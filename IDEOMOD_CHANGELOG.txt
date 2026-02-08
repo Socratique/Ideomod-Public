@@ -1,0 +1,23 @@
+# Ideomod Changelog
+
+## [2026-02-04] Mining Drill Block
+- Added DrillBlock
+  - Directional placement like pistons (faces where player looks)
+  - Redstone-activated: pulse to mine a 3x3 grid in front
+  - Movable by pistons
+  - Two visual states: off and on (glowing front when powered)
+  - Skips indestructible blocks (bedrock, etc.)
+  - Drops mined items near the drill position
+- New package: com.ideomancer.ideomod.block
+- Assets: blockstate (12 variants), 2 models, 5 textures
+- Data: shaped recipe (iron + piston + redstone), loot table, pickaxe tag
+- Status: Working
+
+## [2026-02-04] Initial Setup & First Block
+- Created mod skeleton with main class (Ideomod.java)
+- Set up DeferredRegister pattern for registrations
+- Added registry package: ModBlocks, ModItems, ModCreativeTabs
+- Added IDEOBLOCK - decorative stone block
+  - Recipe: 9 cobblestone in 3x3 grid
+  - Drops itself when mined
+- Status: Working

@@ -1,0 +1,97 @@
+# Reference Repositories for Ideomod (Forge 1.20.1)
+# Use these as guides for implementing features
+
+================================================================================
+MECHANICAL / AUTOMATION
+================================================================================
+Create - https://github.com/Creators-of-Create/Create
+  Branch: mc1.20.1/dev | License: MIT
+  Use for: Mechanical blocks, kinetics, block entities, multiblocks, contraptions
+
+================================================================================
+MOBS & ENTITIES
+================================================================================
+Alex's Mobs - https://github.com/AlexModGuy/AlexsMobs
+  License: GPL-3.0
+  Use for: Custom mob AI, GeckoLib animations, spawning, taming systems
+
+================================================================================
+FOOD & FARMING
+================================================================================
+Farmer's Delight - https://github.com/vectorwing/FarmersDelight
+  License: MIT
+  Use for: Custom crops, cooking systems, food items, wild crop generation
+
+================================================================================
+TOOLS & EQUIPMENT
+================================================================================
+Tinkers' Construct - https://github.com/SlimeKnights/TinkersConstruct
+  License: MIT
+  Use for: Modular tools, smeltery multiblocks, materials, tool modifiers
+
+Tetra - https://github.com/mickelus/tetra
+  Branch: 1.20 | License: Custom (allows addons/datapacks)
+  Use for: Modular items, tool workbench, item improvements through use
+
+================================================================================
+STRUCTURES & WORLDGEN
+================================================================================
+Repurposed Structures - https://github.com/TelepathicGrunt/RepurposedStructures
+  License: LGPL
+  Use for: Structure variations, template pools, processors, biome structures
+
+YUNG's Better Dungeons - https://github.com/YUNG-GANG/YUNGs-Better-Dungeons
+  License: LGPL
+  Use for: Custom dungeons, jigsaw structures, loot integration
+
+ReTerraForged - https://github.com/racoonman2/ReTerraForged
+  Branch: 1.20.1
+  Use for: Custom ChunkGenerator, terrain generation
+
+Biomes O' Plenty - https://github.com/Glitchfiend/BiomesOPlenty
+  Branch: BOP-1.20.1-18.0.x
+  Use for: Biome additions, TerraBlender integration
+
+TerraBlender - https://github.com/Glitchfiend/TerraBlender
+  Use for: Biome modification/addition library
+
+================================================================================
+DIMENSIONS
+================================================================================
+The Aether - https://github.com/The-Aether-Team/The-Aether
+  License: LGPL v3 (code)
+  Use for: Custom dimensions, portals, bosses, accessories, flying mounts
+
+================================================================================
+MAGIC & SPELLS
+================================================================================
+Iron's Spells 'n Spellbooks - https://github.com/iron431/Irons-Spells-n-Spellbooks
+  Use for: Spell systems, magic schools, mana, spell effects
+
+Electroblob's Wizardry - https://github.com/Electroblob77/Wizardry
+  (1.12.2 patterns still useful)
+  Use for: Spell discovery, wand mechanics, spell tiers
+
+================================================================================
+COMBAT
+================================================================================
+Better Combat - https://github.com/ZsoltMolnarrr/BetterCombat
+  Use for: Attack animations, weapon attributes (JSON API), dual wielding
+
+Immersive Weapons - https://github.com/AnonymousHacker1279/ImmersiveWeapons
+  Use for: Custom weapons, throwables, ranged weapons
+
+================================================================================
+MOB AI
+================================================================================
+Improved Mobs - https://github.com/Flemmli97/ImprovedMobs
+  Use for: Enhanced mob AI, difficulty scaling
+
+Zombie Awareness - https://github.com/Corosauce/ZombieAwareness
+  Use for: Mob awareness, sound/light tracking
+
+================================================================================
+LEARNING
+================================================================================
+Kaupenjoe's Forge Course - https://github.com/Kaupenjoe/Forge-Course-1.20.X
+  Use for: 1.20.1 patterns for tools, armor, block entities, mobs

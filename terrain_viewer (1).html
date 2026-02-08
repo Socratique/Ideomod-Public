@@ -1,0 +1,1597 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Ideomod Terrain Workbench</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@300;400;500;700&family=Outfit:wght@300;400;600;700&display=swap');
+
+  :root {
+    --bg-primary: #0a0a0f;
+    --bg-panel: #12121a;
+    --bg-input: #1a1a25;
+    --bg-node: #161620;
+    --border: #2a2a3a;
+    --text-primary: #e0e0e8;
+    --text-secondary: #8888a0;
+    --text-dim: #555568;
+    --accent: #4a9eff;
+    --accent-glow: #4a9eff40;
+    --accent-hover: #6ab4ff;
+    --warning: #ff9f43;
+    --success: #2ed573;
+    --danger: #ff4757;
+    --layer-1: #4a9eff;
+    --layer-2: #ff6b8a;
+    --layer-3: #43d9a2;
+    --layer-4: #ffb347;
+    --layer-5: #c084fc;
+    --layer-6: #67e8f9;
+    --blend-color: #ff9f43;
+    --output-color: #2ed573;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Outfit', sans-serif;
+    background: var(--bg-primary);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  /* ========== TOP BAR ========== */
+  #topbar {
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 44px;
+    background: var(--bg-panel);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    padding: 0 16px;
+    z-index: 10;
+    gap: 16px;
+  }
+
+  #topbar .logo {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700; font-size: 14px;
+    color: var(--accent);
+    letter-spacing: 1px;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+  #topbar .logo span { color: var(--text-dim); font-weight: 300; }
+  #topbar .divider { width: 1px; height: 20px; background: var(--border); }
+  .topbar-info {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text-dim);
+  }
+  .topbar-info strong { color: var(--text-secondary); }
+
+  /* Viewing indicator in topbar */
+  #viewing-label {
+    margin-left: auto;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    color: var(--text-dim);
+    display: flex; align-items: center; gap: 6px;
+  }
+  #viewing-label .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--accent);
+  }
+  #viewing-label strong { color: var(--text-primary); }
+
+  /* ========== LEFT PANEL ========== */
+  #panel {
+    position: absolute;
+    top: 44px; left: 0; bottom: 0;
+    width: 290px;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Panel tabs */
+  .panel-tabs {
+    display: flex;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  .panel-tab {
+    flex: 1;
+    padding: 10px 8px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px;
+    font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--text-dim);
+    text-align: center;
+    cursor: pointer;
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+  }
+  .panel-tab:hover { color: var(--text-secondary); }
+  .panel-tab.active {
+    color: var(--accent);
+    border-bottom-color: var(--accent);
+  }
+
+  /* Panel content area */
+  .panel-content {
+    flex: 1;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+  .panel-content::-webkit-scrollbar { width: 4px; }
+  .panel-content::-webkit-scrollbar-track { background: transparent; }
+  .panel-content::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+  .tab-body { display: none; }
+  .tab-body.active { display: block; }
+
+  /* Panel section */
+  .panel-section {
+    padding: 14px 16px;
+    border-bottom: 1px solid var(--border);
+  }
+  .panel-section h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+    margin-bottom: 12px;
+  }
+  .panel-section h3 .hint {
+    font-weight: 300;
+    text-transform: none;
+    letter-spacing: 0;
+    font-style: italic;
+  }
+
+  /* Control rows */
+  .control-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .control-row:last-child { margin-bottom: 0; }
+  .control-row label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    flex-shrink: 0;
+  }
+  .control-row input[type="range"] {
+    width: 100px; height: 4px;
+    -webkit-appearance: none; appearance: none;
+    background: var(--bg-input);
+    border-radius: 2px; outline: none;
+  }
+  .control-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    border: 2px solid var(--bg-panel);
+    box-shadow: 0 0 6px var(--accent-glow);
+  }
+  .control-row input[type="number"],
+  .control-row input[type="text"] {
+    width: 60px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 6px;
+    text-align: right;
+    outline: none;
+  }
+  .control-row input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--accent-glow);
+  }
+  .value-display {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--accent);
+    min-width: 36px; text-align: right;
+  }
+
+  /* Buttons */
+  .btn {
+    display: block; width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    background: var(--bg-input);
+    color: var(--text-primary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    text-align: center;
+  }
+  .btn:hover { background: var(--border); border-color: var(--text-dim); }
+  .btn-primary { background: var(--accent); border-color: var(--accent); color: #000; font-weight: 600; }
+  .btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+  .btn-danger { border-color: var(--danger); color: var(--danger); }
+  .btn-danger:hover { background: var(--danger); color: #fff; }
+  .btn-sm { padding: 5px 10px; font-size: 11px; width: auto; display: inline-block; }
+  .btn + .btn { margin-top: 6px; }
+
+  /* Toggle */
+  .toggle-row {
+    display: flex; align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+  }
+  .toggle-row label { font-size: 12px; color: var(--text-secondary); }
+  .toggle {
+    position: relative;
+    width: 36px; height: 20px;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .toggle.active { background: var(--accent); border-color: var(--accent); }
+  .toggle::after {
+    content: '';
+    position: absolute;
+    top: 2px; left: 2px;
+    width: 14px; height: 14px;
+    background: var(--text-primary);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+  .toggle.active::after { transform: translateX(16px); }
+
+  /* Select */
+  select {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 4px 6px;
+    outline: none; cursor: pointer;
+  }
+  select:focus { border-color: var(--accent); }
+
+  /* Seed row */
+  .seed-row {
+    display: flex; gap: 6px; margin-bottom: 10px;
+  }
+  .seed-row input {
+    flex: 1;
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-primary);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px;
+    padding: 6px 8px; outline: none;
+  }
+  .seed-row input:focus { border-color: var(--accent); }
+  .seed-row button {
+    background: var(--bg-input);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    color: var(--text-secondary);
+    font-size: 14px;
+    padding: 4px 8px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .seed-row button:hover { background: var(--border); color: var(--text-primary); }
+
+  .help-text {
+    font-size: 10px; color: var(--text-dim);
+    font-style: italic; margin-top: 8px; line-height: 1.4;
+  }
+
+  /* ========== NODE CHAIN (bottom of center) ========== */
+  #node-chain {
+    position: absolute;
+    bottom: 0;
+    left: 290px;
+    right: 0;
+    height: 160px;
+    background: var(--bg-panel);
+    border-top: 1px solid var(--border);
+    z-index: 10;
+    display: flex;
+    flex-direction: column;
+  }
+
+  #node-chain-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+  }
+  #node-chain-header h3 {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10px; font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--text-dim);
+  }
+  #node-chain-header .actions {
+    display: flex; gap: 6px;
+  }
+
+  #node-list-container {
+    flex: 1;
+    overflow-x: auto;
+    overflow-y: hidden;
+    display: flex;
+    align-items: center;
+    padding: 10px 14px;
+    gap: 0;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  /* Node card */
+  .node-card {
+    flex-shrink: 0;
+    width: 130px;
+    background: var(--bg-node);
+    border: 2px solid var(--border);
+    border-radius: 8px;
+    padding: 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    position: relative;
+  }
+  .node-card:hover { border-color: var(--text-dim); }
+  .node-card.selected { border-color: var(--accent); box-shadow: 0 0 12px var(--accent-glow); }
+  .node-card .node-type {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px; font-weight: 500;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+  }
+  .node-card .node-name {
+    font-size: 12px; font-weight: 600;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .node-card .node-preview {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 9px;
+    color: var(--text-dim);
+    margin-top: 4px;
+  }
+  .node-card.layer .node-type { color: var(--layer-1); }
+  .node-card.blend .node-type { color: var(--blend-color); }
+  .node-card.output .node-type { color: var(--output-color); }
+  .node-card.output { border-style: dashed; }
+
+  /* Arrow between nodes */
+  .node-arrow {
+    flex-shrink: 0;
+    width: 30px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-dim);
+    font-size: 16px;
+  }
+
+  /* Drag handle */
+  .node-card .drag-handle {
+    position: absolute;
+    top: 4px; right: 4px;
+    font-size: 10px;
+    color: var(--text-dim);
+    cursor: grab;
+    padding: 2px;
+  }
+  .node-card .drag-handle:active { cursor: grabbing; }
+
+  /* ========== LOADING ========== */
+  #loading {
+    position: absolute;
+    top: 44px; left: 290px; right: 0; bottom: 160px;
+    background: var(--bg-primary);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20;
+    transition: opacity 0.3s;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+  #loading .spinner {
+    width: 32px; height: 32px;
+    border: 3px solid var(--border);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #loading p { margin-top: 12px; font-size: 13px; color: var(--text-dim); }
+
+  /* ========== COORDS ========== */
+  #coords {
+    position: absolute;
+    bottom: 172px; left: 306px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 11px; color: var(--text-dim);
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    padding: 6px 10px; border-radius: 6px;
+    z-index: 10; pointer-events: none;
+  }
+
+  /* Canvas */
+  #canvas-container {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    z-index: 0;
+  }
+  canvas { display: block; }
+
+  /* ========== EMPTY STATE ========== */
+  .empty-state {
+    text-align: center;
+    padding: 30px 20px;
+    color: var(--text-dim);
+    font-size: 13px;
+    line-height: 1.6;
+  }
+
+  /* Inline name edit */
+  .node-name-input {
+    background: var(--bg-input);
+    border: 1px solid var(--accent);
+    border-radius: 3px;
+    color: var(--text-primary);
+    font-family: 'Outfit', sans-serif;
+    font-size: 12px; font-weight: 600;
+    padding: 1px 4px;
+    width: 100%;
+    outline: none;
+  }
+
+  /* Color dots for layers */
+  .layer-dot {
+    display: inline-block;
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    margin-right: 4px;
+    vertical-align: middle;
+  }
+</style>
+</head>
+<body>
+
+<!-- Top Bar -->
+<div id="topbar">
+  <div class="logo">IDEOMOD <span>Terrain Workbench</span></div>
+  <div class="divider"></div>
+  <div class="topbar-info">Blocks: <strong id="info-blocks">0</strong></div>
+  <div class="topbar-info">Faces: <strong id="info-faces">0</strong></div>
+  <div class="topbar-info">Gen: <strong id="info-time">0ms</strong></div>
+  <div id="viewing-label">
+    <div class="dot" id="viewing-dot"></div>
+    Viewing: <strong id="viewing-name">—</strong>
+  </div>
+</div>
+
+<!-- Left Panel -->
+<div id="panel">
+  <div class="panel-tabs">
+    <div class="panel-tab active" data-tab="tab-layer">Layer</div>
+    <div class="panel-tab" data-tab="tab-display">Display</div>
+    <div class="panel-tab" data-tab="tab-world">World</div>
+  </div>
+  <div class="panel-content">
+
+    <!-- TAB: Layer settings (changes based on selected node) -->
+    <div class="tab-body active" id="tab-layer">
+      <div id="layer-empty" class="empty-state">
+        Select a node below to edit its settings, or add a layer to begin.
+      </div>
+      <div id="layer-settings" style="display:none;">
+        <!-- Filled dynamically -->
+      </div>
+      <div id="blend-settings" style="display:none;">
+        <!-- Filled dynamically for blend nodes -->
+      </div>
+    </div>
+
+    <!-- TAB: Display -->
+    <div class="tab-body" id="tab-display">
+      <div class="panel-section">
+        <h3>Rendering</h3>
+        <div class="toggle-row">
+          <label>Minecraft Colors</label>
+          <div class="toggle active" id="toggle-mc-colors"></div>
+        </div>
+        <div class="toggle-row">
+          <label>Show Water</label>
+          <div class="toggle active" id="toggle-water"></div>
+        </div>
+        <div class="toggle-row">
+          <label>Wireframe</label>
+          <div class="toggle" id="toggle-wireframe"></div>
+        </div>
+        <div class="control-row">
+          <label>Render</label>
+          <select id="render-mode">
+            <option value="surface">Surface Only</option>
+            <option value="full">Full Voxels</option>
+          </select>
+        </div>
+      </div>
+      <div class="panel-section">
+        <button class="btn" id="btn-reset-camera">↺ Reset Camera</button>
+      </div>
+    </div>
+
+    <!-- TAB: World -->
+    <div class="tab-body" id="tab-world">
+      <div class="panel-section">
+        <h3>Dimensions</h3>
+        <div class="control-row">
+          <label>Width (X)</label>
+          <input type="number" id="dim-x" value="128" min="16" max="512" step="16">
+        </div>
+        <div class="control-row">
+          <label>Length (Z)</label>
+          <input type="number" id="dim-z" value="128" min="16" max="512" step="16">
+        </div>
+        <div class="control-row">
+          <label>Min Y</label>
+          <input type="number" id="dim-miny" value="-64" min="-64" max="0" step="8">
+        </div>
+        <div class="control-row">
+          <label>Max Y</label>
+          <input type="number" id="dim-maxy" value="192" min="64" max="320" step="8">
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>World Seed</h3>
+        <div class="seed-row">
+          <input type="text" id="seed-input" value="12345" placeholder="Seed...">
+          <button id="seed-random" title="Random seed">🎲</button>
+        </div>
+      </div>
+      <div class="panel-section">
+        <h3>Sea Level</h3>
+        <div class="control-row">
+          <label>Level</label>
+          <input type="number" id="sea-level" value="63" min="-64" max="192" step="1">
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Node Chain Panel (bottom) -->
+<div id="node-chain">
+  <div id="node-chain-header">
+    <h3>Layer Chain</h3>
+    <div class="actions">
+      <button class="btn btn-sm btn-primary" id="btn-add-layer">+ Layer</button>
+      <button class="btn btn-sm" id="btn-add-blend">+ Blend</button>
+      <button class="btn btn-sm" id="btn-generate">⚡ Generate</button>
+    </div>
+  </div>
+  <div id="node-list-container">
+    <!-- Nodes inserted here -->
+  </div>
+</div>
+
+<!-- Loading -->
+<div id="loading" class="hidden">
+  <div class="spinner"></div>
+  <p id="loading-text">Generating terrain...</p>
+</div>
+
+<!-- 3D Canvas -->
+<div id="canvas-container"></div>
+
+<!-- Coords -->
+<div id="coords">Hover terrain to see coordinates</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>
+// ============================================================
+// PERLIN NOISE
+// ============================================================
+class SeededPerlin {
+  constructor(seed) {
+    this.perm = new Uint8Array(512);
+    this.setSeed(seed);
+  }
+  setSeed(s) {
+    const p = new Uint8Array(256);
+    for (let i = 0; i < 256; i++) p[i] = i;
+    let n = this._hashSeed(s);
+    for (let i = 255; i > 0; i--) {
+      n = (n * 16807 + 0) & 0x7FFFFFFF;
+      const j = n % (i + 1);
+      [p[i], p[j]] = [p[j], p[i]];
+    }
+    for (let i = 0; i < 512; i++) this.perm[i] = p[i & 255];
+  }
+  _hashSeed(s) {
+    if (typeof s === 'string') {
+      let h = 0;
+      for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+      return Math.abs(h) || 1;
+    }
+    return Math.abs(Math.floor(s)) || 1;
+  }
+  _fade(t) { return t * t * t * (t * (t * 6 - 15) + 10); }
+  _lerp(a, b, t) { return a + t * (b - a); }
+  _grad(hash, x, y) {
+    const h = hash & 7;
+    const u = h < 4 ? x : y;
+    const v = h < 4 ? y : x;
+    return ((h & 1) ? -u : u) + ((h & 2) ? -v : v);
+  }
+  noise2D(x, y) {
+    const X = Math.floor(x) & 255, Y = Math.floor(y) & 255;
+    const xf = x - Math.floor(x), yf = y - Math.floor(y);
+    const u = this._fade(xf), v = this._fade(yf);
+    const p = this.perm;
+    const A = p[X] + Y, B = p[X + 1] + Y;
+    return this._lerp(
+      this._lerp(this._grad(p[A], xf, yf), this._grad(p[B], xf - 1, yf), u),
+      this._lerp(this._grad(p[A + 1], xf, yf - 1), this._grad(p[B + 1], xf - 1, yf - 1), u), v
+    );
+  }
+  fbm(x, y, octaves, lacunarity, persistence) {
+    let total = 0, amplitude = 1, frequency = 1, maxVal = 0;
+    for (let i = 0; i < octaves; i++) {
+      total += this.noise2D(x * frequency, y * frequency) * amplitude;
+      maxVal += amplitude;
+      amplitude *= persistence;
+      frequency *= lacunarity;
+    }
+    return total / maxVal;
+  }
+}
+
+// ============================================================
+// LAYER & NODE DATA MODEL
+// ============================================================
+const LAYER_COLORS = ['#4a9eff','#ff6b8a','#43d9a2','#ffb347','#c084fc','#67e8f9'];
+let nextLayerId = 0;
+let nextBlendId = 0;
+
+function createLayerNode(name) {
+  return {
+    id: 'layer_' + (nextLayerId++),
+    type: 'layer',
+    name: name || ('Layer ' + nextLayerId),
+    color: LAYER_COLORS[(nextLayerId - 1) % LAYER_COLORS.length],
+    // Noise params
+    baseHeight: 68,
+    heightVariation: 28,
+    noiseScale: 0.035,
+    scaleX: 1.0,
+    scaleZ: 1.0,
+    octaves: 5,
+    lacunarity: 2.0,
+    persistence: 0.50,
+    offsetX: 0,
+    offsetZ: 0,
+    // Shaping
+    power: 1.0,        // exponent applied to noise
+    terraceSteps: 0,   // 0 = off, >0 = number of terrace levels
+    invert: false,
+    clampMin: -1.0,    // normalized noise range
+    clampMax: 1.0,
+    amplitude: 1.0,    // final multiplier
+    // Cache
+    heightmap: null,
+  };
+}
+
+function createBlendNode(name) {
+  return {
+    id: 'blend_' + (nextBlendId++),
+    type: 'blend',
+    name: name || ('Blend ' + nextBlendId),
+    color: '#ff9f43',
+    mode: 'add',       // add, max, min, average, multiply, screen
+    factor: 0.5,       // blend factor for weighted modes
+    heightmap: null,
+  };
+}
+
+// The chain is a flat array: [layer, layer, blend, layer, blend, ...]
+// Processing: layers produce heightmaps, blends combine the two previous results
+// Think of it as a stack: layers push, blends pop two and push one
+let nodeChain = [];
+let selectedNodeId = null;
+
+// ============================================================
+// TERRAIN GENERATOR (per-layer)
+// ============================================================
+class TerrainGenerator {
+  constructor() {
+    this.perlin = new SeededPerlin(12345);
+    this.continentPerlin = new SeededPerlin(54321);
+  }
+  setSeed(seed) {
+    this.perlin.setSeed(seed);
+    const seed2 = typeof seed === 'string' ? seed + '_c' : seed * 16807 + 1;
+    this.continentPerlin.setSeed(seed2);
+  }
+
+  generateLayerHeightmap(layer, worldParams) {
+    const { sizeX, sizeZ } = worldParams;
+    const hm = new Float32Array(sizeX * sizeZ);
+    const halfX = sizeX / 2, halfZ = sizeZ / 2;
+
+    // Use a per-layer seed offset so layers aren't identical
+    const layerSeedOffset = layer.id.charCodeAt(layer.id.length - 1) * 1000;
+    const perlin = new SeededPerlin(
+      typeof worldParams.seed === 'string'
+        ? worldParams.seed + '_' + layer.id
+        : (Number(worldParams.seed) || 12345) + layerSeedOffset
+    );
+    const contPerlin = new SeededPerlin(
+      typeof worldParams.seed === 'string'
+        ? worldParams.seed + '_' + layer.id + '_c'
+        : (Number(worldParams.seed) || 54321) + layerSeedOffset + 777
+    );
+
+    for (let x = 0; x < sizeX; x++) {
+      for (let z = 0; z < sizeZ; z++) {
+        const wx = (x - halfX + layer.offsetX) * layer.noiseScale * layer.scaleX;
+        const wz = (z - halfZ + layer.offsetZ) * layer.noiseScale * layer.scaleZ;
+
+        // Continent-scale
+        const continent = contPerlin.fbm(wx * 0.3, wz * 0.3, 3, 2.0, 0.5);
+        // Detail
+        const detail = perlin.fbm(wx, wz, layer.octaves, layer.lacunarity, layer.persistence);
+        // Combine raw noise (-1 to 1)
+        let noise = continent * 0.6 + detail * 0.4;
+
+        // === SHAPING ===
+        // Clamp
+        noise = Math.max(layer.clampMin, Math.min(layer.clampMax, noise));
+
+        // Power (applied to absolute value, preserving sign)
+        if (layer.power !== 1.0) {
+          const sign = noise >= 0 ? 1 : -1;
+          noise = sign * Math.pow(Math.abs(noise), layer.power);
+        }
+
+        // Terrace
+        if (layer.terraceSteps > 0) {
+          noise = Math.round(noise * layer.terraceSteps) / layer.terraceSteps;
+        }
+
+        // Invert
+        if (layer.invert) noise = -noise;
+
+        // Amplitude
+        noise *= layer.amplitude;
+
+        // Map to height
+        hm[x * sizeZ + z] = Math.round(layer.baseHeight + noise * layer.heightVariation);
+      }
+    }
+    return hm;
+  }
+}
+
+// ============================================================
+// BLEND FUNCTIONS
+// ============================================================
+function blendHeightmaps(hmA, hmB, mode, factor, size) {
+  const result = new Float32Array(size);
+  for (let i = 0; i < size; i++) {
+    const a = hmA ? hmA[i] : 0;
+    const b = hmB ? hmB[i] : 0;
+    switch (mode) {
+      case 'add':     result[i] = a + b * factor; break;
+      case 'max':     result[i] = Math.max(a, b); break;
+      case 'min':     result[i] = Math.min(a, b); break;
+      case 'average': result[i] = a * (1 - factor) + b * factor; break;
+      case 'multiply':
+        // Normalize b to 0-1 range roughly, use as multiplier
+        result[i] = a * (0.5 + (b / 128) * factor);
+        break;
+      case 'screen':
+        // Like multiply but inverted - tends to raise things
+        const na = a / 128, nb = b / 128;
+        result[i] = (1 - (1 - na) * (1 - nb * factor)) * 128;
+        break;
+      default: result[i] = a; break;
+    }
+  }
+  return result;
+}
+
+// ============================================================
+// PROCESS THE NODE CHAIN
+// Layers push to a stack, blends pop two and push result
+// ============================================================
+function processChain(generator, worldParams) {
+  const stack = [];
+  for (const node of nodeChain) {
+    if (node.type === 'layer') {
+      node.heightmap = generator.generateLayerHeightmap(node, worldParams);
+      stack.push(node.heightmap);
+    } else if (node.type === 'blend') {
+      if (stack.length >= 2) {
+        const b = stack.pop();
+        const a = stack.pop();
+        const size = worldParams.sizeX * worldParams.sizeZ;
+        node.heightmap = blendHeightmaps(a, b, node.mode, node.factor, size);
+        stack.push(node.heightmap);
+      } else if (stack.length === 1) {
+        // Only one thing on stack, blend is a no-op
+        node.heightmap = stack[stack.length - 1];
+      } else {
+        node.heightmap = null;
+      }
+    }
+  }
+  return stack.length > 0 ? stack[stack.length - 1] : null;
+}
+
+// ============================================================
+// VOXEL MESH BUILDER (same as before, extracted)
+// ============================================================
+class VoxelMeshBuilder {
+  static build(heightmap, params, displayParams) {
+    const { sizeX, sizeZ, minY, maxY, seaLevel } = params;
+    const { mcColors, showWater, renderMode } = displayParams;
+    const positions = [], normals = [], colors = [], indices = [];
+    let vertexCount = 0, faceCount = 0, blockCount = 0;
+    const halfX = sizeX / 2, halfZ = sizeZ / 2;
+
+    function getColor(y, surfaceY, isWater) {
+      if (mcColors) {
+        if (isWater) return [0.22, 0.45, 0.75];
+        if (y === surfaceY && surfaceY >= seaLevel) return [0.36, 0.63, 0.24];
+        if (y >= surfaceY - 3) return [0.53, 0.38, 0.24];
+        if (y <= minY + 1) return [0.2, 0.2, 0.2];
+        return [0.5, 0.5, 0.5];
+      } else {
+        if (isWater) return [0.15, 0.3, 0.6];
+        const t = Math.max(0, Math.min(1, (y - minY) / (maxY - minY)));
+        return [0.1 + t * 0.7, 0.2 + t * 0.5 - Math.abs(t - 0.5) * 0.3, 0.6 - t * 0.5];
+      }
+    }
+
+    function addFace(x, y, z, nx, ny, nz, color) {
+      const px = x - halfX, pz = z - halfZ;
+      let v0, v1, v2, v3;
+      if (ny === 1)       { v0=[px,y+1,pz+1]; v1=[px+1,y+1,pz+1]; v2=[px+1,y+1,pz]; v3=[px,y+1,pz]; }
+      else if (ny === -1) { v0=[px,y,pz+1]; v1=[px+1,y,pz+1]; v2=[px+1,y,pz]; v3=[px,y,pz]; }
+      else if (nx === 1)  { v0=[px+1,y,pz]; v1=[px+1,y+1,pz]; v2=[px+1,y+1,pz+1]; v3=[px+1,y,pz+1]; }
+      else if (nx === -1) { v0=[px,y,pz+1]; v1=[px,y+1,pz+1]; v2=[px,y+1,pz]; v3=[px,y,pz]; }
+      else if (nz === 1)  { v0=[px+1,y,pz+1]; v1=[px+1,y+1,pz+1]; v2=[px,y+1,pz+1]; v3=[px,y,pz+1]; }
+      else                { v0=[px,y,pz]; v1=[px,y+1,pz]; v2=[px+1,y+1,pz]; v3=[px+1,y,pz]; }
+      for (const v of [v0,v1,v2,v3]) {
+        positions.push(v[0],v[1],v[2]);
+        normals.push(nx,ny,nz);
+        colors.push(color[0],color[1],color[2]);
+      }
+      const i = vertexCount;
+      indices.push(i,i+1,i+2, i,i+2,i+3);
+      vertexCount += 4; faceCount++;
+    }
+
+    function getH(x, z) {
+      if (x < 0 || x >= sizeX || z < 0 || z >= sizeZ) return minY;
+      return heightmap[x * sizeZ + z];
+    }
+
+    for (let x = 0; x < sizeX; x++) {
+      for (let z = 0; z < sizeZ; z++) {
+        const surfaceY = heightmap[x * sizeZ + z];
+        const startY = renderMode === 'surface' ? Math.max(minY, surfaceY - 4) : minY;
+        for (let y = startY; y <= surfaceY; y++) {
+          blockCount++;
+          const color = getColor(y, surfaceY, false);
+          if (y === surfaceY) addFace(x,y,z,0,1,0,color);
+          if (renderMode === 'full' && y === startY) addFace(x,y,z,0,-1,0,color);
+          if (y > getH(x+1,z) || x===sizeX-1) addFace(x,y,z,1,0,0,color);
+          if (y > getH(x-1,z) || x===0)        addFace(x,y,z,-1,0,0,color);
+          if (y > getH(x,z+1) || z===sizeZ-1)  addFace(x,y,z,0,0,1,color);
+          if (y > getH(x,z-1) || z===0)         addFace(x,y,z,0,0,-1,color);
+        }
+        if (showWater && surfaceY < seaLevel) {
+          addFace(x,seaLevel,z,0,1,0,getColor(seaLevel,surfaceY,true));
+          blockCount++;
+        }
+      }
+    }
+    return {
+      positions: new Float32Array(positions), normals: new Float32Array(normals),
+      colors: new Float32Array(colors), indices: new Uint32Array(indices),
+      faceCount, blockCount
+    };
+  }
+}
+
+// ============================================================
+// TERRAIN VIEWER (Three.js scene + full app logic)
+// ============================================================
+class TerrainViewer {
+  constructor() {
+    this.container = document.getElementById('canvas-container');
+    this.generator = new TerrainGenerator();
+    this.terrainMesh = null;
+    this.currentHeightmap = null;
+    this.raycaster = new THREE.Raycaster();
+    this.mouse = new THREE.Vector2();
+
+    this.initScene();
+    this.initControls();
+    this.bindUI();
+    this.animate();
+
+    // Start with one default layer
+    this.addLayer();
+    setTimeout(() => this.generateAndRender(), 100);
+  }
+
+  initScene() {
+    this.scene = new THREE.Scene();
+    this.scene.background = new THREE.Color(0x0a0a0f);
+    this.scene.fog = new THREE.FogExp2(0x0a0a0f, 0.003);
+    const w = window.innerWidth - 290, h = window.innerHeight - 44 - 160;
+    this.camera = new THREE.PerspectiveCamera(60, w / h, 0.5, 2000);
+    this.camera.position.set(100, 120, 100);
+    this.camera.lookAt(0, 40, 0);
+    this.renderer = new THREE.WebGLRenderer({ antialias: true });
+    this.renderer.setSize(w, h);
+    this.renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    this.container.appendChild(this.renderer.domElement);
+    this.renderer.domElement.style.position = 'absolute';
+    this.renderer.domElement.style.top = '44px';
+    this.renderer.domElement.style.left = '290px';
+
+    const ambient = new THREE.AmbientLight(0x404060, 0.6);
+    this.scene.add(ambient);
+    const sun = new THREE.DirectionalLight(0xffeedd, 1.0);
+    sun.position.set(100, 200, 80);
+    this.scene.add(sun);
+    const fill = new THREE.DirectionalLight(0x8899bb, 0.3);
+    fill.position.set(-60, 80, -40);
+    this.scene.add(fill);
+
+    const grid = new THREE.GridHelper(256, 16, 0x222233, 0x181822);
+    this.scene.add(grid);
+    this.grid = grid;
+    this.scene.add(new THREE.AxesHelper(16));
+
+    window.addEventListener('resize', () => {
+      const w = window.innerWidth - 290, h = window.innerHeight - 44 - 160;
+      this.camera.aspect = w / h;
+      this.camera.updateProjectionMatrix();
+      this.renderer.setSize(w, h);
+    });
+    this.renderer.domElement.addEventListener('mousemove', (e) => {
+      const rect = this.renderer.domElement.getBoundingClientRect();
+      this.mouse.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      this.mouse.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+    });
+  }
+
+  initControls() {
+    const canvas = this.renderer.domElement;
+    this.orbit = {
+      target: new THREE.Vector3(0, 40, 0),
+      spherical: { radius: 170, phi: Math.PI / 3.5, theta: Math.PI / 4 },
+      isDragging: false, isPanning: false,
+      lastMouse: { x: 0, y: 0 }
+    };
+    canvas.addEventListener('mousedown', (e) => {
+      if (e.button === 0) this.orbit.isDragging = true;
+      if (e.button === 2 || e.button === 1) this.orbit.isPanning = true;
+      this.orbit.lastMouse = { x: e.clientX, y: e.clientY };
+      e.preventDefault();
+    });
+    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
+    window.addEventListener('mouseup', () => { this.orbit.isDragging = false; this.orbit.isPanning = false; });
+    window.addEventListener('mousemove', (e) => {
+      const dx = e.clientX - this.orbit.lastMouse.x;
+      const dy = e.clientY - this.orbit.lastMouse.y;
+      this.orbit.lastMouse = { x: e.clientX, y: e.clientY };
+      if (this.orbit.isDragging) {
+        this.orbit.spherical.theta -= dx * 0.005;
+        this.orbit.spherical.phi = Math.max(0.1, Math.min(Math.PI - 0.1, this.orbit.spherical.phi - dy * 0.005));
+      }
+      if (this.orbit.isPanning) {
+        const panSpeed = this.orbit.spherical.radius * 0.002;
+        const right = new THREE.Vector3();
+        const up = new THREE.Vector3(0, 1, 0);
+        right.crossVectors(new THREE.Vector3().subVectors(this.camera.position, this.orbit.target).normalize(), up).normalize();
+        const panUp = new THREE.Vector3();
+        panUp.crossVectors(right, new THREE.Vector3().subVectors(this.camera.position, this.orbit.target).normalize()).normalize();
+        this.orbit.target.addScaledVector(right, -dx * panSpeed);
+        this.orbit.target.addScaledVector(panUp, dy * panSpeed);
+      }
+    });
+    canvas.addEventListener('wheel', (e) => {
+      this.orbit.spherical.radius *= (1 + e.deltaY * 0.001);
+      this.orbit.spherical.radius = Math.max(10, Math.min(800, this.orbit.spherical.radius));
+      e.preventDefault();
+    }, { passive: false });
+  }
+
+  updateCamera() {
+    const s = this.orbit.spherical;
+    this.camera.position.set(
+      s.radius * Math.sin(s.phi) * Math.cos(s.theta) + this.orbit.target.x,
+      s.radius * Math.cos(s.phi) + this.orbit.target.y,
+      s.radius * Math.sin(s.phi) * Math.sin(s.theta) + this.orbit.target.z
+    );
+    this.camera.lookAt(this.orbit.target);
+  }
+
+  resetCamera() {
+    this.orbit.target.set(0, 40, 0);
+    this.orbit.spherical = { radius: 170, phi: Math.PI / 3.5, theta: Math.PI / 4 };
+  }
+
+  // ========== UI BINDING ==========
+  bindUI() {
+    // Panel tabs
+    document.querySelectorAll('.panel-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.tab-body').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(tab.dataset.tab).classList.add('active');
+      });
+    });
+
+    // Toggles
+    document.querySelectorAll('.toggle').forEach(el => {
+      el.addEventListener('click', () => el.classList.toggle('active'));
+    });
+
+    // Buttons
+    document.getElementById('btn-generate').addEventListener('click', () => this.generateAndRender());
+    document.getElementById('btn-reset-camera').addEventListener('click', () => this.resetCamera());
+    document.getElementById('seed-random').addEventListener('click', () => {
+      document.getElementById('seed-input').value = Math.floor(Math.random() * 999999999);
+    });
+    document.getElementById('seed-input').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') this.generateAndRender();
+    });
+    document.getElementById('btn-add-layer').addEventListener('click', () => this.addLayer());
+    document.getElementById('btn-add-blend').addEventListener('click', () => this.addBlend());
+  }
+
+  // ========== NODE MANAGEMENT ==========
+  addLayer() {
+    const layer = createLayerNode();
+    nodeChain.push(layer);
+    this.selectNode(layer.id);
+    this.renderNodeChain();
+  }
+
+  addBlend() {
+    const blend = createBlendNode();
+    nodeChain.push(blend);
+    this.selectNode(blend.id);
+    this.renderNodeChain();
+  }
+
+  removeNode(id) {
+    nodeChain = nodeChain.filter(n => n.id !== id);
+    if (selectedNodeId === id) {
+      selectedNodeId = nodeChain.length > 0 ? nodeChain[nodeChain.length - 1].id : null;
+    }
+    this.renderNodeChain();
+    this.renderSelectedNodeSettings();
+    this.updateViewingLabel();
+  }
+
+  selectNode(id) {
+    selectedNodeId = id;
+    this.renderNodeChain();
+    this.renderSelectedNodeSettings();
+    this.updateViewingLabel();
+    // Auto-switch to Layer tab
+    document.querySelectorAll('.panel-tab').forEach(t => t.classList.remove('active'));
+    document.querySelectorAll('.tab-body').forEach(t => t.classList.remove('active'));
+    document.querySelector('[data-tab="tab-layer"]').classList.add('active');
+    document.getElementById('tab-layer').classList.add('active');
+    // If this node has a cached heightmap, show it
+    const node = nodeChain.find(n => n.id === id);
+    if (node && node.heightmap) {
+      this.renderMesh(node.heightmap);
+    }
+  }
+
+  moveNode(id, direction) {
+    const idx = nodeChain.findIndex(n => n.id === id);
+    const newIdx = idx + direction;
+    if (newIdx < 0 || newIdx >= nodeChain.length) return;
+    [nodeChain[idx], nodeChain[newIdx]] = [nodeChain[newIdx], nodeChain[idx]];
+    this.renderNodeChain();
+  }
+
+  getSelectedNode() {
+    return nodeChain.find(n => n.id === selectedNodeId) || null;
+  }
+
+  updateViewingLabel() {
+    const node = this.getSelectedNode();
+    const dot = document.getElementById('viewing-dot');
+    const name = document.getElementById('viewing-name');
+    if (node) {
+      dot.style.background = node.color;
+      name.textContent = node.name;
+    } else {
+      dot.style.background = 'var(--text-dim)';
+      name.textContent = '—';
+    }
+  }
+
+  // ========== RENDER NODE CHAIN UI ==========
+  renderNodeChain() {
+    const container = document.getElementById('node-list-container');
+    container.innerHTML = '';
+
+    nodeChain.forEach((node, idx) => {
+      if (idx > 0) {
+        const arrow = document.createElement('div');
+        arrow.className = 'node-arrow';
+        arrow.textContent = '→';
+        container.appendChild(arrow);
+      }
+
+      const card = document.createElement('div');
+      card.className = `node-card ${node.type}${node.id === selectedNodeId ? ' selected' : ''}`;
+      card.style.borderColor = node.id === selectedNodeId ? node.color : '';
+      if (node.id === selectedNodeId) card.style.boxShadow = `0 0 12px ${node.color}40`;
+
+      const typeLabel = node.type === 'layer' ? 'Layer' : 'Blend';
+      const preview = node.type === 'layer'
+        ? `h:${node.baseHeight} v:${node.heightVariation}`
+        : `mode: ${node.mode}`;
+
+      card.innerHTML = `
+        <div class="node-type" style="color:${node.color}">${typeLabel}</div>
+        <div class="node-name"><span class="layer-dot" style="background:${node.color}"></span>${node.name}</div>
+        <div class="node-preview">${preview}</div>
+      `;
+
+      card.addEventListener('click', (e) => {
+        e.stopPropagation();
+        this.selectNode(node.id);
+      });
+
+      // Double click to rename
+      card.addEventListener('dblclick', (e) => {
+        e.stopPropagation();
+        const nameEl = card.querySelector('.node-name');
+        const input = document.createElement('input');
+        input.className = 'node-name-input';
+        input.value = node.name;
+        nameEl.innerHTML = '';
+        nameEl.appendChild(input);
+        input.focus();
+        input.select();
+        const finish = () => {
+          node.name = input.value || node.name;
+          this.renderNodeChain();
+          this.updateViewingLabel();
+        };
+        input.addEventListener('blur', finish);
+        input.addEventListener('keydown', (e) => { if (e.key === 'Enter') input.blur(); });
+      });
+
+      container.appendChild(card);
+    });
+
+    // Output indicator
+    if (nodeChain.length > 0) {
+      const arrow = document.createElement('div');
+      arrow.className = 'node-arrow';
+      arrow.textContent = '→';
+      container.appendChild(arrow);
+
+      const outCard = document.createElement('div');
+      outCard.className = 'node-card output';
+      outCard.innerHTML = `
+        <div class="node-type" style="color:var(--output-color)">Output</div>
+        <div class="node-name">Final Terrain</div>
+        <div class="node-preview">top of stack</div>
+      `;
+      outCard.addEventListener('click', () => {
+        // Select nothing specific — show final result
+        selectedNodeId = '__output__';
+        this.renderNodeChain();
+        this.renderSelectedNodeSettings();
+        this.updateOutputViewing();
+        // Show final if available
+        const finalHM = this.lastFinalHeightmap;
+        if (finalHM) this.renderMesh(finalHM);
+      });
+      if (selectedNodeId === '__output__') {
+        outCard.classList.add('selected');
+        outCard.style.borderColor = 'var(--output-color)';
+      }
+      container.appendChild(outCard);
+    }
+  }
+
+  updateOutputViewing() {
+    document.getElementById('viewing-dot').style.background = 'var(--output-color)';
+    document.getElementById('viewing-name').textContent = 'Final Output';
+  }
+
+  // ========== RENDER SELECTED NODE SETTINGS ==========
+  renderSelectedNodeSettings() {
+    const layerEmpty = document.getElementById('layer-empty');
+    const layerSettings = document.getElementById('layer-settings');
+    const blendSettings = document.getElementById('blend-settings');
+
+    layerSettings.style.display = 'none';
+    blendSettings.style.display = 'none';
+    layerEmpty.style.display = 'none';
+
+    const node = this.getSelectedNode();
+    if (!node || selectedNodeId === '__output__') {
+      if (selectedNodeId === '__output__') {
+        layerEmpty.style.display = 'block';
+        layerEmpty.innerHTML = '<div class="empty-state">Viewing final blended output.<br>Select a node to edit its settings.</div>';
+      } else {
+        layerEmpty.style.display = 'block';
+        layerEmpty.innerHTML = '<div class="empty-state">Select a node below to edit its settings, or add a layer to begin.</div>';
+      }
+      return;
+    }
+
+    if (node.type === 'layer') {
+      layerSettings.style.display = 'block';
+      this.renderLayerPanel(node);
+    } else if (node.type === 'blend') {
+      blendSettings.style.display = 'block';
+      this.renderBlendPanel(node);
+    }
+  }
+
+  renderLayerPanel(layer) {
+    const el = document.getElementById('layer-settings');
+    el.innerHTML = `
+      <div class="panel-section">
+        <h3><span class="layer-dot" style="background:${layer.color}"></span> ${layer.name} — Terrain</h3>
+        <div class="control-row">
+          <label>Base Height</label>
+          <input type="range" data-key="baseHeight" min="0" max="192" value="${layer.baseHeight}" step="1">
+          <span class="value-display">${layer.baseHeight}</span>
+        </div>
+        <div class="control-row">
+          <label>Height Variation</label>
+          <input type="range" data-key="heightVariation" min="1" max="80" value="${layer.heightVariation}" step="1">
+          <span class="value-display">${layer.heightVariation}</span>
+        </div>
+        <div class="control-row">
+          <label>Noise Scale</label>
+          <input type="range" data-key="noiseScale" min="1" max="100" value="${Math.round(layer.noiseScale * 1000)}" step="1" data-transform="div1000">
+          <span class="value-display">${layer.noiseScale.toFixed(3)}</span>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Noise Detail</h3>
+        <div class="control-row">
+          <label>Octaves</label>
+          <input type="range" data-key="octaves" min="1" max="8" value="${layer.octaves}" step="1">
+          <span class="value-display">${layer.octaves}</span>
+        </div>
+        <div class="control-row">
+          <label>Lacunarity</label>
+          <input type="range" data-key="lacunarity" min="10" max="40" value="${Math.round(layer.lacunarity * 10)}" step="1" data-transform="div10">
+          <span class="value-display">${layer.lacunarity.toFixed(1)}</span>
+        </div>
+        <div class="control-row">
+          <label>Persistence</label>
+          <input type="range" data-key="persistence" min="10" max="80" value="${Math.round(layer.persistence * 100)}" step="1" data-transform="div100">
+          <span class="value-display">${layer.persistence.toFixed(2)}</span>
+        </div>
+      </div>
+
+      <div class="panel-section">
+        <h3>Scale & Offset <span class="hint">(stretch the noise)</span></h3>
+        <div class="control-row">
+          <label>Scale X</label>
+          <input type="range" data-key="scaleX" min="10" max="500" value="${Math.round(layer.scaleX * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.scaleX.toFixed(2)}</span>
+        </div>
+        <div class="control-row">
+          <label>Scale Z</label>
+          <input type="range" data-key="scaleZ" min="10" max="500" value="${Math.round(layer.scaleZ * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.scaleZ.toFixed(2)}</span>
+        </div>
+        <div class="control-row">
+          <label>Offset X</label>
+          <input type="range" data-key="offsetX" min="-500" max="500" value="${layer.offsetX}" step="10">
+          <span class="value-display">${layer.offsetX}</span>
+        </div>
+        <div class="control-row">
+          <label>Offset Z</label>
+          <input type="range" data-key="offsetZ" min="-500" max="500" value="${layer.offsetZ}" step="10">
+          <span class="value-display">${layer.offsetZ}</span>
+        </div>
+        <p class="help-text">Scale stretches noise in one direction. High X + low Z = east-west ridgelines. Offset shifts the pattern.</p>
+      </div>
+
+      <div class="panel-section">
+        <h3>Shaping <span class="hint">(modify after noise)</span></h3>
+        <div class="control-row">
+          <label>Power</label>
+          <input type="range" data-key="power" min="10" max="400" value="${Math.round(layer.power * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.power.toFixed(2)}</span>
+        </div>
+        <div class="control-row">
+          <label>Terrace Steps</label>
+          <input type="range" data-key="terraceSteps" min="0" max="30" value="${layer.terraceSteps}" step="1">
+          <span class="value-display">${layer.terraceSteps || 'off'}</span>
+        </div>
+        <div class="control-row">
+          <label>Amplitude</label>
+          <input type="range" data-key="amplitude" min="0" max="300" value="${Math.round(layer.amplitude * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.amplitude.toFixed(2)}</span>
+        </div>
+        <div class="toggle-row">
+          <label>Invert</label>
+          <div class="toggle ${layer.invert ? 'active' : ''}" data-key="invert"></div>
+        </div>
+        <div class="control-row">
+          <label>Clamp Min</label>
+          <input type="range" data-key="clampMin" min="-100" max="100" value="${Math.round(layer.clampMin * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.clampMin.toFixed(2)}</span>
+        </div>
+        <div class="control-row">
+          <label>Clamp Max</label>
+          <input type="range" data-key="clampMax" min="-100" max="100" value="${Math.round(layer.clampMax * 100)}" step="5" data-transform="div100">
+          <span class="value-display">${layer.clampMax.toFixed(2)}</span>
+        </div>
+        <p class="help-text">Power >1 = sharp peaks, flat valleys. Power <1 = plateau-like. Terrace snaps to steps. Clamp cuts off extremes.</p>
+      </div>
+
+      <div class="panel-section">
+        <button class="btn btn-danger" id="btn-delete-node">✕ Delete Layer</button>
+      </div>
+    `;
+    this.bindLayerInputs(layer);
+  }
+
+  renderBlendPanel(blend) {
+    const el = document.getElementById('blend-settings');
+    el.innerHTML = `
+      <div class="panel-section">
+        <h3><span class="layer-dot" style="background:${blend.color}"></span> ${blend.name}</h3>
+        <div class="control-row">
+          <label>Mode</label>
+          <select data-key="mode">
+            <option value="add" ${blend.mode==='add'?'selected':''}>Add</option>
+            <option value="max" ${blend.mode==='max'?'selected':''}>Max (tallest wins)</option>
+            <option value="min" ${blend.mode==='min'?'selected':''}>Min (shortest wins)</option>
+            <option value="average" ${blend.mode==='average'?'selected':''}>Average</option>
+            <option value="multiply" ${blend.mode==='multiply'?'selected':''}>Multiply (mask)</option>
+            <option value="screen" ${blend.mode==='screen'?'selected':''}>Screen (raise)</option>
+          </select>
+        </div>
+        <div class="control-row">
+          <label>Factor</label>
+          <input type="range" data-key="factor" min="0" max="100" value="${Math.round(blend.factor * 100)}" step="1" data-transform="div100">
+          <span class="value-display">${blend.factor.toFixed(2)}</span>
+        </div>
+        <p class="help-text">
+          <b>Add:</b> Stack heights (factor = weight of 2nd).<br>
+          <b>Max:</b> Tallest point wins at each spot.<br>
+          <b>Min:</b> Shortest wins — carves valleys.<br>
+          <b>Average:</b> Weighted mix (factor = balance).<br>
+          <b>Multiply:</b> One layer masks another.<br>
+          <b>Screen:</b> Opposite of multiply — raises everything.
+        </p>
+      </div>
+      <div class="panel-section">
+        <button class="btn btn-danger" id="btn-delete-node">✕ Delete Blend</button>
+      </div>
+    `;
+    this.bindBlendInputs(blend);
+  }
+
+  bindLayerInputs(layer) {
+    const container = document.getElementById('layer-settings');
+    // Sliders
+    container.querySelectorAll('input[type="range"]').forEach(input => {
+      const key = input.dataset.key;
+      const transform = input.dataset.transform;
+      const valueEl = input.nextElementSibling;
+      input.addEventListener('input', () => {
+        let val = Number(input.value);
+        if (transform === 'div1000') val /= 1000;
+        else if (transform === 'div100') val /= 100;
+        else if (transform === 'div10') val /= 10;
+        layer[key] = val;
+        // Display
+        if (transform) valueEl.textContent = val.toFixed(transform === 'div1000' ? 3 : transform === 'div100' ? 2 : 1);
+        else valueEl.textContent = key === 'terraceSteps' && val === 0 ? 'off' : val;
+      });
+    });
+    // Toggles
+    container.querySelectorAll('.toggle').forEach(tog => {
+      tog.addEventListener('click', () => {
+        tog.classList.toggle('active');
+        layer[tog.dataset.key] = tog.classList.contains('active');
+      });
+    });
+    // Delete
+    container.querySelector('#btn-delete-node').addEventListener('click', () => this.removeNode(layer.id));
+  }
+
+  bindBlendInputs(blend) {
+    const container = document.getElementById('blend-settings');
+    // Mode select
+    const modeSelect = container.querySelector('select[data-key="mode"]');
+    modeSelect.addEventListener('change', () => { blend.mode = modeSelect.value; });
+    // Factor slider
+    const factorInput = container.querySelector('input[data-key="factor"]');
+    const factorVal = factorInput.nextElementSibling;
+    factorInput.addEventListener('input', () => {
+      blend.factor = Number(factorInput.value) / 100;
+      factorVal.textContent = blend.factor.toFixed(2);
+    });
+    // Delete
+    container.querySelector('#btn-delete-node').addEventListener('click', () => this.removeNode(blend.id));
+  }
+
+  // ========== GENERATE & RENDER ==========
+  getWorldParams() {
+    return {
+      sizeX: Number(document.getElementById('dim-x').value),
+      sizeZ: Number(document.getElementById('dim-z').value),
+      minY: Number(document.getElementById('dim-miny').value),
+      maxY: Number(document.getElementById('dim-maxy').value),
+      seed: document.getElementById('seed-input').value,
+      seaLevel: Number(document.getElementById('sea-level').value),
+    };
+  }
+
+  getDisplayParams() {
+    return {
+      mcColors: document.getElementById('toggle-mc-colors').classList.contains('active'),
+      showWater: document.getElementById('toggle-water').classList.contains('active'),
+      wireframe: document.getElementById('toggle-wireframe').classList.contains('active'),
+      renderMode: document.getElementById('render-mode').value,
+    };
+  }
+
+  generateAndRender() {
+    const loading = document.getElementById('loading');
+    loading.classList.remove('hidden');
+
+    requestAnimationFrame(() => {
+      setTimeout(() => {
+        const startTime = performance.now();
+        const worldParams = this.getWorldParams();
+
+        // Process full chain (generates all layer heightmaps & blends)
+        this.lastFinalHeightmap = processChain(this.generator, worldParams);
+
+        // Determine which heightmap to display
+        let displayHM;
+        if (selectedNodeId === '__output__') {
+          displayHM = this.lastFinalHeightmap;
+        } else {
+          const node = this.getSelectedNode();
+          displayHM = node ? node.heightmap : this.lastFinalHeightmap;
+        }
+
+        if (displayHM) {
+          this.renderMesh(displayHM, worldParams);
+        }
+
+        const elapsed = (performance.now() - startTime).toFixed(0);
+        document.getElementById('info-time').textContent = elapsed + 'ms';
+
+        // Update node chain previews
+        this.renderNodeChain();
+        loading.classList.add('hidden');
+      }, 30);
+    });
+  }
+
+  renderMesh(heightmap, worldParamsOverride) {
+    const worldParams = worldParamsOverride || this.getWorldParams();
+    const displayParams = this.getDisplayParams();
+
+    const params = {
+      ...worldParams,
+      baseHeight: 64, // not used in mesh builder directly
+    };
+
+    const meshData = VoxelMeshBuilder.build(heightmap, params, displayParams);
+
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(meshData.positions, 3));
+    geometry.setAttribute('normal', new THREE.BufferAttribute(meshData.normals, 3));
+    geometry.setAttribute('color', new THREE.BufferAttribute(meshData.colors, 3));
+    geometry.setIndex(new THREE.BufferAttribute(meshData.indices, 1));
+
+    const material = new THREE.MeshLambertMaterial({
+      vertexColors: true,
+      wireframe: displayParams.wireframe,
+    });
+
+    if (this.terrainMesh) {
+      this.scene.remove(this.terrainMesh);
+      this.terrainMesh.geometry.dispose();
+      this.terrainMesh.material.dispose();
+    }
+
+    this.terrainMesh = new THREE.Mesh(geometry, material);
+    this.scene.add(this.terrainMesh);
+    this.currentHeightmap = heightmap;
+
+    this.grid.scale.set(worldParams.sizeX / 256, 1, worldParams.sizeZ / 256);
+
+    document.getElementById('info-blocks').textContent = meshData.blockCount.toLocaleString();
+    document.getElementById('info-faces').textContent = meshData.faceCount.toLocaleString();
+  }
+
+  updateCoords() {
+    if (!this.terrainMesh || !this.currentHeightmap) return;
+    this.raycaster.setFromCamera(this.mouse, this.camera);
+    const hits = this.raycaster.intersectObject(this.terrainMesh);
+    const coordsEl = document.getElementById('coords');
+    if (hits.length > 0) {
+      const p = hits[0].point;
+      coordsEl.textContent = `Block: ${Math.floor(p.x)}, ${Math.floor(p.y)}, ${Math.floor(p.z)}`;
+    } else {
+      coordsEl.textContent = 'Hover terrain to see coordinates';
+    }
+  }
+
+  animate() {
+    requestAnimationFrame(() => this.animate());
+    this.updateCamera();
+    this.updateCoords();
+    this.renderer.render(this.scene, this.camera);
+  }
+}
+
+// ============================================================
+// INIT
+// ============================================================
+const viewer = new TerrainViewer();
+</script>
+</body>
+</html>
