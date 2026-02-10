@@ -1,9 +1,6 @@
 {
   "itemGroup.ideomod.ideomod_tab": "Ideomod",
-  
   "block.ideomod.ideoblock": "Ideoblock",
   "block.ideomod.drill": "Mining Drill",
-  
-  "generator.ideomod.plateau": "Plateau",
-  "generator.ideomod.chunky_geology": "Chunky Geology"
+  "block.ideomod.oddstone": "Oddstone"
 }

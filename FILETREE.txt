@@ -7,13 +7,13 @@ D:.
 |   changelog.txt
 |   CREDITS.txt
 |   FILETREE.txt
-|   forge-1.20.1-47.4.10-mdk.zip
 |   generate_filetree.bat
 |   gradle.properties
 |   gradlew
 |   gradlew.bat
 |   IDEOMOD_CHANGELOG.txt
 |   LICENSE.txt
+|   open_cmd_here.bat
 |   README.txt
 |   Repo_Links.txt
 |   settings.gradle
@@ -83,14 +83,10 @@ D:.
 |   |                       |       DrillBlock$1.class
 |   |                       |       DrillBlock.class
 |   |                       |       
-|   |                       +---registry
-|   |                       |       ModBlocks.class
-|   |                       |       ModCreativeTabs.class
-|   |                       |       ModItems.class
-|   |                       |       ModWorldGen.class
-|   |                       |       
-|   |                       \---worldgen
-|   |                               PlateauChunkGenerator.class
+|   |                       \---registry
+|   |                               ModBlocks.class
+|   |                               ModCreativeTabs.class
+|   |                               ModItems.class
 |   |                               
 |   +---classpath
 |   |       runClient_minecraftClasspath.txt
@@ -164,8 +160,6 @@ D:.
 |   |       |   |   |       
 |   |       |   |   \---worldgen
 |   |       |   |       \---world_preset
-|   |       |   |               plateau.json
-|   |       |   |               
 |   |       |   \---minecraft
 |   |       |       \---tags
 |   |       |           +---blocks
@@ -174,8 +168,6 @@ D:.
 |   |       |           |           
 |   |       |           \---worldgen
 |   |       |               \---world_preset
-|   |       |                       normal.json
-|   |       |                       
 |   |       \---META-INF
 |   |               mods.toml
 |   |               
@@ -193,10 +185,17 @@ D:.
 |   |   |   \---compileTransaction
 |   |   |       +---backup-dir
 |   |   |       \---stash-dir
-|   |   |               Ideomod.class.uniqueId2
+|   |   |               ChunkyGeologyChunkGenerator.class.uniqueId4
+|   |   |               ChunkyGeologyConfig.class.uniqueId5
+|   |   |               Ideomod.class.uniqueId6
 |   |   |               ModBlocks.class.uniqueId0
-|   |   |               ModCreativeTabs.class.uniqueId3
-|   |   |               ModItems.class.uniqueId1
+|   |   |               ModCreativeTabs.class.uniqueId8
+|   |   |               ModItems.class.uniqueId2
+|   |   |               ModWorldGen.class.uniqueId3
+|   |   |               PlateauChunkGenerator.class.uniqueId10
+|   |   |               PlateauGenerator$HeightSampler.class.uniqueId1
+|   |   |               PlateauGenerator$PlateauData.class.uniqueId9
+|   |   |               PlateauGenerator.class.uniqueId7
 |   |   |               
 |   |   \---_compileJava_3
 |   +---_applyBinpatches_2
@@ -235,8 +234,18 @@ D:.
 |   |   |   2026-02-03-6.log.gz
 |   |   |   2026-02-03-7.log.gz
 |   |   |   2026-02-03-8.log.gz
-|   |   |   2026-02-04-1.log.gz
 |   |   |   2026-02-04-2.log.gz
+|   |   |   2026-02-04-3.log.gz
+|   |   |   2026-02-04-4.log.gz
+|   |   |   2026-02-05-2.log.gz
+|   |   |   2026-02-05-3.log.gz
+|   |   |   2026-02-05-4.log.gz
+|   |   |   2026-02-05-5.log.gz
+|   |   |   2026-02-05-6.log.gz
+|   |   |   2026-02-05-7.log.gz
+|   |   |   2026-02-05-8.log.gz
+|   |   |   2026-02-06-2.log.gz
+|   |   |   2026-02-08-1.log.gz
 |   |   |   debug-1.log.gz
 |   |   |   debug-2.log.gz
 |   |   |   debug-3.log.gz
@@ -248,120 +257,66 @@ D:.
 |   |   \---telemetry
 |   +---mods
 |   +---resourcepacks
-|   \---saves
-|       +---New World
-|       |   |   icon.png
-|       |   |   level.dat
-|       |   |   level.dat_old
-|       |   |   session.lock
-|       |   |   
-|       |   +---advancements
-|       |   |       380df991-f603-344c-a090-369bad2a924a.json
-|       |   |       
-|       |   +---data
-|       |   |       capabilities.dat
-|       |   |       raids.dat
-|       |   |       random_sequences.dat
-|       |   |       
-|       |   +---datapacks
-|       |   +---DIM-1
-|       |   |   \---data
-|       |   |           capabilities.dat
-|       |   |           raids.dat
-|       |   |           
-|       |   +---DIM1
-|       |   |   \---data
-|       |   |           capabilities.dat
-|       |   |           raids_end.dat
-|       |   |           
-|       |   +---entities
-|       |   |       r.-1.-1.mca
-|       |   |       r.-1.0.mca
-|       |   |       r.0.-1.mca
-|       |   |       r.0.0.mca
-|       |   |       
-|       |   +---playerdata
-|       |   |       380df991-f603-344c-a090-369bad2a924a.dat
-|       |   |       380df991-f603-344c-a090-369bad2a924a.dat_old
-|       |   |       
-|       |   +---poi
-|       |   |       r.-1.0.mca
-|       |   |       r.0.-1.mca
-|       |   |       r.0.0.mca
-|       |   |       
-|       |   +---region
-|       |   |       r.-1.-1.mca
-|       |   |       r.-1.0.mca
-|       |   |       r.-1.1.mca
-|       |   |       r.0.-1.mca
-|       |   |       r.0.0.mca
-|       |   |       r.0.1.mca
-|       |   |       r.1.-1.mca
-|       |   |       r.1.0.mca
-|       |   |       r.1.1.mca
-|       |   |       
-|       |   +---serverconfig
-|       |   |       forge-server.toml
-|       |   |       
-|       |   \---stats
-|       |           380df991-f603-344c-a090-369bad2a924a.json
-|       |           
-|       \---test
-|           |   icon.png
-|           |   level.dat
-|           |   level.dat_old
-|           |   session.lock
-|           |   
-|           +---advancements
-|           |       380df991-f603-344c-a090-369bad2a924a.json
-|           |       
-|           +---data
-|           |       capabilities.dat
-|           |       raids.dat
-|           |       random_sequences.dat
-|           |       
-|           +---datapacks
-|           +---DIM-1
-|           |   \---data
-|           |           capabilities.dat
-|           |           raids.dat
-|           |           
-|           +---DIM1
-|           |   \---data
-|           |           capabilities.dat
-|           |           raids_end.dat
-|           |           
-|           +---entities
-|           |       r.-1.-1.mca
-|           |       r.-1.0.mca
-|           |       r.0.-1.mca
-|           |       r.0.0.mca
-|           |       
-|           +---playerdata
-|           |       380df991-f603-344c-a090-369bad2a924a.dat
-|           |       380df991-f603-344c-a090-369bad2a924a.dat_old
-|           |       
-|           +---poi
-|           |       r.-1.-1.mca
-|           |       r.-1.0.mca
-|           |       r.-1.1.mca
-|           |       r.0.-1.mca
-|           |       r.0.0.mca
-|           |       
-|           +---region
-|           |       r.-1.-1.mca
-|           |       r.-1.0.mca
-|           |       r.-1.1.mca
-|           |       r.0.-1.mca
-|           |       r.0.0.mca
-|           |       r.0.1.mca
-|           |       
-|           +---serverconfig
-|           |       forge-server.toml
-|           |       
-|           \---stats
-|                   380df991-f603-344c-a090-369bad2a924a.json
-|                   
+|   +---saves
+|   |   \---test
+|   |       |   icon.png
+|   |       |   level.dat
+|   |       |   level.dat_old
+|   |       |   session.lock
+|   |       |   
+|   |       +---advancements
+|   |       |       380df991-f603-344c-a090-369bad2a924a.json
+|   |       |       
+|   |       +---data
+|   |       |       capabilities.dat
+|   |       |       raids.dat
+|   |       |       random_sequences.dat
+|   |       |       
+|   |       +---datapacks
+|   |       +---DIM-1
+|   |       |   \---data
+|   |       |           capabilities.dat
+|   |       |           raids.dat
+|   |       |           
+|   |       +---DIM1
+|   |       |   \---data
+|   |       |           capabilities.dat
+|   |       |           raids_end.dat
+|   |       |           
+|   |       +---entities
+|   |       |       r.-1.-1.mca
+|   |       |       r.-1.0.mca
+|   |       |       r.0.-1.mca
+|   |       |       r.0.0.mca
+|   |       |       
+|   |       +---playerdata
+|   |       |       380df991-f603-344c-a090-369bad2a924a.dat
+|   |       |       380df991-f603-344c-a090-369bad2a924a.dat_old
+|   |       |       
+|   |       +---poi
+|   |       |       r.-1.-1.mca
+|   |       |       r.-1.0.mca
+|   |       |       r.-1.1.mca
+|   |       |       r.0.-1.mca
+|   |       |       r.0.0.mca
+|   |       |       
+|   |       +---region
+|   |       |       r.-1.-1.mca
+|   |       |       r.-1.0.mca
+|   |       |       r.-1.1.mca
+|   |       |       r.0.-1.mca
+|   |       |       r.0.0.mca
+|   |       |       r.0.1.mca
+|   |       |       
+|   |       +---serverconfig
+|   |       |       forge-server.toml
+|   |       |       
+|   |       \---stats
+|   |               380df991-f603-344c-a090-369bad2a924a.json
+|   |               
+|   \---screenshots
+|           2026-02-05_22.07.57.png
+|           
 +---run-data
 \---src
     +---generated
@@ -377,14 +332,10 @@ D:.
     |   |               +---block
     |   |               |       DrillBlock.java
     |   |               |       
-    |   |               +---registry
-    |   |               |       ModBlocks.java
-    |   |               |       ModCreativeTabs.java
-    |   |               |       ModItems.java
-    |   |               |       ModWorldGen.java
-    |   |               |       
-    |   |               \---worldgen
-    |   |                       PlateauChunkGenerator.java
+    |   |               \---registry
+    |   |                       ModBlocks.java
+    |   |                       ModCreativeTabs.java
+    |   |                       ModItems.java
     |   |                       
     |   \---resources
     |       |   pack.mcmeta
@@ -430,8 +381,6 @@ D:.
     |       |   |   |       
     |       |   |   \---worldgen
     |       |   |       \---world_preset
-    |       |   |               plateau.json
-    |       |   |               
     |       |   \---minecraft
     |       |       \---tags
     |       |           +---blocks
@@ -440,8 +389,6 @@ D:.
     |       |           |           
     |       |           \---worldgen
     |       |               \---world_preset
-    |       |                       normal.json
-    |       |                       
     |       \---META-INF
     |               mods.toml
     |               

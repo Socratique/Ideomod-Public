@@ -30,6 +30,7 @@ public class ModCreativeTabs {
                         // Blocks
                         output.accept(ModItems.IDEOBLOCK.get());
                         output.accept(ModItems.DRILL.get());
+                        output.accept(ModItems.ODDSTONE.get());
                         
                         // Add more items here as we create them
                     })

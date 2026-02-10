@@ -25,4 +25,8 @@ public class ModItems {
     // Register the BlockItem for Drill
     public static final RegistryObject<Item> DRILL = ITEMS.register("drill",
             () -> new BlockItem(ModBlocks.DRILL.get(), new Item.Properties()));
+    
+    // Register the BlockItem for Oddstone
+    public static final RegistryObject<Item> ODDSTONE = ITEMS.register("oddstone",
+            () -> new BlockItem(ModBlocks.ODDSTONE.get(), new Item.Properties()));
 }
