@@ -1,6 +1,7 @@
 {
-  "itemGroup.ideomod.ideomod_tab": "Ideomod",
   "block.ideomod.ideoblock": "Ideoblock",
   "block.ideomod.drill": "Mining Drill",
-  "block.ideomod.oddstone": "Oddstone"
+  "block.ideomod.oddstone": "Oddstone",
+  "block.ideomod.machine_block": "Machine Block",
+  "itemGroup.ideomod.ideomod_tab": "Ideomod"
 }

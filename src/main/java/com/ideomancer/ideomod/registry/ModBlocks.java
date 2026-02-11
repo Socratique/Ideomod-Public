@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
+import com.ideomancer.ideomod.block.MachineBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
@@ -38,19 +39,28 @@ public class ModBlocks {
             ));
     
     // Register Oddstone - mob avoidance + redstone insulation + sympathetic movement
-    // Key property: isRedstoneConductor = false
-    //   This tells the game NOT to propagate redstone signal through this block.
-    //   Same approach as glass - the block is "transparent" to redstone.
-    //   Without this, redstone power from one side would pass through to the other.
     public static final RegistryObject<Block> ODDSTONE = BLOCKS.register("oddstone",
             () -> new OddstoneBlock(BlockBehaviour.Properties.of()
-                    .mapColor(MapColor.COLOR_PURPLE) // Distinctive purple-ish color on maps
-                    .strength(2.0f, 6.0f)            // Slightly harder than stone
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
-                    // THIS is what makes it not conduct redstone:
-                    // Returns false for "is this a redstone conductor?" check.
-                    // The lambda receives (blockstate, world, position) and returns boolean.
+                    .isRedstoneConductor((state, level, pos) -> false)
+            ));
+    
+    // Register Machine Block - selective stickiness + redstone conduction
+    // Key properties:
+    //   - isRedstoneConductor = false: prevents vanilla redstone propagation
+    //     through the block. We handle our own propagation via the POWER
+    //     blockstate property and custom neighborChanged logic.
+    //   - Sound: METAL (it's a machine!)
+    //   - Strength: 3.0 (tougher than stone, similar to iron)
+    public static final RegistryObject<Block> MACHINE_BLOCK = BLOCKS.register("machine_block",
+            () -> new MachineBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
                     .isRedstoneConductor((state, level, pos) -> false)
             ));
 }

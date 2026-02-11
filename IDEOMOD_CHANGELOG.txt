@@ -1,5 +1,51 @@
 # Ideomod Changelog
 
+## [2026-02-11] Machine Block
+- Added MachineBlock - a mechanical building block with two features
+  - Selective Stickiness: acts like a slime block, but only toward itself
+    - isStickyBlock() returns true, canStickTo() only accepts other Machine Blocks
+    - Exclusive with slime and honey (same pattern as vanilla honey vs slime)
+    - Piston pushes Machine Block groups together; ignores all other blocks
+  - Redstone Conduction: solid-state redstone dust
+    - Stores power level 0-15 as blockstate property (same as dust)
+    - Signal decays by 1 per Machine Block (lever 15 → 14 → 13 → ... → 0)
+    - Powers adjacent non-Machine blocks (lamps, pistons, etc. activate)
+    - Receives signal only from whitelisted redstone components
+      (levers, buttons, repeaters, comparators, dust, observers, etc.)
+      to prevent feedback loops with powered solid blocks
+    - isRedstoneConductor = false to prevent vanilla propagation
+  - Visual: color tint gradient from dark steel grey (0) to bright red (15)
+    - Uses block/item color handlers (MachineBlockColor.java)
+    - Grayscale texture tinted at runtime (same system as biome grass color)
+- New file: MachineBlock.java (com.ideomancer.ideomod.block)
+- New file: MachineBlockColor.java (com.ideomancer.ideomod.client)
+- Updated: ModBlocks, ModItems, ModCreativeTabs registries
+- Assets: blockstate (16 power variants → 1 model), block/item models with
+  tintindex, placeholder grayscale texture, loot table, recipe
+  (4 iron + 4 redstone + 1 slime = 1 machine block), pickaxe tag, lang
+- Status: Working
+
+### Implementation fixes during development:
+- Power feedback loop: Machine Block originally accepted redstone signal
+  from ALL neighbors, causing loops where it powered a lamp, the lamp's
+  block became "weakly powered," and the Machine Block read that power
+  back as input. Fixed with whitelist approach - only accepts signal from
+  actual redstone components (levers, buttons, repeaters, etc.).
+- Asymmetric stickiness: originally wanted slime to grab Machine Block
+  but not vice versa. Forge's canStickTo is inherently symmetric (both
+  blocks must agree). Attempted PistonEvent-based workarounds but they
+  caused jank. Settled on clean mutual exclusion (Machine Block and slime
+  don't interact at all), same pattern as honey vs slime in vanilla.
+
+### Known issues / future work:
+- True asymmetric stickiness (slime grabs Machine, Machine doesn't grab
+  slime) would require mixins to modify PistonStructureResolver. Mixin
+  infrastructure planned for future features.
+- Texture is placeholder grayscale. Needs proper pixel art with circuit/
+  mechanical pattern.
+- Recipe is placeholder.
+- Could add particle effects when powered (redstone sparkles).
+
 ## [2026-02-11] Oddstone Block
 - Added OddstoneBlock - a strange stone with three unique properties
   - Mob Avoidance: all mobs refuse to pathfind over it

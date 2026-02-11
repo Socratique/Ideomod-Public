@@ -31,6 +31,7 @@ public class ModCreativeTabs {
                         output.accept(ModItems.IDEOBLOCK.get());
                         output.accept(ModItems.DRILL.get());
                         output.accept(ModItems.ODDSTONE.get());
+                        output.accept(ModItems.MACHINE_BLOCK.get());
                         
                         // Add more items here as we create them
                     })

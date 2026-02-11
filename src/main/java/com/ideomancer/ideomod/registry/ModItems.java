@@ -18,7 +18,6 @@ public class ModItems {
             DeferredRegister.create(ForgeRegistries.ITEMS, Ideomod.MOD_ID);
     
     // Register the BlockItem for Ideoblock
-    // This allows the block to exist as an item in inventory
     public static final RegistryObject<Item> IDEOBLOCK = ITEMS.register("ideoblock",
             () -> new BlockItem(ModBlocks.IDEOBLOCK.get(), new Item.Properties()));
     
@@ -29,4 +28,8 @@ public class ModItems {
     // Register the BlockItem for Oddstone
     public static final RegistryObject<Item> ODDSTONE = ITEMS.register("oddstone",
             () -> new BlockItem(ModBlocks.ODDSTONE.get(), new Item.Properties()));
+    
+    // Register the BlockItem for Machine Block
+    public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
+            () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
 }
