@@ -1,5 +1,57 @@
 # Ideomod Changelog
 
+## [2026-02-11] Oddstone Block
+- Added OddstoneBlock - a strange stone with three unique properties
+  - Mob Avoidance: all mobs refuse to pathfind over it
+    - JSON config (config/ideomod/oddstone.json) lists affected mobs
+    - Auto-generated on first launch with all vanilla 1.20.1 land mobs
+    - Remove mobs from list to create exceptions
+  - Redstone Insulation: does not conduct redstone signal
+    - Behaves like glass for redstone purposes
+    - Achieved via .isRedstoneConductor(false) in block properties
+  - Sympathetic Movement: wireless slime block behavior
+    - Each face searches outward (configurable radius, default 5) for nearest Oddstone
+    - Max 6 connections per block (one per face), searches through solid blocks
+    - Connected Oddstones form a group that moves together when pushed by piston
+    - Sympathetic Oddstones push non-Oddstone blocks ahead of them
+    - All pushed blocks count toward the 12-block piston limit
+    - Exceeding 12 blocks cancels the piston push entirely
+    - Obstructed sympathetic blocks (immovable block ahead) stay put
+    - Chains through connected Oddstones (A grabs B, B grabs C, etc.)
+- New package: com.ideomancer.ideomod.config (OddstoneConfig.java)
+- New file: OddstoneMovementHandler.java (piston event listener)
+- Assets: blockstate, block/item models, placeholder texture (purple-grey stone)
+- Data: loot table, placeholder recipe (4 stone + 1 redstone = 4 oddstone), pickaxe tag
+- Status: Working
+
+### Implementation fixes during development:
+- Mob pathfinding: Forge's getBlockPathType hook alone was not blocking mobs.
+  Fixed by adding vanilla isPathfindable() override returning false (same
+  approach as fences/walls). Also changed DANGER_OTHER to DAMAGE_OTHER in
+  Forge hooks for stronger avoidance penalty.
+- Sympathetic obstruction: initially the whole piston push would fail if ANY
+  sympathetic oddstone was blocked. Changed so obstructed oddstones simply
+  stay put, and only the 12-block limit causes a full piston failure.
+- Sympathetic push chains: initially sympathetic oddstones could only move
+  into empty spaces. Fixed so they push blocks ahead of them (like any
+  piston-pushed block would), with those pushed blocks counting toward
+  the 12-block limit.
+
+### Known issues / future work:
+- Sympathetic oddstone push chains don't trigger slime block stickiness.
+  If a sympathetically moved oddstone pushes a slime block, blocks attached
+  to that slime block don't come along. Works correctly for catalyst
+  oddstones (directly pushed by piston). Fixing this requires deeper
+  integration with PistonStructureResolver.
+- Future feature: Oddstone should stick to slime blocks when the ODDSTONE
+  moves (treated as sticky like slime), but slime blocks moving should NOT
+  stick to Oddstone (one-way stickiness). This is the isStickyBlock/canStickTo
+  pattern from Forge's IForgeBlock.
+- Face search is axis-aligned only (directly in line with each face). Could
+  be expanded to a half-sphere/cone search per face in the future.
+- Texture is placeholder. Needs proper pixel art.
+- Recipe is placeholder.
+
 ## [2026-02-04] Mining Drill Block
 - Added DrillBlock
   - Directional placement like pistons (faces where player looks)

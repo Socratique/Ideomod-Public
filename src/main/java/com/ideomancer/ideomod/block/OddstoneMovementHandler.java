@@ -69,12 +69,15 @@ public class OddstoneMovementHandler {
      * Stores a planned sympathetic movement for execution after piston fires.
      */
     private static class MovementPlan {
-        final Set<BlockPos> blocksToMove;
+        final Set<BlockPos> oddstonesToMove;
+        final Map<BlockPos, List<BlockPos>> pushChains; // blocks each oddstone pushes ahead of it
         final Direction moveDirection;
         final long tick;
 
-        MovementPlan(Set<BlockPos> blocksToMove, Direction moveDirection, long tick) {
-            this.blocksToMove = blocksToMove;
+        MovementPlan(Set<BlockPos> oddstonesToMove, Map<BlockPos, List<BlockPos>> pushChains,
+                     Direction moveDirection, long tick) {
+            this.oddstonesToMove = oddstonesToMove;
+            this.pushChains = pushChains;
             this.moveDirection = moveDirection;
             this.tick = tick;
         }
@@ -110,42 +113,57 @@ public class OddstoneMovementHandler {
 
         if (sympatheticGroup.isEmpty()) return;
 
-        // Count total blocks: piston's own push + sympathetic
-        // We need to estimate how many blocks the piston is already pushing
+        // Count blocks the piston is already pushing directly
         int pistonPushCount = countPistonPushBlocks(level, pistonPos, pistonFacing, extending);
-        int totalBlocks = pistonPushCount + sympatheticGroup.size();
 
-        if (totalBlocks > PISTON_PUSH_LIMIT) {
-            // Too many blocks - cancel the piston push entirely, just like
-            // when slime blocks make a group too large
-            event.setCanceled(true);
-            Ideomod.LOGGER.debug("Piston push cancelled: {} blocks (piston: {}, sympathetic: {}) exceeds limit of {}",
-                    totalBlocks, pistonPushCount, sympatheticGroup.size(), PISTON_PUSH_LIMIT);
-            return;
-        }
+        // Now for each sympathetic Oddstone, figure out the "push chain" in
+        // front of it - any pushable blocks it would shove ahead of it,
+        // just like a piston-pushed block does.
+        // 
+        // Also collect all blocks we need to keep track of for the move set.
+        int totalCount = pistonPushCount;
+        Set<BlockPos> allOddstonePositions = new LinkedHashSet<>(directOddstones);
+        allOddstonePositions.addAll(sympatheticGroup);
 
-        // Check if all sympathetic blocks can actually move to their destinations
+        // Map each sympathetic oddstone to the push chain in front of it
+        Map<BlockPos, List<BlockPos>> pushChains = new LinkedHashMap<>();
+        Set<BlockPos> movableOddstones = new LinkedHashSet<>();
+
         for (BlockPos pos : sympatheticGroup) {
-            BlockPos dest = pos.relative(moveDirection);
+            List<BlockPos> chain = scanPushChain(level, pos, moveDirection, allOddstonePositions);
 
-            // Destination must be movable-into:
-            // air, replaceable, OR another oddstone that's also in the move set
-            // (including the directly-pushed ones)
-            if (!canMoveInto(level, dest, sympatheticGroup, directOddstones, moveDirection)) {
-                // Obstructed - cancel the whole push, like slime blocks do
+            if (chain == null) {
+                // Hit an immovable block (obsidian, bedrock) - this oddstone
+                // is obstructed and stays put
+                Ideomod.LOGGER.debug("Sympathetic Oddstone at {} obstructed by immovable block, staying put", pos);
+                continue;
+            }
+
+            // Count: the oddstone itself + any blocks it's pushing
+            int chainCost = 1 + chain.size();
+
+            if (totalCount + chainCost > PISTON_PUSH_LIMIT) {
+                // Adding this oddstone and its chain would exceed the limit
+                // Cancel the whole piston push
                 event.setCanceled(true);
-                Ideomod.LOGGER.debug("Piston push cancelled: sympathetic Oddstone at {} blocked at destination {}",
-                        pos, dest);
+                Ideomod.LOGGER.debug("Piston push cancelled: total {} + chain {} exceeds limit of {}",
+                        totalCount, chainCost, PISTON_PUSH_LIMIT);
                 return;
             }
+
+            totalCount += chainCost;
+            movableOddstones.add(pos);
+            pushChains.put(pos, chain);
         }
 
-        // Everything checks out - store the plan for Post to execute
-        long key = pistonPos.asLong() ^ (tick * 31);
-        pendingMoves.put(key, new MovementPlan(sympatheticGroup, moveDirection, tick));
+        if (movableOddstones.isEmpty()) return;
 
-        Ideomod.LOGGER.debug("Piston pre-approved: {} sympathetic Oddstone(s) will move {}",
-                sympatheticGroup.size(), moveDirection);
+        // Store the plan for Post to execute
+        long key = pistonPos.asLong() ^ (tick * 31);
+        pendingMoves.put(key, new MovementPlan(movableOddstones, pushChains, moveDirection, tick));
+
+        Ideomod.LOGGER.debug("Piston pre-approved: {} sympathetic Oddstone(s) + pushed blocks, total {} blocks",
+                movableOddstones.size(), totalCount);
     }
 
     /**
@@ -167,11 +185,22 @@ public class OddstoneMovementHandler {
         // Clean up old entries (safety net)
         pendingMoves.entrySet().removeIf(e -> tick - e.getValue().tick > 5);
 
-        // Execute the sympathetic movement
-        moveBlocks(level, plan.blocksToMove, plan.moveDirection);
+        // Build the complete set of ALL blocks to move:
+        // Each sympathetic oddstone + the blocks it's pushing ahead of it
+        Set<BlockPos> allBlocksToMove = new LinkedHashSet<>();
+        for (BlockPos oddPos : plan.oddstonesToMove) {
+            // Add the pushed blocks first (they're further in move direction)
+            List<BlockPos> chain = plan.pushChains.getOrDefault(oddPos, List.of());
+            allBlocksToMove.addAll(chain);
+            // Then the oddstone itself
+            allBlocksToMove.add(oddPos);
+        }
 
-        Ideomod.LOGGER.debug("Sympathetically moved {} Oddstone block(s) {}",
-                plan.blocksToMove.size(), plan.moveDirection);
+        // Execute the movement
+        moveBlocks(level, allBlocksToMove, plan.moveDirection);
+
+        Ideomod.LOGGER.debug("Sympathetically moved {} total block(s) {}",
+                allBlocksToMove.size(), plan.moveDirection);
     }
 
     // ========================================================================
@@ -313,28 +342,56 @@ public class OddstoneMovementHandler {
     // ========================================================================
 
     /**
-     * Checks if a destination position can receive a moving block.
+     * Scans the line of blocks in front of a sympathetic Oddstone in the
+     * move direction. Returns the list of pushable blocks it would shove
+     * ahead of it (like a piston pushing a row of blocks).
+     * 
+     * Returns null if the chain hits an immovable block (obsidian, bedrock,
+     * extended piston, etc.) - meaning this Oddstone is obstructed.
+     * 
+     * Returns an empty list if the space ahead is clear (air/replaceable).
+     * 
+     * Example moving EAST:
+     *   [Oddstone] [dirt] [stone] [air]
+     *   scanPushChain returns: [dirt_pos, stone_pos]
+     *   These two blocks will be pushed east along with the oddstone.
+     * 
+     * @param allOddstones Set of all oddstone positions (used to skip
+     *                     oddstones that are also moving out of the way)
      */
-    private static boolean canMoveInto(Level level, BlockPos destination,
-                                        Set<BlockPos> sympatheticGroup,
-                                        List<BlockPos> directlyPushed,
-                                        Direction moveDirection) {
-        BlockState destState = level.getBlockState(destination);
+    private static List<BlockPos> scanPushChain(Level level, BlockPos oddstonePos,
+                                                 Direction moveDirection,
+                                                 Set<BlockPos> allOddstones) {
+        List<BlockPos> chain = new ArrayList<>();
+        BlockPos checkPos = oddstonePos.relative(moveDirection);
 
-        // Air or replaceable = fine
-        if (destState.isAir() || destState.canBeReplaced()) {
-            return true;
-        }
+        for (int i = 0; i < PISTON_PUSH_LIMIT; i++) {
+            BlockState state = level.getBlockState(checkPos);
 
-        // If destination contains an Oddstone that's also moving in the
-        // same direction, it'll vacate the space (conga line effect)
-        if (destState.is(ModBlocks.ODDSTONE.get())) {
-            if (sympatheticGroup.contains(destination) || directlyPushed.contains(destination)) {
-                return true;
+            // Air or replaceable = end of chain, space is clear
+            if (state.isAir() || state.canBeReplaced()) {
+                return chain;
             }
+
+            // Another Oddstone that's also part of the move group = it'll
+            // vacate this space, so the chain ends here
+            if (state.is(ModBlocks.ODDSTONE.get()) && allOddstones.contains(checkPos)) {
+                return chain;
+            }
+
+            // Check if this block is pushable (same check pistons use)
+            if (!PistonBaseBlock.isPushable(state, level, checkPos, moveDirection, true, moveDirection)) {
+                // Hit an immovable block - this oddstone is obstructed
+                return null;
+            }
+
+            // Pushable block - add to chain and keep scanning
+            chain.add(checkPos);
+            checkPos = checkPos.relative(moveDirection);
         }
 
-        return false;
+        // Ran out of scan range - treat as obstructed
+        return null;
     }
 
     /**
