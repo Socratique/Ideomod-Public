@@ -61,8 +61,13 @@ D:.
 |   |   compiler.xml
 |   |   gradle.xml
 |   |   misc.xml
+|   |   modules.xml
+|   |   vcs.xml
 |   |   workspace.xml
 |   |   
+|   +---modules
+|   |       Ideomod.main.iml
+|   |       
 |   \---runConfigurations
 |           runClient.xml
 |           runData.xml
@@ -83,16 +88,26 @@ D:.
 |   |                       |       DrillBlock$1.class
 |   |                       |       DrillBlock.class
 |   |                       |       MachineBlock.class
+|   |                       |       OddstoneBlock$1.class
 |   |                       |       OddstoneBlock.class
-|   |                       |       OddstoneMovementHandler$1.class
-|   |                       |       OddstoneMovementHandler$MovementPlan.class
-|   |                       |       OddstoneMovementHandler.class
+|   |                       |       OddstonePortalBlock$1.class
+|   |                       |       OddstonePortalBlock$PortalBounds.class
+|   |                       |       OddstonePortalBlock.class
+|   |                       |       OddstonePortalFrameDetector$FrameResult.class
+|   |                       |       OddstonePortalFrameDetector.class
+|   |                       |       OddstonePortalSavedData$PortalEntry.class
+|   |                       |       OddstonePortalSavedData$RegisterResult.class
+|   |                       |       OddstonePortalSavedData.class
+|   |                       |       StickinessRules.class
 |   |                       |       
 |   |                       +---client
 |   |                       |       MachineBlockColor.class
 |   |                       |       
 |   |                       +---config
 |   |                       |       OddstoneConfig.class
+|   |                       |       
+|   |                       +---mixin
+|   |                       |       PistonStructureResolverMixin.class
 |   |                       |       
 |   |                       \---registry
 |   |                               ModBlocks.class
@@ -104,6 +119,9 @@ D:.
 |   |       runData_minecraftClasspath.txt
 |   |       runGameTestServer_minecraftClasspath.txt
 |   |       runServer_minecraftClasspath.txt
+|   |       
+|   +---createMcpToSrg
+|   |       output.tsrg
 |   |       
 |   +---createSrgToMcp
 |   |       output.srg
@@ -128,6 +146,7 @@ D:.
 |   +---natives
 |   +---resources
 |   |   \---main
+|   |       |   ideomod.mixins.json
 |   |       |   pack.mcmeta
 |   |       |   
 |   |       +---assets
@@ -137,6 +156,7 @@ D:.
 |   |       |       |       ideoblock.json
 |   |       |       |       machine_block.json
 |   |       |       |       oddstone.json
+|   |       |       |       oddstone_portal.json
 |   |       |       |       
 |   |       |       +---lang
 |   |       |       |       en_us.json
@@ -148,6 +168,8 @@ D:.
 |   |       |       |   |       ideoblock.json
 |   |       |       |   |       machine_block.json
 |   |       |       |   |       oddstone.json
+|   |       |       |   |       oddstone_portal_ew.json
+|   |       |       |   |       oddstone_portal_ns.json
 |   |       |       |   |       
 |   |       |       |   \---item
 |   |       |       |           drill.json
@@ -203,6 +225,9 @@ D:.
 |   |   |                       Start.java
 |   |   |                       
 |   |   +---compileJava
+|   |   |   |   compileJava-mappings.tsrg
+|   |   |   |   compileJava-refmap.json
+|   |   |   |   ideomod.refmap.json
 |   |   |   |   previous-compilation-data.bin
 |   |   |   |   
 |   |   |   \---compileTransaction
@@ -246,6 +271,10 @@ D:.
 |   |   \---ideomod
 |   |           oddstone.json
 |   |           
+|   +---crash-reports
+|   |       crash-2026-02-11_21.17.54-fml.txt
+|   |       crash-2026-02-11_22.22.30-server.txt
+|   |       
 |   +---defaultconfigs
 |   +---logs
 |   |   |   2026-02-03-2.log.gz
@@ -270,12 +299,25 @@ D:.
 |   |   |   2026-02-08-3.log.gz
 |   |   |   2026-02-10-1.log.gz
 |   |   |   2026-02-10-2.log.gz
-|   |   |   2026-02-11-1.log.gz
+|   |   |   2026-02-11-10.log.gz
+|   |   |   2026-02-11-11.log.gz
+|   |   |   2026-02-11-12.log.gz
+|   |   |   2026-02-11-13.log.gz
+|   |   |   2026-02-11-14.log.gz
 |   |   |   2026-02-11-2.log.gz
 |   |   |   2026-02-11-3.log.gz
 |   |   |   2026-02-11-4.log.gz
 |   |   |   2026-02-11-5.log.gz
 |   |   |   2026-02-11-6.log.gz
+|   |   |   2026-02-11-7.log.gz
+|   |   |   2026-02-11-8.log.gz
+|   |   |   2026-02-11-9.log.gz
+|   |   |   2026-02-12-1.log.gz
+|   |   |   2026-02-12-2.log.gz
+|   |   |   2026-02-12-3.log.gz
+|   |   |   2026-02-12-4.log.gz
+|   |   |   2026-02-12-5.log.gz
+|   |   |   2026-02-12-6.log.gz
 |   |   |   debug-1.log.gz
 |   |   |   debug-2.log.gz
 |   |   |   debug-3.log.gz
@@ -288,6 +330,95 @@ D:.
 |   +---mods
 |   +---resourcepacks
 |   +---saves
+|   |   +---New World
+|   |   |   |   icon.png
+|   |   |   |   level.dat
+|   |   |   |   level.dat_old
+|   |   |   |   session.lock
+|   |   |   |   
+|   |   |   +---advancements
+|   |   |   |       380df991-f603-344c-a090-369bad2a924a.json
+|   |   |   |       
+|   |   |   +---data
+|   |   |   |       capabilities.dat
+|   |   |   |       ideomod_oddstone_portals.dat
+|   |   |   |       raids.dat
+|   |   |   |       
+|   |   |   +---datapacks
+|   |   |   +---DIM-1
+|   |   |   |   \---data
+|   |   |   |           capabilities.dat
+|   |   |   |           raids.dat
+|   |   |   |           
+|   |   |   +---DIM1
+|   |   |   |   \---data
+|   |   |   |           capabilities.dat
+|   |   |   |           raids_end.dat
+|   |   |   |           
+|   |   |   +---entities
+|   |   |   |       r.-1.-1.mca
+|   |   |   |       r.-1.-2.mca
+|   |   |   |       r.-1.0.mca
+|   |   |   |       r.-1.1.mca
+|   |   |   |       r.-2.-1.mca
+|   |   |   |       r.-2.-2.mca
+|   |   |   |       r.-2.0.mca
+|   |   |   |       r.-2.1.mca
+|   |   |   |       r.0.-1.mca
+|   |   |   |       r.0.-2.mca
+|   |   |   |       r.0.0.mca
+|   |   |   |       r.0.1.mca
+|   |   |   |       r.1.-1.mca
+|   |   |   |       r.1.-2.mca
+|   |   |   |       r.1.0.mca
+|   |   |   |       r.1.1.mca
+|   |   |   |       
+|   |   |   +---playerdata
+|   |   |   |       380df991-f603-344c-a090-369bad2a924a.dat
+|   |   |   |       380df991-f603-344c-a090-369bad2a924a.dat_old
+|   |   |   |       
+|   |   |   +---poi
+|   |   |   |       r.-1.-1.mca
+|   |   |   |       r.-1.-2.mca
+|   |   |   |       r.-1.0.mca
+|   |   |   |       r.-1.1.mca
+|   |   |   |       r.-2.-1.mca
+|   |   |   |       r.-2.-2.mca
+|   |   |   |       r.-2.0.mca
+|   |   |   |       r.-2.1.mca
+|   |   |   |       r.0.-1.mca
+|   |   |   |       r.0.-2.mca
+|   |   |   |       r.0.0.mca
+|   |   |   |       r.0.1.mca
+|   |   |   |       r.1.-1.mca
+|   |   |   |       r.1.-2.mca
+|   |   |   |       r.1.0.mca
+|   |   |   |       r.1.1.mca
+|   |   |   |       
+|   |   |   +---region
+|   |   |   |       r.-1.-1.mca
+|   |   |   |       r.-1.-2.mca
+|   |   |   |       r.-1.0.mca
+|   |   |   |       r.-1.1.mca
+|   |   |   |       r.-2.-1.mca
+|   |   |   |       r.-2.-2.mca
+|   |   |   |       r.-2.0.mca
+|   |   |   |       r.-2.1.mca
+|   |   |   |       r.0.-1.mca
+|   |   |   |       r.0.-2.mca
+|   |   |   |       r.0.0.mca
+|   |   |   |       r.0.1.mca
+|   |   |   |       r.1.-1.mca
+|   |   |   |       r.1.-2.mca
+|   |   |   |       r.1.0.mca
+|   |   |   |       r.1.1.mca
+|   |   |   |       
+|   |   |   +---serverconfig
+|   |   |   |       forge-server.toml
+|   |   |   |       
+|   |   |   \---stats
+|   |   |           380df991-f603-344c-a090-369bad2a924a.json
+|   |   |           
 |   |   \---test
 |   |       |   icon.png
 |   |       |   level.dat
@@ -342,9 +473,11 @@ D:.
 |   |       |       r.-2.0.mca
 |   |       |       r.-2.1.mca
 |   |       |       r.0.-1.mca
+|   |       |       r.0.-2.mca
 |   |       |       r.0.0.mca
 |   |       |       r.0.1.mca
 |   |       |       r.1.-1.mca
+|   |       |       r.1.-2.mca
 |   |       |       r.1.0.mca
 |   |       |       r.1.1.mca
 |   |       |       
@@ -395,7 +528,10 @@ D:.
     |   |               |       DrillBlock.java
     |   |               |       MachineBlock.java
     |   |               |       OddstoneBlock.java
-    |   |               |       OddstoneMovementHandler.java
+    |   |               |       OddstonePortalBlock.java
+    |   |               |       OddstonePortalFrameDetector.java
+    |   |               |       OddstonePortalSavedData.java
+    |   |               |       StickinessRules.java
     |   |               |       
     |   |               +---client
     |   |               |       MachineBlockColor.java
@@ -403,12 +539,16 @@ D:.
     |   |               +---config
     |   |               |       OddstoneConfig.java
     |   |               |       
+    |   |               +---mixin
+    |   |               |       PistonStructureResolverMixin.java
+    |   |               |       
     |   |               \---registry
     |   |                       ModBlocks.java
     |   |                       ModCreativeTabs.java
     |   |                       ModItems.java
     |   |                       
     |   \---resources
+    |       |   ideomod.mixins.json
     |       |   pack.mcmeta
     |       |   
     |       +---assets
@@ -418,6 +558,7 @@ D:.
     |       |       |       ideoblock.json
     |       |       |       machine_block.json
     |       |       |       oddstone.json
+    |       |       |       oddstone_portal.json
     |       |       |       
     |       |       +---lang
     |       |       |       en_us.json
@@ -429,6 +570,8 @@ D:.
     |       |       |   |       ideoblock.json
     |       |       |   |       machine_block.json
     |       |       |   |       oddstone.json
+    |       |       |   |       oddstone_portal_ew.json
+    |       |       |   |       oddstone_portal_ns.json
     |       |       |   |       
     |       |       |   \---item
     |       |       |           drill.json
