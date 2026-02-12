@@ -18,14 +18,21 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
  * 
  * 1. SELECTIVE STICKINESS:
  * 
- *    Acts like a slime block, but ONLY sticks to other Machine Blocks.
- *    When pushed by a piston, it drags adjacent Machine Blocks along
- *    (which drag theirs, etc.), but ignores all other block types.
+ *    Acts like a slime block, but ONLY sticks to other Machine Blocks
+ *    when pushed. Does not grab slime, honey, or regular blocks.
  * 
- *    Exclusive with slime and honey - same pattern as honey vs slime
- *    in vanilla (they refuse to stick to each other).
+ *    ONE-WAY with slime: Slime CAN grab Machine Block (drags it along),
+ *    but Machine Block does NOT grab slime. The Machine Block→slime
+ *    direction is blocked by our mixin in PistonStructureResolver
+ *    via StickinessRules.
  * 
- *    Uses Forge's isStickyBlock/canStickTo hooks. No event handler needed.
+ *    canStickTo returns true for slime so that Forge's two-way check
+ *    passes when slime is the grabber. The mixin handles blocking
+ *    the reverse direction.
+ * 
+ *    Exclusive with honey - same pattern as slime vs honey in vanilla.
+ * 
+ *    Uses Forge's isStickyBlock/canStickTo hooks + mixin for asymmetry.
  * 
  * 2. REDSTONE CONDUCTION: Acts like redstone dust in solid block form.
  *    Signal decays by 1 per Machine Block. Only accepts signal from
@@ -52,7 +59,7 @@ public class MachineBlock extends Block {
     }
 
     // ========================================================================
-    // FEATURE 1: Selective Stickiness (Forge hooks)
+    // FEATURE 1: Selective Stickiness (Forge hooks + mixin)
     // ========================================================================
 
     /**
@@ -66,21 +73,30 @@ public class MachineBlock extends Block {
     }
 
     /**
-     * Controls WHAT this block sticks to.
+     * Controls WHAT this block agrees to stick to.
      * 
-     * - Machine Block + Machine Block: stick (both return true)
-     * - Machine Block + Slime: EXCLUDED (we say no)
-     * - Machine Block + Honey: EXCLUDED (we say no)
-     * - Machine Block + anything else: no (not a Machine Block)
+     * This is called in TWO situations by the Forge piston resolver:
+     *   A) When Machine Block is expanding and checks a neighbor
+     *   B) When a NEIGHBOR is expanding and the resolver asks Machine Block
+     *      "do you agree to be grabbed?" (the two-way check)
      * 
-     * This is the same pattern vanilla uses for honey vs slime exclusion.
+     * We return true for both Machine Blocks and slime:
+     *   - Machine Block + Machine Block: YES (mutual sticking)
+     *   - Machine Block + Slime: YES (so slime CAN grab us via two-way check)
+     *   - Machine Block + Honey: NO (exclusive, same as vanilla slime vs honey)
+     *   - Machine Block + anything else: NO
+     * 
+     * The problem with returning true for slime: when Machine Block
+     * expands, it would also grab slime. We DON'T want that.
+     * The mixin handles blocking Machine Block→slime grabs.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        // Exclusive with slime and honey
-        if (other.getBlock() instanceof SlimeBlock) return false;
+        // Exclusive with honey
         if (other.getBlock() instanceof HoneyBlock) return false;
-        // Stick to other Machine Blocks only
+        // Agree to stick with slime (so slime can grab us)
+        if (other.getBlock() instanceof SlimeBlock) return true;
+        // Stick to other Machine Blocks
         return other.getBlock() instanceof MachineBlock;
     }
 

@@ -1,5 +1,101 @@
 # Ideomod Changelog
 
+## [2026-02-12] Oddstone Portals
+- Added Oddstone Portal system - overworld-to-overworld teleportation
+  - Frame: rectangular ring of Oddstone (minimum 5x5 outer, 3x3 interior)
+    with crafted mineral blocks in all 4 corners
+  - Corner Address System: the 4 corner blocks form a "frequency" / address
+    - Position-sensitive: TL, TR, BR, BL order matters
+    - Normalized across viewing direction (front/back produce same address)
+    - 14 valid corner types: coal, iron, copper, gold, redstone, lapis,
+      diamond, emerald, netherite, quartz, amethyst, raw_iron, raw_copper,
+      raw_gold blocks
+    - 14^4 = 38,416 possible unique addresses per dimension
+  - Activation: ALL Oddstone blocks in the frame must receive redstone signal
+    - Any Oddstone receiving power triggers frame detection
+    - Frame detector scans from interior outward (nether portal style)
+    - Validates structure, checks all Oddstone blocks are powered
+    - Registers address in per-dimension saved data
+    - If matching address found: portals link automatically
+    - If address already has a linked pair: portal refuses to light
+    - Sound: flint & steel ignition on success, fire extinguish on failure
+  - Deactivation: portal clears and unregisters when:
+    - Any Oddstone frame block loses redstone signal
+    - Any Oddstone frame block is broken
+    - Any corner block is broken
+  - Linked Travel: teleports player to partner portal
+    - Preserves relative position within the frame (like nether portals)
+    - Position mapped as fraction (0.0-1.0) horizontally and vertically
+    - Works across different-sized portals (scales proportionally)
+  - Unlinked Travel: scatter teleport as penalty
+    - Random direction, 200-1000 blocks distance
+    - Lands on surface (heightmap) - no air drops
+    - Deals 5 hearts (10 HP) magic damage
+    - Portal looks identical to linked - player doesn't know until they step in
+  - Per-dimension address spaces: overworld and nether store separate registries
+    - Same corner code can exist as independent pairs in each dimension
+    - Uses Minecraft SavedData system, persists across saves/chunk unloads
+  - Portal block: light blue tinted nether portal texture
+    - Axis property (X/Z) for proper visual orientation
+    - Light level 11, no collision, indestructible by hand
+    - Cannot be pushed by pistons
+    - No item form (not placeable by hand, like nether portal blocks)
+    - Color tint via block color handler (0x44DDFF cyan, reuses nether portal texture)
+  - 4-second cooldown between teleports (vanilla portal cooldown system)
+- New files:
+  - OddstonePortalBlock.java (com.ideomancer.ideomod.block)
+  - OddstonePortalFrameDetector.java (com.ideomancer.ideomod.block)
+  - OddstonePortalSavedData.java (com.ideomancer.ideomod.block)
+- Modified files:
+  - OddstoneBlock.java - added neighborChanged for portal activation/deactivation
+  - MachineBlockColor.java - added portal block color handler (light blue tint)
+  - ModBlocks.java - registered ODDSTONE_PORTAL block
+  - ModItems.java - note: no item form for portal block
+- Assets: blockstate (X/Z axis variants), 2 block models (ew/ns thin planes),
+  lang file update
+- Status: Working
+
+### Implementation fixes during development:
+- Frame detection: original approach traced frame from the triggered block
+  outward, which was position-dependent and fragile. Rewrote to scan from
+  interior air blocks outward (nether portal style) - works from any frame
+  block position.
+- Corner blocks: originally used ore blocks (diamond_ore, iron_ore).
+  Changed to crafted mineral blocks (diamond_block, iron_block) per design.
+- Activation sound: initially used END_PORTAL_SPAWN (too loud), then
+  PORTAL_TRIGGER (triggers nether teleport connotation). Settled on
+  FLINTANDSTEEL_USE (matches nether portal lighting).
+- Teleport: initially used handleInsidePortal() for nether-style screen
+  effect, but this is hardcoded to send player to the nether. Reverted
+  to instant teleport with cooldown.
+- Scatter teleport: originally picked random Y level, causing air drops.
+  Fixed to use heightmap for surface landing.
+- Deactivation: initial approach had individual Oddstone blocks checking
+  their own power state, causing newly-powered blocks to immediately
+  deactivate portals lit by other frame blocks. Fixed with "all must be
+  powered" rule - frame detector validates all Oddstone blocks have signal.
+- Corner block breaking: portal blocks are diagonal to corners, so
+  updateShape never fires on portal blocks when corner breaks. Fixed by
+  detecting corner removal in OddstoneBlock.neighborChanged - Oddstone
+  frame blocks adjacent to the corner DO receive the notification.
+- Stale saved data: old registrations from ore-corner testing persisted
+  in world save, blocking new mineral-block addresses. Clearing
+  ideomod_oddstone_portals.dat from world data folder resolves this.
+
+### Known issues / future work:
+- No nether portal screen overlay effect. Adding it properly requires
+  custom client-server networking since vanilla's portalTime counter is
+  hardcoded to nether travel. Planned for future polish pass.
+- Portal has no custom particles (could add light blue particles later).
+- Portal texture is recolored nether portal via tint. Could create a
+  custom animated texture with .mcmeta for a unique visual.
+- Future: naturally generated structures containing lit/ruined Oddstone
+  portals with lore books hinting at addresses. Three discovery types:
+  lit+linked (rarest), lit+unlinked, and ruined (frame partially broken).
+- Future: portal screen tint via custom network packet.
+- Oddstone recipe is still placeholder. Rarity intended to be greater
+  than diamond as the primary bottleneck for portal construction.
+
 ## [2026-02-11] Machine Block
 - Added MachineBlock - a mechanical building block with two features
   - Selective Stickiness: acts like a slime block, but only toward itself

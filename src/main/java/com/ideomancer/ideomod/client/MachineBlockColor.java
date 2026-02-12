@@ -9,69 +9,73 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * Registers block and item color handlers for Machine Block's
- * power-level gradient.
+ * Registers block and item color handlers for:
  * 
- * HOW MINECRAFT BLOCK TINTING WORKS:
- * ===================================
- * Normally a block's texture is rendered as-is. But you can register
- * a "color handler" that multiplies a color onto the texture at runtime.
+ * 1. Machine Block's power-level gradient (dark grey -> bright red)
+ * 2. Oddstone Portal's light blue tint (recolors nether portal texture)
  * 
- * This is the same system that makes grass/leaves change color based on
- * biome temperature. For us, it changes Machine Block's color based on
- * its redstone power level.
+ * HOW THE PORTAL TINT WORKS:
+ * ==========================
+ * We reuse the vanilla nether portal texture (which is purple/magenta).
+ * By applying a light blue tint via the color handler, the texture gets
+ * multiplied by our color, shifting it from purple to a cyan/light blue.
  * 
- * The texture itself should be a GRAYSCALE design. The tint color gets
- * multiplied onto it, so:
- * - White pixels → show the full tint color
- * - Grey pixels → show a darker version of the tint
- * - Black pixels → stay black regardless of tint
+ * The nether portal texture is mostly white/light purple, so multiplying
+ * by light blue (0x44DDFF) gives us a distinct blue-cyan portal effect
+ * that's clearly different from nether portals.
  * 
- * This means we design ONE texture and the color system handles the
- * gradient from steel grey (unpowered) to bright red (full power).
- * 
- * IMPORTANT: This class only loads on the CLIENT side (Dist.CLIENT).
- * Servers don't render blocks so they don't need color handlers.
+ * This avoids needing a custom animated texture (which would require
+ * more complex setup with .mcmeta animation files).
  */
 @Mod.EventBusSubscriber(modid = Ideomod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
 public class MachineBlockColor {
 
-    /**
-     * Register block color handler.
-     * The lambda receives (blockstate, world, position, tintIndex) and
-     * returns an RGB color int. tintIndex refers to which layer of the
-     * model to tint (some models have multiple tintable layers).
-     * We use tintIndex 0 for our tinted layer.
-     */
+    // ========================================================================
+    // MACHINE BLOCK COLORS
+    // ========================================================================
+
     @SubscribeEvent
     public static void registerBlockColors(RegisterColorHandlersEvent.Block event) {
+        // Machine Block: power level gradient
         event.register(
                 (state, level, pos, tintIndex) -> {
                     if (tintIndex == 0) {
                         int power = state.getValue(MachineBlock.POWER);
                         return MachineBlock.getPowerColor(power);
                     }
-                    return 0xFFFFFF; // No tint for other layers
+                    return 0xFFFFFF;
                 },
                 ModBlocks.MACHINE_BLOCK.get()
         );
+
+        // Oddstone Portal: light blue tint
+        // 0x44DDFF = a bright cyan/light blue
+        // This gets multiplied onto the nether portal texture,
+        // turning its purple hue into a cool blue
+        event.register(
+                (state, level, pos, tintIndex) -> {
+                    if (tintIndex == 0) {
+                        return 0x44DDFF; // Light blue / cyan
+                    }
+                    return 0xFFFFFF;
+                },
+                ModBlocks.ODDSTONE_PORTAL.get()
+        );
     }
 
-    /**
-     * Register item color handler.
-     * When the block is in your inventory/hand, there's no blockstate to
-     * read power from, so we always show the unpowered color (power 0).
-     */
     @SubscribeEvent
     public static void registerItemColors(RegisterColorHandlersEvent.Item event) {
+        // Machine Block: unpowered color in inventory
         event.register(
                 (stack, tintIndex) -> {
                     if (tintIndex == 0) {
-                        return MachineBlock.getPowerColor(0); // Unpowered in inventory
+                        return MachineBlock.getPowerColor(0);
                     }
                     return 0xFFFFFF;
                 },
                 ModBlocks.MACHINE_BLOCK.get().asItem()
         );
+
+        // No item color for portal block - it has no item form
     }
 }

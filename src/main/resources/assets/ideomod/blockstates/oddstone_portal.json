@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "axis=x": {
+      "model": "ideomod:block/oddstone_portal_ew"
+    },
+    "axis=z": {
+      "model": "ideomod:block/oddstone_portal_ns"
+    }
+  }
+}

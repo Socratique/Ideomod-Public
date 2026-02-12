@@ -10,6 +10,10 @@ import net.minecraftforge.registries.RegistryObject;
 /**
  * Registry for all mod items
  * BlockItems are registered here to associate blocks with their item forms
+ * 
+ * Note: Oddstone Portal block does NOT get an item form.
+ * It's only created by portal activation, never placed by hand.
+ * Same as vanilla nether portal blocks.
  */
 public class ModItems {
     
@@ -32,4 +36,6 @@ public class ModItems {
     // Register the BlockItem for Machine Block
     public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
             () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
+    
+    // No BlockItem for ODDSTONE_PORTAL - it's not placeable by players
 }
