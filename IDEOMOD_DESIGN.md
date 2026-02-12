@@ -10,7 +10,7 @@
 |--------|---------|
 | ✅ | Implemented & working |
 | 🔧 | Partially implemented / in progress |
-| 📐 | Designed, not yet coded |
+| 📝 | Designed, not yet coded |
 | 💡 | Idea / brainstorm — needs design |
 | ❌ | Scrapped or on hold |
 
@@ -125,7 +125,111 @@
 
 **Future ideas:**
 - *💡 Particle effects when powered (redstone sparkles)*
-- *💡 Machine Block + Drill = auto-miner contraption?*
+
+---
+
+### Framed Blocks 📝
+> Any block wrapped in an iron or copper frame. Extends Machine Block stickiness as cheap "body" pieces.
+
+| Property | Value |
+|----------|-------|
+| ID | `iron_framed_block`, `copper_framed_block` |
+| Type | Block Entity (stores inner block ID as ResourceLocation) |
+| Hardness | Inherits inner block + frame bonus? TBD |
+| Tool | Pickaxe |
+| Drops | Normal: original block + frame block. Silk Touch: framed block item (preserves combo). |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Inner block storage | 📝 | Block entity stores ResourceLocation of wrapped block. |
+| Dynamic rendering | 📝 | Custom renderer composites inner block texture + frame overlay. 2 overlay textures total (iron, copper). Works with any block including modded. Reference: FramedBlocks mod. |
+| Machine-activated stickiness | 📝 | Framed blocks are NOT sticky by default. When a Machine Block is part of a piston push group, it "activates" adjacent framed blocks, making them sticky for that move. Activation chains through matching framed blocks (iron→iron, copper→copper). Deactivates after move resolves. |
+| Material exclusivity | 📝 | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
+| Slime/honey exclusivity | 📝 | Framed blocks do not interact with slime or honey stickiness. |
+
+**Stickiness matrix (when activated by Machine Block):**
+
+| | Machine Block | Iron Framed | Copper Framed | Slime | Honey |
+|---|---|---|---|---|---|
+| Iron Framed | ✓ | ✓ | ✗ | ✗ | ✗ |
+| Copper Framed | ✓ | ✗ | ✓ | ✗ | ✗ |
+
+**Activation propagation example:**
+```
+[Piston] [Machine] [IronFramed] [IronFramed] [IronFramed]
+  push →   sticky → activated  → chains     → chains
+                     (touches M)  (touches    (touches
+                                   activated)  activated)
+```
+Without a Machine Block in the group, framed blocks are inert and get pushed individually.
+
+**Known issues:**
+- Activation chaining requires mixin pre-pass: scan outward from Machine Blocks, mark connected framed blocks as active, then let resolver run, then clear marks.
+
+**Future ideas:**
+- *💡 Copper frames oxidize over time? Waxable?*
+- *💡 Different blast resistance per frame material?*
+
+---
+
+### Frame Blocks 📝
+> Transparent decorative blocks — an empty iron or copper frame. Same stickiness rules as Framed Blocks.
+
+| Property | Value |
+|----------|-------|
+| ID | `iron_frame`, `copper_frame` |
+| Hardness | Iron: ~3.0 / Copper: ~2.5 (TBD) |
+| Tool | Pickaxe |
+| Transparency | Non-solid, see-through (like iron bars as a full block outline) |
+| Recipe | TBD (iron ingots / copper ingots in frame pattern?) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Decorative transparency | 📝 | Renders as an open frame/cage outline. Not a full solid block. |
+| Machine-activated stickiness | 📝 | Same rules as Framed Blocks — activated by Machine Block presence in push group, chains with matching material type. |
+| Material exclusivity | 📝 | Iron frames stick to iron frames and iron framed blocks. Copper to copper. Cross-material does not stick. |
+
+**Notes:** Frame Blocks are essentially "empty" Framed Blocks. They share the same stickiness family. An Iron Frame and an Iron Framed Stone will stick to each other when activated.
+
+---
+
+### The Framer 📝
+> Directional machine that wraps blocks in iron or copper frames.
+
+| Property | Value |
+|----------|-------|
+| ID | `framer` |
+| Placement | Directional (faces player look direction, like Drill) |
+| Activation | Redstone pulse |
+| GUI | Dispenser-style inventory (holds Frame Blocks) |
+| Behavior | Consumes 1 Frame Block from inventory, converts block in front into corresponding framed variant |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Directional placement | 📝 | Extends DirectionalBlock + FACING property. |
+| Redstone activation | 📝 | POWERED property + neighborChanged(). Pulse → frame one block. |
+| Frame block inventory | 📝 | Small GUI (dispenser-style, 3×3 grid). Holds Iron Frame and/or Copper Frame blocks. |
+| Block conversion | 📝 | On pulse: check block at FACING position. If frameable, replace with Framed Block entity storing original block ID. Consume 1 Frame Block matching the type used. |
+| Frame type selection | 📝 | Uses first available Frame Block in inventory. Iron Frame → iron framed. Copper Frame → copper framed. |
+
+**Conversion flow:**
+```
+[Framer→] [Oak Planks]  + redstone pulse + Iron Frame block in inventory
+                         ↓
+[Framer→] [Iron Framed Oak Planks]  (block entity storing "minecraft:oak_planks")
+```
+
+**Edge cases to decide:**
+- What blocks CAN'T be framed? (Bedrock, block entities like chests, other framed blocks, air?)
+- Can the Framer be pushed by pistons while loaded? (Probably yes — mobile framing station.)
+
+**Future ideas:**
 
 ---
 
@@ -183,7 +287,7 @@
 
 ---
 
-### Odd Slime 📐
+### Odd Slime 📝
 > *Slime variant with directional grabbing behavior.*
 
 **Design notes:**
@@ -199,7 +303,7 @@
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5×5 outer (3×3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types × 4 positions = 14⁴ = 38,416 unique addresses per dimension |
+| Address space | 14 corner types Ã— 4 positions = 14⁴ = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |

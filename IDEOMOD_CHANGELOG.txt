@@ -1,5 +1,22 @@
 # Ideomod Changelog
 
+## [2026-02-12] Stage 1 — Housekeeping & Dead Code Cleanup
+- Deleted Config.java (untouched MDK template, never referenced by mod code)
+- Removed dead methods from OddstonePortalSavedData:
+  - findPortalContaining() — identical to getPortal(), never called
+  - isAddressFull() — never called
+- Fixed OddstonePortalBlock: replaced standalone java.util.Random with
+  Minecraft's level.getRandom() for scatter teleport randomization.
+  Ties into the game's random pipeline instead of being disconnected.
+- Renamed MachineBlockColor.java → ModColorHandlers.java
+  - Class handled colors for both Machine Block AND Oddstone Portal,
+    name now reflects actual scope
+  - No other files needed updating (discovered via @Mod.EventBusSubscriber)
+- Updated generate_filetree.bat to only show src/ directory
+  - Cuts FILETREE.txt from ~624 lines to ~100, removing build artifacts,
+    gradle cache, world saves, and screenshots
+- Status: No behavior changes. Pure cleanup.
+
 ## [2026-02-12] Oddstone Portals
 - Added Oddstone Portal system - overworld-to-overworld teleportation
   - Frame: rectangular ring of Oddstone (minimum 5x5 outer, 3x3 interior)
@@ -104,7 +121,7 @@
     - Piston pushes Machine Block groups together; ignores all other blocks
   - Redstone Conduction: solid-state redstone dust
     - Stores power level 0-15 as blockstate property (same as dust)
-    - Signal decays by 1 per Machine Block (lever 15 → 14 → 13 → ... → 0)
+    - Signal decays by 1 per Machine Block (lever 15 â†’ 14 â†’ 13 â†’ ... â†’ 0)
     - Powers adjacent non-Machine blocks (lamps, pistons, etc. activate)
     - Receives signal only from whitelisted redstone components
       (levers, buttons, repeaters, comparators, dust, observers, etc.)
@@ -116,7 +133,7 @@
 - New file: MachineBlock.java (com.ideomancer.ideomod.block)
 - New file: MachineBlockColor.java (com.ideomancer.ideomod.client)
 - Updated: ModBlocks, ModItems, ModCreativeTabs registries
-- Assets: blockstate (16 power variants → 1 model), block/item models with
+- Assets: blockstate (16 power variants â†’ 1 model), block/item models with
   tintindex, placeholder grayscale texture, loot table, recipe
   (4 iron + 4 redstone + 1 slime = 1 machine block), pickaxe tag, lang
 - Status: Working

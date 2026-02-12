@@ -1,8 +1,5 @@
 @echo off
-REM Generates a file tree of the project directory
-REM Run this from your project root folder
-
-echo Generating file tree...
-tree /F /A > FILETREE.txt
-echo File tree saved to FILETREE.txt
-pause
+REM Generate a file tree of only the src/ directory (the actual mod code)
+REM Excludes build artifacts, gradle cache, world saves, etc.
+tree /F src > FILETREE.txt
+echo FILETREE.txt generated (src/ only)

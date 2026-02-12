@@ -22,8 +22,6 @@ import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
 
-import java.util.Random;
-
 /**
  * Oddstone Portal Block - fills the interior of a lit Oddstone portal frame.
  * 
@@ -45,7 +43,6 @@ public class OddstonePortalBlock extends Block {
     protected static final VoxelShape Z_AXIS_AABB = Block.box(6.0, 0.0, 0.0, 10.0, 16.0, 16.0);
 
     private static final int TELEPORT_COOLDOWN = 80; // 4 seconds
-    private static final Random RANDOM = new Random();
 
     public OddstonePortalBlock(Properties properties) {
         super(properties);
@@ -369,8 +366,8 @@ public class OddstonePortalBlock extends Block {
     // ========================================================================
 
     private void scatterTeleport(ServerLevel level, ServerPlayer player) {
-        double angle = RANDOM.nextDouble() * Math.PI * 2;
-        double distance = 200 + RANDOM.nextDouble() * 800;
+        double angle = level.getRandom().nextDouble() * Math.PI * 2;
+        double distance = 200 + level.getRandom().nextDouble() * 800;
         int targetX = player.blockPosition().getX() + (int) (Math.cos(angle) * distance);
         int targetZ = player.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
 

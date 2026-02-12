@@ -9,29 +9,23 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
 
 /**
- * Registers block and item color handlers for:
+ * Registers all block and item color handlers for the mod.
  * 
- * 1. Machine Block's power-level gradient (dark grey -> bright red)
- * 2. Oddstone Portal's light blue tint (recolors nether portal texture)
+ * Color handlers apply runtime tints to block/item textures.
+ * The texture itself is a grayscale or neutral image, and the
+ * color handler multiplies it by a color value to produce the
+ * final appearance. Same system vanilla uses for grass, leaves,
+ * and redstone dust.
  * 
- * HOW THE PORTAL TINT WORKS:
- * ==========================
- * We reuse the vanilla nether portal texture (which is purple/magenta).
- * By applying a light blue tint via the color handler, the texture gets
- * multiplied by our color, shifting it from purple to a cyan/light blue.
- * 
- * The nether portal texture is mostly white/light purple, so multiplying
- * by light blue (0x44DDFF) gives us a distinct blue-cyan portal effect
- * that's clearly different from nether portals.
- * 
- * This avoids needing a custom animated texture (which would require
- * more complex setup with .mcmeta animation files).
+ * Currently handles:
+ * - Machine Block: power-level gradient (dark steel grey → bright red)
+ * - Oddstone Portal: light blue tint (recolors nether portal texture)
  */
 @Mod.EventBusSubscriber(modid = Ideomod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.MOD, value = Dist.CLIENT)
-public class MachineBlockColor {
+public class ModColorHandlers {
 
     // ========================================================================
-    // MACHINE BLOCK COLORS
+    // BLOCK COLORS
     // ========================================================================
 
     @SubscribeEvent
@@ -62,6 +56,10 @@ public class MachineBlockColor {
                 ModBlocks.ODDSTONE_PORTAL.get()
         );
     }
+
+    // ========================================================================
+    // ITEM COLORS
+    // ========================================================================
 
     @SubscribeEvent
     public static void registerItemColors(RegisterColorHandlersEvent.Item event) {

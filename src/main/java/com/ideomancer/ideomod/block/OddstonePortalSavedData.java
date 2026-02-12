@@ -189,26 +189,6 @@ public class OddstonePortalSavedData extends SavedData {
         return portalsByPosition.get(pos);
     }
 
-    /**
-     * Finds a portal entry by checking if a position is registered.
-     * Used when a portal block needs to know its registration status.
-     */
-    @Nullable
-    public PortalEntry findPortalContaining(BlockPos anyFramePos) {
-        // Direct lookup first
-        PortalEntry direct = portalsByPosition.get(anyFramePos);
-        if (direct != null) return direct;
-        return null;
-    }
-
-    /**
-     * Checks if an address already has a fully linked pair.
-     */
-    public boolean isAddressFull(String address) {
-        BlockPos[] existing = portalsByAddress.get(address);
-        return existing != null && existing[0] != null && existing[1] != null;
-    }
-
     // ========================================================================
     // SAVE / LOAD (NBT serialization)
     // ========================================================================
