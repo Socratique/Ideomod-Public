@@ -1,11 +1,11 @@
 package com.ideomancer.ideomod.block;
 
+import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -18,21 +18,14 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
  * 
  * 1. SELECTIVE STICKINESS:
  * 
- *    Acts like a slime block, but ONLY sticks to other Machine Blocks
- *    when pushed. Does not grab slime, honey, or regular blocks.
+ *    Acts like a slime block, but ONLY sticks to other Machine Blocks.
+ *    When pushed by a piston, it drags adjacent Machine Blocks along
+ *    (which drag theirs, etc.), but ignores all other block types.
  * 
- *    ONE-WAY with slime: Slime CAN grab Machine Block (drags it along),
- *    but Machine Block does NOT grab slime. The Machine Block→slime
- *    direction is blocked by our mixin in PistonStructureResolver
- *    via StickinessRules.
+ *    Exclusive with slime and honey - same pattern as honey vs slime
+ *    in vanilla (they refuse to stick to each other).
  * 
- *    canStickTo returns true for slime so that Forge's two-way check
- *    passes when slime is the grabber. The mixin handles blocking
- *    the reverse direction.
- * 
- *    Exclusive with honey - same pattern as slime vs honey in vanilla.
- * 
- *    Uses Forge's isStickyBlock/canStickTo hooks + mixin for asymmetry.
+ *    Uses Forge's isStickyBlock/canStickTo hooks. No event handler needed.
  * 
  * 2. REDSTONE CONDUCTION: Acts like redstone dust in solid block form.
  *    Signal decays by 1 per Machine Block. Only accepts signal from
@@ -59,7 +52,7 @@ public class MachineBlock extends Block {
     }
 
     // ========================================================================
-    // FEATURE 1: Selective Stickiness (Forge hooks + mixin)
+    // FEATURE 1: Selective Stickiness (Forge hooks)
     // ========================================================================
 
     /**
@@ -73,30 +66,21 @@ public class MachineBlock extends Block {
     }
 
     /**
-     * Controls WHAT this block agrees to stick to.
+     * Controls WHAT this block sticks to.
      * 
-     * This is called in TWO situations by the Forge piston resolver:
-     *   A) When Machine Block is expanding and checks a neighbor
-     *   B) When a NEIGHBOR is expanding and the resolver asks Machine Block
-     *      "do you agree to be grabbed?" (the two-way check)
+     * - Machine Block + Machine Block: stick (both return true)
+     * - Machine Block + Slime: EXCLUDED (we say no)
+     * - Machine Block + Honey: EXCLUDED (we say no)
+     * - Machine Block + anything else: no (not a Machine Block)
      * 
-     * We return true for both Machine Blocks and slime:
-     *   - Machine Block + Machine Block: YES (mutual sticking)
-     *   - Machine Block + Slime: YES (so slime CAN grab us via two-way check)
-     *   - Machine Block + Honey: NO (exclusive, same as vanilla slime vs honey)
-     *   - Machine Block + anything else: NO
-     * 
-     * The problem with returning true for slime: when Machine Block
-     * expands, it would also grab slime. We DON'T want that.
-     * The mixin handles blocking Machine Block→slime grabs.
+     * This is the same pattern vanilla uses for honey vs slime exclusion.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        // Exclusive with honey
+        // Exclusive with slime and honey
+        if (other.getBlock() instanceof SlimeBlock) return false;
         if (other.getBlock() instanceof HoneyBlock) return false;
-        // Agree to stick with slime (so slime can grab us)
-        if (other.getBlock() instanceof SlimeBlock) return true;
-        // Stick to other Machine Blocks
+        // Stick to other Machine Blocks only
         return other.getBlock() instanceof MachineBlock;
     }
 
@@ -223,57 +207,16 @@ public class MachineBlock extends Block {
     }
 
     /**
-     * Whitelist of blocks that are "real" redstone sources.
+     * Checks if a block is a "real" redstone source using the tag.
      * We only accept signal from these to prevent feedback loops.
      * Generic solid blocks (lamps, stone, etc.) that are only powered
      * because WE powered them are excluded.
+     * 
+     * Tag file: data/ideomod/tags/blocks/redstone_components.json
+     * Editable by datapacks — add modded redstone components without recompiling.
      */
     private static boolean isRedstoneComponent(Block block) {
-        return block == Blocks.REDSTONE_WIRE
-            || block == Blocks.LEVER
-            || block == Blocks.STONE_BUTTON
-            || block == Blocks.OAK_BUTTON
-            || block == Blocks.SPRUCE_BUTTON
-            || block == Blocks.BIRCH_BUTTON
-            || block == Blocks.JUNGLE_BUTTON
-            || block == Blocks.ACACIA_BUTTON
-            || block == Blocks.DARK_OAK_BUTTON
-            || block == Blocks.CHERRY_BUTTON
-            || block == Blocks.MANGROVE_BUTTON
-            || block == Blocks.BAMBOO_BUTTON
-            || block == Blocks.CRIMSON_BUTTON
-            || block == Blocks.WARPED_BUTTON
-            || block == Blocks.POLISHED_BLACKSTONE_BUTTON
-            || block == Blocks.STONE_PRESSURE_PLATE
-            || block == Blocks.OAK_PRESSURE_PLATE
-            || block == Blocks.SPRUCE_PRESSURE_PLATE
-            || block == Blocks.BIRCH_PRESSURE_PLATE
-            || block == Blocks.JUNGLE_PRESSURE_PLATE
-            || block == Blocks.ACACIA_PRESSURE_PLATE
-            || block == Blocks.DARK_OAK_PRESSURE_PLATE
-            || block == Blocks.CHERRY_PRESSURE_PLATE
-            || block == Blocks.MANGROVE_PRESSURE_PLATE
-            || block == Blocks.BAMBOO_PRESSURE_PLATE
-            || block == Blocks.CRIMSON_PRESSURE_PLATE
-            || block == Blocks.WARPED_PRESSURE_PLATE
-            || block == Blocks.POLISHED_BLACKSTONE_PRESSURE_PLATE
-            || block == Blocks.LIGHT_WEIGHTED_PRESSURE_PLATE
-            || block == Blocks.HEAVY_WEIGHTED_PRESSURE_PLATE
-            || block == Blocks.REPEATER
-            || block == Blocks.COMPARATOR
-            || block == Blocks.OBSERVER
-            || block == Blocks.REDSTONE_BLOCK
-            || block == Blocks.REDSTONE_TORCH
-            || block == Blocks.REDSTONE_WALL_TORCH
-            || block == Blocks.DAYLIGHT_DETECTOR
-            || block == Blocks.TRAPPED_CHEST
-            || block == Blocks.TRIPWIRE_HOOK
-            || block == Blocks.LECTERN
-            || block == Blocks.TARGET
-            || block == Blocks.SCULK_SENSOR
-            || block == Blocks.CALIBRATED_SCULK_SENSOR
-            || block == Blocks.LIGHTNING_ROD
-            || block == Blocks.DETECTOR_RAIL;
+        return block.defaultBlockState().is(ModTags.REDSTONE_COMPONENTS);
     }
 
     // ========================================================================

@@ -1,5 +1,25 @@
 # Ideomod Changelog
 
+## [2026-02-13] Stage 3 — Block Tags
+- Replaced hardcoded block lists with data-driven block tags
+  - Tags are JSON files loadable by datapacks — no recompile needed to
+    add/remove blocks. Other mods can also append to these tags.
+- New file: ModTags.java (com.ideomancer.ideomod.registry)
+  - Defines TagKey references for PORTAL_CORNER_BLOCKS and REDSTONE_COMPONENTS
+- New tag: data/ideomod/tags/blocks/portal_corner_blocks.json
+  - 14 crafted mineral/metal blocks for portal corner addresses
+  - Replaces hardcoded 14-block list in PortalUtils.isCornerBlock
+  - One-liner check: state.is(ModTags.PORTAL_CORNER_BLOCKS)
+- New tag: data/ideomod/tags/blocks/redstone_components.json
+  - All vanilla redstone signal sources (levers, buttons, plates, etc.)
+  - Uses #minecraft:buttons and #minecraft:pressure_plates tag references
+    to include all wood variants automatically (cuts ~25 entries to 2 lines)
+  - Replaces hardcoded 30+ block whitelist in MachineBlock.isRedstoneComponent
+- Updated PortalUtils.java: isCornerBlock now uses tag lookup
+- Updated MachineBlock.java: isRedstoneComponent now uses tag lookup,
+  removed unused Blocks import
+- Status: Working. Portals and Machine Block redstone tested.
+
 ## [2026-02-13] Stage 2 — Consolidate Duplicated Code
 - New file: PortalUtils.java (com.ideomancer.ideomod.block)
   - Single source of truth for portal corner block validation (isCornerBlock)

@@ -1,10 +1,10 @@
 package com.ideomancer.ideomod.block;
 
+import com.ideomancer.ideomod.registry.ModTags;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
@@ -43,21 +43,7 @@ public class PortalUtils {
      * - OddstoneBlock (corner-broken detection in neighborChanged)
      */
     public static boolean isCornerBlock(BlockState state) {
-        Block block = state.getBlock();
-        return block == Blocks.COAL_BLOCK
-            || block == Blocks.IRON_BLOCK
-            || block == Blocks.COPPER_BLOCK
-            || block == Blocks.GOLD_BLOCK
-            || block == Blocks.REDSTONE_BLOCK
-            || block == Blocks.LAPIS_BLOCK
-            || block == Blocks.DIAMOND_BLOCK
-            || block == Blocks.EMERALD_BLOCK
-            || block == Blocks.NETHERITE_BLOCK
-            || block == Blocks.QUARTZ_BLOCK
-            || block == Blocks.AMETHYST_BLOCK
-            || block == Blocks.RAW_IRON_BLOCK
-            || block == Blocks.RAW_COPPER_BLOCK
-            || block == Blocks.RAW_GOLD_BLOCK;
+        return state.is(ModTags.PORTAL_CORNER_BLOCKS);
     }
 
     /**
