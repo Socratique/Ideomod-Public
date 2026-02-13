@@ -1,5 +1,20 @@
 # Ideomod Changelog
 
+## [2026-02-13] Stage 4 — Extract Portal Logic from OddstoneBlock
+- New file: OddstonePortalHandler.java (com.ideomancer.ideomod.block)
+  - Static utility class handling portal activation and deactivation
+  - Public API: onNeighborChanged(), onBlockRemoved()
+  - Private internals: tryActivate(), tryDeactivate(), unregisterAndClear(),
+    isAdjacentToPortal()
+  - All logic moved 1:1 from OddstoneBlock — no behavior changes
+- Updated OddstoneBlock.java: 258 lines → 106 lines
+  - neighborChanged() and onRemove() now delegate to OddstonePortalHandler
+  - Removed all portal-specific imports (SoundEvents, SoundSource, Direction,
+    ModBlocks, Ideomod logger, etc.)
+  - Class now only contains its own features: stickiness, mob avoidance,
+    pathfinding
+- Status: Working. All portal operations tested.
+
 ## [2026-02-13] Stage 3 — Block Tags
 - Replaced hardcoded block lists with data-driven block tags
   - Tags are JSON files loadable by datapacks — no recompile needed to
