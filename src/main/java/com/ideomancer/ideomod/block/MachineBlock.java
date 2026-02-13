@@ -22,10 +22,20 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
  *    When pushed by a piston, it drags adjacent Machine Blocks along
  *    (which drag theirs, etc.), but ignores all other block types.
  * 
- *    Exclusive with slime and honey - same pattern as honey vs slime
- *    in vanilla (they refuse to stick to each other).
+ *    IMPORTANT — canStickTo vs MIXIN ROLES:
+ *    Forge checks canStickTo BIDIRECTIONALLY (both blocks must agree).
+ *    For one-way stickiness (slime grabs Machine Block, Machine Block
+ *    doesn't grab slime), canStickTo must be PERMISSIVE — return true
+ *    for any pair where asymmetric behavior is desired. The mixin's
+ *    grab immunity rules then block the unwanted direction.
  * 
- *    Uses Forge's isStickyBlock/canStickTo hooks. No event handler needed.
+ *    See: docs/STICKINESS_SYSTEM.md for the full explanation.
+ * 
+ *    canStickTo returns TRUE for: Machine Block, Slime, Honey, Odd Slime
+ *    Grab immunity rules BLOCK: Machine Block → Slime, Machine Block → Honey,
+ *                                Machine Block → Odd Slime
+ *    Net result: Slime/Honey/Odd Slime CAN grab Machine Block,
+ *                Machine Block CANNOT grab them back.
  * 
  * 2. REDSTONE CONDUCTION: Acts like redstone dust in solid block form.
  *    Signal decays by 1 per Machine Block. Only accepts signal from
@@ -52,38 +62,39 @@ public class MachineBlock extends Block {
     }
 
     // ========================================================================
-    // FEATURE 1: Selective Stickiness (Forge hooks)
+    // FEATURE 1: Selective Stickiness (Forge hooks + mixin)
     // ========================================================================
 
-    /**
-     * Tells the piston resolver "this block is sticky" - meaning it
-     * should try to drag neighbors along when pushed/pulled.
-     * Same as what slime blocks and honey blocks return.
-     */
     @Override
     public boolean isStickyBlock(BlockState state) {
         return true;
     }
 
     /**
-     * Controls WHAT this block sticks to.
+     * PERMISSIVE canStickTo — returns true for any sticky block type.
      * 
-     * - Machine Block + Machine Block: stick (both return true)
-     * - Machine Block + Slime: EXCLUDED (we say no)
-     * - Machine Block + Honey: EXCLUDED (we say no)
-     * - Machine Block + anything else: no (not a Machine Block)
+     * This is intentional. Forge's bidirectional canStickTo check means
+     * if we return false here, the OTHER block can't grab us either.
+     * We want slime/honey/odd slime to be ABLE to grab Machine Block
+     * (one-way), so we must return true here.
      * 
-     * This is the same pattern vanilla uses for honey vs slime exclusion.
+     * The reverse (Machine Block grabbing slime/honey/odd slime) is
+     * blocked by grab immunity rules in StickinessRules, enforced by
+     * the PistonStructureResolver mixin.
+     * 
+     * For non-sticky blocks (stone, dirt, etc.): returns false.
+     * Machine Block only actively grabs other Machine Blocks.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        // Honey: fully excluded (mutual, same as vanilla honey vs slime)
-        if (other.getBlock() instanceof HoneyBlock) return false;
-        // Machine Block: stick to each other
+        // Machine Block sticks to Machine Block (the actual desired behavior)
         if (other.getBlock() instanceof MachineBlock) return true;
-        // Slime: allow slime to grab us. The reverse (us grabbing slime)
-        // is blocked by the mixin via StickinessRules grab immunity.
+        // Permissive for all slime-type blocks — lets THEM grab us.
+        // Our mixin rules prevent US from grabbing THEM.
         if (other.getBlock() instanceof SlimeBlock) return true;
+        if (other.getBlock() instanceof HoneyBlock) return true;
+        if (other.getBlock() instanceof OddSlimeBlock) return true;
+        // Everything else: no
         return false;
     }
 
@@ -91,38 +102,21 @@ public class MachineBlock extends Block {
     // FEATURE 2: Redstone Conduction
     // ========================================================================
 
-    /**
-     * "Yes, I am a source of redstone signal."
-     * Must return true for getSignal/getDirectSignal to be called.
-     */
     @Override
     public boolean isSignalSource(BlockState state) {
         return true;
     }
 
-    /**
-     * Returns the redstone signal strength this block provides to a neighbor.
-     * Called when an adjacent block asks "how much power is this block giving me?"
-     */
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         return state.getValue(POWER);
     }
 
-    /**
-     * "Direct signal" - strong power. Lets repeaters read our signal
-     * and lets us power blocks that need strong signal.
-     */
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         return state.getValue(POWER);
     }
 
-    /**
-     * Called when a neighboring block changes. Recalculates our power.
-     * Logic mirrors redstone dust: check all 6 neighbors, take the
-     * best signal (with -1 decay for Machine Block chains).
-     */
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
@@ -143,9 +137,6 @@ public class MachineBlock extends Block {
         }
     }
 
-    /**
-     * Recalculate power when the block is first placed.
-     */
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         if (!level.isClientSide() && !oldState.is(this)) {
@@ -156,9 +147,6 @@ public class MachineBlock extends Block {
         }
     }
 
-    /**
-     * When removed, notify neighbors so they can recalculate.
-     */
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!level.isClientSide() && !newState.is(this)) {
@@ -177,12 +165,6 @@ public class MachineBlock extends Block {
         }
     }
 
-    /**
-     * Calculates power from neighbors. Only accepts signal from actual
-     * redstone components (whitelist) to prevent feedback loops where
-     * we power a lamp, the lamp's block becomes "powered", and we read
-     * that power back. Machine Block neighbors propagate with -1 decay.
-     */
     private int calculatePower(Level level, BlockPos pos) {
         int bestPower = 0;
 
@@ -192,13 +174,11 @@ public class MachineBlock extends Block {
             Block neighborBlock = neighborState.getBlock();
 
             if (neighborBlock instanceof MachineBlock) {
-                // Adjacent Machine Block: take its power - 1 (decay)
                 int neighborPower = neighborState.getValue(POWER) - 1;
                 if (neighborPower > bestPower) {
                     bestPower = neighborPower;
                 }
             } else if (isRedstoneComponent(neighborBlock)) {
-                // Whitelisted redstone component: take its signal directly
                 int signal = level.getSignal(neighborPos, dir);
                 if (signal > bestPower) {
                     bestPower = signal;
@@ -209,15 +189,6 @@ public class MachineBlock extends Block {
         return Math.min(15, Math.max(0, bestPower));
     }
 
-    /**
-     * Checks if a block is a "real" redstone source using the tag.
-     * We only accept signal from these to prevent feedback loops.
-     * Generic solid blocks (lamps, stone, etc.) that are only powered
-     * because WE powered them are excluded.
-     * 
-     * Tag file: data/ideomod/tags/blocks/redstone_components.json
-     * Editable by datapacks — add modded redstone components without recompiling.
-     */
     private static boolean isRedstoneComponent(Block block) {
         return block.defaultBlockState().is(ModTags.REDSTONE_COMPONENTS);
     }
@@ -226,11 +197,6 @@ public class MachineBlock extends Block {
     // COLOR TINTING (for visual gradient)
     // ========================================================================
 
-    /**
-     * Returns a color int for the given power level. Goes from dark
-     * steel grey (power 0) to bright red (power 15), like redstone dust.
-     * Used by client-side color handler to tint the block texture.
-     */
     public static int getPowerColor(int power) {
         float t = power / 15.0f;
         int r = (int) (80 + t * (255 - 80));

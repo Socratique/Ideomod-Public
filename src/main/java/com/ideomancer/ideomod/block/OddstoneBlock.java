@@ -21,8 +21,9 @@ import org.jetbrains.annotations.Nullable;
  * 2. REDSTONE INSULATION: Does not conduct redstone signal through it.
  *    (Set via .isRedstoneConductor(false) in ModBlocks registration)
  * 3. SYMPATHETIC MOVEMENT: Wireless slime block behavior via piston events.
- *    (Handled by OddstoneMovementHandler)
- * 4. ONE-WAY STICKINESS: Oddstone grabs slime, slime doesn't grab Oddstone.
+ *    (Handled by PistonStructureResolver mixin)
+ * 4. ONE-WAY STICKINESS: Oddstone grabs ALL slime types (slime, honey, odd slime).
+ *    No slime type can grab Oddstone back. Oddstone also sticks to other Oddstone.
  * 5. PORTAL FRAME: When ALL Oddstone blocks in a valid frame are powered,
  *    the portal activates. If ANY Oddstone loses power, it deactivates.
  *    (Handled by OddstonePortalHandler)
@@ -66,11 +67,26 @@ public class OddstoneBlock extends Block {
         return true;
     }
 
+    /**
+     * Oddstone sticks to ALL slime-type blocks and other Oddstone.
+     * It's the universal grabber — the "parent" of all sticky systems.
+     * 
+     * - Oddstone + Slime: YES (Oddstone grabs slime)
+     * - Oddstone + Honey: YES (Oddstone grabs honey)
+     * - Oddstone + Odd Slime: YES (Oddstone grabs odd slime)
+     * - Oddstone + Oddstone: YES (for sympathetic movement)
+     * - Oddstone + Machine Block: NO (Machine Block is its own exclusive family)
+     * - Oddstone + anything else: NO (Oddstone only grabs sticky things + itself)
+     * 
+     * The reverse (slime/honey/odd slime grabbing Oddstone) is BLOCKED
+     * by StickinessRules grab immunity rules registered in Ideomod.java.
+     */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        if (other.getBlock() instanceof HoneyBlock) return false;
-        if (other.getBlock() instanceof OddstoneBlock) return true;
         if (other.getBlock() instanceof SlimeBlock) return true;
+        if (other.getBlock() instanceof HoneyBlock) return true;
+        if (other.getBlock() instanceof OddSlimeBlock) return true;
+        if (other.getBlock() instanceof OddstoneBlock) return true;
         return false;
     }
 

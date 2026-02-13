@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
 import com.ideomancer.ideomod.block.MachineBlock;
+import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.OddstonePortalBlock;
 import net.minecraft.world.level.block.Block;
@@ -58,6 +59,16 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .isRedstoneConductor((state, level, pos) -> false)
+            ));
+    
+    // Register Odd Slime - directional slime block, only sticky when pushed in FACING direction
+    // Properties mirror vanilla slime: soft, bouncy sound, no tool required
+    public static final RegistryObject<Block> ODD_SLIME = BLOCKS.register("odd_slime",
+            () -> new OddSlimeBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_LIGHT_GREEN)
+                    .friction(0.8F)           // Slippery like slime
+                    .sound(SoundType.SLIME_BLOCK)
+                    .noOcclusion()             // Translucent like slime
             ));
     
     // Register Oddstone Portal - the interior fill block for lit Oddstone portals

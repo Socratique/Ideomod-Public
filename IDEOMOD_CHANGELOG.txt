@@ -1,16 +1,67 @@
 # Ideomod Changelog
 
-## [2026-02-13] Stage 6 — Remaining Work Documented
-- Documented remaining items in REMAINING_WORK.md for future sessions:
-  - Stage 6A: Auto BlockItem registration helper (ModBlocks + ModItems
-    dual registration consolidated into single helper method)
-  - Stage 6B: Portal entity handling decision (players only vs all
-    entities vs selective — design decision with tradeoffs documented)
-  - Deferred mixin fix: one-way stickiness backward pull-along in
-    addBlockLine's internal line-tracing loop (full root cause and
-    fix approach documented)
-- Drill tool-drops: skipped, current behavior acceptable for now
-- Codebase review refactoring complete (Stages 1-5 applied and tested)
+## [2026-02-13] Odd Slime Block
+- Added OddSlimeBlock - a directional slime variant with conditional stickiness
+  - Extends DirectionalBlock with FACING property (piston-style placement)
+  - Only sticky when pushed in its FACING direction. Push any other way
+    and neighbors don't come along. Active along full axis (push + pull).
+  - When active, grabs all 6 neighbors like regular slime
+  - Stickiness relationships:
+    - Odd Slime + Odd Slime: YES (when active)
+    - Odd Slime + normal blocks: YES (when active)
+    - Odd Slime + Machine Block: YES (when active, one-way)
+    - Oddstone + Odd Slime: YES (Oddstone grabs all slime types)
+    - Odd Slime + Slime: NO (mutual exclusion)
+    - Odd Slime + Honey: NO (mutual exclusion)
+    - Odd Slime + Oddstone: NO (no slime grabs Oddstone)
+    - Machine Block + Odd Slime: NO (Machine Block can't grab back)
+- New file: OddSlimeBlock.java (com.ideomancer.ideomod.block)
+- Assets: blockstate (6 facing variants), block/item models, 3 placeholder
+  textures (front dot, back ring, side arrows with per-face UV rotation)
+- Data: loot table, placeholder recipe (1 slime block + 1 oddstone)
+- Block properties: slime friction (0.8), slime sound, translucent, no occlusion
+- Status: Working
+
+### Stickiness system changes:
+- StickinessRules.java: Added directional rule system
+  - New registerDirectionalRule() and isDirectionalGrabBlocked() methods
+  - Directional rules check (blockState, pushDirection) -> should stickiness
+    be disabled? Separate from grab immunity (type-based).
+- PistonStructureResolverMixin.java: Extended for directional stickiness
+  - Now shadows pushDirection field from PistonStructureResolver
+  - HEAD injection (branching): checks directional rules before grab immunity
+  - @Redirect (backward walk): checks directional rules for both blocks,
+    plus narrow exemption for active OddSlimeBlock targets — when an active
+    Odd Slime is in front pulling a chain, blocks behind it join regardless
+    of grab immunity (otherwise Machine Block -> Odd Slime rule incorrectly
+    prevents Machine Block from being pulled along)
+  - Exemption is specifically instanceof OddSlimeBlock + FACING match.
+    NOT generalized to "any sticky block" — that would re-open the Stage 5
+    bug where slime pulled Oddstone in the backward walk.
+- Ideomod.java: Registered new stickiness rules
+  - Grab immunity: Odd Slime -> Oddstone, Machine Block -> Odd Slime,
+    Slime -> Odd Slime, Honey -> Odd Slime (4 new rules)
+  - Directional: Odd Slime disabled when pushDirection != FACING
+- OddstoneBlock.java: canStickTo now returns true for HoneyBlock and
+  OddSlimeBlock (Oddstone grabs all slime-type blocks)
+- MachineBlock.java: canStickTo now returns true for SlimeBlock, HoneyBlock,
+  and OddSlimeBlock (permissive — lets them grab us, mixin blocks reverse)
+  - Previously returned false for slime/honey, which broke the Forge
+    bidirectional canStickTo check and prevented one-way grabs entirely
+- New documentation: STICKINESS_SYSTEM.md
+  - Explains the bidirectional canStickTo trap
+  - Documents the three-layer system (canStickTo permissive, grab immunity
+    restrictive, directional rules for conditional stickiness)
+  - Full stickiness matrix and per-pair implementation details
+  - Checklist for adding new sticky blocks
+  - Common mistakes section
+
+### Key lesson — the bidirectional canStickTo rule:
+  Forge checks canStickTo on BOTH blocks. If either returns false, the
+  stick fails before the mixin can intervene. For any pair where one-way
+  stickiness is desired, BOTH sides must return true in canStickTo. The
+  mixin's grab immunity rules handle blocking the unwanted direction.
+  Never express one-way behavior in canStickTo — it will break both ways.
 
 ## [2026-02-13] Stage 5 — Bug Fixes
 - PortalEntry mutable state (OddstonePortalSavedData.java):
@@ -70,6 +121,7 @@
   - 14 crafted mineral/metal blocks for portal corner addresses
   - Replaces hardcoded 14-block list in PortalUtils.isCornerBlock
   - One-liner check: state.is(ModTags.PORTAL_CORNER_BLOCKS)
+  - One-liner check: state.is(ModTags.PORTAL_CORNER_BLOCKS)
 - New tag: data/ideomod/tags/blocks/redstone_components.json
   - All vanilla redstone signal sources (levers, buttons, plates, etc.)
   - Uses #minecraft:buttons and #minecraft:pressure_plates tag references
@@ -80,7 +132,7 @@
   removed unused Blocks import
 - Status: Working. Portals and Machine Block redstone tested.
 
-## [2026-02-13] Stage 2 — Consolidate Duplicated Code
+## [2026-02-13] Stage 2 â€” Consolidate Duplicated Code
 - New file: PortalUtils.java (com.ideomancer.ideomod.block)
   - Single source of truth for portal corner block validation (isCornerBlock)
     - Both BlockState and Level+BlockPos overloads
@@ -89,8 +141,8 @@
   - Shared bottom-left portal scan (findBottomLeft)
     - Previously copy-pasted 3 times across OddstoneBlock and OddstonePortalBlock
     - "Scan down, then scan left" pattern now in one place
-  - Frame corner derivation (getFrameCorner) — bottomLeft to registration key
-  - Portal clearing (clearPortalBlocks) — moved from OddstoneBlock
+  - Frame corner derivation (getFrameCorner) â€” bottomLeft to registration key
+  - Portal clearing (clearPortalBlocks) â€” moved from OddstoneBlock
   - Axis-to-direction helper (getHorizontalDir)
     - Replaces 5 inline ternaries across 3 files
 - Updated OddstoneBlock.java:
@@ -112,15 +164,15 @@
 - Status: Working. All portal operations tested (activate, deactivate,
   linked teleport, scatter teleport, corner break, frame break).
 
-## [2026-02-12] Stage 1 — Housekeeping & Dead Code Cleanup
+## [2026-02-12] Stage 1 â€” Housekeeping & Dead Code Cleanup
 - Deleted Config.java (untouched MDK template, never referenced by mod code)
 - Removed dead methods from OddstonePortalSavedData:
-  - findPortalContaining() — identical to getPortal(), never called
-  - isAddressFull() — never called
+  - findPortalContaining() â€” identical to getPortal(), never called
+  - isAddressFull() â€” never called
 - Fixed OddstonePortalBlock: replaced standalone java.util.Random with
   Minecraft's level.getRandom() for scatter teleport randomization.
   Ties into the game's random pipeline instead of being disconnected.
-- Renamed MachineBlockColor.java → ModColorHandlers.java
+- Renamed MachineBlockColor.java â†’ ModColorHandlers.java
   - Class handled colors for both Machine Block AND Oddstone Portal,
     name now reflects actual scope
   - No other files needed updating (discovered via @Mod.EventBusSubscriber)
@@ -233,7 +285,7 @@
     - Piston pushes Machine Block groups together; ignores all other blocks
   - Redstone Conduction: solid-state redstone dust
     - Stores power level 0-15 as blockstate property (same as dust)
-    - Signal decays by 1 per Machine Block (lever 15 â†’ 14 â†’ 13 â†’ ... â†’ 0)
+    - Signal decays by 1 per Machine Block (lever 15 Ã¢â€ â€™ 14 Ã¢â€ â€™ 13 Ã¢â€ â€™ ... Ã¢â€ â€™ 0)
     - Powers adjacent non-Machine blocks (lamps, pistons, etc. activate)
     - Receives signal only from whitelisted redstone components
       (levers, buttons, repeaters, comparators, dust, observers, etc.)
@@ -245,7 +297,7 @@
 - New file: MachineBlock.java (com.ideomancer.ideomod.block)
 - New file: MachineBlockColor.java (com.ideomancer.ideomod.client)
 - Updated: ModBlocks, ModItems, ModCreativeTabs registries
-- Assets: blockstate (16 power variants â†’ 1 model), block/item models with
+- Assets: blockstate (16 power variants Ã¢â€ â€™ 1 model), block/item models with
   tintindex, placeholder grayscale texture, loot table, recipe
   (4 iron + 4 redstone + 1 slime = 1 machine block), pickaxe tag, lang
 - Status: Working

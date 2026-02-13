@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "facing=north": { "model": "ideomod:block/odd_slime" },
+    "facing=south": { "model": "ideomod:block/odd_slime", "y": 180 },
+    "facing=east":  { "model": "ideomod:block/odd_slime", "y": 90 },
+    "facing=west":  { "model": "ideomod:block/odd_slime", "y": 270 },
+    "facing=up":    { "model": "ideomod:block/odd_slime", "x": 270 },
+    "facing=down":  { "model": "ideomod:block/odd_slime", "x": 90 }
+  }
+}

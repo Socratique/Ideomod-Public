@@ -1,12 +1,15 @@
 package com.ideomancer.ideomod;
 
 import com.ideomancer.ideomod.block.MachineBlock;
+import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.StickinessRules;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModCreativeTabs;
 import com.ideomancer.ideomod.registry.ModItems;
 import com.mojang.logging.LogUtils;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraftforge.common.MinecraftForge;
@@ -62,36 +65,41 @@ public class Ideomod {
     }
 
     /**
-     * Registers all one-way stickiness rules for the mod.
+     * Registers all stickiness rules for the mod.
+     * See STICKINESS_SYSTEM.md for full documentation.
      * 
-     * Each rule says: "When block A is expanding (being pushed by a piston
-     * and checking its sticky neighbors), and it finds block B next to it,
-     * BLOCK the grab. B does not come along."
+     * TWO TYPES OF RULES:
      * 
-     * ODDSTONE behavior:
-     *   Oddstone pushed → grabs slime (allowed by canStickTo, no rule needed)
-     *   Slime pushed → does NOT grab Oddstone (BLOCKED by rule below)
+     * 1. GRAB IMMUNITY: "When block A is expanding and finds block B as a
+     *    neighbor, BLOCK the grab. B does not come along."
      * 
-     * MACHINE BLOCK behavior:
-     *   Slime pushed → grabs Machine Block (allowed by canStickTo, no rule needed)
-     *   Machine Block pushed → does NOT grab slime (BLOCKED by rule below)
+     * 2. DIRECTIONAL: "When block A is being pushed in direction D, disable
+     *    its stickiness entirely." Used by Odd Slime.
      */
     private void registerStickinessRules() {
+        // ================================================================
+        // GRAB IMMUNITY RULES (type-based)
+        // ================================================================
+
         // ODDSTONE: Slime should NOT grab Oddstone.
-        // (But Oddstone CAN grab slime - handled by OddstoneBlock.canStickTo)
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
-        // ODDSTONE: Honey should NOT grab Oddstone either.
+        // ODDSTONE: Honey should NOT grab Oddstone.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
+        // ODDSTONE: Odd Slime should NOT grab Oddstone.
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> grabber.getBlock() instanceof OddSlimeBlock
+                                  && target.getBlock() instanceof OddstoneBlock
+        );
+
         // MACHINE BLOCK: Machine Block should NOT grab slime.
-        // (But slime CAN grab Machine Block - allowed by MachineBlock.canStickTo)
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof MachineBlock
                                   && target.getBlock() instanceof SlimeBlock
@@ -103,7 +111,40 @@ public class Ideomod {
                                   && target.getBlock() instanceof HoneyBlock
         );
 
-        LOGGER.info("Registered one-way stickiness rules");
+        // MACHINE BLOCK: Machine Block should NOT grab Odd Slime.
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> grabber.getBlock() instanceof MachineBlock
+                                  && target.getBlock() instanceof OddSlimeBlock
+        );
+
+        // SLIME: Slime should NOT grab Odd Slime (mutual exclusion).
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
+                                  && target.getBlock() instanceof OddSlimeBlock
+        );
+
+        // HONEY: Honey should NOT grab Odd Slime (mutual exclusion).
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
+                                  && target.getBlock() instanceof OddSlimeBlock
+        );
+
+        // ================================================================
+        // DIRECTIONAL RULES
+        // ================================================================
+
+        // ODD SLIME: Only sticky when pushed in its FACING direction.
+        // If push direction != FACING, disable all stickiness.
+        StickinessRules.registerDirectionalRule(
+                (state, pushDirection) -> {
+                    if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
+                    Direction facing = state.getValue(DirectionalBlock.FACING);
+                    // Block stickiness if push direction does NOT match facing
+                    return !pushDirection.equals(facing);
+                }
+        );
+
+        LOGGER.info("Registered stickiness rules (grab immunity + directional)");
     }
 
     /**

@@ -32,6 +32,7 @@ public class ModCreativeTabs {
                         output.accept(ModItems.DRILL.get());
                         output.accept(ModItems.ODDSTONE.get());
                         output.accept(ModItems.MACHINE_BLOCK.get());
+                        output.accept(ModItems.ODD_SLIME.get());
                         
                         // Add more items here as we create them
                     })

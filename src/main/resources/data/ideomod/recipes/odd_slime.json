@@ -1,0 +1,11 @@
+{
+  "type": "minecraft:crafting_shapeless",
+  "ingredients": [
+    { "item": "minecraft:slime_block" },
+    { "item": "ideomod:oddstone" }
+  ],
+  "result": {
+    "item": "ideomod:odd_slime",
+    "count": 1
+  }
+}

@@ -37,5 +37,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
             () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
     
+    // Register the BlockItem for Odd Slime
+    public static final RegistryObject<Item> ODD_SLIME = ITEMS.register("odd_slime",
+            () -> new BlockItem(ModBlocks.ODD_SLIME.get(), new Item.Properties()));
+    
     // No BlockItem for ODDSTONE_PORTAL - it's not placeable by players
 }

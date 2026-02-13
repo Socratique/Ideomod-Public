@@ -1,11 +1,13 @@
 package com.ideomancer.ideomod.mixin;
 
+import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.StickinessRules;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import org.spongepowered.asm.mixin.Final;
@@ -21,7 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Mixin into PistonStructureResolver for two Ideomod features:
+ * Mixin into PistonStructureResolver for three Ideomod features:
  * 
  * FEATURE 1: ONE-WAY STICKINESS
  * ==============================
@@ -29,56 +31,38 @@ import java.util.List;
  * Example: slime tries to grab Oddstone -> BLOCKED.
  *          Oddstone tries to grab slime -> ALLOWED.
  * 
- * This is enforced in TWO places:
+ * Enforced at two injection points:
  * 
- *   A) addBranchingBlocks -> addBlockLine (sideways grabs)
- *      When the resolver finds a sticky block in the push list and
- *      checks its 6 neighbors, it calls addBlockLine for each.
- *      Our HEAD injection on addBlockLine blocks these when rules match.
+ *   A) HEAD of addBlockLine (during branching only) — ACTIVE GRABBING
+ *      Checks both grab immunity AND directional rules.
  * 
- *   B) addBlockLine's INTERNAL backward walk (pull-along grabs)
- *      Inside addBlockLine, there's a loop that walks backward from
- *      the starting block. For each block behind, it checks isStickyBlock()
- *      and canStickTo(). If both pass, the block gets pulled along.
- *      Our @Redirect on canStickTo intercepts this check and applies
- *      our grab immunity rules.
+ *   B) @Redirect on canStickTo (inside addBlockLine) — CHAIN COHESION
+ *      Checks grab immunity AND directional rules.
+ *      EXCEPTION: If the target (front block) is an active OddSlimeBlock,
+ *      grab immunity is skipped — the Odd Slime is pulling the behind
+ *      block along in its chain, not the other way around.
+ *      See ideomod$checkCanStickToWithRules javadoc for details.
  * 
- * FEATURE 2: ODDSTONE SYMPATHETIC MOVEMENT
+ * FEATURE 2: DIRECTIONAL STICKINESS (Odd Slime)
+ * ==============================================
+ * Blocks whose stickiness depends on push direction.
+ * Checked at both injection points.
+ * 
+ * FEATURE 3: ODDSTONE SYMPATHETIC MOVEMENT
  * =========================================
- * Extends the resolver's sticky neighbor search for Oddstone blocks.
- * Normally the resolver only checks the 6 directly adjacent positions.
- * For Oddstone, we also search along each face up to a configurable
- * radius, finding distant Oddstones and feeding them into addBlockLine
- * as if they were touching.
+ * Extended range sticky search for Oddstone blocks.
  * 
- * This means distant Oddstones go through the FULL resolver pipeline:
- * - They get added to toPush like any other block
- * - Their own sticky neighbors get checked (including slime!)
- * - They participate in push chains
- * - They count toward the 12-block limit
- * - Movement ordering is handled correctly
- * 
- * This replaces OddstoneMovementHandler entirely. One system, not two.
- * 
- * HOW IT WORKS:
- * =============
- * We use a ThreadLocal flag to track when we're inside addBranchingBlocks
- * (the sticky neighbor expansion phase). During this phase:
- * 
- * 1. ONE-WAY STICKINESS (sideways): When addBlockLine is called, we
- *    check if the grab should be blocked by our rules. If so, return
- *    true (handled).
- * 
- * 2. ONE-WAY STICKINESS (backward pull-along): A @Redirect on
- *    canStickTo inside addBlockLine consults StickinessRules before
- *    allowing any sticky pull-along. This catches the internal
- *    backward walk that the HEAD injection cannot reach.
- * 
- * 3. SYMPATHETIC SEARCH: At the TAIL of addBranchingBlocks, we scan
- *    the toPush list for Oddstones and do face-search for distant ones.
- *    Any found get fed into addBlockLine. If new blocks were added,
- *    we return true to tell the resolver to re-run branching (so the
- *    newly added Oddstones get their own sticky neighbor check).
+ * HISTORY / KNOWN PITFALLS:
+ * =========================
+ * - The @Redirect on canStickTo was added specifically to fix slime
+ *   pulling Oddstone in the backward walk (Stage 5 bug fix). Removing
+ *   or weakening grab immunity in the @Redirect WILL re-break this.
+ * - Any exemption to grab immunity in the backward walk must be
+ *   NARROWLY targeted. Do NOT exempt based on generic "is sticky" or
+ *   "has no directional rules" checks — that matches Oddstone, slime,
+ *   honey, etc. and re-opens the Stage 5 bug.
+ * - The current exemption specifically checks for OddSlimeBlock with
+ *   FACING matching pushDirection. Only this block type gets the pass.
  */
 @Mixin(PistonStructureResolver.class)
 public abstract class PistonStructureResolverMixin {
@@ -89,15 +73,15 @@ public abstract class PistonStructureResolverMixin {
 
     @Shadow @Final private Level level;
     @Shadow @Final private List<BlockPos> toPush;
+    @Shadow @Final private Direction pushDirection;
 
     /** The resolver's own method for adding a block and its push line. */
     @Shadow protected abstract boolean addBlockLine(BlockPos pos, Direction dir);
 
     /**
      * ThreadLocal flag: true when we're inside addBranchingBlocks.
-     * Used to distinguish sticky branching from line-building in
-     * the addBlockLine injection, so we only block grabs during
-     * the sticky expansion phase (sideways grabs).
+     * Used to distinguish sticky branching (active grabbing) from
+     * line-building (passive chain cohesion).
      */
     @Unique
     private static final ThreadLocal<Boolean> ideomod$inBranching = ThreadLocal.withInitial(() -> false);
@@ -117,17 +101,16 @@ public abstract class PistonStructureResolverMixin {
     }
 
     // ====================================================================
-    // FEATURE 1A: ONE-WAY STICKINESS — SIDEWAYS GRABS
+    // FEATURE 1A + 2A: ONE-WAY & DIRECTIONAL STICKINESS — SIDEWAYS GRABS
     // ====================================================================
 
     /**
-     * At HEAD of addBlockLine: check if this grab should be blocked
-     * by our one-way stickiness rules. Only active during branching
-     * (the sideways neighbor expansion phase).
+     * At HEAD of addBlockLine: check if this grab should be blocked.
+     * Only active during branching (sideways neighbor expansion phase).
      * 
-     * This handles the case where addBranchingBlocks iterates over
-     * sticky blocks in toPush and calls addBlockLine for each adjacent
-     * position. We intercept at the door and check our rules.
+     * This is the "active grabbing" phase — a sticky block reaches out
+     * to its neighbors. Both grab immunity AND directional rules apply
+     * with full force here.
      */
     @Inject(method = "addBlockLine", at = @At("HEAD"), cancellable = true)
     private void ideomod$blockOneWayGrabs(BlockPos pos, Direction dir,
@@ -142,50 +125,57 @@ public abstract class PistonStructureResolverMixin {
 
         if (neighborState.isAir()) return;
 
-        if (grabberState.isStickyBlock() && StickinessRules.isGrabBlocked(grabberState, neighborState)) {
-            // Block this grab. Return TRUE = "resolved OK, nothing to add"
-            cir.setReturnValue(true);
+        if (grabberState.isStickyBlock()) {
+            // Check 1: Directional stickiness — is the grabber disabled for this push?
+            if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
+                cir.setReturnValue(true);
+                return;
+            }
+
+            // Check 2: One-way grab immunity — is this specific grab blocked?
+            if (StickinessRules.isGrabBlocked(grabberState, neighborState)) {
+                cir.setReturnValue(true);
+            }
         }
     }
 
     // ====================================================================
-    // FEATURE 1B: ONE-WAY STICKINESS — BACKWARD PULL-ALONG
+    // FEATURE 1B + 2B: STICKINESS — BACKWARD WALK (chain cohesion)
     // ====================================================================
 
     /**
      * Redirects the canStickTo() call inside addBlockLine's backward walk.
      * 
-     * WHAT THIS FIXES:
-     * ================
-     * Inside addBlockLine, after walking forward to collect blocks in
-     * the push direction, there's a backward walk that checks:
-     *   "Is the block behind me sticky? Does it stick to me?"
-     * If yes, that block gets pulled along in the push group.
+     * The backward walk finds sticky blocks behind the current push line
+     * and checks if they should join the group. The call is:
+     *   behindBlockState.canStickTo(frontBlockState)
      * 
-     * The HEAD injection on addBlockLine can't reach this — it's an
-     * internal loop, not a new call to addBlockLine.
+     * "grabberState" = block BEHIND (being considered for the chain)
+     * "targetState"  = block IN FRONT (already in the line)
      * 
-     * HOW IT WORKS:
-     * =============
-     * Vanilla calls: stateA.canStickTo(stateB)
-     * We intercept that call. We run the original canStickTo first.
-     * If it returns true, we ALSO check StickinessRules:
-     *   - stateA is the sticky block doing the grabbing
-     *   - stateB is the block being grabbed
-     * If our rules say "blocked", we return false — vanilla thinks
-     * they can't stick, and skips the pull-along.
+     * RULES APPLIED:
+     * ==============
+     * 1. Directional rules: ALWAYS. If a block isn't active for this push
+     *    direction, it's not sticky — period.
      * 
-     * SCOPE:
-     * ======
-     * This @Redirect applies to ALL canStickTo calls inside addBlockLine,
-     * which is exactly what we want — every stickiness check in the
-     * line-building logic gets our one-way rules applied.
+     * 2. Grab immunity: ALWAYS, with ONE narrow exception:
+     *    If the TARGET is an OddSlimeBlock whose FACING matches pushDirection
+     *    (i.e. it's actively pulling), grab immunity is skipped.
      * 
-     * Note: The @Redirect target uses Forge's method name. In Forge
-     * 1.20.1, canStickTo is added by Forge's patch to BlockState (via
-     * IForgeBlockState). The method signature is:
-     *   boolean canStickTo(BlockState other)
-     * called on a BlockState instance.
+     * WHY THE EXCEPTION:
+     * ==================
+     * When active Odd Slime is in front and Machine Block is behind it,
+     * the backward walk calls MachineBlock.canStickTo(OddSlime). Our grab
+     * immunity says Machine Block can't grab Odd Slime. But Machine Block
+     * isn't grabbing — Odd Slime is pulling it along. Without the exception,
+     * Machine Block gets incorrectly left behind.
+     * 
+     * WHY IT'S NARROWLY TARGETED:
+     * ===========================
+     * We specifically check for OddSlimeBlock + FACING match. We do NOT
+     * use generic "is sticky and has no directional block" — that would
+     * match Oddstone, slime, honey, and re-open the Stage 5 bug where
+     * slime pulled Oddstone in the backward walk.
      */
     @Redirect(
         method = "addBlockLine",
@@ -198,21 +188,44 @@ public abstract class PistonStructureResolverMixin {
         // First: run vanilla/Forge's original canStickTo check
         boolean vanillaResult = grabberState.canStickTo(targetState);
         if (!vanillaResult) {
-            return false; // Vanilla already says no — nothing to override
+            return false;
         }
 
-        // Second: check our one-way stickiness rules
-        // grabberState = the sticky block trying to pull the other along
-        // targetState = the block being grabbed
-        if (StickinessRules.isGrabBlocked(grabberState, targetState)) {
-            return false; // Our rules say this grab is not allowed
+        // Check directional rules for both blocks
+        if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
+            return false;
+        }
+        if (StickinessRules.isDirectionalGrabBlocked(targetState, this.pushDirection)) {
+            return false;
         }
 
-        return true; // Both vanilla and our rules allow the stick
+        // Check grab immunity — with narrow exception for active Odd Slime targets.
+        //
+        // If the target (front block) is an OddSlimeBlock that is active for
+        // this push direction, it's the one doing the pulling. The grabber
+        // (behind block) should come along regardless of grab immunity.
+        //
+        // IMPORTANT: This check is intentionally specific to OddSlimeBlock.
+        // Do NOT generalize to "any sticky block" — that re-opens the Stage 5
+        // bug (slime pulling Oddstone in backward walk).
+        boolean targetIsActivePuller = false;
+        if (targetState.getBlock() instanceof OddSlimeBlock) {
+            Direction facing = targetState.getValue(DirectionalBlock.FACING);
+            targetIsActivePuller = this.pushDirection.equals(facing);
+        }
+
+        if (!targetIsActivePuller) {
+            // Normal case: apply grab immunity
+            if (StickinessRules.isGrabBlocked(grabberState, targetState)) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     // ====================================================================
-    // FEATURE 2: ODDSTONE SYMPATHETIC MOVEMENT
+    // FEATURE 3: ODDSTONE SYMPATHETIC MOVEMENT
     // ====================================================================
 
     /**
@@ -223,16 +236,12 @@ public abstract class PistonStructureResolverMixin {
      * 
      * If we added any new blocks, we override the return value to true,
      * which tells the resolver's loop in resolve() to re-run branching.
-     * This ensures newly added Oddstones get THEIR sticky neighbors
-     * checked too (including more distant Oddstones — the chain propagates).
      */
     @Inject(method = "addBranchingBlocks", at = @At("TAIL"), cancellable = true)
     private void ideomod$sympatheticSearch(CallbackInfoReturnable<Boolean> cir) {
         int radius = OddstoneConfig.getSympatheticRadius();
-        if (radius <= 1) return; // No extended search needed
+        if (radius <= 1) return;
 
-        // Snapshot the current push list — we'll be adding to it via
-        // addBlockLine, so we iterate a copy to avoid concurrent modification
         List<BlockPos> snapshot = new ArrayList<>(this.toPush);
         boolean addedAny = false;
 
@@ -240,40 +249,24 @@ public abstract class PistonStructureResolverMixin {
             BlockState state = this.level.getBlockState(oddPos);
             if (!state.is(ModBlocks.ODDSTONE.get())) continue;
 
-            // Search each face for distant Oddstones (start at distance 2;
-            // distance 1 is already handled by vanilla stickiness)
             for (Direction face : Direction.values()) {
                 for (int dist = 2; dist <= radius; dist++) {
                     BlockPos checkPos = oddPos.relative(face, dist);
                     BlockState checkState = this.level.getBlockState(checkPos);
 
                     if (checkState.is(ModBlocks.ODDSTONE.get())) {
-                        // Found a distant Oddstone on this face!
                         if (!this.toPush.contains(checkPos)) {
-                            // Feed it into the resolver as if it were adjacent.
-                            // addBlockLine handles pushability checks, the
-                            // 12-block limit, and adding the whole push line.
                             boolean result = this.addBlockLine(checkPos, face);
                             if (this.toPush.contains(checkPos)) {
                                 addedAny = true;
                             }
-                            // If addBlockLine returned false, the push is
-                            // impossible (e.g. hit 12-block limit). The resolver
-                            // will handle this — we don't need to do anything.
                         }
-                        break; // Only grab the nearest Oddstone per face
+                        break;
                     }
-
-                    // Sympathetic link passes through ALL blocks (wireless).
-                    // Don't break on non-air — keep scanning.
                 }
             }
         }
 
-        // If we added new blocks, tell the resolver to re-run branching.
-        // This ensures the newly added Oddstones get their own sticky
-        // neighbor expansion (which may find more distant Oddstones,
-        // more slime blocks, etc.)
         if (addedAny) {
             cir.setReturnValue(true);
         }
