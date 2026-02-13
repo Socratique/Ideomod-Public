@@ -77,11 +77,14 @@ public class MachineBlock extends Block {
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        // Exclusive with slime and honey
-        if (other.getBlock() instanceof SlimeBlock) return false;
+        // Honey: fully excluded (mutual, same as vanilla honey vs slime)
         if (other.getBlock() instanceof HoneyBlock) return false;
-        // Stick to other Machine Blocks only
-        return other.getBlock() instanceof MachineBlock;
+        // Machine Block: stick to each other
+        if (other.getBlock() instanceof MachineBlock) return true;
+        // Slime: allow slime to grab us. The reverse (us grabbing slime)
+        // is blocked by the mixin via StickinessRules grab immunity.
+        if (other.getBlock() instanceof SlimeBlock) return true;
+        return false;
     }
 
     // ========================================================================

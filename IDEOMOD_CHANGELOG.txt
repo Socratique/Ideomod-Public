@@ -1,5 +1,50 @@
 # Ideomod Changelog
 
+## [2026-02-13] Stage 6 — Remaining Work Documented
+- Documented remaining items in REMAINING_WORK.md for future sessions:
+  - Stage 6A: Auto BlockItem registration helper (ModBlocks + ModItems
+    dual registration consolidated into single helper method)
+  - Stage 6B: Portal entity handling decision (players only vs all
+    entities vs selective — design decision with tradeoffs documented)
+  - Deferred mixin fix: one-way stickiness backward pull-along in
+    addBlockLine's internal line-tracing loop (full root cause and
+    fix approach documented)
+- Drill tool-drops: skipped, current behavior acceptable for now
+- Codebase review refactoring complete (Stages 1-5 applied and tested)
+
+## [2026-02-13] Stage 5 — Bug Fixes
+- PortalEntry mutable state (OddstonePortalSavedData.java):
+  - partnerPos field changed from public to private
+  - Added getPartnerPos() getter for external access
+  - Mutations only happen inside registerPortal/unregisterPortal,
+    both followed by setDirty() — external code can no longer
+    accidentally mutate without triggering a world save
+- Updated OddstonePortalBlock.java: uses entry.getPartnerPos()
+- MachineBlock asymmetric stickiness fix:
+  - canStickTo now returns true for SlimeBlock (allows slime to grab us)
+  - Reverse direction (Machine Block grabbing slime) is blocked by
+    the mixin via StickinessRules grab immunity — asymmetry preserved
+  - Previously returned false for slime in both directions, which
+    prevented slime from grabbing Machine Block entirely
+- Removed OddstoneMovementHandler.java from project files
+  - Was deleted during mixin rewrite but lingered in project context
+  - Movement handler memory leak and key collision fixes (prepared
+    during this stage) are moot — the mixin replaced this system
+- MachineBlock isUpdating propagation: left as-is. The one-block-per-tick
+  drip behavior is acceptable and fixing it adds complexity without
+  clear benefit.
+- Status: Working. Portal linking/unlinking and Machine Block stickiness tested.
+
+### Known issue discovered during testing:
+- One-way stickiness mixin only blocks grabs during addBranchingBlocks
+  (sideways sticky expansion). It does NOT block the backward sticky
+  pull-along inside addBlockLine's internal line-tracing. This means:
+  - Slime in front/behind Oddstone in the push direction still pulls it
+  - Machine Block in front/behind slime in the push direction still pulls it
+  - Sideways grabs are correctly blocked
+  Fix requires injecting into addBlockLine's backward walk loop, which
+  is a more complex mixin change. Deferred to a future pass.
+
 ## [2026-02-13] Stage 4 — Extract Portal Logic from OddstoneBlock
 - New file: OddstonePortalHandler.java (com.ideomancer.ideomod.block)
   - Static utility class handling portal activation and deactivation

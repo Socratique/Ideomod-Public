@@ -50,7 +50,7 @@ public class OddstonePortalSavedData extends SavedData {
         public final String address;
         public final BlockPos pos;
         public final String axis; // "X" or "Z"
-        @Nullable public BlockPos partnerPos;
+        @Nullable private BlockPos partnerPos;
 
         public PortalEntry(String address, BlockPos pos, String axis, @Nullable BlockPos partnerPos) {
             this.address = address;
@@ -61,6 +61,11 @@ public class OddstonePortalSavedData extends SavedData {
 
         public boolean isLinked() {
             return partnerPos != null;
+        }
+
+        @Nullable
+        public BlockPos getPartnerPos() {
+            return partnerPos;
         }
     }
 

@@ -1,623 +1,121 @@
 Folder PATH listing for volume Don't Panic
 Volume serial number is 7606-BCD6
-D:.
-|   .gitattributes
-|   .gitignore
-|   build.gradle
-|   changelog.txt
-|   CREDITS.txt
-|   FILETREE.txt
-|   generate_filetree.bat
-|   gradle.properties
-|   gradlew
-|   gradlew.bat
-|   IDEOMOD_CHANGELOG.txt
-|   LICENSE.txt
-|   open_cmd_here.bat
-|   README.txt
-|   Repo_Links.txt
-|   settings.gradle
-|   
-+---.gradle
-|   |   file-system.probe
-|   |   
-|   +---8.8
-|   |   |   gc.properties
-|   |   |   
-|   |   +---checksums
-|   |   |       checksums.lock
-|   |   |       md5-checksums.bin
-|   |   |       sha1-checksums.bin
-|   |   |       
-|   |   +---dependencies-accessors
-|   |   |       gc.properties
-|   |   |       
-|   |   +---executionHistory
-|   |   |       executionHistory.bin
-|   |   |       executionHistory.lock
-|   |   |       
-|   |   +---expanded
-|   |   |       expanded.lock
-|   |   |       
-|   |   +---fileChanges
-|   |   |       last-build.bin
-|   |   |       
-|   |   +---fileHashes
-|   |   |       fileHashes.bin
-|   |   |       fileHashes.lock
-|   |   |       resourceHashesCache.bin
-|   |   |       
-|   |   \---vcsMetadata
-|   +---buildOutputCleanup
-|   |       buildOutputCleanup.lock
-|   |       cache.properties
-|   |       outputFiles.bin
-|   |       
-|   \---vcs-1
-|           gc.properties
-|           
-+---.idea
-|   |   .gitignore
-|   |   compiler.xml
-|   |   gradle.xml
-|   |   misc.xml
-|   |   modules.xml
-|   |   vcs.xml
-|   |   workspace.xml
-|   |   
-|   +---modules
-|   |       Ideomod.main.iml
-|   |       
-|   \---runConfigurations
-|           runClient.xml
-|           runData.xml
-|           runGameTestServer.xml
-|           runServer.xml
-|           
-+---build
-|   +---classes
-|   |   \---java
-|   |       \---main
-|   |           \---com
-|   |               \---ideomancer
-|   |                   \---ideomod
-|   |                       |   Config.class
-|   |                       |   Ideomod.class
-|   |                       |   
-|   |                       +---block
-|   |                       |       DrillBlock$1.class
-|   |                       |       DrillBlock.class
-|   |                       |       MachineBlock.class
-|   |                       |       OddstoneBlock$1.class
-|   |                       |       OddstoneBlock.class
-|   |                       |       OddstonePortalBlock$1.class
-|   |                       |       OddstonePortalBlock$PortalBounds.class
-|   |                       |       OddstonePortalBlock.class
-|   |                       |       OddstonePortalFrameDetector$FrameResult.class
-|   |                       |       OddstonePortalFrameDetector.class
-|   |                       |       OddstonePortalSavedData$PortalEntry.class
-|   |                       |       OddstonePortalSavedData$RegisterResult.class
-|   |                       |       OddstonePortalSavedData.class
-|   |                       |       StickinessRules.class
-|   |                       |       
-|   |                       +---client
-|   |                       |       MachineBlockColor.class
-|   |                       |       
-|   |                       +---config
-|   |                       |       OddstoneConfig.class
-|   |                       |       
-|   |                       +---mixin
-|   |                       |       PistonStructureResolverMixin.class
-|   |                       |       
-|   |                       \---registry
-|   |                               ModBlocks.class
-|   |                               ModCreativeTabs.class
-|   |                               ModItems.class
-|   |                               
-|   +---classpath
-|   |       runClient_minecraftClasspath.txt
-|   |       runData_minecraftClasspath.txt
-|   |       runGameTestServer_minecraftClasspath.txt
-|   |       runServer_minecraftClasspath.txt
-|   |       
-|   +---createMcpToSrg
-|   |       output.tsrg
-|   |       
-|   +---createSrgToMcp
-|   |       output.srg
-|   |       
-|   +---downloadMCMeta
-|   |       version.json
-|   |       
-|   +---downloadMcpConfig
-|   |       output.zip
-|   |       
-|   +---extractSrg
-|   |       output.srg
-|   |       
-|   +---generated
-|   |   \---sources
-|   |       +---annotationProcessor
-|   |       |   \---java
-|   |       |       \---main
-|   |       \---headers
-|   |           \---java
-|   |               \---main
-|   +---natives
-|   +---resources
-|   |   \---main
-|   |       |   ideomod.mixins.json
-|   |       |   pack.mcmeta
-|   |       |   
-|   |       +---assets
-|   |       |   \---ideomod
-|   |       |       +---blockstates
-|   |       |       |       drill.json
-|   |       |       |       ideoblock.json
-|   |       |       |       machine_block.json
-|   |       |       |       oddstone.json
-|   |       |       |       oddstone_portal.json
-|   |       |       |       
-|   |       |       +---lang
-|   |       |       |       en_us.json
-|   |       |       |       
-|   |       |       +---models
-|   |       |       |   +---block
-|   |       |       |   |       drill.json
-|   |       |       |   |       drill_on.json
-|   |       |       |   |       ideoblock.json
-|   |       |       |   |       machine_block.json
-|   |       |       |   |       oddstone.json
-|   |       |       |   |       oddstone_portal_ew.json
-|   |       |       |   |       oddstone_portal_ns.json
-|   |       |       |   |       
-|   |       |       |   \---item
-|   |       |       |           drill.json
-|   |       |       |           ideoblock.json
-|   |       |       |           machine_block.json
-|   |       |       |           oddstone.json
-|   |       |       |           
-|   |       |       \---textures
-|   |       |           \---block
-|   |       |                   drill_back.png
-|   |       |                   drill_front.png
-|   |       |                   drill_front_on.png
-|   |       |                   drill_side.png
-|   |       |                   drill_top.png
-|   |       |                   ideoblock.png
-|   |       |                   machine_block.png
-|   |       |                   oddstone.png
-|   |       |                   
-|   |       +---data
-|   |       |   +---ideomod
-|   |       |   |   +---loot_tables
-|   |       |   |   |   \---blocks
-|   |       |   |   |           drill.json
-|   |       |   |   |           ideoblock.json
-|   |       |   |   |           machine_block.json
-|   |       |   |   |           oddstone.json
-|   |       |   |   |           
-|   |       |   |   +---recipes
-|   |       |   |   |       drill.json
-|   |       |   |   |       ideoblock.json
-|   |       |   |   |       machine_block.json
-|   |       |   |   |       oddstone.json
-|   |       |   |   |       
-|   |       |   |   \---worldgen
-|   |       |   |       \---world_preset
-|   |       |   \---minecraft
-|   |       |       \---tags
-|   |       |           +---blocks
-|   |       |           |   \---mineable
-|   |       |           |           pickaxe.json
-|   |       |           |           
-|   |       |           \---worldgen
-|   |       |               \---world_preset
-|   |       \---META-INF
-|   |               mods.toml
-|   |               
-|   +---tmp
-|   |   +---.cache
-|   |   |   \---expanded
-|   |   |       \---zip_e38c7b1572572a9143f4c4d90e354b25
-|   |   |           \---mcp
-|   |   |               \---client
-|   |   |                       Start.java
-|   |   |                       
-|   |   +---compileJava
-|   |   |   |   compileJava-mappings.tsrg
-|   |   |   |   compileJava-refmap.json
-|   |   |   |   ideomod.refmap.json
-|   |   |   |   previous-compilation-data.bin
-|   |   |   |   
-|   |   |   \---compileTransaction
-|   |   |       +---backup-dir
-|   |   |       \---stash-dir
-|   |   |               MachineBlock.class.uniqueId5
-|   |   |               MachineBlockColor.class.uniqueId3
-|   |   |               MachineBlockStickyHandler$1.class.uniqueId4
-|   |   |               MachineBlockStickyHandler$MovementPlan.class.uniqueId2
-|   |   |               MachineBlockStickyHandler.class.uniqueId0
-|   |   |               ModBlocks.class.uniqueId1
-|   |   |               
-|   |   \---_compileJava_3
-|   +---_applyBinpatches_2
-|   |       log.txt
-|   |       
-|   +---_atJar_4
-|   |       accesstransform.log
-|   |       log.txt
-|   |       parent_at.cfg
-|   |       
-|   \---_compileJava_3
-|       \---mcp
-|           \---client
-|                   Start.class
-|                   
-+---gradle
-|   \---wrapper
-|           gradle-wrapper.jar
-|           gradle-wrapper.properties
-|           
-+---run
-|   |   options.txt
-|   |   usercache.json
-|   |   usernamecache.json
-|   |   
-|   +---config
-|   |   |   fml.toml
-|   |   |   forge-client.toml
-|   |   |   
-|   |   \---ideomod
-|   |           oddstone.json
-|   |           
-|   +---crash-reports
-|   |       crash-2026-02-11_21.17.54-fml.txt
-|   |       crash-2026-02-11_22.22.30-server.txt
-|   |       
-|   +---defaultconfigs
-|   +---logs
-|   |   |   2026-02-03-2.log.gz
-|   |   |   2026-02-03-3.log.gz
-|   |   |   2026-02-03-4.log.gz
-|   |   |   2026-02-03-5.log.gz
-|   |   |   2026-02-03-6.log.gz
-|   |   |   2026-02-03-7.log.gz
-|   |   |   2026-02-03-8.log.gz
-|   |   |   2026-02-04-2.log.gz
-|   |   |   2026-02-04-3.log.gz
-|   |   |   2026-02-04-4.log.gz
-|   |   |   2026-02-05-2.log.gz
-|   |   |   2026-02-05-3.log.gz
-|   |   |   2026-02-05-4.log.gz
-|   |   |   2026-02-05-5.log.gz
-|   |   |   2026-02-05-6.log.gz
-|   |   |   2026-02-05-7.log.gz
-|   |   |   2026-02-05-8.log.gz
-|   |   |   2026-02-06-2.log.gz
-|   |   |   2026-02-08-2.log.gz
-|   |   |   2026-02-08-3.log.gz
-|   |   |   2026-02-10-1.log.gz
-|   |   |   2026-02-10-2.log.gz
-|   |   |   2026-02-11-10.log.gz
-|   |   |   2026-02-11-11.log.gz
-|   |   |   2026-02-11-12.log.gz
-|   |   |   2026-02-11-13.log.gz
-|   |   |   2026-02-11-14.log.gz
-|   |   |   2026-02-11-2.log.gz
-|   |   |   2026-02-11-3.log.gz
-|   |   |   2026-02-11-4.log.gz
-|   |   |   2026-02-11-5.log.gz
-|   |   |   2026-02-11-6.log.gz
-|   |   |   2026-02-11-7.log.gz
-|   |   |   2026-02-11-8.log.gz
-|   |   |   2026-02-11-9.log.gz
-|   |   |   2026-02-12-1.log.gz
-|   |   |   2026-02-12-2.log.gz
-|   |   |   2026-02-12-3.log.gz
-|   |   |   2026-02-12-4.log.gz
-|   |   |   2026-02-12-5.log.gz
-|   |   |   2026-02-12-6.log.gz
-|   |   |   debug-1.log.gz
-|   |   |   debug-2.log.gz
-|   |   |   debug-3.log.gz
-|   |   |   debug-4.log.gz
-|   |   |   debug-5.log.gz
-|   |   |   debug.log
-|   |   |   latest.log
-|   |   |   
-|   |   \---telemetry
-|   +---mods
-|   +---resourcepacks
-|   +---saves
-|   |   +---New World
-|   |   |   |   icon.png
-|   |   |   |   level.dat
-|   |   |   |   level.dat_old
-|   |   |   |   session.lock
-|   |   |   |   
-|   |   |   +---advancements
-|   |   |   |       380df991-f603-344c-a090-369bad2a924a.json
-|   |   |   |       
-|   |   |   +---data
-|   |   |   |       capabilities.dat
-|   |   |   |       ideomod_oddstone_portals.dat
-|   |   |   |       raids.dat
-|   |   |   |       
-|   |   |   +---datapacks
-|   |   |   +---DIM-1
-|   |   |   |   \---data
-|   |   |   |           capabilities.dat
-|   |   |   |           raids.dat
-|   |   |   |           
-|   |   |   +---DIM1
-|   |   |   |   \---data
-|   |   |   |           capabilities.dat
-|   |   |   |           raids_end.dat
-|   |   |   |           
-|   |   |   +---entities
-|   |   |   |       r.-1.-1.mca
-|   |   |   |       r.-1.-2.mca
-|   |   |   |       r.-1.0.mca
-|   |   |   |       r.-1.1.mca
-|   |   |   |       r.-2.-1.mca
-|   |   |   |       r.-2.-2.mca
-|   |   |   |       r.-2.0.mca
-|   |   |   |       r.-2.1.mca
-|   |   |   |       r.0.-1.mca
-|   |   |   |       r.0.-2.mca
-|   |   |   |       r.0.0.mca
-|   |   |   |       r.0.1.mca
-|   |   |   |       r.1.-1.mca
-|   |   |   |       r.1.-2.mca
-|   |   |   |       r.1.0.mca
-|   |   |   |       r.1.1.mca
-|   |   |   |       
-|   |   |   +---playerdata
-|   |   |   |       380df991-f603-344c-a090-369bad2a924a.dat
-|   |   |   |       380df991-f603-344c-a090-369bad2a924a.dat_old
-|   |   |   |       
-|   |   |   +---poi
-|   |   |   |       r.-1.-1.mca
-|   |   |   |       r.-1.-2.mca
-|   |   |   |       r.-1.0.mca
-|   |   |   |       r.-1.1.mca
-|   |   |   |       r.-2.-1.mca
-|   |   |   |       r.-2.-2.mca
-|   |   |   |       r.-2.0.mca
-|   |   |   |       r.-2.1.mca
-|   |   |   |       r.0.-1.mca
-|   |   |   |       r.0.-2.mca
-|   |   |   |       r.0.0.mca
-|   |   |   |       r.0.1.mca
-|   |   |   |       r.1.-1.mca
-|   |   |   |       r.1.-2.mca
-|   |   |   |       r.1.0.mca
-|   |   |   |       r.1.1.mca
-|   |   |   |       
-|   |   |   +---region
-|   |   |   |       r.-1.-1.mca
-|   |   |   |       r.-1.-2.mca
-|   |   |   |       r.-1.0.mca
-|   |   |   |       r.-1.1.mca
-|   |   |   |       r.-2.-1.mca
-|   |   |   |       r.-2.-2.mca
-|   |   |   |       r.-2.0.mca
-|   |   |   |       r.-2.1.mca
-|   |   |   |       r.0.-1.mca
-|   |   |   |       r.0.-2.mca
-|   |   |   |       r.0.0.mca
-|   |   |   |       r.0.1.mca
-|   |   |   |       r.1.-1.mca
-|   |   |   |       r.1.-2.mca
-|   |   |   |       r.1.0.mca
-|   |   |   |       r.1.1.mca
-|   |   |   |       
-|   |   |   +---serverconfig
-|   |   |   |       forge-server.toml
-|   |   |   |       
-|   |   |   \---stats
-|   |   |           380df991-f603-344c-a090-369bad2a924a.json
-|   |   |           
-|   |   \---test
-|   |       |   icon.png
-|   |       |   level.dat
-|   |       |   level.dat_old
-|   |       |   session.lock
-|   |       |   
-|   |       +---advancements
-|   |       |       380df991-f603-344c-a090-369bad2a924a.json
-|   |       |       
-|   |       +---data
-|   |       |       capabilities.dat
-|   |       |       raids.dat
-|   |       |       random_sequences.dat
-|   |       |       
-|   |       +---datapacks
-|   |       +---DIM-1
-|   |       |   \---data
-|   |       |           capabilities.dat
-|   |       |           raids.dat
-|   |       |           
-|   |       +---DIM1
-|   |       |   \---data
-|   |       |           capabilities.dat
-|   |       |           raids_end.dat
-|   |       |           
-|   |       +---entities
-|   |       |       r.-1.-1.mca
-|   |       |       r.-1.0.mca
-|   |       |       r.-1.1.mca
-|   |       |       r.-1.2.mca
-|   |       |       r.0.-1.mca
-|   |       |       r.0.0.mca
-|   |       |       r.0.1.mca
-|   |       |       r.0.2.mca
-|   |       |       r.1.-1.mca
-|   |       |       r.1.0.mca
-|   |       |       r.1.1.mca
-|   |       |       r.1.2.mca
-|   |       |       
-|   |       +---playerdata
-|   |       |       380df991-f603-344c-a090-369bad2a924a.dat
-|   |       |       380df991-f603-344c-a090-369bad2a924a.dat_old
-|   |       |       
-|   |       +---poi
-|   |       |       r.-1.-1.mca
-|   |       |       r.-1.-2.mca
-|   |       |       r.-1.0.mca
-|   |       |       r.-1.1.mca
-|   |       |       r.-1.2.mca
-|   |       |       r.-2.-1.mca
-|   |       |       r.-2.-2.mca
-|   |       |       r.-2.0.mca
-|   |       |       r.-2.1.mca
-|   |       |       r.0.-1.mca
-|   |       |       r.0.-2.mca
-|   |       |       r.0.0.mca
-|   |       |       r.0.1.mca
-|   |       |       r.1.-1.mca
-|   |       |       r.1.-2.mca
-|   |       |       r.1.0.mca
-|   |       |       r.1.1.mca
-|   |       |       
-|   |       +---region
-|   |       |       r.-1.-1.mca
-|   |       |       r.-1.-2.mca
-|   |       |       r.-1.0.mca
-|   |       |       r.-1.1.mca
-|   |       |       r.-1.2.mca
-|   |       |       r.-2.-1.mca
-|   |       |       r.-2.-2.mca
-|   |       |       r.-2.0.mca
-|   |       |       r.-2.1.mca
-|   |       |       r.-2.2.mca
-|   |       |       r.0.-1.mca
-|   |       |       r.0.-2.mca
-|   |       |       r.0.0.mca
-|   |       |       r.0.1.mca
-|   |       |       r.0.2.mca
-|   |       |       r.1.-1.mca
-|   |       |       r.1.-2.mca
-|   |       |       r.1.0.mca
-|   |       |       r.1.1.mca
-|   |       |       r.1.2.mca
-|   |       |       
-|   |       +---serverconfig
-|   |       |       forge-server.toml
-|   |       |       
-|   |       \---stats
-|   |               380df991-f603-344c-a090-369bad2a924a.json
-|   |               
-|   \---screenshots
-|           2026-02-05_22.07.57.png
-|           
-+---run-data
-\---src
-    +---generated
-    |   \---resources
-    +---main
-    |   +---java
-    |   |   \---com
-    |   |       \---ideomancer
-    |   |           \---ideomod
-    |   |               |   Config.java
-    |   |               |   Ideomod.java
-    |   |               |   
-    |   |               +---block
-    |   |               |       DrillBlock.java
-    |   |               |       MachineBlock.java
-    |   |               |       OddstoneBlock.java
-    |   |               |       OddstonePortalBlock.java
-    |   |               |       OddstonePortalFrameDetector.java
-    |   |               |       OddstonePortalSavedData.java
-    |   |               |       StickinessRules.java
-    |   |               |       
-    |   |               +---client
-    |   |               |       MachineBlockColor.java
-    |   |               |       
-    |   |               +---config
-    |   |               |       OddstoneConfig.java
-    |   |               |       
-    |   |               +---mixin
-    |   |               |       PistonStructureResolverMixin.java
-    |   |               |       
-    |   |               \---registry
-    |   |                       ModBlocks.java
-    |   |                       ModCreativeTabs.java
-    |   |                       ModItems.java
-    |   |                       
-    |   \---resources
-    |       |   ideomod.mixins.json
-    |       |   pack.mcmeta
-    |       |   
-    |       +---assets
-    |       |   \---ideomod
-    |       |       +---blockstates
-    |       |       |       drill.json
-    |       |       |       ideoblock.json
-    |       |       |       machine_block.json
-    |       |       |       oddstone.json
-    |       |       |       oddstone_portal.json
-    |       |       |       
-    |       |       +---lang
-    |       |       |       en_us.json
-    |       |       |       
-    |       |       +---models
-    |       |       |   +---block
-    |       |       |   |       drill.json
-    |       |       |   |       drill_on.json
-    |       |       |   |       ideoblock.json
-    |       |       |   |       machine_block.json
-    |       |       |   |       oddstone.json
-    |       |       |   |       oddstone_portal_ew.json
-    |       |       |   |       oddstone_portal_ns.json
-    |       |       |   |       
-    |       |       |   \---item
-    |       |       |           drill.json
-    |       |       |           ideoblock.json
-    |       |       |           machine_block.json
-    |       |       |           oddstone.json
-    |       |       |           
-    |       |       \---textures
-    |       |           \---block
-    |       |                   drill_back.png
-    |       |                   drill_front.png
-    |       |                   drill_front_on.png
-    |       |                   drill_side.png
-    |       |                   drill_top.png
-    |       |                   ideoblock.png
-    |       |                   machine_block.png
-    |       |                   oddstone.png
-    |       |                   
-    |       +---data
-    |       |   +---ideomod
-    |       |   |   +---loot_tables
-    |       |   |   |   \---blocks
-    |       |   |   |           drill.json
-    |       |   |   |           ideoblock.json
-    |       |   |   |           machine_block.json
-    |       |   |   |           oddstone.json
-    |       |   |   |           
-    |       |   |   +---recipes
-    |       |   |   |       drill.json
-    |       |   |   |       ideoblock.json
-    |       |   |   |       machine_block.json
-    |       |   |   |       oddstone.json
-    |       |   |   |       
-    |       |   |   \---worldgen
-    |       |   |       \---world_preset
-    |       |   \---minecraft
-    |       |       \---tags
-    |       |           +---blocks
-    |       |           |   \---mineable
-    |       |           |           pickaxe.json
-    |       |           |           
-    |       |           \---worldgen
-    |       |               \---world_preset
-    |       \---META-INF
-    |               mods.toml
-    |               
-    \---test
-        +---java
-        \---resources
+D:\PROJECTS\MINECRAFT MODS\IDEOMOD\SRC
+ÃÄÄÄgenerated
+³   ÀÄÄÄresources
+ÃÄÄÄmain
+³   ÃÄÄÄjava
+³   ³   ÀÄÄÄcom
+³   ³       ÀÄÄÄideomancer
+³   ³           ÀÄÄÄideomod
+³   ³               ³   Ideomod.java
+³   ³               ³   
+³   ³               ÃÄÄÄblock
+³   ³               ³       DrillBlock.java
+³   ³               ³       MachineBlock.java
+³   ³               ³       OddstoneBlock.java
+³   ³               ³       OddstonePortalBlock.java
+³   ³               ³       OddstonePortalFrameDetector.java
+³   ³               ³       OddstonePortalHandler.java
+³   ³               ³       OddstonePortalSavedData.java
+³   ³               ³       PortalUtils.java
+³   ³               ³       StickinessRules.java
+³   ³               ³       
+³   ³               ÃÄÄÄclient
+³   ³               ³       ModColorHandlers.java
+³   ³               ³       
+³   ³               ÃÄÄÄconfig
+³   ³               ³       OddstoneConfig.java
+³   ³               ³       
+³   ³               ÃÄÄÄeffect
+³   ³               ³       JudgementEffect.java
+³   ³               ³       
+³   ³               ÃÄÄÄmixin
+³   ³               ³       PistonStructureResolverMixin.java
+³   ³               ³       
+³   ³               ÀÄÄÄregistry
+³   ³                       ModBlocks.java
+³   ³                       ModCommands.java
+³   ³                       ModCreativeTabs.java
+³   ³                       ModItems.java
+³   ³                       ModTags.java
+³   ³                       
+³   ÀÄÄÄresources
+³       ³   ideomod.mixins.json
+³       ³   pack.mcmeta
+³       ³   
+³       ÃÄÄÄassets
+³       ³   ÀÄÄÄideomod
+³       ³       ÃÄÄÄblockstates
+³       ³       ³       drill.json
+³       ³       ³       ideoblock.json
+³       ³       ³       machine_block.json
+³       ³       ³       oddstone.json
+³       ³       ³       oddstone_portal.json
+³       ³       ³       
+³       ³       ÃÄÄÄlang
+³       ³       ³       en_us.json
+³       ³       ³       
+³       ³       ÃÄÄÄmodels
+³       ³       ³   ÃÄÄÄblock
+³       ³       ³   ³       drill.json
+³       ³       ³   ³       drill_on.json
+³       ³       ³   ³       ideoblock.json
+³       ³       ³   ³       machine_block.json
+³       ³       ³   ³       oddstone.json
+³       ³       ³   ³       oddstone_portal_ew.json
+³       ³       ³   ³       oddstone_portal_ns.json
+³       ³       ³   ³       
+³       ³       ³   ÀÄÄÄitem
+³       ³       ³           drill.json
+³       ³       ³           ideoblock.json
+³       ³       ³           machine_block.json
+³       ³       ³           oddstone.json
+³       ³       ³           
+³       ³       ÀÄÄÄtextures
+³       ³           ÀÄÄÄblock
+³       ³                   drill_back.png
+³       ³                   drill_front.png
+³       ³                   drill_front_on.png
+³       ³                   drill_side.png
+³       ³                   drill_top.png
+³       ³                   ideoblock.png
+³       ³                   machine_block.png
+³       ³                   oddstone.png
+³       ³                   
+³       ÃÄÄÄdata
+³       ³   ÃÄÄÄideomod
+³       ³   ³   ÃÄÄÄloot_tables
+³       ³   ³   ³   ÀÄÄÄblocks
+³       ³   ³   ³           drill.json
+³       ³   ³   ³           ideoblock.json
+³       ³   ³   ³           machine_block.json
+³       ³   ³   ³           oddstone.json
+³       ³   ³   ³           
+³       ³   ³   ÃÄÄÄrecipes
+³       ³   ³   ³       drill.json
+³       ³   ³   ³       ideoblock.json
+³       ³   ³   ³       machine_block.json
+³       ³   ³   ³       oddstone.json
+³       ³   ³   ³       
+³       ³   ³   ÃÄÄÄtags
+³       ³   ³   ³   ÀÄÄÄblocks
+³       ³   ³   ³           portal_corner_blocks.json
+³       ³   ³   ³           redstone_components.json
+³       ³   ³   ³           
+³       ³   ³   ÀÄÄÄworldgen
+³       ³   ³       ÀÄÄÄworld_preset
+³       ³   ÀÄÄÄminecraft
+³       ³       ÀÄÄÄtags
+³       ³           ÃÄÄÄblocks
+³       ³           ³   ÀÄÄÄmineable
+³       ³           ³           pickaxe.json
+³       ³           ³           
+³       ³           ÀÄÄÄworldgen
+³       ³               ÀÄÄÄworld_preset
+³       ÀÄÄÄMETA-INF
+³               mods.toml
+³               
+ÀÄÄÄtest
+    ÃÄÄÄjava
+    ÀÄÄÄresources

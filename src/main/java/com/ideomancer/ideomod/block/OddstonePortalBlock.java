@@ -140,7 +140,7 @@ public class OddstonePortalBlock extends Block {
     private void linkedTeleport(ServerLevel level, ServerPlayer player,
                                  OddstonePortalSavedData.PortalEntry entry,
                                  BlockPos portalBlockPos, BlockState portalState) {
-        BlockPos partnerPos = entry.partnerPos;
+        BlockPos partnerPos = entry.getPartnerPos();
         if (partnerPos == null) return;
 
         OddstonePortalSavedData data = OddstonePortalSavedData.get(level);

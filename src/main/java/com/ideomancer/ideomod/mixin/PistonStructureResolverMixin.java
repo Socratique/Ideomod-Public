@@ -14,6 +14,7 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
@@ -27,6 +28,20 @@ import java.util.List;
  * Selectively blocks sticky grabs based on rules in StickinessRules.
  * Example: slime tries to grab Oddstone -> BLOCKED.
  *          Oddstone tries to grab slime -> ALLOWED.
+ * 
+ * This is enforced in TWO places:
+ * 
+ *   A) addBranchingBlocks -> addBlockLine (sideways grabs)
+ *      When the resolver finds a sticky block in the push list and
+ *      checks its 6 neighbors, it calls addBlockLine for each.
+ *      Our HEAD injection on addBlockLine blocks these when rules match.
+ * 
+ *   B) addBlockLine's INTERNAL backward walk (pull-along grabs)
+ *      Inside addBlockLine, there's a loop that walks backward from
+ *      the starting block. For each block behind, it checks isStickyBlock()
+ *      and canStickTo(). If both pass, the block gets pulled along.
+ *      Our @Redirect on canStickTo intercepts this check and applies
+ *      our grab immunity rules.
  * 
  * FEATURE 2: ODDSTONE SYMPATHETIC MOVEMENT
  * =========================================
@@ -50,10 +65,16 @@ import java.util.List;
  * We use a ThreadLocal flag to track when we're inside addBranchingBlocks
  * (the sticky neighbor expansion phase). During this phase:
  * 
- * 1. ONE-WAY STICKINESS: When addBlockLine is called, we check if the
- *    grab should be blocked by our rules. If so, return true (handled).
+ * 1. ONE-WAY STICKINESS (sideways): When addBlockLine is called, we
+ *    check if the grab should be blocked by our rules. If so, return
+ *    true (handled).
  * 
- * 2. SYMPATHETIC SEARCH: At the TAIL of addBranchingBlocks, we scan
+ * 2. ONE-WAY STICKINESS (backward pull-along): A @Redirect on
+ *    canStickTo inside addBlockLine consults StickinessRules before
+ *    allowing any sticky pull-along. This catches the internal
+ *    backward walk that the HEAD injection cannot reach.
+ * 
+ * 3. SYMPATHETIC SEARCH: At the TAIL of addBranchingBlocks, we scan
  *    the toPush list for Oddstones and do face-search for distant ones.
  *    Any found get fed into addBlockLine. If new blocks were added,
  *    we return true to tell the resolver to re-run branching (so the
@@ -76,7 +97,7 @@ public abstract class PistonStructureResolverMixin {
      * ThreadLocal flag: true when we're inside addBranchingBlocks.
      * Used to distinguish sticky branching from line-building in
      * the addBlockLine injection, so we only block grabs during
-     * the sticky expansion phase.
+     * the sticky expansion phase (sideways grabs).
      */
     @Unique
     private static final ThreadLocal<Boolean> ideomod$inBranching = ThreadLocal.withInitial(() -> false);
@@ -96,12 +117,17 @@ public abstract class PistonStructureResolverMixin {
     }
 
     // ====================================================================
-    // FEATURE 1: ONE-WAY STICKINESS
+    // FEATURE 1A: ONE-WAY STICKINESS — SIDEWAYS GRABS
     // ====================================================================
 
     /**
      * At HEAD of addBlockLine: check if this grab should be blocked
-     * by our one-way stickiness rules. Only active during branching.
+     * by our one-way stickiness rules. Only active during branching
+     * (the sideways neighbor expansion phase).
+     * 
+     * This handles the case where addBranchingBlocks iterates over
+     * sticky blocks in toPush and calls addBlockLine for each adjacent
+     * position. We intercept at the door and check our rules.
      */
     @Inject(method = "addBlockLine", at = @At("HEAD"), cancellable = true)
     private void ideomod$blockOneWayGrabs(BlockPos pos, Direction dir,
@@ -120,6 +146,69 @@ public abstract class PistonStructureResolverMixin {
             // Block this grab. Return TRUE = "resolved OK, nothing to add"
             cir.setReturnValue(true);
         }
+    }
+
+    // ====================================================================
+    // FEATURE 1B: ONE-WAY STICKINESS — BACKWARD PULL-ALONG
+    // ====================================================================
+
+    /**
+     * Redirects the canStickTo() call inside addBlockLine's backward walk.
+     * 
+     * WHAT THIS FIXES:
+     * ================
+     * Inside addBlockLine, after walking forward to collect blocks in
+     * the push direction, there's a backward walk that checks:
+     *   "Is the block behind me sticky? Does it stick to me?"
+     * If yes, that block gets pulled along in the push group.
+     * 
+     * The HEAD injection on addBlockLine can't reach this — it's an
+     * internal loop, not a new call to addBlockLine.
+     * 
+     * HOW IT WORKS:
+     * =============
+     * Vanilla calls: stateA.canStickTo(stateB)
+     * We intercept that call. We run the original canStickTo first.
+     * If it returns true, we ALSO check StickinessRules:
+     *   - stateA is the sticky block doing the grabbing
+     *   - stateB is the block being grabbed
+     * If our rules say "blocked", we return false — vanilla thinks
+     * they can't stick, and skips the pull-along.
+     * 
+     * SCOPE:
+     * ======
+     * This @Redirect applies to ALL canStickTo calls inside addBlockLine,
+     * which is exactly what we want — every stickiness check in the
+     * line-building logic gets our one-way rules applied.
+     * 
+     * Note: The @Redirect target uses Forge's method name. In Forge
+     * 1.20.1, canStickTo is added by Forge's patch to BlockState (via
+     * IForgeBlockState). The method signature is:
+     *   boolean canStickTo(BlockState other)
+     * called on a BlockState instance.
+     */
+    @Redirect(
+        method = "addBlockLine",
+        at = @At(
+            value = "INVOKE",
+            target = "Lnet/minecraft/world/level/block/state/BlockState;canStickTo(Lnet/minecraft/world/level/block/state/BlockState;)Z"
+        )
+    )
+    private boolean ideomod$checkCanStickToWithRules(BlockState grabberState, BlockState targetState) {
+        // First: run vanilla/Forge's original canStickTo check
+        boolean vanillaResult = grabberState.canStickTo(targetState);
+        if (!vanillaResult) {
+            return false; // Vanilla already says no — nothing to override
+        }
+
+        // Second: check our one-way stickiness rules
+        // grabberState = the sticky block trying to pull the other along
+        // targetState = the block being grabbed
+        if (StickinessRules.isGrabBlocked(grabberState, targetState)) {
+            return false; // Our rules say this grab is not allowed
+        }
+
+        return true; // Both vanilla and our rules allow the stick
     }
 
     // ====================================================================
