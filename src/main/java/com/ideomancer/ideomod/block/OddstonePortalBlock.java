@@ -86,30 +86,12 @@ public class OddstonePortalBlock extends Block {
             BlockState checkState = level.getBlockState(checkPos);
             if (!checkState.is(ModBlocks.ODDSTONE_PORTAL.get())
                 && !checkState.is(ModBlocks.ODDSTONE.get())
-                && !isCornerBlock(checkState)) {
+                && !PortalUtils.isCornerBlock(checkState)) {
                 return Blocks.AIR.defaultBlockState();
             }
         }
 
         return super.updateShape(state, direction, neighborState, level, pos, neighborPos);
-    }
-
-    static boolean isCornerBlock(BlockState state) {
-        Block block = state.getBlock();
-        return block == Blocks.COAL_BLOCK
-            || block == Blocks.IRON_BLOCK
-            || block == Blocks.COPPER_BLOCK
-            || block == Blocks.GOLD_BLOCK
-            || block == Blocks.REDSTONE_BLOCK
-            || block == Blocks.LAPIS_BLOCK
-            || block == Blocks.DIAMOND_BLOCK
-            || block == Blocks.EMERALD_BLOCK
-            || block == Blocks.NETHERITE_BLOCK
-            || block == Blocks.QUARTZ_BLOCK
-            || block == Blocks.AMETHYST_BLOCK
-            || block == Blocks.RAW_IRON_BLOCK
-            || block == Blocks.RAW_COPPER_BLOCK
-            || block == Blocks.RAW_GOLD_BLOCK;
     }
 
     // ========================================================================
@@ -172,7 +154,7 @@ public class OddstonePortalBlock extends Block {
 
         // -- Step 1: Find THIS portal's interior bounds --
         Direction.Axis thisAxis = portalState.getValue(AXIS);
-        Direction thisHDir = (thisAxis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction thisHDir = PortalUtils.getHorizontalDir(thisAxis);
         PortalBounds thisBounds = findPortalBounds(level, portalBlockPos, thisHDir);
 
         if (thisBounds == null) {
@@ -206,7 +188,7 @@ public class OddstonePortalBlock extends Block {
         // -- Step 3: Find PARTNER portal's interior bounds --
         Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
                 ? Direction.Axis.X : Direction.Axis.Z;
-        Direction partnerHDir = (partnerAxis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction partnerHDir = PortalUtils.getHorizontalDir(partnerAxis);
 
         // Find a portal block in the partner
         BlockPos partnerPortalBlock = findAnyPortalBlock(level, partnerPos, partnerHDir);
@@ -252,7 +234,7 @@ public class OddstonePortalBlock extends Block {
                                  OddstonePortalSavedData.PortalEntry partnerEntry) {
         Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
                 ? Direction.Axis.X : Direction.Axis.Z;
-        Direction hDir = (partnerAxis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction hDir = PortalUtils.getHorizontalDir(partnerAxis);
 
         BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);
         if (target == null) target = frameCorner.above();
@@ -309,15 +291,7 @@ public class OddstonePortalBlock extends Block {
     @Nullable
     private PortalBounds findPortalBounds(Level level, BlockPos portalBlock, Direction hDir) {
         // Find bottom-left of interior
-        BlockPos bottom = portalBlock;
-        while (level.getBlockState(bottom.below()).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottom = bottom.below();
-        }
-        BlockPos bottomLeft = bottom;
-        while (level.getBlockState(bottomLeft.relative(hDir.getOpposite()))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottomLeft = bottomLeft.relative(hDir.getOpposite());
-        }
+        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlock, hDir);
 
         // Measure width
         int width = 0;
@@ -371,8 +345,9 @@ public class OddstonePortalBlock extends Block {
         int targetX = player.blockPosition().getX() + (int) (Math.cos(angle) * distance);
         int targetZ = player.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
 
+        // getHeight returns the Y of the highest block — we need to stand ON TOP of it
         int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, targetX, targetZ);
-        BlockPos targetPos = new BlockPos(targetX, surfaceY, targetZ);
+        BlockPos targetPos = new BlockPos(targetX, surfaceY + 1, targetZ);
 
         player.teleportTo(
                 targetPos.getX() + 0.5,
@@ -403,20 +378,10 @@ public class OddstonePortalBlock extends Block {
             OddstonePortalSavedData data) {
 
         Direction.Axis axis = state.getValue(AXIS);
-        Direction hDir = (axis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction hDir = PortalUtils.getHorizontalDir(axis);
 
-        BlockPos bottom = portalBlockPos;
-        while (level.getBlockState(bottom.below()).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottom = bottom.below();
-        }
-
-        BlockPos bottomLeft = bottom;
-        while (level.getBlockState(bottomLeft.relative(hDir.getOpposite()))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottomLeft = bottomLeft.relative(hDir.getOpposite());
-        }
-
-        BlockPos frameCorner = bottomLeft.below().relative(hDir.getOpposite());
+        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlockPos, hDir);
+        BlockPos frameCorner = PortalUtils.getFrameCorner(bottomLeft, hDir);
         return data.getPortal(frameCorner);
     }
 

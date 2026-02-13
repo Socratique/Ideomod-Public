@@ -12,7 +12,6 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -74,7 +73,7 @@ public class OddstoneBlock extends Block {
         if (adjacentToPortal) {
             BlockState changedState = level.getBlockState(neighborPos);
             if (!changedState.is(ModBlocks.ODDSTONE.get())
-                && !OddstonePortalBlock.isCornerBlock(changedState)
+                && !PortalUtils.isCornerBlock(changedState)
                 && !changedState.is(ModBlocks.ODDSTONE_PORTAL.get())) {
                 tryDeactivatePortal(serverLevel, pos);
             }
@@ -196,50 +195,17 @@ public class OddstoneBlock extends Block {
                                            BlockState portalState) {
         OddstonePortalSavedData data = OddstonePortalSavedData.get(level);
         Direction.Axis axis = portalState.getValue(OddstonePortalBlock.AXIS);
-        Direction hDir = (axis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction hDir = PortalUtils.getHorizontalDir(axis);
 
-        // Navigate to bottom-left of interior
-        BlockPos bottom = portalBlockPos;
-        while (level.getBlockState(bottom.below()).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottom = bottom.below();
-        }
-        BlockPos bottomLeft = bottom;
-        while (level.getBlockState(bottomLeft.relative(hDir.getOpposite()))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            bottomLeft = bottomLeft.relative(hDir.getOpposite());
-        }
-
-        // Frame corner is one step outside interior
-        BlockPos frameCorner = bottomLeft.below().relative(hDir.getOpposite());
+        // Navigate to bottom-left of interior, then derive frame corner
+        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlockPos, hDir);
+        BlockPos frameCorner = PortalUtils.getFrameCorner(bottomLeft, hDir);
         data.unregisterPortal(frameCorner);
 
         // Clear all portal blocks
-        clearPortalBlocks(level, bottomLeft, hDir);
+        PortalUtils.clearPortalBlocks(level, bottomLeft, hDir);
 
         Ideomod.LOGGER.info("Oddstone Portal deactivated (frame corner {})", frameCorner);
-    }
-
-    private void clearPortalBlocks(ServerLevel level, BlockPos bottomLeft, Direction hDir) {
-        int width = 0;
-        while (level.getBlockState(bottomLeft.relative(hDir, width))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            width++;
-        }
-
-        int height = 0;
-        while (level.getBlockState(bottomLeft.above(height))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            height++;
-        }
-
-        for (int h = 0; h < width; h++) {
-            for (int v = 0; v < height; v++) {
-                BlockPos portalPos = bottomLeft.relative(hDir, h).above(v);
-                if (level.getBlockState(portalPos).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-                    level.setBlock(portalPos, Blocks.AIR.defaultBlockState(), 2);
-                }
-            }
-        }
     }
 
     // ========================================================================

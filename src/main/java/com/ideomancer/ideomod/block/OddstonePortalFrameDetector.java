@@ -6,7 +6,6 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.registries.ForgeRegistries;
 import org.jetbrains.annotations.Nullable;
@@ -74,7 +73,7 @@ public class OddstonePortalFrameDetector {
 
     @Nullable
     private static FrameResult tryFromInterior(Level level, BlockPos interiorPos, Direction.Axis portalAxis) {
-        Direction hDir = (portalAxis == Direction.Axis.X) ? Direction.SOUTH : Direction.EAST;
+        Direction hDir = PortalUtils.getHorizontalDir(portalAxis);
         Direction hDirNeg = hDir.getOpposite();
 
         int leftDist = scanForFrame(level, interiorPos, hDirNeg);
@@ -249,22 +248,9 @@ public class OddstonePortalFrameDetector {
     /**
      * Valid corner blocks - crafted mineral/metal blocks.
      * 14 types = 14^4 = 38,416 unique addresses per dimension.
+     * Delegates to PortalUtils for the single source of truth.
      */
     private static boolean isCornerBlock(Level level, BlockPos pos) {
-        Block block = level.getBlockState(pos).getBlock();
-        return block == Blocks.COAL_BLOCK
-            || block == Blocks.IRON_BLOCK
-            || block == Blocks.COPPER_BLOCK
-            || block == Blocks.GOLD_BLOCK
-            || block == Blocks.REDSTONE_BLOCK
-            || block == Blocks.LAPIS_BLOCK
-            || block == Blocks.DIAMOND_BLOCK
-            || block == Blocks.EMERALD_BLOCK
-            || block == Blocks.NETHERITE_BLOCK
-            || block == Blocks.QUARTZ_BLOCK
-            || block == Blocks.AMETHYST_BLOCK
-            || block == Blocks.RAW_IRON_BLOCK
-            || block == Blocks.RAW_COPPER_BLOCK
-            || block == Blocks.RAW_GOLD_BLOCK;
+        return PortalUtils.isCornerBlock(level, pos);
     }
 }

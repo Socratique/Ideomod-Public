@@ -1,5 +1,37 @@
 # Ideomod Changelog
 
+## [2026-02-13] Stage 2 — Consolidate Duplicated Code
+- New file: PortalUtils.java (com.ideomancer.ideomod.block)
+  - Single source of truth for portal corner block validation (isCornerBlock)
+    - Both BlockState and Level+BlockPos overloads
+    - Previously duplicated in OddstonePortalBlock and OddstonePortalFrameDetector
+    - OddstoneBlock also referenced the OddstonePortalBlock copy
+  - Shared bottom-left portal scan (findBottomLeft)
+    - Previously copy-pasted 3 times across OddstoneBlock and OddstonePortalBlock
+    - "Scan down, then scan left" pattern now in one place
+  - Frame corner derivation (getFrameCorner) — bottomLeft to registration key
+  - Portal clearing (clearPortalBlocks) — moved from OddstoneBlock
+  - Axis-to-direction helper (getHorizontalDir)
+    - Replaces 5 inline ternaries across 3 files
+- Updated OddstoneBlock.java:
+  - Uses PortalUtils for isCornerBlock, findBottomLeft, getFrameCorner,
+    clearPortalBlocks, getHorizontalDir
+  - Removed local clearPortalBlocks method
+  - Removed unused Blocks import
+- Updated OddstonePortalBlock.java:
+  - Uses PortalUtils for isCornerBlock, findBottomLeft, getHorizontalDir
+  - Removed local isCornerBlock method (14-block list)
+  - Fixed scatter teleport landing Y: added +1 to heightmap result so
+    player lands ON TOP of the surface block, not inside it
+    (pre-existing bug, most visible on Superflat worlds)
+- Updated OddstonePortalFrameDetector.java:
+  - Local isCornerBlock now delegates to PortalUtils (thin wrapper)
+  - Uses PortalUtils.getHorizontalDir
+  - Removed unused Blocks import
+  - Fixed extra closing brace from initial edit
+- Status: Working. All portal operations tested (activate, deactivate,
+  linked teleport, scatter teleport, corner break, frame break).
+
 ## [2026-02-12] Stage 1 — Housekeeping & Dead Code Cleanup
 - Deleted Config.java (untouched MDK template, never referenced by mod code)
 - Removed dead methods from OddstonePortalSavedData:
