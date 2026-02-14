@@ -1,5 +1,58 @@
 # Ideomod Changelog
 
+## [2026-02-14] Ranged Piston System — Repulser & Attractor (Animation Fix)
+- Repulser and Attractor blocks now animate correctly using vanilla's
+  MovingPistonBlock + PistonMovingBlockEntity system. Blocks slide smoothly
+  from source to destination over 2 ticks with proper texture, entity
+  pushing, collision, waterlogging, and all vanilla edge-case handling.
+
+### Sympathetic boundary fix:
+- Fixed bug where Attractor couldn't pull sympathetic Oddstone at the
+  boundary of scan range (e.g. Oddstone at pos 13 not joining when target
+  at pos 12). Caused by resolver's pistonPos overlapping with sympathetic
+  block positions.
+- Fix: Virtual piston placed at devicePos (far from action). ThreadLocal
+  in RangedPistonFlags stores real target position. PistonStructureResolver
+  mixin redirects startPos from (devicePos + pushDir) to actual targetPos.
+  Resolver walks from correct position, pistonPos can't collide.
+
+### Animation fix (the hard one):
+- Root cause: MovingPistonBlock.newBlockEntity() returns null. The client
+  never creates PistonMovingBlockEntity through the normal block entity path.
+  Vanilla creates it on BOTH client and server by running moveBlocks() inside
+  triggerEvent(), which executes on both sides via the block event packet system.
+- Our code was running movement in neighborChanged() (server-only), so the
+  client never had a PistonMovingBlockEntity to render — blocks disappeared
+  for 2 ticks then popped into place at the destination.
+- Fix: Repulser/Attractor now use level.blockEvent() in neighborChanged()
+  and do the actual movement in triggerEvent(), matching vanilla piston
+  architecture. triggerEvent runs on BOTH client and server. RangedPistonUtil
+  accepts Level (not ServerLevel) so both sides execute the full resolve-
+  and-move logic, creating PistonMovingBlockEntity on both sides.
+- Movement logic in RangedPistonUtil closely mirrors vanilla
+  PistonBaseBlock.moveBlocks(): same ordering (snapshot → destroy → place
+  MovingPistonBlock at destinations while sources still exist → clear
+  sources → neighbor updates), same flags (68 placement, 82 cleanup),
+  same factory method (MovingPistonBlock.newMovingBlockEntity()).
+
+### Files changed:
+- OddstoneRepulserBlock.java: blockEvent + triggerEvent pattern
+- OddstoneAttractorBlock.java: blockEvent + triggerEvent pattern
+- RangedPistonUtil.java: rewritten to mirror vanilla moveBlocks(), accepts Level
+- RangedPistonFlags.java: new — ThreadLocal for resolver startPos redirect
+- PistonStructureResolverMixin.java: added Feature 4 — startPos redirect
+- Ideomod.java: no custom entity registration needed (vanilla handles rendering)
+
+### Key lessons — see BLOCK_EVENT_LESSON.md for full writeup:
+- Vanilla's MovingPistonBlock is a BaseEntityBlock whose newBlockEntity()
+  returns null. Client-side PistonMovingBlockEntity is created by running
+  moveBlocks() on the client via the block event system — NOT via chunk sync.
+- Any mod feature that places MovingPistonBlock MUST use the block event
+  system (level.blockEvent → triggerEvent on both sides) or the animation
+  will be invisible.
+- When piggybacking vanilla systems, match the execution phase (block events,
+  not neighborChanged) and the exact ordering/flags, not just the method calls.
+
 ## [2026-02-13] Odd Slime Block
 - Added OddSlimeBlock - a directional slime variant with conditional stickiness
   - Extends DirectionalBlock with FACING property (piston-style placement)
@@ -31,12 +84,12 @@
   - Now shadows pushDirection field from PistonStructureResolver
   - HEAD injection (branching): checks directional rules before grab immunity
   - @Redirect (backward walk): checks directional rules for both blocks,
-    plus narrow exemption for active OddSlimeBlock targets — when an active
+    plus narrow exemption for active OddSlimeBlock targets â€” when an active
     Odd Slime is in front pulling a chain, blocks behind it join regardless
     of grab immunity (otherwise Machine Block -> Odd Slime rule incorrectly
     prevents Machine Block from being pulled along)
   - Exemption is specifically instanceof OddSlimeBlock + FACING match.
-    NOT generalized to "any sticky block" — that would re-open the Stage 5
+    NOT generalized to "any sticky block" â€” that would re-open the Stage 5
     bug where slime pulled Oddstone in the backward walk.
 - Ideomod.java: Registered new stickiness rules
   - Grab immunity: Odd Slime -> Oddstone, Machine Block -> Odd Slime,
@@ -45,7 +98,7 @@
 - OddstoneBlock.java: canStickTo now returns true for HoneyBlock and
   OddSlimeBlock (Oddstone grabs all slime-type blocks)
 - MachineBlock.java: canStickTo now returns true for SlimeBlock, HoneyBlock,
-  and OddSlimeBlock (permissive — lets them grab us, mixin blocks reverse)
+  and OddSlimeBlock (permissive â€” lets them grab us, mixin blocks reverse)
   - Previously returned false for slime/honey, which broke the Forge
     bidirectional canStickTo check and prevented one-way grabs entirely
 - New documentation: STICKINESS_SYSTEM.md
@@ -56,31 +109,31 @@
   - Checklist for adding new sticky blocks
   - Common mistakes section
 
-### Key lesson — the bidirectional canStickTo rule:
+### Key lesson â€” the bidirectional canStickTo rule:
   Forge checks canStickTo on BOTH blocks. If either returns false, the
   stick fails before the mixin can intervene. For any pair where one-way
   stickiness is desired, BOTH sides must return true in canStickTo. The
   mixin's grab immunity rules handle blocking the unwanted direction.
-  Never express one-way behavior in canStickTo — it will break both ways.
+  Never express one-way behavior in canStickTo â€” it will break both ways.
 
-## [2026-02-13] Stage 5 — Bug Fixes
+## [2026-02-13] Stage 5 â€” Bug Fixes
 - PortalEntry mutable state (OddstonePortalSavedData.java):
   - partnerPos field changed from public to private
   - Added getPartnerPos() getter for external access
   - Mutations only happen inside registerPortal/unregisterPortal,
-    both followed by setDirty() — external code can no longer
+    both followed by setDirty() â€” external code can no longer
     accidentally mutate without triggering a world save
 - Updated OddstonePortalBlock.java: uses entry.getPartnerPos()
 - MachineBlock asymmetric stickiness fix:
   - canStickTo now returns true for SlimeBlock (allows slime to grab us)
   - Reverse direction (Machine Block grabbing slime) is blocked by
-    the mixin via StickinessRules grab immunity — asymmetry preserved
+    the mixin via StickinessRules grab immunity â€” asymmetry preserved
   - Previously returned false for slime in both directions, which
     prevented slime from grabbing Machine Block entirely
 - Removed OddstoneMovementHandler.java from project files
   - Was deleted during mixin rewrite but lingered in project context
   - Movement handler memory leak and key collision fixes (prepared
-    during this stage) are moot — the mixin replaced this system
+    during this stage) are moot â€” the mixin replaced this system
 - MachineBlock isUpdating propagation: left as-is. The one-block-per-tick
   drip behavior is acceptable and fixing it adds complexity without
   clear benefit.
@@ -96,14 +149,14 @@
   Fix requires injecting into addBlockLine's backward walk loop, which
   is a more complex mixin change. Deferred to a future pass.
 
-## [2026-02-13] Stage 4 — Extract Portal Logic from OddstoneBlock
+## [2026-02-13] Stage 4 â€” Extract Portal Logic from OddstoneBlock
 - New file: OddstonePortalHandler.java (com.ideomancer.ideomod.block)
   - Static utility class handling portal activation and deactivation
   - Public API: onNeighborChanged(), onBlockRemoved()
   - Private internals: tryActivate(), tryDeactivate(), unregisterAndClear(),
     isAdjacentToPortal()
-  - All logic moved 1:1 from OddstoneBlock — no behavior changes
-- Updated OddstoneBlock.java: 258 lines → 106 lines
+  - All logic moved 1:1 from OddstoneBlock â€” no behavior changes
+- Updated OddstoneBlock.java: 258 lines â†’ 106 lines
   - neighborChanged() and onRemove() now delegate to OddstonePortalHandler
   - Removed all portal-specific imports (SoundEvents, SoundSource, Direction,
     ModBlocks, Ideomod logger, etc.)
@@ -111,9 +164,9 @@
     pathfinding
 - Status: Working. All portal operations tested.
 
-## [2026-02-13] Stage 3 — Block Tags
+## [2026-02-13] Stage 3 â€” Block Tags
 - Replaced hardcoded block lists with data-driven block tags
-  - Tags are JSON files loadable by datapacks — no recompile needed to
+  - Tags are JSON files loadable by datapacks â€” no recompile needed to
     add/remove blocks. Other mods can also append to these tags.
 - New file: ModTags.java (com.ideomancer.ideomod.registry)
   - Defines TagKey references for PORTAL_CORNER_BLOCKS and REDSTONE_COMPONENTS
@@ -132,7 +185,7 @@
   removed unused Blocks import
 - Status: Working. Portals and Machine Block redstone tested.
 
-## [2026-02-13] Stage 2 â€” Consolidate Duplicated Code
+## [2026-02-13] Stage 2 Ã¢â‚¬â€ Consolidate Duplicated Code
 - New file: PortalUtils.java (com.ideomancer.ideomod.block)
   - Single source of truth for portal corner block validation (isCornerBlock)
     - Both BlockState and Level+BlockPos overloads
@@ -141,8 +194,8 @@
   - Shared bottom-left portal scan (findBottomLeft)
     - Previously copy-pasted 3 times across OddstoneBlock and OddstonePortalBlock
     - "Scan down, then scan left" pattern now in one place
-  - Frame corner derivation (getFrameCorner) â€” bottomLeft to registration key
-  - Portal clearing (clearPortalBlocks) â€” moved from OddstoneBlock
+  - Frame corner derivation (getFrameCorner) Ã¢â‚¬â€ bottomLeft to registration key
+  - Portal clearing (clearPortalBlocks) Ã¢â‚¬â€ moved from OddstoneBlock
   - Axis-to-direction helper (getHorizontalDir)
     - Replaces 5 inline ternaries across 3 files
 - Updated OddstoneBlock.java:
@@ -164,15 +217,15 @@
 - Status: Working. All portal operations tested (activate, deactivate,
   linked teleport, scatter teleport, corner break, frame break).
 
-## [2026-02-12] Stage 1 â€” Housekeeping & Dead Code Cleanup
+## [2026-02-12] Stage 1 Ã¢â‚¬â€ Housekeeping & Dead Code Cleanup
 - Deleted Config.java (untouched MDK template, never referenced by mod code)
 - Removed dead methods from OddstonePortalSavedData:
-  - findPortalContaining() â€” identical to getPortal(), never called
-  - isAddressFull() â€” never called
+  - findPortalContaining() Ã¢â‚¬â€ identical to getPortal(), never called
+  - isAddressFull() Ã¢â‚¬â€ never called
 - Fixed OddstonePortalBlock: replaced standalone java.util.Random with
   Minecraft's level.getRandom() for scatter teleport randomization.
   Ties into the game's random pipeline instead of being disconnected.
-- Renamed MachineBlockColor.java â†’ ModColorHandlers.java
+- Renamed MachineBlockColor.java Ã¢â€ â€™ ModColorHandlers.java
   - Class handled colors for both Machine Block AND Oddstone Portal,
     name now reflects actual scope
   - No other files needed updating (discovered via @Mod.EventBusSubscriber)
@@ -285,7 +338,7 @@
     - Piston pushes Machine Block groups together; ignores all other blocks
   - Redstone Conduction: solid-state redstone dust
     - Stores power level 0-15 as blockstate property (same as dust)
-    - Signal decays by 1 per Machine Block (lever 15 Ã¢â€ â€™ 14 Ã¢â€ â€™ 13 Ã¢â€ â€™ ... Ã¢â€ â€™ 0)
+    - Signal decays by 1 per Machine Block (lever 15 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 14 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 13 ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ... ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 0)
     - Powers adjacent non-Machine blocks (lamps, pistons, etc. activate)
     - Receives signal only from whitelisted redstone components
       (levers, buttons, repeaters, comparators, dust, observers, etc.)
@@ -297,7 +350,7 @@
 - New file: MachineBlock.java (com.ideomancer.ideomod.block)
 - New file: MachineBlockColor.java (com.ideomancer.ideomod.client)
 - Updated: ModBlocks, ModItems, ModCreativeTabs registries
-- Assets: blockstate (16 power variants Ã¢â€ â€™ 1 model), block/item models with
+- Assets: blockstate (16 power variants ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ 1 model), block/item models with
   tintindex, placeholder grayscale texture, loot table, recipe
   (4 iron + 4 redstone + 1 slime = 1 machine block), pickaxe tag, lang
 - Status: Working

@@ -4,6 +4,8 @@
     "ideomod:ideoblock",
     "ideomod:drill",
     "ideomod:oddstone",
-    "ideomod:machine_block"
+    "ideomod:machine_block",
+    "ideomod:oddstone_repulser",
+    "ideomod:oddstone_attractor"
   ]
 }

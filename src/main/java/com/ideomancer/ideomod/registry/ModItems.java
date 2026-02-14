@@ -42,4 +42,12 @@ public class ModItems {
             () -> new BlockItem(ModBlocks.ODD_SLIME.get(), new Item.Properties()));
     
     // No BlockItem for ODDSTONE_PORTAL - it's not placeable by players
+
+    // Register the BlockItem for Oddstone Repulser
+    public static final RegistryObject<Item> ODDSTONE_REPULSER = ITEMS.register("oddstone_repulser",
+            () -> new BlockItem(ModBlocks.ODDSTONE_REPULSER.get(), new Item.Properties()));
+
+    // Register the BlockItem for Oddstone Attractor
+    public static final RegistryObject<Item> ODDSTONE_ATTRACTOR = ITEMS.register("oddstone_attractor",
+            () -> new BlockItem(ModBlocks.ODDSTONE_ATTRACTOR.get(), new Item.Properties()));
 }

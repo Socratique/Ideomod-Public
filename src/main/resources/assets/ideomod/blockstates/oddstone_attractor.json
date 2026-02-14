@@ -1,0 +1,16 @@
+{
+  "variants": {
+    "facing=north,powered=false": { "model": "ideomod:block/oddstone_attractor" },
+    "facing=north,powered=true":  { "model": "ideomod:block/oddstone_attractor" },
+    "facing=south,powered=false": { "model": "ideomod:block/oddstone_attractor", "y": 180 },
+    "facing=south,powered=true":  { "model": "ideomod:block/oddstone_attractor", "y": 180 },
+    "facing=west,powered=false":  { "model": "ideomod:block/oddstone_attractor", "y": 270 },
+    "facing=west,powered=true":   { "model": "ideomod:block/oddstone_attractor", "y": 270 },
+    "facing=east,powered=false":  { "model": "ideomod:block/oddstone_attractor", "y": 90 },
+    "facing=east,powered=true":   { "model": "ideomod:block/oddstone_attractor", "y": 90 },
+    "facing=up,powered=false":    { "model": "ideomod:block/oddstone_attractor", "x": 270 },
+    "facing=up,powered=true":     { "model": "ideomod:block/oddstone_attractor", "x": 270 },
+    "facing=down,powered=false":  { "model": "ideomod:block/oddstone_attractor", "x": 90 },
+    "facing=down,powered=true":   { "model": "ideomod:block/oddstone_attractor", "x": 90 }
+  }
+}

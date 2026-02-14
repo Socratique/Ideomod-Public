@@ -4,8 +4,10 @@ import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
 import com.ideomancer.ideomod.block.MachineBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
+import com.ideomancer.ideomod.block.OddstoneAttractorBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.OddstonePortalBlock;
+import com.ideomancer.ideomod.block.OddstoneRepulserBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.state.BlockBehaviour;
@@ -88,5 +90,30 @@ public class ModBlocks {
                     .lightLevel(state -> 11)
                     .pushReaction(PushReaction.BLOCK) // Can't be pushed by pistons
                     .noLootTable() // Drops nothing
+            ));
+
+    // ========================================================================
+    // REPULSER / ATTRACTOR — ranged directional pistons
+    // ========================================================================
+
+    // Register Oddstone Repulser - scans line, pushes Oddstone away
+    // Mechanical feel: stone base + metal + oddstone accent
+    // Movable by pistons (can be part of contraptions)
+    public static final RegistryObject<Block> ODDSTONE_REPULSER = BLOCKS.register("oddstone_repulser",
+            () -> new OddstoneRepulserBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    // Register Oddstone Attractor - scans line, pulls Oddstone toward it
+    // Same properties as Repulser — they're a matched pair
+    public static final RegistryObject<Block> ODDSTONE_ATTRACTOR = BLOCKS.register("oddstone_attractor",
+            () -> new OddstoneAttractorBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
             ));
 }

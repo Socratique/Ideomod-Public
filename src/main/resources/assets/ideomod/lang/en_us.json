@@ -5,5 +5,7 @@
   "block.ideomod.machine_block": "Machine Block",
   "block.ideomod.oddstone_portal": "Oddstone Portal",
   "block.ideomod.odd_slime": "Odd Slime",
+  "block.ideomod.oddstone_repulser": "Oddstone Repulser",
+  "block.ideomod.oddstone_attractor": "Oddstone Attractor",
   "itemGroup.ideomod.ideomod_tab": "Ideomod"
 }

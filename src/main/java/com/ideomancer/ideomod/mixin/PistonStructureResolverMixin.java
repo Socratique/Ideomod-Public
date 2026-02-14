@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.mixin;
 
 import com.ideomancer.ideomod.block.OddSlimeBlock;
+import com.ideomancer.ideomod.block.RangedPistonFlags;
 import com.ideomancer.ideomod.block.StickinessRules;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
@@ -12,6 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import org.spongepowered.asm.mixin.Final;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
@@ -23,7 +25,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Mixin into PistonStructureResolver for three Ideomod features:
+ * Mixin into PistonStructureResolver for four Ideomod features:
  * 
  * FEATURE 1: ONE-WAY STICKINESS
  * ==============================
@@ -33,13 +35,13 @@ import java.util.List;
  * 
  * Enforced at two injection points:
  * 
- *   A) HEAD of addBlockLine (during branching only) — ACTIVE GRABBING
+ *   A) HEAD of addBlockLine (during branching only) -- ACTIVE GRABBING
  *      Checks both grab immunity AND directional rules.
  * 
- *   B) @Redirect on canStickTo (inside addBlockLine) — CHAIN COHESION
+ *   B) @Redirect on canStickTo (inside addBlockLine) -- CHAIN COHESION
  *      Checks grab immunity AND directional rules.
  *      EXCEPTION: If the target (front block) is an active OddSlimeBlock,
- *      grab immunity is skipped — the Odd Slime is pulling the behind
+ *      grab immunity is skipped -- the Odd Slime is pulling the behind
  *      block along in its chain, not the other way around.
  *      See ideomod$checkCanStickToWithRules javadoc for details.
  * 
@@ -52,6 +54,19 @@ import java.util.List;
  * =========================================
  * Extended range sticky search for Oddstone blocks.
  * 
+ * FEATURE 4: RANGED PISTON START POSITION REDIRECT
+ * =================================================
+ * When a ranged piston (Repulser/Attractor) creates the resolver, it
+ * sets pistonPos to the device's own position (safe, far away). But the
+ * resolver calculates startPos = pistonPos + pushDirection, which would
+ * point to the block next to the device -- not the actual target.
+ * 
+ * This mixin checks RangedPistonFlags at the HEAD of resolve(). If a
+ * ranged target is set, it overrides startPos to point at the real
+ * target block. The resolver then walks the line from the correct
+ * position, and pistonPos being far away means it can't collide with
+ * any blocks in the move group (fixing the sympathetic boundary issue).
+ * 
  * HISTORY / KNOWN PITFALLS:
  * =========================
  * - The @Redirect on canStickTo was added specifically to fix slime
@@ -59,7 +74,7 @@ import java.util.List;
  *   or weakening grab immunity in the @Redirect WILL re-break this.
  * - Any exemption to grab immunity in the backward walk must be
  *   NARROWLY targeted. Do NOT exempt based on generic "is sticky" or
- *   "has no directional rules" checks — that matches Oddstone, slime,
+ *   "has no directional rules" checks -- that matches Oddstone, slime,
  *   honey, etc. and re-opens the Stage 5 bug.
  * - The current exemption specifically checks for OddSlimeBlock with
  *   FACING matching pushDirection. Only this block type gets the pass.
@@ -75,6 +90,13 @@ public abstract class PistonStructureResolverMixin {
     @Shadow @Final private List<BlockPos> toPush;
     @Shadow @Final private Direction pushDirection;
 
+    /**
+     * startPos is the resolver's first block to check, normally set in the
+     * constructor as pistonPos.relative(pushDirection). We shadow it with
+     * @Mutable so we can override it for ranged piston operations.
+     */
+    @Shadow @Final @Mutable private BlockPos startPos;
+
     /** The resolver's own method for adding a block and its push line. */
     @Shadow protected abstract boolean addBlockLine(BlockPos pos, Direction dir);
 
@@ -85,6 +107,29 @@ public abstract class PistonStructureResolverMixin {
      */
     @Unique
     private static final ThreadLocal<Boolean> ideomod$inBranching = ThreadLocal.withInitial(() -> false);
+
+    // ====================================================================
+    // FEATURE 4: RANGED PISTON START POSITION REDIRECT
+    // ====================================================================
+
+    /**
+     * At HEAD of resolve(): if a ranged piston operation is active,
+     * override startPos to point at the real target block instead of
+     * the calculated pistonPos + pushDirection.
+     * 
+     * This is the core fix for the sympathetic boundary issue. The
+     * virtual piston sits at the device position (far away), so its
+     * pistonPos can't collide with any blocks that should be in the
+     * move group. The startPos redirect ensures the resolver still
+     * starts walking from the correct target block.
+     */
+    @Inject(method = "resolve", at = @At("HEAD"))
+    private void ideomod$redirectStartPos(CallbackInfoReturnable<Boolean> cir) {
+        BlockPos target = RangedPistonFlags.getTarget();
+        if (target != null) {
+            this.startPos = target;
+        }
+    }
 
     // ====================================================================
     // PHASE DETECTION
@@ -101,14 +146,14 @@ public abstract class PistonStructureResolverMixin {
     }
 
     // ====================================================================
-    // FEATURE 1A + 2A: ONE-WAY & DIRECTIONAL STICKINESS — SIDEWAYS GRABS
+    // FEATURE 1A + 2A: ONE-WAY & DIRECTIONAL STICKINESS -- SIDEWAYS GRABS
     // ====================================================================
 
     /**
      * At HEAD of addBlockLine: check if this grab should be blocked.
      * Only active during branching (sideways neighbor expansion phase).
      * 
-     * This is the "active grabbing" phase — a sticky block reaches out
+     * This is the "active grabbing" phase -- a sticky block reaches out
      * to its neighbors. Both grab immunity AND directional rules apply
      * with full force here.
      */
@@ -126,97 +171,89 @@ public abstract class PistonStructureResolverMixin {
         if (neighborState.isAir()) return;
 
         if (grabberState.isStickyBlock()) {
-            // Check 1: Directional stickiness — is the grabber disabled for this push?
+            // Check 1: Directional stickiness -- is the grabber disabled for this push?
             if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
                 cir.setReturnValue(true);
                 return;
             }
 
-            // Check 2: One-way grab immunity — is this specific grab blocked?
+            // Check 2: Grab immunity -- does the target resist the grabber?
             if (StickinessRules.isGrabBlocked(grabberState, neighborState)) {
                 cir.setReturnValue(true);
+                return;
             }
         }
     }
 
     // ====================================================================
-    // FEATURE 1B + 2B: STICKINESS — BACKWARD WALK (chain cohesion)
+    // FEATURE 1B + 2B: ONE-WAY & DIRECTIONAL STICKINESS -- BACKWARD WALK
     // ====================================================================
 
     /**
-     * Redirects the canStickTo() call inside addBlockLine's backward walk.
+     * @Redirect on canStickTo inside addBlockLine.
      * 
-     * The backward walk finds sticky blocks behind the current push line
-     * and checks if they should join the group. The call is:
-     *   behindBlockState.canStickTo(frontBlockState)
+     * Context: addBlockLine walks backward from the given position,
+     * checking if each block sticks to the one in front of it. This is
+     * the "chain cohesion" phase -- not active grabbing, but maintaining
+     * connections within an existing line.
      * 
-     * "grabberState" = block BEHIND (being considered for the chain)
-     * "targetState"  = block IN FRONT (already in the line)
+     * We intercept canStickTo here to apply BOTH grab immunity AND
+     * directional stickiness rules to the backward walk.
      * 
-     * RULES APPLIED:
-     * ==============
-     * 1. Directional rules: ALWAYS. If a block isn't active for this push
-     *    direction, it's not sticky — period.
+     * SPECIAL CASE -- ODD SLIME AS TARGET:
+     * When the target (block in front) is an OddSlimeBlock whose FACING
+     * matches pushDirection, we SKIP grab immunity. Why? Because in this
+     * case, the Odd Slime is the active puller -- it's carrying blocks
+     * behind it in its chain. The block behind is being pulled along BY
+     * the Odd Slime, not grabbing it. Without this exception, Odd Slime
+     * couldn't pull anything because grab immunity would block the
+     * backward-walk connection.
      * 
-     * 2. Grab immunity: ALWAYS, with ONE narrow exception:
-     *    If the TARGET is an OddSlimeBlock whose FACING matches pushDirection
-     *    (i.e. it's actively pulling), grab immunity is skipped.
+     * WARNING: This exception MUST remain narrowly scoped to OddSlimeBlock.
+     * Generalizing it will re-break one-way stickiness (Stage 5 bug).
      * 
-     * WHY THE EXCEPTION:
-     * ==================
-     * When active Odd Slime is in front and Machine Block is behind it,
-     * the backward walk calls MachineBlock.canStickTo(OddSlime). Our grab
-     * immunity says Machine Block can't grab Odd Slime. But Machine Block
-     * isn't grabbing — Odd Slime is pulling it along. Without the exception,
-     * Machine Block gets incorrectly left behind.
-     * 
-     * WHY IT'S NARROWLY TARGETED:
-     * ===========================
-     * We specifically check for OddSlimeBlock + FACING match. We do NOT
-     * use generic "is sticky and has no directional block" — that would
-     * match Oddstone, slime, honey, and re-open the Stage 5 bug where
-     * slime pulled Oddstone in the backward walk.
+     * @param self     The BlockState calling canStickTo (the "behind" block)
+     * @param other    The BlockState being stuck to (the "front" block / target)
+     * @return true if they can stick, false if blocked by our rules
      */
-    @Redirect(
-        method = "addBlockLine",
-        at = @At(
-            value = "INVOKE",
-            target = "Lnet/minecraft/world/level/block/state/BlockState;canStickTo(Lnet/minecraft/world/level/block/state/BlockState;)Z"
-        )
-    )
-    private boolean ideomod$checkCanStickToWithRules(BlockState grabberState, BlockState targetState) {
-        // First: run vanilla/Forge's original canStickTo check
-        boolean vanillaResult = grabberState.canStickTo(targetState);
-        if (!vanillaResult) {
+    @Redirect(method = "addBlockLine",
+              at = @At(value = "INVOKE",
+                       target = "Lnet/minecraft/world/level/block/state/BlockState;canStickTo(Lnet/minecraft/world/level/block/state/BlockState;)Z"))
+    private boolean ideomod$checkCanStickToWithRules(BlockState self, BlockState other) {
+        // Run the original canStickTo first
+        if (!self.canStickTo(other)) {
             return false;
         }
 
-        // Check directional rules for both blocks
-        if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
-            return false;
-        }
-        if (StickinessRules.isDirectionalGrabBlocked(targetState, this.pushDirection)) {
+        // Apply directional rules to the "behind" block (self).
+        // If it shouldn't be sticky for this push direction, block the stick.
+        if (StickinessRules.isDirectionalGrabBlocked(self, this.pushDirection)) {
             return false;
         }
 
-        // Check grab immunity — with narrow exception for active Odd Slime targets.
+        // Apply directional rules to the "front" block (other).
+        if (StickinessRules.isDirectionalGrabBlocked(other, this.pushDirection)) {
+            return false;
+        }
+
+        // Check grab immunity -- with narrow exception for active Odd Slime targets.
         //
         // If the target (front block) is an OddSlimeBlock that is active for
         // this push direction, it's the one doing the pulling. The grabber
         // (behind block) should come along regardless of grab immunity.
         //
         // IMPORTANT: This check is intentionally specific to OddSlimeBlock.
-        // Do NOT generalize to "any sticky block" — that re-opens the Stage 5
+        // Do NOT generalize to "any sticky block" -- that re-opens the Stage 5
         // bug (slime pulling Oddstone in backward walk).
         boolean targetIsActivePuller = false;
-        if (targetState.getBlock() instanceof OddSlimeBlock) {
-            Direction facing = targetState.getValue(DirectionalBlock.FACING);
+        if (other.getBlock() instanceof OddSlimeBlock) {
+            Direction facing = other.getValue(DirectionalBlock.FACING);
             targetIsActivePuller = this.pushDirection.equals(facing);
         }
 
         if (!targetIsActivePuller) {
             // Normal case: apply grab immunity
-            if (StickinessRules.isGrabBlocked(grabberState, targetState)) {
+            if (StickinessRules.isGrabBlocked(self, other)) {
                 return false;
             }
         }

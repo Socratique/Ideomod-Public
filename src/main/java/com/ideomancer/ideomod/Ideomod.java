@@ -26,55 +26,35 @@ import org.slf4j.Logger;
  */
 @Mod(Ideomod.MOD_ID)
 public class Ideomod {
-    // The mod ID - must match what's in mods.toml and gradle.properties
     public static final String MOD_ID = "ideomod";
-    
-    // Logger for outputting information to the console/log files
-    // Made public so other classes can use it
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public Ideomod() {
-        // Get the mod event bus for registering mod lifecycle events
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
 
-        // Register all our deferred registers to the mod event bus
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
+        // NOTE: ModEntityTypes registration removed -- ranged pistons now use
+        // vanilla's MovingPistonBlock/PistonMovingBlockEntity for animation.
+        // No custom entities needed. Re-add if other custom entities are added later.
 
-        // Register the setup methods for mod loading
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
 
-        // Register ourselves for server and other game events
         MinecraftForge.EVENT_BUS.register(this);
 
         LOGGER.info("Ideomod initializing!");
     }
 
-    /**
-     * Common setup - runs on both client and server
-     * Use this for things like registering capabilities, network packets, etc.
-     */
     private void commonSetup(final FMLCommonSetupEvent event) {
-        // Register one-way stickiness rules
-        // These tell our PistonStructureResolver mixin which grabs to block
         registerStickinessRules();
-
         LOGGER.info("Ideomod common setup complete!");
     }
 
     /**
      * Registers all stickiness rules for the mod.
      * See STICKINESS_SYSTEM.md for full documentation.
-     * 
-     * TWO TYPES OF RULES:
-     * 
-     * 1. GRAB IMMUNITY: "When block A is expanding and finds block B as a
-     *    neighbor, BLOCK the grab. B does not come along."
-     * 
-     * 2. DIRECTIONAL: "When block A is being pushed in direction D, disable
-     *    its stickiness entirely." Used by Odd Slime.
      */
     private void registerStickinessRules() {
         // ================================================================
@@ -134,12 +114,10 @@ public class Ideomod {
         // ================================================================
 
         // ODD SLIME: Only sticky when pushed in its FACING direction.
-        // If push direction != FACING, disable all stickiness.
         StickinessRules.registerDirectionalRule(
                 (state, pushDirection) -> {
                     if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
                     Direction facing = state.getValue(DirectionalBlock.FACING);
-                    // Block stickiness if push direction does NOT match facing
                     return !pushDirection.equals(facing);
                 }
         );
@@ -147,10 +125,6 @@ public class Ideomod {
         LOGGER.info("Registered stickiness rules (grab immunity + directional)");
     }
 
-    /**
-     * Client-only setup - runs only on the client
-     * Use this for things like registering renderers, keybindings, etc.
-     */
     private void clientSetup(final FMLClientSetupEvent event) {
         LOGGER.info("Ideomod client setup complete!");
     }
