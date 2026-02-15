@@ -1,5 +1,12 @@
 # Ideomod Changelog
 
+## [2026-02-15] Documentation Cleanup
+- Removed stale known issue from Oddstone: "Sympathetic push chains don't
+  trigger slime stickiness on pushed blocks." Tested and confirmed working
+  -- sympathetic blocks correctly participate in slime stickiness resolution.
+  Likely resolved during the mixin rewrite (branching loop re-runs until
+  stable after sympathetic additions).
+
 ## [2026-02-15] Portal System -- Deactivation Fix, Cross-Axis Rotation, Break Effects
 - Fixed critical bug: Z-axis portals randomly deactivating when blocks
   placed/broken near the frame exterior. X-axis portals less affected.

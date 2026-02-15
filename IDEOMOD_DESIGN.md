@@ -89,7 +89,6 @@
 | One-way stickiness | [DONE] | Oddstone grabs slime; slime does NOT grab Oddstone. Via mixin + StickinessRules. |
 
 **Known issues:**
-- Sympathetic push chains don't trigger slime stickiness on pushed blocks
 - Face search is axis-aligned only (no cone/hemisphere)
 - Placeholder texture & recipe
 
@@ -714,7 +713,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5x5 outer (3x3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
+| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
