@@ -1,121 +1,129 @@
-Folder PATH listing for volume Don't Panic
-Volume serial number is 7606-BCD6
-D:\PROJECTS\MINECRAFT MODS\IDEOMOD\SRC
-ÃÄÄÄgenerated
-³   ÀÄÄÄresources
-ÃÄÄÄmain
-³   ÃÄÄÄjava
-³   ³   ÀÄÄÄcom
-³   ³       ÀÄÄÄideomancer
-³   ³           ÀÄÄÄideomod
-³   ³               ³   Ideomod.java
-³   ³               ³   
-³   ³               ÃÄÄÄblock
-³   ³               ³       DrillBlock.java
-³   ³               ³       MachineBlock.java
-³   ³               ³       OddstoneBlock.java
-³   ³               ³       OddstonePortalBlock.java
-³   ³               ³       OddstonePortalFrameDetector.java
-³   ³               ³       OddstonePortalHandler.java
-³   ³               ³       OddstonePortalSavedData.java
-³   ³               ³       PortalUtils.java
-³   ³               ³       StickinessRules.java
-³   ³               ³       
-³   ³               ÃÄÄÄclient
-³   ³               ³       ModColorHandlers.java
-³   ³               ³       
-³   ³               ÃÄÄÄconfig
-³   ³               ³       OddstoneConfig.java
-³   ³               ³       
-³   ³               ÃÄÄÄeffect
-³   ³               ³       JudgementEffect.java
-³   ³               ³       
-³   ³               ÃÄÄÄmixin
-³   ³               ³       PistonStructureResolverMixin.java
-³   ³               ³       
-³   ³               ÀÄÄÄregistry
-³   ³                       ModBlocks.java
-³   ³                       ModCommands.java
-³   ³                       ModCreativeTabs.java
-³   ³                       ModItems.java
-³   ³                       ModTags.java
-³   ³                       
-³   ÀÄÄÄresources
-³       ³   ideomod.mixins.json
-³       ³   pack.mcmeta
-³       ³   
-³       ÃÄÄÄassets
-³       ³   ÀÄÄÄideomod
-³       ³       ÃÄÄÄblockstates
-³       ³       ³       drill.json
-³       ³       ³       ideoblock.json
-³       ³       ³       machine_block.json
-³       ³       ³       oddstone.json
-³       ³       ³       oddstone_portal.json
-³       ³       ³       
-³       ³       ÃÄÄÄlang
-³       ³       ³       en_us.json
-³       ³       ³       
-³       ³       ÃÄÄÄmodels
-³       ³       ³   ÃÄÄÄblock
-³       ³       ³   ³       drill.json
-³       ³       ³   ³       drill_on.json
-³       ³       ³   ³       ideoblock.json
-³       ³       ³   ³       machine_block.json
-³       ³       ³   ³       oddstone.json
-³       ³       ³   ³       oddstone_portal_ew.json
-³       ³       ³   ³       oddstone_portal_ns.json
-³       ³       ³   ³       
-³       ³       ³   ÀÄÄÄitem
-³       ³       ³           drill.json
-³       ³       ³           ideoblock.json
-³       ³       ³           machine_block.json
-³       ³       ³           oddstone.json
-³       ³       ³           
-³       ³       ÀÄÄÄtextures
-³       ³           ÀÄÄÄblock
-³       ³                   drill_back.png
-³       ³                   drill_front.png
-³       ³                   drill_front_on.png
-³       ³                   drill_side.png
-³       ³                   drill_top.png
-³       ³                   ideoblock.png
-³       ³                   machine_block.png
-³       ³                   oddstone.png
-³       ³                   
-³       ÃÄÄÄdata
-³       ³   ÃÄÄÄideomod
-³       ³   ³   ÃÄÄÄloot_tables
-³       ³   ³   ³   ÀÄÄÄblocks
-³       ³   ³   ³           drill.json
-³       ³   ³   ³           ideoblock.json
-³       ³   ³   ³           machine_block.json
-³       ³   ³   ³           oddstone.json
-³       ³   ³   ³           
-³       ³   ³   ÃÄÄÄrecipes
-³       ³   ³   ³       drill.json
-³       ³   ³   ³       ideoblock.json
-³       ³   ³   ³       machine_block.json
-³       ³   ³   ³       oddstone.json
-³       ³   ³   ³       
-³       ³   ³   ÃÄÄÄtags
-³       ³   ³   ³   ÀÄÄÄblocks
-³       ³   ³   ³           portal_corner_blocks.json
-³       ³   ³   ³           redstone_components.json
-³       ³   ³   ³           
-³       ³   ³   ÀÄÄÄworldgen
-³       ³   ³       ÀÄÄÄworld_preset
-³       ³   ÀÄÄÄminecraft
-³       ³       ÀÄÄÄtags
-³       ³           ÃÄÄÄblocks
-³       ³           ³   ÀÄÄÄmineable
-³       ³           ³           pickaxe.json
-³       ³           ³           
-³       ³           ÀÄÄÄworldgen
-³       ³               ÀÄÄÄworld_preset
-³       ÀÄÄÄMETA-INF
-³               mods.toml
-³               
-ÀÄÄÄtest
-    ÃÄÄÄjava
-    ÀÄÄÄresources
+ï»¿+-- generated
+|  \\-- resources
++-- main
+|  +-- java
+|  |  \\-- com
+|  |     \\-- ideomancer
+|  |        \\-- ideomod
+|  |           +-- block
+|  |           |  +-- DrillBlock.java
+|  |           |  +-- MachineBlock.java
+|  |           |  +-- OddSlimeBlock.java
+|  |           |  +-- OddstoneAttractorBlock.java
+|  |           |  +-- OddstoneBlock.java
+|  |           |  +-- OddstonePortalBlock.java
+|  |           |  +-- OddstonePortalFrameDetector.java
+|  |           |  +-- OddstonePortalHandler.java
+|  |           |  +-- OddstonePortalSavedData.java
+|  |           |  +-- OddstoneRepulserBlock.java
+|  |           |  +-- PortalUtils.java
+|  |           |  +-- RangedPistonFlags.java
+|  |           |  +-- RangedPistonUtil.java
+|  |           |  \\-- StickinessRules.java
+|  |           +-- client
+|  |           |  \\-- ModColorHandlers.java
+|  |           +-- config
+|  |           |  \\-- OddstoneConfig.java
+|  |           +-- effect
+|  |           |  \\-- JudgementEffect.java
+|  |           +-- entity
+|  |           +-- mixin
+|  |           |  \\-- PistonStructureResolverMixin.java
+|  |           +-- registry
+|  |           |  +-- ModBlocks.java
+|  |           |  +-- ModCommands.java
+|  |           |  +-- ModCreativeTabs.java
+|  |           |  +-- ModItems.java
+|  |           |  \\-- ModTags.java
+|  |           +-- renderer
+|  |           \\-- Ideomod.java
+|  \\-- resources
+|     +-- assets
+|     |  \\-- ideomod
+|     |     +-- blockstates
+|     |     |  +-- drill.json
+|     |     |  +-- ideoblock.json
+|     |     |  +-- machine_block.json
+|     |     |  +-- odd_slime.json
+|     |     |  +-- oddstone.json
+|     |     |  +-- oddstone_attractor.json
+|     |     |  +-- oddstone_portal.json
+|     |     |  \\-- oddstone_repulser.json
+|     |     +-- lang
+|     |     |  \\-- en_us.json
+|     |     +-- models
+|     |     |  +-- block
+|     |     |  |  +-- drill.json
+|     |     |  |  +-- drill_on.json
+|     |     |  |  +-- ideoblock.json
+|     |     |  |  +-- machine_block.json
+|     |     |  |  +-- odd_slime.json
+|     |     |  |  +-- oddstone.json
+|     |     |  |  +-- oddstone_attractor.json
+|     |     |  |  +-- oddstone_portal_ew.json
+|     |     |  |  +-- oddstone_portal_ns.json
+|     |     |  |  \\-- oddstone_repulser.json
+|     |     |  \\-- item
+|     |     |     +-- drill.json
+|     |     |     +-- ideoblock.json
+|     |     |     +-- machine_block.json
+|     |     |     +-- odd_slime.json
+|     |     |     +-- oddstone.json
+|     |     |     +-- oddstone_attractor.json
+|     |     |     \\-- oddstone_repulser.json
+|     |     \\-- textures
+|     |        \\-- block
+|     |           +-- drill_back.png
+|     |           +-- drill_front.png
+|     |           +-- drill_front_on.png
+|     |           +-- drill_side.png
+|     |           +-- drill_top.png
+|     |           +-- ideoblock.png
+|     |           +-- machine_block.png
+|     |           +-- odd_slime_back.png
+|     |           +-- odd_slime_front.png
+|     |           +-- odd_slime_side.png
+|     |           +-- oddstone.png
+|     |           +-- oddstone_attractor_back.png
+|     |           +-- oddstone_attractor_front.png
+|     |           +-- oddstone_attractor_side.png
+|     |           +-- oddstone_repulser_back.png
+|     |           +-- oddstone_repulser_front.png
+|     |           \\-- oddstone_repulser_side.png
+|     +-- data
+|     |  +-- ideomod
+|     |  |  +-- loot_tables
+|     |  |  |  \\-- blocks
+|     |  |  |     +-- drill.json
+|     |  |  |     +-- ideoblock.json
+|     |  |  |     +-- machine_block.json
+|     |  |  |     +-- odd_slime.json
+|     |  |  |     +-- oddstone.json
+|     |  |  |     +-- oddstone_attractor.json
+|     |  |  |     \\-- oddstone_repulser.json
+|     |  |  +-- recipes
+|     |  |  |  +-- drill.json
+|     |  |  |  +-- ideoblock.json
+|     |  |  |  +-- machine_block.json
+|     |  |  |  +-- odd_slime.json
+|     |  |  |  \\-- oddstone.json
+|     |  |  +-- tags
+|     |  |  |  \\-- blocks
+|     |  |  |     +-- portal_corner_blocks.json
+|     |  |  |     \\-- redstone_components.json
+|     |  |  \\-- worldgen
+|     |  |     \\-- world_preset
+|     |  \\-- minecraft
+|     |     \\-- tags
+|     |        +-- blocks
+|     |        |  \\-- mineable
+|     |        |     \\-- pickaxe.json
+|     |        \\-- worldgen
+|     |           \\-- world_preset
+|     +-- META-INF
+|     |  \\-- mods.toml
+|     +-- ideomod.mixins.json
+|     \\-- pack.mcmeta
+\\-- test
+   +-- java
+   \\-- resources

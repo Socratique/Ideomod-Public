@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-13*
+*Last updated: 2026-02-15*
 
 ---
 
@@ -47,8 +47,8 @@
 
 ---
 
-### Drill Block [DONE]
-> Directional mining block. Redstone-activated 3x3 excavator.
+### Drill Block [HOLD]
+> Directional mining block. Redstone-activated 3x3 excavator. Implemented and functional but on hold pending design review.
 
 | Property | Value |
 |----------|-------|
@@ -77,7 +77,7 @@
 | ID | `oddstone` |
 | Hardness | 2.0 / Blast 6.0 |
 | Tool | Pickaxe |
-| Recipe | 4 stone + 1 redstone -> 4 oddstone (placeholder) |
+| Recipe | None -- natural resource only. Must be mined. |
 
 **Features:**
 
@@ -96,8 +96,38 @@
 **Future ideas:**
 - *[IDEA] Expand face search to half-sphere/cone per face*
 - *[IDEA] Non-placeholder texture (purple-grey stone currently)*
-- *[IDEA] Non-placeholder recipe (rarity intended to be greater than diamond -- bottleneck for portal construction)*
 - *[IDEA] Oddstone as universal mod economy resource -- gates Portals, Inhibitors, Machine Blocks, Placers, Disenchanting Table (see Systems > Oddstone Economy)*
+
+---
+
+### Oddstone Variants [IDEA]
+> Full stone-family variants of Oddstone (cobbled, polished, bricks, chiseled, stairs, slabs, walls, etc.). All retain Oddstone behavior but each variant is its own sympathetic frequency.
+
+**Variants (planned):**
+- Cobbled Oddstone
+- Polished Oddstone
+- Oddstone Bricks
+- Chiseled Oddstone
+- Oddstone Stairs, Slabs, Walls
+- (Others as needed -- cracked bricks, mossy, etc.)
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Full Oddstone behavior | [IDEA] | All variants have mob avoidance, redstone insulation, one-way stickiness, and sympathetic movement. |
+| Per-variant sympathetic frequency | [IDEA] | Each variant type forms its own sympathetic network. Oddstone links to Oddstone. Oddstone Bricks link to Oddstone Bricks. They do NOT cross-link. |
+| Crafting between variants | [IDEA] | Standard stonecutter/crafting recipes to convert between forms (like vanilla stone family). |
+| Portal frames | [IDEA] | Can any variant be used in portal frames, or only base Oddstone? TBD -- restricting to base Oddstone keeps portal building simple. |
+
+**Design notes:**
+- The frequency system massively expands contraption potential. Players can run multiple independent sympathetic networks in the same area by using different variants. Base Oddstone moves one thing, Oddstone Bricks move another, polished moves a third -- all without interfering.
+- This turns a cosmetic choice (which variant looks best) into a functional one (which frequency do I assign to this circuit). Builders and redstone engineers get different value from the same blocks.
+- Crafting between variants is free/lossless (stonecutter style). The rare resource is the Oddstone itself, not the shaping.
+- All variants still count toward the 12-block piston push limit per group.
+
+**Design questions (open):**
+- *How many variants is too many? Each one is a separate sympathetic frequency, which is powerful. But more variants = more assets, more recipes, more registry entries.*
 
 ---
 
@@ -296,14 +326,14 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
-### Oddstone Repulser [IDEA]
+### Oddstone Repulser [DONE]
 > Directional ranged piston that pushes Oddstone blocks at a distance. Scans a 12-block line in front and pushes any Oddstone found forward by 1.
 
 | Property | Value |
 |----------|-------|
 | ID | `oddstone_repulser` |
 | Placement | Directional (faces player look direction, piston-style) |
-| Activation | Redstone pulse |
+| Activation | Redstone pulse (rising edge) |
 | Range | 12 blocks |
 | Target | Oddstone blocks only |
 | Movable | Yes (can be pushed by pistons) |
@@ -313,10 +343,15 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Directional scan | [IDEA] | Scans 12-block line from FACING direction. Finds all Oddstone in line. |
-| Ranged push | [IDEA] | Pushes found Oddstone forward by 1 block. Uses vanilla piston move logic -- respects push limits, unmovable blocks, etc. |
-| Push ordering | [IDEA] | Pushes farthest Oddstone first, then works inward to avoid collisions. |
-| Full structure push | [IDEA] | If Oddstone has adjacent blocks that would move as a piston group (sticky connections, sympathetic links), the whole group moves. |
+| Directional scan | [DONE] | Scans 12-block line from FACING direction. Finds nearest Oddstone. |
+| Ranged push | [DONE] | Pushes found Oddstone forward by 1 block. Uses vanilla piston move logic via RangedPistonUtil -- respects push limits, unmovable blocks, etc. |
+| Full structure push | [DONE] | If Oddstone has adjacent blocks that would move as a piston group (sticky connections, sympathetic links), the whole group moves. |
+| Block event sync | [DONE] | Uses vanilla block event system for client-server synchronization. Movement runs on both sides for proper animation. |
+
+**Known issues:**
+- Placeholder texture
+- Placeholder recipe
+- ~90% code duplication with Attractor (could extract shared base class)
 
 **Design notes:**
 - Range is detection range, not a containment field -- an Oddstone at position 12 can be pushed to 13.
@@ -325,14 +360,14 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
-### Oddstone Attractor [IDEA]
+### Oddstone Attractor [DONE]
 > Directional ranged piston that pulls Oddstone blocks toward it. Inverse of Oddstone Repulser.
 
 | Property | Value |
 |----------|-------|
 | ID | `oddstone_attractor` |
 | Placement | Directional (faces player look direction, piston-style) |
-| Activation | Redstone pulse |
+| Activation | Redstone pulse (rising edge) |
 | Range | 12 blocks |
 | Target | Oddstone blocks only |
 | Movable | Yes (can be pushed by pistons) |
@@ -342,10 +377,15 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Directional scan | [IDEA] | Scans 12-block line from FACING direction. Finds all Oddstone in line. |
-| Ranged pull | [IDEA] | Pulls found Oddstone toward the Attractor by 1 block. Uses vanilla piston move logic. |
-| Pull ordering | [IDEA] | Pulls closest Oddstone first, then works outward to avoid collisions. |
-| Full structure pull | [IDEA] | Same as Repulser -- pulls the whole piston group, not just the Oddstone. |
+| Directional scan | [DONE] | Scans 12-block line from FACING direction. Finds farthest Oddstone. |
+| Ranged pull | [DONE] | Pulls found Oddstone toward the Attractor by 1 block. Uses vanilla piston move logic via RangedPistonUtil. |
+| Full structure pull | [DONE] | Same as Repulser -- pulls the whole piston group, not just the Oddstone. |
+| Block event sync | [DONE] | Same block event pattern as Repulser for client-server animation. |
+
+**Known issues:**
+- Placeholder texture
+- Placeholder recipe
+- ~90% code duplication with Repulser
 
 **Design notes:**
 - Block directly in front of Attractor must be air for closest Oddstone to be pulled.
@@ -407,12 +447,12 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 **Repulser/Attractor family summary:**
 
-| Variant | Target | Range | Movable | Tier |
-|---------|--------|-------|---------|------|
-| Oddstone Repulser | Oddstone only | 12 (TBD) | Yes | Early-mid |
-| Oddstone Attractor | Oddstone only | 12 (TBD) | Yes | Early-mid |
-| Arcane Repulser | Any block | 12 (TBD) | No | Mid-late |
-| Arcane Attractor | Any block | 12 (TBD) | No | Mid-late |
+| Variant | Target | Range | Movable | Tier | Status |
+|---------|--------|-------|---------|------|--------|
+| Oddstone Repulser | Oddstone only | 12 | Yes | Early-mid | [DONE] |
+| Oddstone Attractor | Oddstone only | 12 | Yes | Early-mid | [DONE] |
+| Arcane Repulser | Any block | 12 (TBD) | No | Mid-late | [IDEA] |
+| Arcane Attractor | Any block | 12 (TBD) | No | Mid-late | [IDEA] |
 
 ---
 
@@ -500,7 +540,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 *No standalone items yet. All current items are BlockItems.*
 
 **Future ideas:**
-- *[IDEA] Tool/armor modifiers via multiblock crafting stations*
+- *[IDEA] Tool/armor modifiers via multiblock crafting stations (see Recipes & Crafting > Crafting Modifiers)*
 - *[IDEA] Custom tool materials tied to geology system*
 
 ---
@@ -530,6 +570,71 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
+### Unique Loot Items [IDEA]
+> Special items found as world loot. Not craftable by default (some may become craftable via Crafting Schematics). Each has a unique property or behavior that makes it worth seeking out.
+
+**Butcher's Knife:**
+
+| Property | Value |
+|----------|-------|
+| ID | `butchers_knife` |
+| Type | Tool (sword-class or axe-class, TBD) |
+| Source | Loot (village butcher chests, pillager outposts, other structure loot) |
+| Durability | TBD (iron-tier equivalent?) |
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Innate Looting | [IDEA] | Acts as if it has a minor Looting enchant (~Looting I equivalent). Stacks with actual Looting enchantment. |
+| Extended loot tables | [IDEA] | Mobs killed with the Butcher's Knife drop items not in their normal loot table but thematically part of their body. Animals drop bones. Possibly: chickens drop extra feathers, cows drop sinew/tendon (new crafting material?), spiders drop extra eyes, etc. |
+
+**Design notes:**
+- The Butcher's Knife is the template for unique loot items -- a tool with a specific identity and niche, not just "better sword."
+- Extended loot tables make it a functional tool for specific resource gathering, not just combat. Bone farming from passive mobs is a genuine use case.
+- Can be enchanted normally (including with more Looting for stacking).
+
+**(More unique items TBD -- this section will grow as ideas develop.)**
+
+**Future ideas:**
+- *[IDEA] Cartographer's Compass -- points toward nearest unexplored structure?*
+- *[IDEA] More unique weapons/tools with innate properties, found as rare loot*
+
+---
+
+### Artisan's Ink [IDEA]
+> Rare resource used for copying schematics at a Drafting Table. See Recipes & Crafting > Schematics & Drafting Table.
+
+| Property | Value |
+|----------|-------|
+| ID | `artisans_ink` |
+| Type | Crafting material |
+| Source | TBD (rare mob drop? Complex recipe? Villager trade?) |
+
+**Design notes:**
+- The limiter on schematic copying. Should be obtainable but never trivially abundant.
+- Thematically: a special ink for precise technical drawing. Ties to the Drafting Table's "blueprint" aesthetic.
+
+---
+
+### Magic Bottle [IDEA]
+> Empty enchanted vessel created at an Enhanced Enchanting Table structure. Can capture environmental effects from the world. See Magic & Enchanting > Enchanting Overhaul > Magic Bottles.
+
+| Property | Value |
+|----------|-------|
+| ID | `magic_bottle` |
+| Type | Usable item (right-click on environment to capture) |
+| Source | Glass bottle enchanted at Enhanced Enchanting Table structure |
+| Stackable | Yes (16? TBD) |
+
+**Capturable effects (TBD -- examples):**
+
+| Source | Result | Effect |
+|--------|--------|--------|
+| Campfire smoke | Bottled Smoke | Blinds, slows, damages drinker briefly |
+| Nether portal block | Bottled Nether Portal | Teleports drinker to the Nether |
+| (more TBD) | | |
+
+---
+
 ## 3. MECHANICAL SYSTEMS
 
 ### Piston Stickiness Framework [DONE]
@@ -546,8 +651,13 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 **Current rules:**
 - Slime -> Oddstone: **BLOCKED** (Oddstone is immune to slime grabs)
 - Honey -> Oddstone: **BLOCKED**
+- Odd Slime -> Oddstone: **BLOCKED**
 - Machine Block -> Slime: **BLOCKED** (Machine Block won't drag slime)
 - Machine Block -> Honey: **BLOCKED**
+- Machine Block -> Odd Slime: **BLOCKED**
+- Slime -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
+- Honey -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
+- Odd Slime directional rule: stickiness disabled when pushDirection != FACING
 
 ---
 
@@ -556,21 +666,39 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
-### Odd Slime [DESIGNED]
-> *Slime variant with directional grabbing behavior.*
+### Odd Slime [DONE]
+> Directional slime block. Only sticky when pushed in its FACING direction.
 
-**Design notes:**
-- *Grabs only in specific directions?*
-- *Needs design work*
+| Property | Value |
+|----------|-------|
+| ID | `odd_slime` |
+| Placement | Directional (piston-style, FACING property) |
+| Friction | 0.8F (slippery like ice) |
+| Sound | Slime |
+| Recipe | 1 slime block + 1 oddstone -> 1 odd slime (shapeless) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Directional stickiness | [DONE] | Only sticky when pushed in FACING direction. Pushed sideways or opposite = acts non-sticky. Enforced by StickinessRules directional rule + mixin. |
+| Slime/honey exclusion | [DONE] | canStickTo returns false for SlimeBlock and HoneyBlock (mutual exclusion, same as slime vs honey in vanilla). |
+| Oddstone immunity | [DONE] | Grab immunity rule prevents Odd Slime from grabbing Oddstone. |
+| Chain pulling | [DONE] | When active (pushed in FACING direction), Odd Slime pulls blocks behind it in the backward walk. Special mixin exemption allows this despite grab immunity. |
+
+**Known issues:**
+- Placeholder texture
 
 ---
 
-### Repulser/Attractor System [IDEA]
+### Repulser/Attractor System [DONE]
 > Ranged directional pistons. Scan a line and push/pull blocks at distance using vanilla piston move logic.
 
-**Variants:** Oddstone Repulser, Oddstone Attractor, Arcane Repulser, Arcane Attractor (see Blocks section for full details).
+**Variants:** Oddstone Repulser [DONE], Oddstone Attractor [DONE], Arcane Repulser [IDEA], Arcane Attractor [IDEA] (see Blocks section for full details).
 
-**Core mechanic:** All four blocks share a common scan-and-move utility. On redstone pulse, scan a line in FACING direction, find target blocks, and trigger piston-style movement. Differences between variants are target filter (Oddstone-only vs any block), direction (push vs pull), and movability (Oddstone variants movable, Arcane variants immovable).
+**Core mechanic:** All four blocks share a common scan-and-move utility (RangedPistonUtil). On redstone pulse, scan a line in FACING direction, find target blocks, and trigger piston-style movement via the block event system for client-server sync. Differences between variants are target filter (Oddstone-only vs any block), scan direction (nearest vs farthest), move direction (push vs pull), and movability (Oddstone variants movable, Arcane variants immovable).
+
+**Architecture:** Uses RangedPistonFlags (ThreadLocal) to pass target position into the PistonStructureResolver via mixin, which redirects the resolver's startPos. Movement logic in RangedPistonUtil mirrors vanilla's PistonBaseBlock.moveBlocks() step for step. Block events ensure MovingPistonBlock entities are created on both client and server for proper sliding animation.
 
 **Interactions:**
 - Sympathetic Movement: Pushed/pulled Oddstone still triggers sympathetic chains.
@@ -586,7 +714,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5x5 outer (3x3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types Ãƒ-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
+| Address space | 14 corner types ÃƒÆ’Ã†â€™-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
@@ -801,10 +929,77 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 ---
 
 ### Enchanting Overhaul [IDEA]
-> Comprehensive rework of the vanilla enchanting system.
+> Comprehensive rework of the vanilla enchanting system. New point-budget mechanic, catalyst slot, tiered resources, expanded enchantments, and removed restrictions.
+
+**Enchantment Level Budget:**
+
+Every piece of gear has a maximum "enchant level" -- a point budget. Each enchantment costs points equal to its level. The player decides how to spend the budget.
+
+```
+Example: Iron Chestplate -- max enchant level: 10
+
+Option A: Protection V (5) + Thorns III (3) + Unbreaking II (2) = 10/10
+Option B: Protection X (10) = 10/10
+Option C: Protection II (2) + Fire Prot II (2) + Blast Prot II (2) + Unbreaking IV (4) = 10/10
+```
+
+- Replaces vanilla's "you get what you get" enchanting with deliberate choices.
+- No enchantment incompatibilities -- any enchant can go on any appropriate gear, limited only by the budget and cost/rarity of high-level enchants.
+- Enchantment levels can go beyond vanilla caps (Protection V+, Sharpness VI+, etc.) but higher levels cost proportionally more and are rarer.
+- Different gear materials / tiers have different max enchant levels. Diamond > iron > stone, etc. Exact numbers TBD.
+
+**Catalyst Slot:**
+
+Addition to the Enhanced Enchanting Table structure (see Multiblock Framework). A new slot in the enchanting GUI for catalyst items.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Catalyst slot | [IDEA] | New slot in enchanting GUI when structure is active. Accepts catalyst items. |
+| Enchantment biasing | [IDEA] | Placing a catalyst makes certain enchantments more likely to appear in the enchanting options. Different catalysts bias toward different enchant families. |
+| Catalyst items | [IDEA] | TBD -- could be existing items with thematic links (flint -> Sharpness family, feather -> movement enchants, blaze powder -> fire enchants) or new dedicated catalyst items. |
+
+**Tiered Enchanting Resources:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Resource tiers | [IDEA] | Lapis is no longer the only enchanting fuel. Higher-tier enchanting (higher levels, rarer enchants) requires rarer resources. Specific tier list TBD -- could follow a progression like lapis -> amethyst -> Oddstone dust -> something else. |
+
+**Anvil Changes:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Remove "too expensive" cap | [IDEA] | Anvil no longer refuses operations. Cost still scales, but the hard cap is gone. If you have the levels, you can do it. |
+
+**Expanded Enchantments & Curses:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| New enchantments | [IDEA] | Specific list TBD. Goal is to expand the pool so the catalyst system and budget system have more to work with. |
+| New curses | [IDEA] | More curses to create risk in enchanting. Curses cost zero budget points but occupy space -- they're penalties, not choices. |
+
+**Magic Bottles:**
+
+Addition to the enchanting structure. A new contributor block or structure extension that enables enchanting non-gear items.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Bottle enchanting | [IDEA] | Place a glass bottle in the enchanting slot. Structure converts it to a "Magic Bottle" -- an empty vessel that can capture environmental effects. |
+| Environmental capture | [IDEA] | Right-click a Magic Bottle on certain blocks/effects to bottle them. Each source creates a different consumable potion-like item. |
+| Bottled Smoke | [IDEA] | Capture: Magic Bottle + campfire smoke. Effect: when drunk, briefly blinds, slows, and damages. Throwable as splash variant? |
+| Bottled Nether Portal | [IDEA] | Capture: Magic Bottle + nether portal block. Effect: when drunk, teleports the player to the Nether. One-way ticket. |
+| More bottled effects | [IDEA] | TBD -- the system is open-ended. Bottled lava? Bottled sculk vibration? Bottled dragon breath already exists in vanilla -- this extends the concept. |
 
 **Design notes:**
-- *Details TBD*
+- The enchant level budget is the core change. It transforms enchanting from a slot machine into a build system. Players theory-craft loadouts, make tradeoffs, specialize gear.
+- Catalysts + budget + tiered resources create three levers for progression: what you can get (catalysts), how much you can fit (budget), and what tier you can access (resources).
+- Magic Bottles are deliberately weird and experimental. They turn the enchanting table from "gear enhancer" into "magical workstation." The environmental capture mechanic encourages exploration and experimentation.
+- Removing the too-expensive cap is a QoL change that respects player investment. If someone has 80 levels, let them spend 80 levels.
+
+**Design questions (open):**
+- *What determines a gear piece's max enchant level? Material tier? Item type? Can it be increased (Arcane modifier -- see Crafting Modifiers)?*
+- *Do curses reduce available budget, or do they take zero points but still occupy a "slot"?*
+- *Catalyst consumption -- one per enchant? One per session? Durability-based?*
+- *Magic Bottle capture -- instant or does it take time/resources?*
 
 ---
 
@@ -824,15 +1019,95 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 ## 8. RECIPES & CRAFTING
 
 ### Multiblock Crafting Stations [IDEA]
-> Advanced crafting through physical multiblock structures.
+> Advanced crafting through physical multiblock structures. Adds crafting modifiers, schematic support, and expanded crafting capabilities.
 
 **Design notes:**
-- Tool/armor modifiers
-- Ties into mechanical systems?
 - Built on the Multiblock Structure Framework (see Systems > Multiblock Structure Framework)
 - Likely a shapeless flood scan -- "is there an anvil nearby?" rather than requiring exact placement
 - Vanilla workstations (anvil, smithing table, furnace, brewing stand) serve as Core blocks -- no custom blocks needed for basic structures
 - Machine Core / Machine Block as contributors to boost output quality or speed
+
+---
+
+### Crafting Modifiers [IDEA]
+> Terraria-style light modifiers applied to gear when crafted at a proper multiblock crafting station. Small bonuses that make crafted gear feel special.
+
+**Core mechanic:** When crafting tools, weapons, or armor at an active multiblock crafting station, there's a chance the item receives a modifier -- a small, permanent bonus. Generally one modifier per item. Modifier chance and quality scale with the crafting station's contributor completeness.
+
+**Example modifiers:**
+
+| Modifier | Effect | Applies to |
+|----------|--------|------------|
+| Hardened | Small increase to armor protection | Armor |
+| Tempered | Slight durability increase | Tools, weapons, armor |
+| Keen | Small increase to attack damage | Weapons |
+| Honed | Small increase to mining efficiency | Tools |
+| Arcane | Adds 1-2 extra enchantment level budget to the item | Any enchantable gear |
+| (more TBD) | | |
+
+**Design notes:**
+- Modifiers are "mini-enchants" -- smaller in impact than real enchantments. They're bonuses, not build-defining.
+- The Arcane modifier is the standout -- extra enchant budget means more room for enchantments, making it the most sought-after modifier.
+- Crafting at a basic workbench gives no modifier chance. You need a proper station. This rewards players who invest in their crafting setup.
+- Modifier names appear as prefixes on the item: "Hardened Iron Chestplate", "Tempered Diamond Pickaxe", etc.
+- One modifier per item. No stacking. Simple and readable.
+
+**Design questions (open):**
+- *What's the base chance? 10%? 25%? How much does a full station boost it?*
+- *Can modifiers appear on non-gear items? (Probably not -- keep it focused on equipment.)*
+- *Can you reroll a modifier somehow, or is it permanent? Permanent feels right -- it makes each craft meaningful.*
+
+---
+
+### Schematics & Drafting Table [IDEA]
+> Schematic items that guarantee specific crafting outcomes. Used at a Drafting Table, which is a contributor block in crafting multiblock structures.
+
+**Drafting Table:**
+
+| Property | Value |
+|----------|-------|
+| ID | `drafting_table` |
+| Type | Contributor block for crafting multiblock structures |
+| Tool | Axe |
+| Recipe | TBD (wood + paper + iron? Thematic for a work surface) |
+
+When a Drafting Table is part of an active crafting station structure, it adds a schematic slot to the crafting GUI. It also serves as a standalone station for copying schematics.
+
+**Modifier Schematics:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Guaranteed modifier | [IDEA] | Place a modifier schematic in the schematic slot when crafting. The output item is guaranteed to have that specific modifier instead of a random chance. |
+| Limited uses | [IDEA] | Schematics have 2-3 uses before being consumed. Not infinite, not single-use. |
+| Found as loot | [IDEA] | Schematics are found in dungeon chests, structure loot, etc. Not craftable (except by copying). Encourages exploration. |
+
+**Crafting Schematics:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Unique recipes | [IDEA] | Special schematics that unlock crafting of items that are normally uncraftable. E.g. a Trident schematic lets you craft a trident from prismarine + other materials. |
+| Schematic slot required | [IDEA] | Must be placed in the schematic slot of an active crafting station with Drafting Table. |
+| Limited uses | [IDEA] | Same 2-3 use durability as modifier schematics. |
+| Found as loot | [IDEA] | Rare loot from structures, bosses, etc. The schematic IS the reward -- finding a Trident schematic is like finding a trident, but renewable (2-3 times, plus copying). |
+
+**Schematic Copying:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Copy at Drafting Table | [IDEA] | Right-click Drafting Table to open copying GUI. Place original schematic + blank schematic + Artisan's Ink. Produces a copy. |
+| Artisan's Ink | [IDEA] | Rare crafting resource required for copying. Exact recipe/source TBD -- should be expensive enough that copying is an investment, not trivially repeatable. |
+| Copy has full uses | [IDEA] | Copied schematic has the same 2-3 uses as the original. The original is not consumed by copying. |
+
+**Design notes:**
+- Schematics create a loot-to-crafting pipeline. You find a schematic, bring it home, and it becomes a limited crafting capability. Copying extends it but costs rare ink.
+- The Drafting Table is cheap to build but the schematics and ink are the real gates. The table is infrastructure, not a bottleneck.
+- Crafting schematics for normally uncraftable items (tridents, etc.) give those items a path to acquisition beyond luck, without making them trivially available.
+- The whole system rewards exploration: find schematics in the world, bring them back to your workshop, use them carefully.
+
+**Design questions (open):**
+- *What items get crafting schematics? Trident is a clear candidate. What else -- elytra? Saddle? Enchanted golden apple? Each one needs a recipe that feels fair.*
+- *Can you copy a copy? (Probably yes -- the ink cost is the limiter, not copy-generation.)*
+- *Artisan's Ink source -- rare mob drop? Complex recipe? Bought from a specific villager type?*
 
 ---
 
@@ -842,8 +1117,9 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 |--------|--------|-------|
 | Ideoblock | 9 cobblestone | |
 | Drill | Iron + piston + redstone | Shaped |
-| Oddstone | 4 stone + 1 redstone -> 4 | |
+| Oddstone | None (natural resource) | |
 | Machine Block | 4 iron + 4 redstone + 1 slime | |
+| Odd Slime | 1 slime block + 1 oddstone | Shapeless |
 
 ---
 
@@ -1172,7 +1448,7 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 | File | Purpose |
 |------|---------|
 | `ideomod.mixins.json` | Mixin config |
-| `PistonStructureResolverMixin.java` | One-way stickiness |
+| `PistonStructureResolverMixin.java` | 4 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect |
 
 ---
 
