@@ -145,6 +145,18 @@ public class RangedPistonUtil {
         if (!toPush.contains(targetPos)) return false;
         if (toPush.contains(devicePos)) return false;
 
+        // Safety: reject if ANY block's destination is the device itself.
+        // This prevents sympathetic/sticky blocks from being pushed into
+        // and overwriting the Attractor/Repulser. Mirrors how vanilla
+        // pistons can't push blocks into the piston base.
+        for (BlockPos pushPos : toPush) {
+            if (pushPos.relative(pushDir).equals(devicePos)) {
+                Ideomod.LOGGER.debug("Ranged piston at {} -- blocked, a block at {} would move into device",
+                        devicePos, pushPos);
+                return false;
+            }
+        }
+
         // ---- STEP 2: Snapshot block states (mirrors vanilla lines 277-282) ----
         // map tracks source positions that need to be cleared to air later
         Map<BlockPos, BlockState> map = Maps.newHashMap();
