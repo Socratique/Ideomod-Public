@@ -29,6 +29,10 @@ import org.jetbrains.annotations.Nullable;
  * similar to nether portals. If you walk through the left side of
  * portal A, you come out the left side of portal B.
  * 
+ * When portals have different orientations (X-axis vs Z-axis), the
+ * player's facing is rotated 90° to face through the destination
+ * portal's plane, preserving the feeling of walking "through" it.
+ * 
  * LINKED portals: position-preserving teleport to partner.
  * UNLINKED portals: scatter-teleport 200-1000 blocks + 5 hearts damage.
  * 
@@ -62,7 +66,7 @@ public class OddstonePortalBlock extends Block {
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos,
                                 CollisionContext context) {
-        return state.getValue(AXIS) == Direction.Axis.Z ? Z_AXIS_AABB : X_AXIS_AABB;
+        return state.getValue(AXIS) == Direction.Axis.X ? Z_AXIS_AABB : X_AXIS_AABB;
     }
 
     // ========================================================================
@@ -136,6 +140,17 @@ public class OddstonePortalBlock extends Block {
      * 
      * This means walking through the left side of portal A puts you on
      * the left side of portal B, even if the portals are different sizes.
+     * 
+     * HOW ROTATION WORKS:
+     * ===================
+     * When source and destination portals have different axes (X vs Z),
+     * the player is rotated 90° so they face through the destination
+     * portal's plane. This preserves the feeling of "walking through"
+     * — you enter facing one direction and exit facing the natural
+     * direction of the destination portal.
+     * 
+     * Same-axis portals: no rotation (player keeps their facing).
+     * Cross-axis portals: 90° rotation to align with destination.
      */
     private void linkedTeleport(ServerLevel level, ServerPlayer player,
                                  OddstonePortalSavedData.PortalEntry entry,
@@ -158,7 +173,6 @@ public class OddstonePortalBlock extends Block {
         PortalBounds thisBounds = findPortalBounds(level, portalBlockPos, thisHDir);
 
         if (thisBounds == null) {
-            // Fallback
             simpleTeleport(level, player, partnerPos, partnerEntry);
             return;
         }
@@ -220,26 +234,49 @@ public class OddstonePortalBlock extends Block {
             targetZ = partnerBounds.fixedCoord + 0.5;
         }
 
-        player.teleportTo(targetX, targetY, targetZ);
+        // -- Step 5: Calculate rotation for cross-axis teleports --
+        float yaw = player.getYRot();
+        float pitch = player.getXRot();
 
-        Ideomod.LOGGER.debug("Player {} teleported via Oddstone Portal to ({}, {}, {})",
-                player.getName().getString(), targetX, targetY, targetZ);
-    }
+        if (thisAxis != partnerAxis) {
+            // Portals are on different axes — rotate 90°.
+            //
+            // The "through" direction of a portal is its thin axis:
+            //   X-axis portal: you walk through along X (East/West)
+            //   Z-axis portal: you walk through along Z (North/South)
+            //
+            // When going from X-axis → Z-axis, the through direction
+            // rotates from X to Z, which is a 90° clockwise rotation.
+            // When going from Z-axis → X-axis, it's 90° counterclockwise.
+            //
+            // We rotate the player's yaw by the same amount so they
+            // exit facing through the destination portal naturally.
+            //
+            // Yaw in Minecraft:
+            //   0 = South (+Z), 90 = West (-X), 180 = North (-Z), 270 = East (+X)
+            //
+            // X-axis portal thin direction is along X (East/West faces)
+            // Z-axis portal thin direction is along Z (North/South faces)
+            // Going from X→Z thin axis: rotate yaw +90 (clockwise)
+            // Going from Z→X thin axis: rotate yaw -90 (counterclockwise)
+            if (thisAxis == Direction.Axis.X) {
+                // Source is X-axis, destination is Z-axis
+                yaw += 90.0F;
+            } else {
+                // Source is Z-axis, destination is X-axis
+                yaw -= 90.0F;
+            }
 
-    /**
-     * Simple fallback teleport to the first portal block we can find.
-     */
-    private void simpleTeleport(ServerLevel level, ServerPlayer player,
-                                 BlockPos frameCorner,
-                                 OddstonePortalSavedData.PortalEntry partnerEntry) {
-        Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
-                ? Direction.Axis.X : Direction.Axis.Z;
-        Direction hDir = PortalUtils.getHorizontalDir(partnerAxis);
+            // Normalize to -180..180
+            while (yaw > 180.0F) yaw -= 360.0F;
+            while (yaw <= -180.0F) yaw += 360.0F;
+        }
 
-        BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);
-        if (target == null) target = frameCorner.above();
+        // Teleport with rotation
+        player.teleportTo(level, targetX, targetY, targetZ, yaw, pitch);
 
-        player.teleportTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
+        Ideomod.LOGGER.debug("Player {} teleported via Oddstone Portal to ({}, {}, {}), yaw={}",
+                player.getName().getString(), targetX, targetY, targetZ, yaw);
     }
 
     /**
@@ -362,15 +399,32 @@ public class OddstonePortalBlock extends Block {
     }
 
     // ========================================================================
+    // SIMPLE FALLBACK TELEPORT
+    // ========================================================================
+
+    /**
+     * Simple fallback teleport to the first portal block we can find.
+     */
+    private void simpleTeleport(ServerLevel level, ServerPlayer player,
+                                 BlockPos frameCorner,
+                                 OddstonePortalSavedData.PortalEntry partnerEntry) {
+        Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
+                ? Direction.Axis.X : Direction.Axis.Z;
+        Direction hDir = PortalUtils.getHorizontalDir(partnerAxis);
+
+        BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);
+        if (target == null) target = frameCorner.above();
+
+        player.teleportTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
+    }
+
+    // ========================================================================
     // PORTAL ENTRY LOOKUP
     // ========================================================================
 
     /**
      * Finds the portal registration by navigating from a portal block
      * to the bottom-left interior, then to the frame corner.
-     * 
-     * Robust against partial cascade - captures the state immediately
-     * before further blocks are removed.
      */
     @Nullable
     private OddstonePortalSavedData.PortalEntry findPortalEntry(
@@ -390,9 +444,7 @@ public class OddstonePortalBlock extends Block {
     // ========================================================================
 
     /**
-     * When a portal block is removed (corner broken, frame broken, redstone lost),
-     * unregister the portal. The first portal block in the cascade to be removed
-     * handles the unregistration; subsequent removals find no entry and skip.
+     * When a portal block is removed, unregister the portal.
      */
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,

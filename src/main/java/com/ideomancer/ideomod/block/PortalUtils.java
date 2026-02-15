@@ -5,7 +5,6 @@ import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
@@ -40,7 +39,7 @@ public class PortalUtils {
      * Called by:
      * - OddstonePortalFrameDetector (frame validation)
      * - OddstonePortalBlock (updateShape cascade check)
-     * - OddstoneBlock (corner-broken detection in neighborChanged)
+     * - OddstonePortalHandler (corner-broken detection in validateOrDeactivate)
      */
     public static boolean isCornerBlock(BlockState state) {
         return state.is(ModTags.PORTAL_CORNER_BLOCKS);
@@ -64,8 +63,7 @@ public class PortalUtils {
      * negative horizontal direction.
      * 
      * "Bottom-left" means the portal block at the lowest Y and the
-     * most negative horizontal position (south-most for X-axis portals,
-     * east-most... no: the hDir.getOpposite() direction).
+     * most negative horizontal position (the hDir.getOpposite() direction).
      * 
      * Visual example (portal interior, X-axis portal, hDir = SOUTH):
      * 
@@ -121,9 +119,11 @@ public class PortalUtils {
     // ========================================================================
 
     /**
-     * Clears all portal blocks in a portal interior, replacing them with air.
-     * Scans from the bottom-left to determine width and height, then removes
-     * all portal blocks in that rectangle.
+     * Clears all portal blocks in a portal interior by destroying them.
+     * Uses level.destroyBlock() instead of level.setBlock() so that each
+     * portal block produces the same break particles and sound as when
+     * they cascade-break via updateShape (e.g. when an Oddstone frame
+     * block is mined). The false parameter means no item drops.
      * 
      * @param level      The world (must be server-side)
      * @param bottomLeft Bottom-left portal block of the interior
@@ -144,12 +144,12 @@ public class PortalUtils {
             height++;
         }
 
-        // Clear all portal blocks in the rectangle
+        // Destroy all portal blocks in the rectangle
         for (int h = 0; h < width; h++) {
             for (int v = 0; v < height; v++) {
                 BlockPos portalPos = bottomLeft.relative(hDir, h).above(v);
                 if (level.getBlockState(portalPos).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-                    level.setBlock(portalPos, Blocks.AIR.defaultBlockState(), 2);
+                    level.destroyBlock(portalPos, false);
                 }
             }
         }

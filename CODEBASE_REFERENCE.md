@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-14*
+*Last updated: 2026-02-15*
 
 ---
 
@@ -108,11 +108,13 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 **Linking**: Max 2 portals per address. First lights unlinked, second auto-links to first. Destroying one unlinks the other.
 
-**Teleportation**: Linked portals preserve relative position (fractional offset). Unlinked portals scatter-teleport 200-1000 blocks + 5 hearts damage.
+**Teleportation**: Linked portals preserve relative position (fractional offset). Cross-axis portals (X vs Z) rotate player yaw 90 degrees to face through the destination portal. Unlinked portals scatter-teleport 200-1000 blocks + 5 hearts damage.
+
+**Deactivation strategy**: Full frame re-validation via `validateOrDeactivate()`. When any frame Oddstone gets neighborChanged, navigates from portal block to frame, checks all corners + all Oddstone powered. Only deactivates if validation fails. Prevents false triggers from unrelated neighbor updates. Immediate deactivation via `onBlockRemoved()` when a frame Oddstone is physically broken.
+
+**Break effects**: `PortalUtils.clearPortalBlocks()` uses `level.destroyBlock(pos, false)` for proper break particles and sound on all deactivation paths.
 
 **Registration**: `OddstonePortalSavedData` (per-dimension SavedData). Keyed by frame corner position. Serialized to NBT.
-
-**Deactivation triggers**: Frame block removed, corner block removed, any Oddstone loses power.
 
 ### 4. Oddstone (5 features in one block)
 

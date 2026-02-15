@@ -714,7 +714,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5x5 outer (3x3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types ÃƒÆ’Ã†â€™-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
+| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
@@ -733,6 +733,8 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 | Per-dimension registries | [DONE] | Overworld and Nether store separate address spaces. Uses SavedData, persists across saves. |
 | Pair exclusivity | [DONE] | Third portal with same address refuses to light. |
 | Redstone-gated activation | [DONE] | All Oddstone must be powered. Prevents partial-frame lighting. |
+| Cross-axis rotation | [DONE] | Player yaw rotated 90 degrees when portals have different axes (X vs Z). Preserves "walking through" feeling. |
+| Frame re-validation | [DONE] | Deactivation re-validates entire frame instead of reacting to single block state. Prevents false deactivation from unrelated neighbor updates. |
 
 **Known issues:**
 - No nether portal screen overlay (vanilla's portalTime hardcoded to nether; needs custom networking)

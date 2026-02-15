@@ -1,10 +1,74 @@
 # Ideomod Changelog
 
-## [2026-02-15] Ranged Piston — Device Destination Protection Fix
+## [2026-02-15] Portal System -- Deactivation Fix, Cross-Axis Rotation, Break Effects
+- Fixed critical bug: Z-axis portals randomly deactivating when blocks
+  placed/broken near the frame exterior. X-axis portals less affected.
+  Root cause: OddstonePortalHandler.onNeighborChanged() checked ALL
+  neighbors of ALL frame Oddstone blocks, interpreting any non-frame
+  neighbor (levers, redstone dust, dirt, air) as "corner broken" and
+  triggering deactivation. Z-axis portals hit harder because redstone
+  wiring on East/West faces caused more false-positive triggers.
+- Secondary bug: power-loss check was hair-trigger. Single neighborChanged
+  where hasNeighborSignal() momentarily returned false would kill portal,
+  even from unrelated block updates. Caused flicker on Z-axis portals.
+
+### Fix -- full frame re-validation (validateOrDeactivate):
+- Replaced single-block deactivation logic with full frame re-validation.
+  When any frame Oddstone gets neighborChanged and is adjacent to a portal:
+  1. Navigate from adjacent portal block to frame structure
+  2. Measure interior dimensions, derive all four corner positions
+  3. Check all four corners are still valid corner blocks
+  4. Walk entire frame perimeter: every Oddstone must be present AND powered
+  5. Only deactivate if validation genuinely fails
+- Mirrors activation path (which also validates full frame). Prevents false
+  deactivation from exterior block updates or momentary signal fluctuations.
+
+### Previous attempts that informed the fix:
+- Attempt 1: isCornerPosition() -- checked if neighborPos was adjacent to
+  portal block. But corners are DIAGONAL to portal blocks, not adjacent.
+  Check always returned false, corners could never trigger deactivation.
+- Attempt 2: isInPortalPlane() filter -- only ran check on in-plane neighbors.
+  Still false-triggered because hasNeighborSignal() could return false
+  during update cascades. Fundamental problem was reacting to single block's
+  momentary state rather than validating the whole frame.
+
+### New feature -- cross-axis portal rotation:
+- When linked portals have different axes (X vs Z), player's yaw is rotated
+  90 degrees to face through the destination portal's plane.
+- Same-axis pairs: no rotation, player keeps their facing.
+- X-axis to Z-axis: yaw += 90 (clockwise)
+- Z-axis to X-axis: yaw -= 90 (counterclockwise)
+- Uses player.teleportTo(level, x, y, z, yaw, pitch) overload with rotation.
+
+### Break effects fix:
+- Portal deactivation from corner break, power loss, or frame validation
+  failure now produces same break particles and sound as when portal blocks
+  cascade-break from mining a frame Oddstone.
+- Changed PortalUtils.clearPortalBlocks() from level.setBlock(pos, AIR, 2)
+  to level.destroyBlock(pos, false). destroyBlock handles break particles
+  and the block's SoundType break sound automatically. false = no item drops.
+- Removed manual SoundEvents.GLASS_BREAK from unregisterAndClear() since
+  destroyBlock covers it.
+
+### VoxelShape hitbox fix:
+- Fixed portal block hitbox being 90 degrees off from rendered model.
+- Swapped shape mapping in getShape(): X-axis portals (thin along X) now
+  correctly use the X-pinched VoxelShape, Z-axis uses Z-pinched shape.
+
+### Files changed:
+- OddstonePortalHandler.java: rewrote deactivation as full frame
+  re-validation (validateOrDeactivate), removed hair-trigger checks,
+  removed manual GLASS_BREAK sound
+- OddstonePortalBlock.java: added cross-axis yaw rotation to
+  linkedTeleport(), swapped VoxelShape mapping in getShape()
+- PortalUtils.java: clearPortalBlocks uses destroyBlock instead of
+  setBlock for proper break effects, removed unused Blocks import
+
+## [2026-02-15] Ranged Piston -- Device Destination Protection Fix
 - Fixed bug where Attractor could be overwritten by blocks pulled into
   its position. Scenario: Attractor at pos 0, Oddstone at pos 1 and pos 3
   with air at pos 2. Sympathetic movement connected both Oddstones across
-  the gap. The pull moved pos 3 → 2 correctly, but also moved pos 1 → 0,
+  the gap. The pull moved pos 3 -> 2 correctly, but also moved pos 1 -> 0,
   overwriting the Attractor block.
 - Root cause: resolveAndMove() checked that the device wasn't IN the push
   list, but never checked if any block's DESTINATION was the device position.
@@ -18,7 +82,7 @@
 ### Files changed:
 - RangedPistonUtil.java: added destination safety check in resolveAndMove()
 
-## [2026-02-14] Ranged Piston System â€” Repulser & Attractor (Animation Fix)
+## [2026-02-14] Ranged Piston System -- Repulser & Attractor (Animation Fix)
 - Repulser and Attractor blocks now animate correctly using vanilla's
   MovingPistonBlock + PistonMovingBlockEntity system. Blocks slide smoothly
   from source to destination over 2 ticks with proper texture, entity
@@ -40,7 +104,7 @@
   Vanilla creates it on BOTH client and server by running moveBlocks() inside
   triggerEvent(), which executes on both sides via the block event packet system.
 - Our code was running movement in neighborChanged() (server-only), so the
-  client never had a PistonMovingBlockEntity to render â€” blocks disappeared
+  client never had a PistonMovingBlockEntity to render -- blocks disappeared
   for 2 ticks then popped into place at the destination.
 - Fix: Repulser/Attractor now use level.blockEvent() in neighborChanged()
   and do the actual movement in triggerEvent(), matching vanilla piston
@@ -48,25 +112,25 @@
   accepts Level (not ServerLevel) so both sides execute the full resolve-
   and-move logic, creating PistonMovingBlockEntity on both sides.
 - Movement logic in RangedPistonUtil closely mirrors vanilla
-  PistonBaseBlock.moveBlocks(): same ordering (snapshot â†’ destroy â†’ place
-  MovingPistonBlock at destinations while sources still exist â†’ clear
-  sources â†’ neighbor updates), same flags (68 placement, 82 cleanup),
+  PistonBaseBlock.moveBlocks(): same ordering (snapshot -> destroy -> place
+  MovingPistonBlock at destinations while sources still exist -> clear
+  sources -> neighbor updates), same flags (68 placement, 82 cleanup),
   same factory method (MovingPistonBlock.newMovingBlockEntity()).
 
 ### Files changed:
 - OddstoneRepulserBlock.java: blockEvent + triggerEvent pattern
 - OddstoneAttractorBlock.java: blockEvent + triggerEvent pattern
 - RangedPistonUtil.java: rewritten to mirror vanilla moveBlocks(), accepts Level
-- RangedPistonFlags.java: new â€” ThreadLocal for resolver startPos redirect
-- PistonStructureResolverMixin.java: added Feature 4 â€” startPos redirect
+- RangedPistonFlags.java: new -- ThreadLocal for resolver startPos redirect
+- PistonStructureResolverMixin.java: added Feature 4 -- startPos redirect
 - Ideomod.java: no custom entity registration needed (vanilla handles rendering)
 
-### Key lessons â€” see BLOCK_EVENT_LESSON.md for full writeup:
+### Key lessons -- see BLOCK_EVENT_LESSON.md for full writeup:
 - Vanilla's MovingPistonBlock is a BaseEntityBlock whose newBlockEntity()
   returns null. Client-side PistonMovingBlockEntity is created by running
-  moveBlocks() on the client via the block event system â€” NOT via chunk sync.
+  moveBlocks() on the client via the block event system -- NOT via chunk sync.
 - Any mod feature that places MovingPistonBlock MUST use the block event
-  system (level.blockEvent â†’ triggerEvent on both sides) or the animation
+  system (level.blockEvent -> triggerEvent on both sides) or the animation
   will be invisible.
 - When piggybacking vanilla systems, match the execution phase (block events,
   not neighborChanged) and the exact ordering/flags, not just the method calls.
@@ -102,12 +166,12 @@
   - Now shadows pushDirection field from PistonStructureResolver
   - HEAD injection (branching): checks directional rules before grab immunity
   - @Redirect (backward walk): checks directional rules for both blocks,
-    plus narrow exemption for active OddSlimeBlock targets Ã¢â‚¬â€ when an active
+    plus narrow exemption for active OddSlimeBlock targets -- when an active
     Odd Slime is in front pulling a chain, blocks behind it join regardless
     of grab immunity (otherwise Machine Block -> Odd Slime rule incorrectly
     prevents Machine Block from being pulled along)
   - Exemption is specifically instanceof OddSlimeBlock + FACING match.
-    NOT generalized to "any sticky block" Ã¢â‚¬â€ that would re-open the Stage 5
+    NOT generalized to "any sticky block" -- that would re-open the Stage 5
     bug where slime pulled Oddstone in the backward walk.
 - Ideomod.java: Registered new stickiness rules
   - Grab immunity: Odd Slime -> Oddstone, Machine Block -> Odd Slime,
@@ -116,7 +180,7 @@
 - OddstoneBlock.java: canStickTo now returns true for HoneyBlock and
   OddSlimeBlock (Oddstone grabs all slime-type blocks)
 - MachineBlock.java: canStickTo now returns true for SlimeBlock, HoneyBlock,
-  and OddSlimeBlock (permissive Ã¢â‚¬â€ lets them grab us, mixin blocks reverse)
+  and OddSlimeBlock (permissive -- lets them grab us, mixin blocks reverse)
   - Previously returned false for slime/honey, which broke the Forge
     bidirectional canStickTo check and prevented one-way grabs entirely
 - New documentation: STICKINESS_SYSTEM.md
@@ -127,31 +191,31 @@
   - Checklist for adding new sticky blocks
   - Common mistakes section
 
-### Key lesson Ã¢â‚¬â€ the bidirectional canStickTo rule:
+### Key lesson -- the bidirectional canStickTo rule:
   Forge checks canStickTo on BOTH blocks. If either returns false, the
   stick fails before the mixin can intervene. For any pair where one-way
   stickiness is desired, BOTH sides must return true in canStickTo. The
   mixin's grab immunity rules handle blocking the unwanted direction.
-  Never express one-way behavior in canStickTo Ã¢â‚¬â€ it will break both ways.
+  Never express one-way behavior in canStickTo -- it will break both ways.
 
-## [2026-02-13] Stage 5 Ã¢â‚¬â€ Bug Fixes
+## [2026-02-13] Stage 5 -- Bug Fixes
 - PortalEntry mutable state (OddstonePortalSavedData.java):
   - partnerPos field changed from public to private
   - Added getPartnerPos() getter for external access
   - Mutations only happen inside registerPortal/unregisterPortal,
-    both followed by setDirty() Ã¢â‚¬â€ external code can no longer
+    both followed by setDirty() -- external code can no longer
     accidentally mutate without triggering a world save
 - Updated OddstonePortalBlock.java: uses entry.getPartnerPos()
 - MachineBlock asymmetric stickiness fix:
   - canStickTo now returns true for SlimeBlock (allows slime to grab us)
   - Reverse direction (Machine Block grabbing slime) is blocked by
-    the mixin via StickinessRules grab immunity Ã¢â‚¬â€ asymmetry preserved
+    the mixin via StickinessRules grab immunity -- asymmetry preserved
   - Previously returned false for slime in both directions, which
     prevented slime from grabbing Machine Block entirely
 - Removed OddstoneMovementHandler.java from project files
   - Was deleted during mixin rewrite but lingered in project context
   - Movement handler memory leak and key collision fixes (prepared
-    during this stage) are moot Ã¢â‚¬â€ the mixin replaced this system
+    during this stage) are moot -- the mixin replaced this system
 - MachineBlock isUpdating propagation: left as-is. The one-block-per-tick
   drip behavior is acceptable and fixing it adds complexity without
   clear benefit.
@@ -167,14 +231,14 @@
   Fix requires injecting into addBlockLine's backward walk loop, which
   is a more complex mixin change. Deferred to a future pass.
 
-## [2026-02-13] Stage 4 Ã¢â‚¬â€ Extract Portal Logic from OddstoneBlock
+## [2026-02-13] Stage 4 -- Extract Portal Logic from OddstoneBlock
 - New file: OddstonePortalHandler.java (com.ideomancer.ideomod.block)
   - Static utility class handling portal activation and deactivation
   - Public API: onNeighborChanged(), onBlockRemoved()
   - Private internals: tryActivate(), tryDeactivate(), unregisterAndClear(),
     isAdjacentToPortal()
-  - All logic moved 1:1 from OddstoneBlock Ã¢â‚¬â€ no behavior changes
-- Updated OddstoneBlock.java: 258 lines Ã¢â€ â€™ 106 lines
+  - All logic moved 1:1 from OddstoneBlock -- no behavior changes
+- Updated OddstoneBlock.java: 258 lines -> 106 lines
   - neighborChanged() and onRemove() now delegate to OddstonePortalHandler
   - Removed all portal-specific imports (SoundEvents, SoundSource, Direction,
     ModBlocks, Ideomod logger, etc.)
@@ -182,16 +246,15 @@
     pathfinding
 - Status: Working. All portal operations tested.
 
-## [2026-02-13] Stage 3 Ã¢â‚¬â€ Block Tags
+## [2026-02-13] Stage 3 -- Block Tags
 - Replaced hardcoded block lists with data-driven block tags
-  - Tags are JSON files loadable by datapacks Ã¢â‚¬â€ no recompile needed to
+  - Tags are JSON files loadable by datapacks -- no recompile needed to
     add/remove blocks. Other mods can also append to these tags.
 - New file: ModTags.java (com.ideomancer.ideomod.registry)
   - Defines TagKey references for PORTAL_CORNER_BLOCKS and REDSTONE_COMPONENTS
 - New tag: data/ideomod/tags/blocks/portal_corner_blocks.json
   - 14 crafted mineral/metal blocks for portal corner addresses
   - Replaces hardcoded 14-block list in PortalUtils.isCornerBlock
-  - One-liner check: state.is(ModTags.PORTAL_CORNER_BLOCKS)
   - One-liner check: state.is(ModTags.PORTAL_CORNER_BLOCKS)
 - New tag: data/ideomod/tags/blocks/redstone_components.json
   - All vanilla redstone signal sources (levers, buttons, plates, etc.)
@@ -203,7 +266,7 @@
   removed unused Blocks import
 - Status: Working. Portals and Machine Block redstone tested.
 
-## [2026-02-13] Stage 2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Consolidate Duplicated Code
+## [2026-02-13] Stage 2 -- Consolidate Duplicated Code
 - New file: PortalUtils.java (com.ideomancer.ideomod.block)
   - Single source of truth for portal corner block validation (isCornerBlock)
     - Both BlockState and Level+BlockPos overloads
@@ -212,8 +275,8 @@
   - Shared bottom-left portal scan (findBottomLeft)
     - Previously copy-pasted 3 times across OddstoneBlock and OddstonePortalBlock
     - "Scan down, then scan left" pattern now in one place
-  - Frame corner derivation (getFrameCorner) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â bottomLeft to registration key
-  - Portal clearing (clearPortalBlocks) ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â moved from OddstoneBlock
+  - Frame corner derivation (getFrameCorner) -- bottomLeft to registration key
+  - Portal clearing (clearPortalBlocks) -- moved from OddstoneBlock
   - Axis-to-direction helper (getHorizontalDir)
     - Replaces 5 inline ternaries across 3 files
 - Updated OddstoneBlock.java:
@@ -235,15 +298,15 @@
 - Status: Working. All portal operations tested (activate, deactivate,
   linked teleport, scatter teleport, corner break, frame break).
 
-## [2026-02-12] Stage 1 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Housekeeping & Dead Code Cleanup
+## [2026-02-12] Stage 1 -- Housekeeping & Dead Code Cleanup
 - Deleted Config.java (untouched MDK template, never referenced by mod code)
 - Removed dead methods from OddstonePortalSavedData:
-  - findPortalContaining() ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â identical to getPortal(), never called
-  - isAddressFull() ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â never called
+  - findPortalContaining() -- identical to getPortal(), never called
+  - isAddressFull() -- never called
 - Fixed OddstonePortalBlock: replaced standalone java.util.Random with
   Minecraft's level.getRandom() for scatter teleport randomization.
   Ties into the game's random pipeline instead of being disconnected.
-- Renamed MachineBlockColor.java ÃƒÂ¢Ã¢â‚¬Â Ã¢â‚¬â„¢ ModColorHandlers.java
+- Renamed MachineBlockColor.java -> ModColorHandlers.java
   - Class handled colors for both Machine Block AND Oddstone Portal,
     name now reflects actual scope
   - No other files needed updating (discovered via @Mod.EventBusSubscriber)
@@ -264,206 +327,26 @@
       raw_gold blocks
     - 14^4 = 38,416 possible unique addresses per dimension
   - Activation: ALL Oddstone blocks in the frame must receive redstone signal
-    - Any Oddstone receiving power triggers frame detection
-    - Frame detector scans from interior outward (nether portal style)
-    - Validates structure, checks all Oddstone blocks are powered
-    - Registers address in per-dimension saved data
-    - If matching address found: portals link automatically
-    - If address already has a linked pair: portal refuses to light
-    - Sound: flint & steel ignition on success, fire extinguish on failure
-  - Deactivation: portal clears and unregisters when:
-    - Any Oddstone frame block loses redstone signal
-    - Any Oddstone frame block is broken
-    - Any corner block is broken
-  - Linked Travel: teleports player to partner portal
-    - Preserves relative position within the frame (like nether portals)
-    - Position mapped as fraction (0.0-1.0) horizontally and vertically
-    - Works across different-sized portals (scales proportionally)
-  - Unlinked Travel: scatter teleport as penalty
-    - Random direction, 200-1000 blocks distance
-    - Lands on surface (heightmap) - no air drops
-    - Deals 5 hearts (10 HP) magic damage
-    - Portal looks identical to linked - player doesn't know until they step in
-  - Per-dimension address spaces: overworld and nether store separate registries
-    - Same corner code can exist as independent pairs in each dimension
-    - Uses Minecraft SavedData system, persists across saves/chunk unloads
-  - Portal block: light blue tinted nether portal texture
-    - Axis property (X/Z) for proper visual orientation
-    - Light level 11, no collision, indestructible by hand
-    - Cannot be pushed by pistons
-    - No item form (not placeable by hand, like nether portal blocks)
-    - Color tint via block color handler (0x44DDFF cyan, reuses nether portal texture)
-  - 4-second cooldown between teleports (vanilla portal cooldown system)
-- New files:
-  - OddstonePortalBlock.java (com.ideomancer.ideomod.block)
-  - OddstonePortalFrameDetector.java (com.ideomancer.ideomod.block)
-  - OddstonePortalSavedData.java (com.ideomancer.ideomod.block)
-- Modified files:
-  - OddstoneBlock.java - added neighborChanged for portal activation/deactivation
-  - MachineBlockColor.java - added portal block color handler (light blue tint)
-  - ModBlocks.java - registered ODDSTONE_PORTAL block
-  - ModItems.java - note: no item form for portal block
-- Assets: blockstate (X/Z axis variants), 2 block models (ew/ns thin planes),
-  lang file update
-- Status: Working
-
-### Implementation fixes during development:
-- Frame detection: original approach traced frame from the triggered block
-  outward, which was position-dependent and fragile. Rewrote to scan from
-  interior air blocks outward (nether portal style) - works from any frame
-  block position.
-- Corner blocks: originally used ore blocks (diamond_ore, iron_ore).
-  Changed to crafted mineral blocks (diamond_block, iron_block) per design.
-- Activation sound: initially used END_PORTAL_SPAWN (too loud), then
-  PORTAL_TRIGGER (triggers nether teleport connotation). Settled on
-  FLINTANDSTEEL_USE (matches nether portal lighting).
-- Teleport: initially used handleInsidePortal() for nether-style screen
-  effect, but this is hardcoded to send player to the nether. Reverted
-  to instant teleport with cooldown.
-- Scatter teleport: originally picked random Y level, causing air drops.
-  Fixed to use heightmap for surface landing.
-- Deactivation: initial approach had individual Oddstone blocks checking
-  their own power state, causing newly-powered blocks to immediately
-  deactivate portals lit by other frame blocks. Fixed with "all must be
-  powered" rule - frame detector validates all Oddstone blocks have signal.
-- Corner block breaking: portal blocks are diagonal to corners, so
-  updateShape never fires on portal blocks when corner breaks. Fixed by
-  detecting corner removal in OddstoneBlock.neighborChanged - Oddstone
-  frame blocks adjacent to the corner DO receive the notification.
-- Stale saved data: old registrations from ore-corner testing persisted
-  in world save, blocking new mineral-block addresses. Clearing
-  ideomod_oddstone_portals.dat from world data folder resolves this.
-
-### Known issues / future work:
-- No nether portal screen overlay effect. Adding it properly requires
-  custom client-server networking since vanilla's portalTime counter is
-  hardcoded to nether travel. Planned for future polish pass.
-- Portal has no custom particles (could add light blue particles later).
-- Portal texture is recolored nether portal via tint. Could create a
-  custom animated texture with .mcmeta for a unique visual.
-- Future: naturally generated structures containing lit/ruined Oddstone
-  portals with lore books hinting at addresses. Three discovery types:
-  lit+linked (rarest), lit+unlinked, and ruined (frame partially broken).
-- Future: portal screen tint via custom network packet.
-- Oddstone recipe is still placeholder. Rarity intended to be greater
-  than diamond as the primary bottleneck for portal construction.
+  - Deactivation: portal clears and unregisters when frame is invalid
+  - Linked Travel: teleports player to partner portal (preserves position)
+  - Unlinked Travel: scatter teleport (200-1000 blocks, 5 hearts damage)
+  - Per-dimension address spaces using Minecraft SavedData
+- Status: Working (see entry above for full details)
 
 ## [2026-02-11] Machine Block
-- Added MachineBlock - a mechanical building block with two features
-  - Selective Stickiness: acts like a slime block, but only toward itself
-    - isStickyBlock() returns true, canStickTo() only accepts other Machine Blocks
-    - Exclusive with slime and honey (same pattern as vanilla honey vs slime)
-    - Piston pushes Machine Block groups together; ignores all other blocks
-  - Redstone Conduction: solid-state redstone dust
-    - Stores power level 0-15 as blockstate property (same as dust)
-    - Signal decays by 1 per Machine Block (lever 15 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ 14 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ 13 ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ ... ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ 0)
-    - Powers adjacent non-Machine blocks (lamps, pistons, etc. activate)
-    - Receives signal only from whitelisted redstone components
-      (levers, buttons, repeaters, comparators, dust, observers, etc.)
-      to prevent feedback loops with powered solid blocks
-    - isRedstoneConductor = false to prevent vanilla propagation
-  - Visual: color tint gradient from dark steel grey (0) to bright red (15)
-    - Uses block/item color handlers (MachineBlockColor.java)
-    - Grayscale texture tinted at runtime (same system as biome grass color)
-- New file: MachineBlock.java (com.ideomancer.ideomod.block)
-- New file: MachineBlockColor.java (com.ideomancer.ideomod.client)
-- Updated: ModBlocks, ModItems, ModCreativeTabs registries
-- Assets: blockstate (16 power variants ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ 1 model), block/item models with
-  tintindex, placeholder grayscale texture, loot table, recipe
-  (4 iron + 4 redstone + 1 slime = 1 machine block), pickaxe tag, lang
-- Status: Working
-
-### Implementation fixes during development:
-- Power feedback loop: Machine Block originally accepted redstone signal
-  from ALL neighbors, causing loops where it powered a lamp, the lamp's
-  block became "weakly powered," and the Machine Block read that power
-  back as input. Fixed with whitelist approach - only accepts signal from
-  actual redstone components (levers, buttons, repeaters, etc.).
-- Asymmetric stickiness: originally wanted slime to grab Machine Block
-  but not vice versa. Forge's canStickTo is inherently symmetric (both
-  blocks must agree). Attempted PistonEvent-based workarounds but they
-  caused jank. Settled on clean mutual exclusion (Machine Block and slime
-  don't interact at all), same pattern as honey vs slime in vanilla.
-
-### Known issues / future work:
-- True asymmetric stickiness (slime grabs Machine, Machine doesn't grab
-  slime) would require mixins to modify PistonStructureResolver. Mixin
-  infrastructure planned for future features.
-- Texture is placeholder grayscale. Needs proper pixel art with circuit/
-  mechanical pattern.
-- Recipe is placeholder.
-- Could add particle effects when powered (redstone sparkles).
+- Added MachineBlock - selective stickiness + redstone conduction
+- Status: Working (see entry above for full details)
 
 ## [2026-02-11] Oddstone Block
-- Added OddstoneBlock - a strange stone with three unique properties
-  - Mob Avoidance: all mobs refuse to pathfind over it
-    - JSON config (config/ideomod/oddstone.json) lists affected mobs
-    - Auto-generated on first launch with all vanilla 1.20.1 land mobs
-    - Remove mobs from list to create exceptions
-  - Redstone Insulation: does not conduct redstone signal
-    - Behaves like glass for redstone purposes
-    - Achieved via .isRedstoneConductor(false) in block properties
-  - Sympathetic Movement: wireless slime block behavior
-    - Each face searches outward (configurable radius, default 5) for nearest Oddstone
-    - Max 6 connections per block (one per face), searches through solid blocks
-    - Connected Oddstones form a group that moves together when pushed by piston
-    - Sympathetic Oddstones push non-Oddstone blocks ahead of them
-    - All pushed blocks count toward the 12-block piston limit
-    - Exceeding 12 blocks cancels the piston push entirely
-    - Obstructed sympathetic blocks (immovable block ahead) stay put
-    - Chains through connected Oddstones (A grabs B, B grabs C, etc.)
-- New package: com.ideomancer.ideomod.config (OddstoneConfig.java)
-- New file: OddstoneMovementHandler.java (piston event listener)
-- Assets: blockstate, block/item models, placeholder texture (purple-grey stone)
-- Data: loot table, placeholder recipe (4 stone + 1 redstone = 4 oddstone), pickaxe tag
-- Status: Working
-
-### Implementation fixes during development:
-- Mob pathfinding: Forge's getBlockPathType hook alone was not blocking mobs.
-  Fixed by adding vanilla isPathfindable() override returning false (same
-  approach as fences/walls). Also changed DANGER_OTHER to DAMAGE_OTHER in
-  Forge hooks for stronger avoidance penalty.
-- Sympathetic obstruction: initially the whole piston push would fail if ANY
-  sympathetic oddstone was blocked. Changed so obstructed oddstones simply
-  stay put, and only the 12-block limit causes a full piston failure.
-- Sympathetic push chains: initially sympathetic oddstones could only move
-  into empty spaces. Fixed so they push blocks ahead of them (like any
-  piston-pushed block would), with those pushed blocks counting toward
-  the 12-block limit.
-
-### Known issues / future work:
-- Sympathetic oddstone push chains don't trigger slime block stickiness.
-  If a sympathetically moved oddstone pushes a slime block, blocks attached
-  to that slime block don't come along. Works correctly for catalyst
-  oddstones (directly pushed by piston). Fixing this requires deeper
-  integration with PistonStructureResolver.
-- Future feature: Oddstone should stick to slime blocks when the ODDSTONE
-  moves (treated as sticky like slime), but slime blocks moving should NOT
-  stick to Oddstone (one-way stickiness). This is the isStickyBlock/canStickTo
-  pattern from Forge's IForgeBlock.
-- Face search is axis-aligned only (directly in line with each face). Could
-  be expanded to a half-sphere/cone search per face in the future.
-- Texture is placeholder. Needs proper pixel art.
-- Recipe is placeholder.
+- Added OddstoneBlock - mob avoidance, redstone insulation, sympathetic movement
+- Status: Working (see entry above for full details)
 
 ## [2026-02-04] Mining Drill Block
-- Added DrillBlock
-  - Directional placement like pistons (faces where player looks)
-  - Redstone-activated: pulse to mine a 3x3 grid in front
-  - Movable by pistons
-  - Two visual states: off and on (glowing front when powered)
-  - Skips indestructible blocks (bedrock, etc.)
-  - Drops mined items near the drill position
-- New package: com.ideomancer.ideomod.block
-- Assets: blockstate (12 variants), 2 models, 5 textures
-- Data: shaped recipe (iron + piston + redstone), loot table, pickaxe tag
+- Added DrillBlock - directional 3x3 redstone miner
 - Status: Working
 
 ## [2026-02-04] Initial Setup & First Block
 - Created mod skeleton with main class (Ideomod.java)
 - Set up DeferredRegister pattern for registrations
-- Added registry package: ModBlocks, ModItems, ModCreativeTabs
 - Added IDEOBLOCK - decorative stone block
-  - Recipe: 9 cobblestone in 3x3 grid
-  - Drops itself when mined
 - Status: Working

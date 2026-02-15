@@ -22,6 +22,14 @@ import net.minecraft.world.level.block.state.BlockState;
  * - Neighbor change handling: power gained/lost, corner block broken
  * - Block removal handling: frame block broken
  * 
+ * DEACTIVATION STRATEGY:
+ * Rather than reacting to a single Oddstone's momentary state during
+ * neighborChanged (which can false-trigger from unrelated block updates),
+ * deactivation re-validates the ENTIRE frame. If any Oddstone in the
+ * frame has lost power or any corner block is missing, the portal is
+ * deactivated. This mirrors the activation path, which also validates
+ * the entire frame before lighting.
+ * 
  * All methods are static — this is a utility class, not a block.
  * Called by OddstoneBlock.neighborChanged() and OddstoneBlock.onRemove().
  */
@@ -33,17 +41,16 @@ public class OddstonePortalHandler {
 
     /**
      * Handles an Oddstone block's neighbor changing. Decides whether
-     * to try activating or deactivating a portal based on the current
-     * power state and adjacency to existing portal blocks.
+     * to try activating or deactivating a portal.
      * 
-     * Three triggers for deactivation:
-     * 1. This Oddstone lost redstone power while adjacent to a lit portal
-     * 2. A corner block was broken (detected by checking what the changed
-     *    neighbor block is now — if it's not oddstone, corner, or portal,
-     *    something in the frame was destroyed)
+     * Activation: if this Oddstone has power and isn't already part of
+     * a lit portal, attempt frame detection and activation.
      * 
-     * One trigger for activation:
-     * 1. This Oddstone gained redstone power and isn't already part of a portal
+     * Deactivation: if this Oddstone is adjacent to a lit portal,
+     * re-validate the entire frame. Only deactivates if the frame
+     * is genuinely broken (Oddstone unpowered or corner missing).
+     * This prevents false deactivation from unrelated neighbor
+     * updates like placing blocks near the frame exterior.
      */
     public static void onNeighborChanged(ServerLevel level, BlockPos pos,
                                           BlockPos neighborPos) {
@@ -52,18 +59,14 @@ public class OddstonePortalHandler {
 
         if (hasPower && !adjacentToPortal) {
             tryActivate(level, pos);
-        } else if (!hasPower && adjacentToPortal) {
-            tryDeactivate(level, pos);
-        }
-
-        // Corner block broken check
-        if (adjacentToPortal) {
-            BlockState changedState = level.getBlockState(neighborPos);
-            if (!changedState.is(ModBlocks.ODDSTONE.get())
-                && !PortalUtils.isCornerBlock(changedState)
-                && !changedState.is(ModBlocks.ODDSTONE_PORTAL.get())) {
-                tryDeactivate(level, pos);
-            }
+        } else if (adjacentToPortal) {
+            // Re-validate the entire frame instead of reacting to this
+            // single block's state. The frame check handles all cases:
+            // - Oddstone lost power
+            // - Corner block broken
+            // - Frame Oddstone broken (covered by onBlockRemoved, but
+            //   this catches edge cases from neighbor cascades)
+            validateOrDeactivate(level, pos);
         }
     }
 
@@ -73,6 +76,8 @@ public class OddstonePortalHandler {
 
     /**
      * When an Oddstone frame block is broken, deactivate any adjacent portal.
+     * This is immediate — no re-validation needed because we KNOW a frame
+     * block is gone.
      */
     public static void onBlockRemoved(ServerLevel level, BlockPos pos) {
         for (Direction dir : Direction.values()) {
@@ -155,22 +160,132 @@ public class OddstonePortalHandler {
     // ========================================================================
 
     /**
-     * Finds an adjacent portal block and deactivates the entire portal.
+     * Re-validates the portal frame that this Oddstone is part of.
+     * If the frame is no longer valid (power lost or corner missing),
+     * deactivates the portal. If the frame is still valid, does nothing.
+     * 
+     * This is the key fix for false deactivation: instead of assuming
+     * the portal is broken because ONE Oddstone got a neighborChanged,
+     * we walk the entire frame and check everything.
      */
-    private static void tryDeactivate(ServerLevel level, BlockPos pos) {
+    private static void validateOrDeactivate(ServerLevel level, BlockPos oddstonePos) {
+        // Find an adjacent portal block to start navigation
+        BlockPos portalBlockPos = null;
+        BlockState portalState = null;
         for (Direction dir : Direction.values()) {
-            BlockPos neighbor = pos.relative(dir);
-            BlockState neighborState = level.getBlockState(neighbor);
+            BlockPos neighbor = oddstonePos.relative(dir);
+            BlockState state = level.getBlockState(neighbor);
+            if (state.is(ModBlocks.ODDSTONE_PORTAL.get())) {
+                portalBlockPos = neighbor;
+                portalState = state;
+                break;
+            }
+        }
+        if (portalBlockPos == null) return;
 
-            if (neighborState.is(ModBlocks.ODDSTONE_PORTAL.get())) {
-                unregisterAndClear(level, neighbor, neighborState);
+        Direction.Axis axis = portalState.getValue(OddstonePortalBlock.AXIS);
+        Direction hDir = PortalUtils.getHorizontalDir(axis);
+
+        // Navigate to bottom-left of interior
+        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlockPos, hDir);
+
+        // Measure portal interior dimensions
+        int width = 0;
+        while (level.getBlockState(bottomLeft.relative(hDir, width))
+                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
+            width++;
+        }
+        int height = 0;
+        while (level.getBlockState(bottomLeft.above(height))
+                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
+            height++;
+        }
+        if (width == 0 || height == 0) {
+            unregisterAndClear(level, portalBlockPos, portalState);
+            return;
+        }
+
+        // Derive the four frame corners from the interior
+        Direction hDirNeg = hDir.getOpposite();
+        BlockPos frameBL = bottomLeft.relative(hDirNeg).below();
+        BlockPos frameBR = frameBL.relative(hDir, width + 1);
+        BlockPos frameTL = frameBL.above(height + 1);
+        BlockPos frameTR = frameTL.relative(hDir, width + 1);
+
+        int outerWidth = width + 2;
+        int outerHeight = height + 2;
+
+        // Check all four corners are still valid corner blocks
+        if (!PortalUtils.isCornerBlock(level, frameBL)
+            || !PortalUtils.isCornerBlock(level, frameBR)
+            || !PortalUtils.isCornerBlock(level, frameTL)
+            || !PortalUtils.isCornerBlock(level, frameTR)) {
+            Ideomod.LOGGER.debug("Portal frame invalid - corner block missing");
+            unregisterAndClear(level, portalBlockPos, portalState);
+            return;
+        }
+
+        // Check all Oddstone in the frame are still Oddstone AND powered
+        // Bottom row (excluding corners)
+        for (int h = 1; h < outerWidth - 1; h++) {
+            BlockPos pos = frameBL.relative(hDir, h);
+            if (!isValidFrameOddstone(level, pos)) {
+                unregisterAndClear(level, portalBlockPos, portalState);
                 return;
             }
         }
+        // Top row (excluding corners)
+        for (int h = 1; h < outerWidth - 1; h++) {
+            BlockPos pos = frameTL.relative(hDir, h);
+            if (!isValidFrameOddstone(level, pos)) {
+                unregisterAndClear(level, portalBlockPos, portalState);
+                return;
+            }
+        }
+        // Left column (excluding corners)
+        for (int v = 1; v < outerHeight - 1; v++) {
+            BlockPos pos = frameBL.above(v);
+            if (!isValidFrameOddstone(level, pos)) {
+                unregisterAndClear(level, portalBlockPos, portalState);
+                return;
+            }
+        }
+        // Right column (excluding corners)
+        for (int v = 1; v < outerHeight - 1; v++) {
+            BlockPos pos = frameBR.above(v);
+            if (!isValidFrameOddstone(level, pos)) {
+                unregisterAndClear(level, portalBlockPos, portalState);
+                return;
+            }
+        }
+
+        // Frame is still valid — do nothing
+    }
+
+    /**
+     * Checks that a position is Oddstone AND receiving a redstone signal.
+     */
+    private static boolean isValidFrameOddstone(Level level, BlockPos pos) {
+        if (!level.getBlockState(pos).is(ModBlocks.ODDSTONE.get())) {
+            Ideomod.LOGGER.debug("Portal frame invalid - expected Oddstone at {}", pos);
+            return false;
+        }
+        if (!level.hasNeighborSignal(pos)) {
+            Ideomod.LOGGER.debug("Portal frame invalid - Oddstone at {} has no redstone signal", pos);
+            return false;
+        }
+        return true;
     }
 
     /**
      * Unregisters a portal from saved data and clears all its portal blocks.
+     * 
+     * This is the single deactivation exit point — all paths that kill a
+     * portal (corner break, power loss, frame break) come through here.
+     * 
+     * Break particles and sound come from PortalUtils.clearPortalBlocks(),
+     * which uses level.destroyBlock() — same visual/audio as when portal
+     * blocks cascade-break via updateShape when a frame Oddstone is mined.
      */
     private static void unregisterAndClear(ServerLevel level, BlockPos portalBlockPos,
                                             BlockState portalState) {
