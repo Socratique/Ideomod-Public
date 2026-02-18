@@ -7,6 +7,8 @@ import com.ideomancer.ideomod.block.StickinessRules;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModCreativeTabs;
 import com.ideomancer.ideomod.registry.ModItems;
+import com.ideomancer.ideomod.structure.StructureManager;
+import com.ideomancer.ideomod.structure.definitions.FurnaceArrayDefinition;
 import com.mojang.logging.LogUtils;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.DirectionalBlock;
@@ -49,6 +51,8 @@ public class Ideomod {
 
     private void commonSetup(final FMLCommonSetupEvent event) {
         registerStickinessRules();
+        registerStructureDefinitions();
+        registerStructureEventHandlers();
         LOGGER.info("Ideomod common setup complete!");
     }
 
@@ -123,6 +127,25 @@ public class Ideomod {
         );
 
         LOGGER.info("Registered stickiness rules (grab immunity + directional)");
+    }
+
+    /**
+     * Registers all multiblock structure definitions with the StructureManager.
+     * Definitions are static — shared across all dimensions.
+     */
+    private void registerStructureDefinitions() {
+        StructureManager.registerDefinition(FurnaceArrayDefinition.create());
+        LOGGER.info("Registered multiblock structure definitions");
+    }
+
+    /**
+     * Registers the StructureManager's Forge event handlers on the game event bus.
+     * These handle block place/break, chunk load/unload, and level load events
+     * to drive structure detection and lifecycle management.
+     */
+    private void registerStructureEventHandlers() {
+        MinecraftForge.EVENT_BUS.register(new StructureManager.EventHandler());
+        LOGGER.info("Registered structure event handlers");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {

@@ -35,6 +35,9 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ODD_SLIME.get());
                         output.accept(ModItems.ODDSTONE_REPULSER.get());
                         output.accept(ModItems.ODDSTONE_ATTRACTOR.get());
+
+                        // Tools / Debug
+                        output.accept(ModItems.STRUCTURE_DEBUG_STICK.get());
                         
                         // Add more items here as we create them
                     })

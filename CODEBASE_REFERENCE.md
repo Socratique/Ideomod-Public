@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-15*
+*Last updated: 2026-02-18*
 
 ---
 
@@ -24,7 +24,8 @@ Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
 ```
 com.ideomancer.ideomod
-  |-- Ideomod.java              Main mod class. Registers buses + stickiness rules.
+  |-- Ideomod.java              Main mod class. Registers buses, stickiness rules,
+  |                              structure definitions, StructureManager event handler.
   |-- block/
   |     |-- OddstoneBlock.java           5-feature core block (see Oddstone section)
   |     |-- MachineBlock.java            Selective stickiness + redstone conduction
@@ -47,13 +48,24 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
-  |     \-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
+  |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
+  |     \-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
+  |-- multiblock/
+  |     |-- StructureDefinition.java     Abstract base for structure type rulesets
+  |     |-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame tag, sizing)
+  |     |-- StructureScanner.java        Directional pattern scanner (cluster + frame)
+  |     |-- StructureResult.java         Immutable scan output (builder pattern)
+  |     |-- StructureRegistration.java   Persistent registration entry (UUID, NBT)
+  |     |-- StructureManager.java        Per-dimension SavedData + event handling + queries
+  |     |-- StructureEffectHandler.java  Interface for per-type effects
+  |     \-- FurnaceArrayEffect.java      GUI rename on formation/removal
   \-- registry/
         |-- ModBlocks.java               DeferredRegister<Block> -- all block registrations
-        |-- ModItems.java                DeferredRegister<Item> -- all BlockItems
+        |-- ModItems.java                DeferredRegister<Item> -- BlockItems + debug stick
         |-- ModCreativeTabs.java         Creative tab with all mod items
         |-- ModCommands.java             /judgement command (Forge event bus)
-        \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS tags
+        \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
+                                         FURNACE_ARRAY_FRAME tags
 ```
 
 ---
@@ -116,7 +128,34 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 **Registration**: `OddstonePortalSavedData` (per-dimension SavedData). Keyed by frame corner position. Serialized to NBT.
 
-### 4. Oddstone (5 features in one block)
+### 4. Multiblock Structure Framework [WIP]
+
+**Architecture**: Registration-based system. Structures are world data managed by StructureManager (per-dimension SavedData). Individual blocks don't know they're part of a structure.
+
+**Components**: StructureDefinition (abstract ruleset) -> StructureScanner (pattern matching) -> StructureResult (scan output) -> StructureManager (registration + events) -> StructureRegistration (persistent entry) -> StructureEffectHandler (per-type effects).
+
+**StructureManager data structures**:
+- `structures`: UUID -> StructureRegistration (all registered structures)
+- `chunkIndex`: ChunkPos -> Set<UUID> (which structures overlap each chunk)
+- `typeIndex`: String -> Set<UUID> (structures grouped by definition name)
+- `coreExclusivity`: BlockPos -> Map<String, UUID> (one structure per type per core)
+- `trackedCores`: Set<BlockPos> (event-placed cores not yet in structures, for future non-BE cores)
+
+**Event flow**: Block placed/broken -> check chunk index for nearby structures -> rescan affected -> check if placed block is a core -> try new formation -> check if placed block is frame material -> search nearby for cores via block entity maps + trackedCores -> try formation.
+
+**Core detection**: Two complementary approaches: (1) block entity map iteration from nearby chunks (cheap, catches furnaces), (2) event-populated trackedCores set (catches future non-block-entity cores). No chunk scanning on load.
+
+**Scanner**: Directional pattern scanner. Phase 1: flood-fill cluster of adjacent same-type cores. Phase 2: compute frame bounds from cluster + facing. Phase 3: validate frame layers (back wall, sides, top, bottom) + front face air openings. Normalizes bounds and core position to clusterMin.
+
+**Current structure type -- Furnace Array**:
+- Cores: furnace, blast_furnace, smoker (all vanilla furnace types)
+- Frame: #ideomod:furnace_array_frame tag (18 stone-family blocks)
+- Max cluster: 3 wide x 2 tall (6 furnaces)
+- Facing: derived from furnace's FACING property
+- Effects: GUI rename ("Enhanced Furnace" etc.) + 50% cooking speed boost
+- Speed boost: +1 extra progress on even ticks via AbstractFurnaceBlockEntityMixin, clamped to totalTime - 1
+
+### 5. Oddstone (5 features in one block)
 
 1. **Mob avoidance**: `isPathfindable=false` + `BlockPathTypes.DAMAGE_OTHER`. JSON config per-mob whitelist.
 2. **Redstone insulation**: `isRedstoneConductor=false` in properties.
@@ -124,16 +163,16 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 4. **One-way stickiness**: Grabs all slime types + other Oddstone. Cannot be grabbed back (grab immunity rules).
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 
-### 5. Machine Block (2 features)
+### 6. Machine Block (2 features)
 
 1. **Selective stickiness**: Only actively grabs other Machine Blocks. Permissive canStickTo lets slime/honey/odd slime grab it (one-way via immunity rules).
 2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
 
-### 6. Odd Slime Block
+### 7. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
 
-### 7. Judgement Effect
+### 8. Judgement Effect
 
 Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 32 blocks freeze (`setNoAi(true)`), stare at player for 5 seconds (manual yaw/pitch per tick), then unfreeze. Triggered by LivingDeathEvent. Also available via `/judgement` command (op level 2).
 
@@ -143,11 +182,11 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR
 
-**ModItems**: BlockItems for all blocks EXCEPT ODDSTONE_PORTAL (not player-placeable).
+**ModItems**: BlockItems for all blocks EXCEPT ODDSTONE_PORTAL (not player-placeable). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist).
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks).
 
-**ModCreativeTabs**: Single tab "ideomod_tab" with icon IDEOBLOCK.
+**ModCreativeTabs**: Single tab "ideomod_tab" with icon IDEOBLOCK. Lists all BlockItems + Structure Debug Stick.
 
 ---
 
@@ -165,6 +204,10 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **Stickiness rule pattern**: `canStickTo` = permissive (allow both directions), `StickinessRules` = restrictive (block specific grabbers). Never express one-way behavior in canStickTo alone.
 
+**Multiblock definitions**: Extend StructureDefinition, register with StructureManager in commonSetup(). Use block tags for frame/component blocks. Scanner normalizes bounds and core positions.
+
+**SavedData pattern**: Per-dimension via `level.getDataStorage().computeIfAbsent()`. NBT serialization. Static factory `get(ServerLevel)`. Used by both OddstonePortalSavedData and StructureManager.
+
 ---
 
 ## KNOWN ISSUES & TECHNICAL DEBT
@@ -176,3 +219,4 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 5. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
 6. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
 7. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
+8. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.

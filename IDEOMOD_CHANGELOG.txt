@@ -1,5 +1,126 @@
 # Ideomod Changelog
 
+## [2026-02-18] Multiblock Structure Framework -- Phase 1 & Furnace Array
+
+Implemented the Multiblock Structure Framework and its first structure type,
+the Furnace Array. The framework provides registration-based detection,
+tracking, and evaluation of multiblock structures as world data -- individual
+blocks don't know they're part of a structure. The Structure Manager (SavedData)
+holds all knowledge.
+
+### Framework architecture (9 new Java files):
+
+- **StructureDefinition.java**: Abstract base for structure type rulesets.
+  Defines core blocks, frame tags, scan parameters. Subclassed per type.
+- **FurnaceArrayDefinition.java**: Concrete definition for furnace arrays.
+  Cores: furnace, blast_furnace, smoker. Frame tag: #ideomod:furnace_array_frame.
+  Max cluster 3x2 (6 furnaces), requires open front face (air).
+- **StructureScanner.java**: Directional pattern scanner. Phase 1: flood-fill
+  cluster of adjacent same-type cores. Phase 2: compute frame bounds from
+  cluster + facing direction. Phase 3: validate back/side/top/bottom frame
+  layers + front face air openings. Normalizes bounds with Math.min/max to
+  handle all facing directions (NORTH/WEST produce inverted coordinates).
+  Normalizes core position to clusterMin for consistent exclusivity keying.
+- **StructureResult.java**: Immutable scan output. Holds core pos, facing,
+  cluster bounds, structure bounds, effector positions, frame positions,
+  validity. Builder pattern for construction.
+- **StructureRegistration.java**: Persistent registration entry. UUID, definition
+  name, core position, last valid scan result, bounding box for chunk indexing.
+  NBT serialization. Null bounds guard on load.
+- **StructureManager.java**: Per-dimension SavedData. Stores all registrations,
+  chunk index, type index, core exclusivity map, event-populated trackedCores
+  set. Listens for block place/break events. Reactive core detection via block
+  entity iteration (no chunk scanning). Query API for consuming systems.
+  Debug stick notifications for register/deregister events.
+- **StructureEffectHandler.java**: Interface for structure-type-specific effects.
+  onFormed(), onRemoved(), onTick(), onUpdated().
+- **FurnaceArrayEffect.java**: Sets custom GUI names ("Enhanced Furnace" etc.)
+  on formation, clears on removal.
+- **AbstractFurnaceBlockEntityMixin.java**: Injects into furnace tick to boost
+  cooking speed by 50% (extra +1 progress on even ticks) when furnace is part
+  of a registered furnace array. Safety clamp prevents progress from meeting or
+  exceeding cookingTotalTime (vanilla uses equality check, not >=).
+
+### Wiring files:
+
+- **Ideomod.java**: Registers StructureManager.EventHandler on FORGE event bus
+  and registers FurnaceArrayDefinition with StructureManager in commonSetup().
+- **ideomod.mixins.json**: Added AbstractFurnaceBlockEntityMixin.
+- **furnace_array_frame.json**: New block tag at
+  data/ideomod/tags/blocks/furnace_array_frame.json. Contains 18 stone-family
+  blocks (stone, cobblestone, stone_bricks, deepslate variants, etc.).
+- **en_us.json**: Added Enhanced Furnace/Blast Furnace/Smoker container names
+  and Structure Debug Stick item name.
+
+### Debug tooling:
+
+- **Structure Debug Stick**: New item (ModItems.STRUCTURE_DEBUG_STICK). Hold in
+  either hand (mainhand or offhand). Color-coded chat messages appear when
+  structures register (green) or deregister (red), showing structure type,
+  core position, and core count. Zero overhead when nobody holds it.
+- **structure_debug_stick.json**: Item model using vanilla stick texture.
+
+### Key design decisions:
+
+- **Reactive core detection**: Instead of scanning ~98K blocks per chunk on load
+  (which froze the game), uses two complementary approaches: (1) block entity
+  map iteration from nearby chunks when a frame block is placed (catches
+  furnaces, typically 0-10 entries per chunk), and (2) event-populated
+  trackedCores set for future non-block-entity cores. Combined with
+  isRelevantForAnyDefinition() filter, most block placements skip the search
+  entirely.
+- **Canonical core position**: Scanner normalizes corePos to clusterMin so that
+  scanning from any furnace in a cluster produces the same exclusivity key.
+  Without this, each furnace registered a separate duplicate structure.
+- **Bounds normalization**: Direction.relative() offsets can produce inverted
+  min/max coordinates when facing NORTH or WEST (negative axis directions).
+  Scanner normalizes with Math.min/max after directional calculation.
+- **Cooking progress clamp**: Vanilla completes smelts via equality check
+  (cookingProgress == cookingTotalTime), not >=. Mixin clamps progress to
+  totalTime - 1 after boosting, so vanilla's next increment lands exactly
+  on the target.
+
+### Bugs found and fixed during testing:
+
+1. **World load freeze**: onChunkLoaded() scanned 98K blocks per chunk.
+   Hundreds of chunks loading during spawn prep = millions of lookups on
+   server thread. Fix: eliminated chunk scanning entirely in favor of
+   reactive block entity iteration.
+2. **Duplicate structure registration**: Each furnace in a cluster registered
+   its own structure because corePos differed. Fix: normalize to clusterMin.
+3. **Bounds inversion**: NORTH/WEST facing structures had frameMin > frameMax,
+   causing expanded bounds checks to always fail. Frame block breaks didn't
+   trigger rescans. Fix: Math.min/max normalization.
+4. **Infinite smelting progress**: Mixin could push cookingProgress past
+   cookingTotalTime. Vanilla's equality check never passed, progress climbed
+   forever, GUI arrow extended infinitely. Fix: safety clamp to totalTime - 1.
+5. **Missing re-formation on block break**: Breaking a block covering a
+   furnace's front face didn't trigger re-scan. Fix: added
+   findAndScanNearbyCores() to block break path (cheap with BE iteration).
+6. **Six messages per registration**: Debug stick showed one message per
+   furnace. Same root cause as bug #2 (duplicate registrations). Fixed by
+   canonical core position.
+
+### Files added:
+- com/ideomancer/ideomod/multiblock/StructureDefinition.java
+- com/ideomancer/ideomod/multiblock/FurnaceArrayDefinition.java
+- com/ideomancer/ideomod/multiblock/StructureScanner.java
+- com/ideomancer/ideomod/multiblock/StructureResult.java
+- com/ideomancer/ideomod/multiblock/StructureRegistration.java
+- com/ideomancer/ideomod/multiblock/StructureManager.java
+- com/ideomancer/ideomod/multiblock/StructureEffectHandler.java
+- com/ideomancer/ideomod/multiblock/FurnaceArrayEffect.java
+- com/ideomancer/ideomod/mixin/AbstractFurnaceBlockEntityMixin.java
+- data/ideomod/tags/blocks/furnace_array_frame.json
+- assets/ideomod/models/item/structure_debug_stick.json
+
+### Files changed:
+- Ideomod.java (event handler registration, definition registration)
+- ideomod.mixins.json (added AbstractFurnaceBlockEntityMixin)
+- ModItems.java (added STRUCTURE_DEBUG_STICK)
+- ModCreativeTabs.java (added debug stick to tab)
+- en_us.json (container names, item name)
+
 ## [2026-02-15] Documentation Cleanup
 - Removed stale known issue from Oddstone: "Sympathetic push chains don't
   trigger slime stickiness on pushed blocks." Tested and confirmed working
@@ -121,7 +242,7 @@
 - Movement logic in RangedPistonUtil closely mirrors vanilla
   PistonBaseBlock.moveBlocks(): same ordering (snapshot -> destroy -> place
   MovingPistonBlock at destinations while sources still exist -> clear
-  sources -> neighbor updates), same flags (68 placement, 82 cleanup),
+  sources -> neighbor updates -> sound), same flags (68 placement, 82 cleanup),
   same factory method (MovingPistonBlock.newMovingBlockEntity()).
 
 ### Files changed:
@@ -139,83 +260,23 @@
 - Any mod feature that places MovingPistonBlock MUST use the block event
   system (level.blockEvent -> triggerEvent on both sides) or the animation
   will be invisible.
-- When piggybacking vanilla systems, match the execution phase (block events,
-  not neighborChanged) and the exact ordering/flags, not just the method calls.
 
-## [2026-02-13] Odd Slime Block
-- Added OddSlimeBlock - a directional slime variant with conditional stickiness
-  - Extends DirectionalBlock with FACING property (piston-style placement)
-  - Only sticky when pushed in its FACING direction. Push any other way
-    and neighbors don't come along. Active along full axis (push + pull).
-  - When active, grabs all 6 neighbors like regular slime
-  - Stickiness relationships:
-    - Odd Slime + Odd Slime: YES (when active)
-    - Odd Slime + normal blocks: YES (when active)
-    - Odd Slime + Machine Block: YES (when active, one-way)
-    - Oddstone + Odd Slime: YES (Oddstone grabs all slime types)
-    - Odd Slime + Slime: NO (mutual exclusion)
-    - Odd Slime + Honey: NO (mutual exclusion)
-    - Odd Slime + Oddstone: NO (no slime grabs Oddstone)
-    - Machine Block + Odd Slime: NO (Machine Block can't grab back)
-- New file: OddSlimeBlock.java (com.ideomancer.ideomod.block)
-- Assets: blockstate (6 facing variants), block/item models, 3 placeholder
-  textures (front dot, back ring, side arrows with per-face UV rotation)
-- Data: loot table, placeholder recipe (1 slime block + 1 oddstone)
-- Block properties: slime friction (0.8), slime sound, translucent, no occlusion
-- Status: Working
-
-### Stickiness system changes:
-- StickinessRules.java: Added directional rule system
-  - New registerDirectionalRule() and isDirectionalGrabBlocked() methods
-  - Directional rules check (blockState, pushDirection) -> should stickiness
-    be disabled? Separate from grab immunity (type-based).
-- PistonStructureResolverMixin.java: Extended for directional stickiness
-  - Now shadows pushDirection field from PistonStructureResolver
-  - HEAD injection (branching): checks directional rules before grab immunity
-  - @Redirect (backward walk): checks directional rules for both blocks,
-    plus narrow exemption for active OddSlimeBlock targets -- when an active
-    Odd Slime is in front pulling a chain, blocks behind it join regardless
-    of grab immunity (otherwise Machine Block -> Odd Slime rule incorrectly
-    prevents Machine Block from being pulled along)
-  - Exemption is specifically instanceof OddSlimeBlock + FACING match.
-    NOT generalized to "any sticky block" -- that would re-open the Stage 5
-    bug where slime pulled Oddstone in the backward walk.
-- Ideomod.java: Registered new stickiness rules
-  - Grab immunity: Odd Slime -> Oddstone, Machine Block -> Odd Slime,
-    Slime -> Odd Slime, Honey -> Odd Slime (4 new rules)
-  - Directional: Odd Slime disabled when pushDirection != FACING
-- OddstoneBlock.java: canStickTo now returns true for HoneyBlock and
-  OddSlimeBlock (Oddstone grabs all slime-type blocks)
-- MachineBlock.java: canStickTo now returns true for SlimeBlock, HoneyBlock,
-  and OddSlimeBlock (permissive -- lets them grab us, mixin blocks reverse)
-  - Previously returned false for slime/honey, which broke the Forge
-    bidirectional canStickTo check and prevented one-way grabs entirely
-- New documentation: STICKINESS_SYSTEM.md
-  - Explains the bidirectional canStickTo trap
-  - Documents the three-layer system (canStickTo permissive, grab immunity
-    restrictive, directional rules for conditional stickiness)
-  - Full stickiness matrix and per-pair implementation details
-  - Checklist for adding new sticky blocks
-  - Common mistakes section
-
-### Key lesson -- the bidirectional canStickTo rule:
-  Forge checks canStickTo on BOTH blocks. If either returns false, the
-  stick fails before the mixin can intervene. For any pair where one-way
-  stickiness is desired, BOTH sides must return true in canStickTo. The
-  mixin's grab immunity rules handle blocking the unwanted direction.
-  Never express one-way behavior in canStickTo -- it will break both ways.
-
-## [2026-02-13] Stage 5 -- Bug Fixes
-- PortalEntry mutable state (OddstonePortalSavedData.java):
-  - partnerPos field changed from public to private
-  - Added getPartnerPos() getter for external access
-  - Mutations only happen inside registerPortal/unregisterPortal,
-    both followed by setDirty() -- external code can no longer
-    accidentally mutate without triggering a world save
-- Updated OddstonePortalBlock.java: uses entry.getPartnerPos()
-- MachineBlock asymmetric stickiness fix:
-  - canStickTo now returns true for SlimeBlock (allows slime to grab us)
-  - Reverse direction (Machine Block grabbing slime) is blocked by
+## [2026-02-13] Stage 5 -- PistonStructureResolver Mixin & Stickiness Overhaul
+- New file: PistonStructureResolverMixin.java (com.ideomancer.ideomod.mixin)
+  - Feature 1: One-way stickiness (grab immunity via StickinessRules)
+  - Feature 2: Sympathetic movement (face-aligned BFS for Oddstone)
+  - Feature 3: Directional stickiness (Odd Slime FACING-gated)
+  - Feature 4: Ranged piston startPos redirect (added 2026-02-14)
+- New file: StickinessRules.java (com.ideomancer.ideomod.block)
+  - Central rule registry for grab immunity and directional rules
+  - BiPredicate-based -- any block combo can have rules
+  - Called by the mixin during piston resolution
+- Updated Ideomod.java: added registerStickinessRules() with 8 grab
+  immunity rules + 1 directional rule (Odd Slime)
+- Overhauled block canStickTo() methods:
+  - OddstoneBlock: now returns true for slime/honey/odd_slime (permissive)
+    Actual one-way behavior enforced at Layer 2 in mixin
+  - MachineBlock: returns true for slime/honey/odd_slime (permissive)
     the mixin via StickinessRules grab immunity -- asymmetry preserved
   - Previously returned false for slime in both directions, which
     prevented slime from grabbing Machine Block entirely

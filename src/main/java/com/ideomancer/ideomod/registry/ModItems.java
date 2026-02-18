@@ -50,4 +50,12 @@ public class ModItems {
     // Register the BlockItem for Oddstone Attractor
     public static final RegistryObject<Item> ODDSTONE_ATTRACTOR = ITEMS.register("oddstone_attractor",
             () -> new BlockItem(ModBlocks.ODDSTONE_ATTRACTOR.get(), new Item.Properties()));
+
+    // ================================================================
+    // Tools / Debug Items
+    // ================================================================
+
+    // Structure Debug Stick — hold in either hand to see structure register/deregister messages in chat
+    public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
+            "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 }

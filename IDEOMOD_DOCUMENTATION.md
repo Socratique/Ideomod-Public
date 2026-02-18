@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
-*Comprehensive reference for the Ideomod codebase Ã¢â‚¬â€ architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-15*
+*Comprehensive reference for the Ideomod codebase ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â architecture, systems, templates, and implementation details.*
+*Last updated: 2026-02-18*
 
 ---
 
@@ -13,14 +13,15 @@
 5. [PistonStructureResolver Mixin](#5-pistonstructureresolver-mixin)
 6. [Ranged Piston System](#6-ranged-piston-system)
 7. [Portal System](#7-portal-system)
-8. [Block Specifications](#8-block-specifications)
-9. [Judgement Effect](#9-judgement-effect)
-10. [Configuration](#10-configuration)
-11. [Resource File Templates](#11-resource-file-templates)
-12. [Tag Contents](#12-tag-contents)
-13. [Known Issues & Technical Debt](#13-known-issues--technical-debt)
-14. [Conventions & Patterns](#14-conventions--patterns)
-15. [Adding New Content Checklists](#15-adding-new-content-checklists)
+8. [Multiblock Structure Framework](#8-multiblock-structure-framework)
+9. [Block Specifications](#9-block-specifications)
+10. [Judgement Effect](#10-judgement-effect)
+11. [Configuration](#11-configuration)
+12. [Resource File Templates](#12-resource-file-templates)
+13. [Tag Contents](#13-tag-contents)
+14. [Known Issues & Technical Debt](#14-known-issues--technical-debt)
+15. [Conventions & Patterns](#15-conventions--patterns)
+16. [Adding New Content Checklists](#16-adding-new-content-checklists)
 
 ---
 
@@ -38,7 +39,7 @@
 
 Build config files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
-Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin` in the `mixins` array (common, not client-only). Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
+Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin` and `AbstractFurnaceBlockEntityMixin` in the `mixins` array (common, not client-only). Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
 
 gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.0`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
 
@@ -49,9 +50,10 @@ gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1
 ```
 com.ideomancer.ideomod
   |-- Ideomod.java              Main mod class. Registers DeferredRegisters, event
-  |                              buses, and stickiness rules in commonSetup().
+  |                              buses, stickiness rules, structure definitions,
+  |                              and StructureManager event handler.
   |-- block/
-  |     |-- OddstoneBlock.java           Core block: 5 features (see section 8)
+  |     |-- OddstoneBlock.java           Core block: 5 features (see section 9)
   |     |-- MachineBlock.java            Selective stickiness + redstone conduction
   |     |-- OddSlimeBlock.java           Directional slime (FACING-gated stickiness)
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
@@ -72,10 +74,20 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event (Forge event bus)
   |-- mixin/
-  |     \-- PistonStructureResolverMixin.java  4-feature mixin (see section 5)
+  |     |-- PistonStructureResolverMixin.java    4-feature mixin (see section 5)
+  |     \-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (section 8)
+  |-- multiblock/
+  |     |-- StructureDefinition.java     Abstract base for structure type rulesets
+  |     |-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame, sizing)
+  |     |-- StructureScanner.java        Directional pattern scanner (cluster + frame)
+  |     |-- StructureResult.java         Immutable scan output (builder pattern)
+  |     |-- StructureRegistration.java   Persistent registration entry (UUID, NBT)
+  |     |-- StructureManager.java        Per-dimension SavedData + events + queries
+  |     |-- StructureEffectHandler.java  Interface for per-type effects
+  |     \-- FurnaceArrayEffect.java      GUI rename on formation/removal
   \-- registry/
-        |-- ModBlocks.java               DeferredRegister<Block> Ã¢â‚¬â€ all block registrations
-        |-- ModItems.java                DeferredRegister<Item> Ã¢â‚¬â€ all BlockItems
+        |-- ModBlocks.java               DeferredRegister<Block> -- all block registrations
+        |-- ModItems.java                DeferredRegister<Item> -- BlockItems + debug stick
         |-- ModCreativeTabs.java         Creative tab with mod items
         |-- ModCommands.java             /judgement command (Forge event bus)
         \-- ModTags.java                 TagKey definitions for custom tags
@@ -104,26 +116,29 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings.
 
+Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `stacksTo(1)`. Hold in either hand to see structure register/deregister chat messages.
+
 ### ModCreativeTabs
 
-Single tab `ideomod_tab`, icon = IDEOBLOCK. Lists: Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor.
+Single tab `ideomod_tab`, icon = IDEOBLOCK. Lists: Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Structure Debug Stick.
 
 ### ModTags
 
-Two custom TagKeys, both for blocks:
+Three custom TagKeys, all for blocks:
 
 | Tag | Purpose | JSON Location |
 |-----|---------|---------------|
 | `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
 | `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | `data/ideomod/tags/blocks/redstone_components.json` |
+| `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | `data/ideomod/tags/blocks/furnace_array_frame.json` |
 
-See section 12 for the full contents of each tag.
+See section 13 for the full contents of each tag.
 
 ### ModCommands
 
 Registered on the FORGE event bus (not MOD bus) via `@Mod.EventBusSubscriber`. Listens for `RegisterCommandsEvent`.
 
-`/judgement` Ã¢â‚¬â€ requires op level 2. Calls `JudgementEffect.trigger(player)` directly (bypasses the 1/200 chance roll).
+`/judgement` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â requires op level 2. Calls `JudgementEffect.trigger(player)` directly (bypasses the 1/200 chance roll).
 
 ---
 
@@ -133,18 +148,18 @@ This is the most architecturally complex system in the mod. It enables one-way (
 
 ### The Core Problem
 
-Forge checks `canStickTo` **bidirectionally**. When block A tries to stick to block B, BOTH `A.canStickTo(B)` AND `B.canStickTo(A)` must return true. If either returns false, the stick fails *before* any mixin code runs. This means you cannot express one-way stickiness through `canStickTo` alone Ã¢â‚¬â€ if Machine Block says "no" to slime, then slime also can't grab Machine Block.
+Forge checks `canStickTo` **bidirectionally**. When block A tries to stick to block B, BOTH `A.canStickTo(B)` AND `B.canStickTo(A)` must return true. If either returns false, the stick fails *before* any mixin code runs. This means you cannot express one-way stickiness through `canStickTo` alone ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if Machine Block says "no" to slime, then slime also can't grab Machine Block.
 
 ### Three-Layer Architecture
 
-**Layer 1 Ã¢â‚¬â€ canStickTo() (PERMISSIVE)**
+**Layer 1 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â canStickTo() (PERMISSIVE)**
 Lives in each block class. Returns true for any block pair where interaction is desired in EITHER direction. Only returns false for true mutual exclusions where neither side should ever stick (like slime vs honey in vanilla, or slime vs odd slime).
 
-**Layer 2 Ã¢â‚¬â€ Grab Immunity Rules (RESTRICTIVE)**
+**Layer 2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Grab Immunity Rules (RESTRICTIVE)**
 Lives in `StickinessRules.java`, registered in `Ideomod.registerStickinessRules()`, enforced by `PistonStructureResolverMixin`. Each rule is a `BiPredicate<BlockState, BlockState>` that tests `(grabber, target) -> should block?`. Runs after canStickTo passes. Blocks specific grabber->target pairs.
 
-**Layer 3 Ã¢â‚¬â€ Directional Rules (CONDITIONAL)**
-Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Direction>` that tests `(blockState, pushDirection) -> should disable stickiness?`. Used for Odd Slime, which is only sticky when pushed in its FACING direction. When a directional rule fires, the block acts completely non-sticky for that push Ã¢â‚¬â€ it won't grab ANY neighbors.
+**Layer 3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional Rules (CONDITIONAL)**
+Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Direction>` that tests `(blockState, pushDirection) -> should disable stickiness?`. Used for Odd Slime, which is only sticky when pushed in its FACING direction. When a directional rule fires, the block acts completely non-sticky for that push ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it won't grab ANY neighbors.
 
 ### The Golden Rule
 
@@ -191,19 +206,19 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. False for everything else (including MachineBlock).
 
-**MachineBlock**: Returns true for MachineBlock, SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. The slime/honey/odd slime returns are *permissive* Ã¢â‚¬â€ they let those types grab Machine Block one-way. Machine Block's own grabs toward them are blocked by immunity rules.
+**MachineBlock**: Returns true for MachineBlock, SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. The slime/honey/odd slime returns are *permissive* ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they let those types grab Machine Block one-way. Machine Block's own grabs toward them are blocked by immunity rules.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-### StickinessRules.java Ã¢â‚¬â€ Internal Structure
+### StickinessRules.java ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Internal Structure
 
 Two static ArrayLists hold the registered rules. Two static check methods iterate them:
 
-`isGrabBlocked(expandingState, neighborState)` Ã¢â‚¬â€ iterates grab immunity rules. Returns true if any rule blocks the grab.
+`isGrabBlocked(expandingState, neighborState)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â iterates grab immunity rules. Returns true if any rule blocks the grab.
 
-`isDirectionalGrabBlocked(state, pushDirection)` Ã¢â‚¬â€ iterates directional rules. Returns true if the block should be non-sticky for this push direction.
+`isDirectionalGrabBlocked(state, pushDirection)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â iterates directional rules. Returns true if the block should be non-sticky for this push direction.
 
-This class lives in `block/` package (not `mixin/`) because both `Ideomod.java` (to register) and the mixin (to check) need to access it. The mixin package is locked down by Sponge Ã¢â‚¬â€ no regular classes allowed there.
+This class lives in `block/` package (not `mixin/`) because both `Ideomod.java` (to register) and the mixin (to check) need to access it. The mixin package is locked down by Sponge ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no regular classes allowed there.
 
 ---
 
@@ -223,14 +238,14 @@ This is the most complex and sensitive file in the project. It implements four f
 | `pushDirection` | Direction | Which way the piston is pushing |
 | `startPos` | BlockPos | First block to check. Shadowed with `@Mutable` so Feature 4 can override it. |
 
-Shadowed method: `addBlockLine(BlockPos pos, Direction dir)` Ã¢â‚¬â€ the resolver's own method for adding a line of blocks starting from `pos`.
+Shadowed method: `addBlockLine(BlockPos pos, Direction dir)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the resolver's own method for adding a line of blocks starting from `pos`.
 
 ### Custom Fields
 
-`ideomod$inBranching` Ã¢â‚¬â€ `ThreadLocal<Boolean>`, defaults to false. Set true at HEAD of `addBranchingBlocks`, set false at TAIL. Used to distinguish between two phases of the resolver that both call `addBlockLine`:
+`ideomod$inBranching` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `ThreadLocal<Boolean>`, defaults to false. Set true at HEAD of `addBranchingBlocks`, set false at TAIL. Used to distinguish between two phases of the resolver that both call `addBlockLine`:
 
-1. **Line-building phase**: `resolve()` calls `addBlockLine()` directly to build the initial push line. This is passive chain cohesion Ã¢â‚¬â€ blocks already in line stay connected.
-2. **Branching phase**: `resolve()` calls `addBranchingBlocks()`, which iterates every sticky block in `toPush` and checks its 6 neighbors. For each neighbor not already in the list, it calls `addBlockLine()`. This is active grabbing Ã¢â‚¬â€ sticky blocks reaching out.
+1. **Line-building phase**: `resolve()` calls `addBlockLine()` directly to build the initial push line. This is passive chain cohesion ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â blocks already in line stay connected.
+2. **Branching phase**: `resolve()` calls `addBranchingBlocks()`, which iterates every sticky block in `toPush` and checks its 6 neighbors. For each neighbor not already in the list, it calls `addBlockLine()`. This is active grabbing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sticky blocks reaching out.
 
 The distinction matters because grab immunity and directional rules should apply at full strength during branching (active grabbing) but need nuance during line-building (see the backward walk section below).
 
@@ -243,14 +258,14 @@ The distinction matters because grab immunity and directional rules should apply
 Only fires when `ideomod$inBranching` is true. This catches the moment a sticky block in the push list reaches out to grab a neighbor during branching.
 
 Logic:
-1. Calculate grabber position: `pos.relative(dir.getOpposite())` Ã¢â‚¬â€ the block that's doing the grabbing
+1. Calculate grabber position: `pos.relative(dir.getOpposite())` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the block that's doing the grabbing
 2. Verify grabber is actually in `toPush` (skip otherwise)
 3. Get both block states
 4. Skip if neighbor is air
 5. Check directional rules on the grabber: is it disabled for this push direction? If yes, cancel with `cir.setReturnValue(true)`.
 6. Check grab immunity: does the target resist this grabber? If yes, cancel with `cir.setReturnValue(true)`.
 
-**Critical detail**: The cancel return value is `true`, not `false`. The `addBlockLine` method returns boolean indicating "did this succeed without hitting the push limit." Returning `true` means "everything's fine, just didn't add anything" Ã¢â‚¬â€ it lets the resolver continue checking other neighbors. Returning `false` would mean "push limit exceeded, abort everything" which would break unrelated blocks.
+**Critical detail**: The cancel return value is `true`, not `false`. The `addBlockLine` method returns boolean indicating "did this succeed without hitting the push limit." Returning `true` means "everything's fine, just didn't add anything" ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it lets the resolver continue checking other neighbors. Returning `false` would mean "push limit exceeded, abort everything" which would break unrelated blocks.
 
 ### Feature 1B + 2B: Backward Walk (Redirect on canStickTo)
 
@@ -267,13 +282,13 @@ In this context:
 - `other` = the "front" block (the one already in the line, calling backward)
 
 Logic:
-1. Run original `canStickTo(self, other)` Ã¢â‚¬â€ if vanilla says no, we say no.
+1. Run original `canStickTo(self, other)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if vanilla says no, we say no.
 2. Check directional rules on `self` (behind block). If disabled for this push, return false.
 3. Check directional rules on `other` (front block). If disabled for this push, return false.
-4. **Special case**: Check if `other` is an active OddSlimeBlock (FACING == pushDirection). If yes, skip grab immunity. Rationale: the Odd Slime is the active puller here Ã¢â‚¬â€ it's carrying blocks behind it in its chain. The behind block is being pulled BY the Odd Slime, not grabbing it. Without this exception, Odd Slime couldn't pull anything because grab immunity would block the backward-walk connection.
+4. **Special case**: Check if `other` is an active OddSlimeBlock (FACING == pushDirection). If yes, skip grab immunity. Rationale: the Odd Slime is the active puller here ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it's carrying blocks behind it in its chain. The behind block is being pulled BY the Odd Slime, not grabbing it. Without this exception, Odd Slime couldn't pull anything because grab immunity would block the backward-walk connection.
 5. If not the special case, apply normal grab immunity: `isGrabBlocked(self, other)`.
 
-**CRITICAL WARNING**: The Odd Slime exception MUST remain narrowly scoped to `instanceof OddSlimeBlock` with FACING check. Generalizing it to "any sticky block" or "any block without directional rules" would match Oddstone, regular slime, honey, etc. and re-break one-way stickiness. This was the Stage 5 bug Ã¢â‚¬â€ slime pulling Oddstone in the backward walk.
+**CRITICAL WARNING**: The Odd Slime exception MUST remain narrowly scoped to `instanceof OddSlimeBlock` with FACING check. Generalizing it to "any sticky block" or "any block without directional rules" would match Oddstone, regular slime, honey, etc. and re-break one-way stickiness. This was the Stage 5 bug ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â slime pulling Oddstone in the backward walk.
 
 ### Feature 3: Sympathetic Movement (TAIL of addBranchingBlocks)
 
@@ -285,7 +300,7 @@ After vanilla finishes checking all distance-1 sticky neighbors, this extends th
 
 Key details:
 - Takes a snapshot of `toPush` before iterating (avoids ConcurrentModificationException as new blocks get added)
-- Only checks blocks matching `ModBlocks.ODDSTONE` Ã¢â‚¬â€ other block types don't participate
+- Only checks blocks matching `ModBlocks.ODDSTONE` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â other block types don't participate
 - Scans each direction independently, stops at first Oddstone found per direction (finds nearest)
 - If any new blocks were added, sets return value to `true`, which tells the resolver's main loop in `resolve()` to re-run branching. This enables chaining: Oddstone A finds Oddstone B, next iteration B finds Oddstone C, etc.
 - All sympathetic blocks count toward the vanilla 12-block push limit
@@ -321,15 +336,15 @@ Repulser and Attractor are ranged directional pistons that push/pull Oddstone bl
 
 Both blocks follow the same pattern:
 
-1. `neighborChanged()` Ã¢â‚¬â€ server-only. Detects rising redstone edge. Updates POWERED state. On rising edge, calls `level.blockEvent(pos, this, EVENT_FIRE, facing.get3DDataValue())`.
+1. `neighborChanged()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â server-only. Detects rising redstone edge. Updates POWERED state. On rising edge, calls `level.blockEvent(pos, this, EVENT_FIRE, facing.get3DDataValue())`.
 2. Block event is queued for the block event phase of this tick. Server sends `ClientboundBlockEventPacket` to all tracking clients.
-3. `triggerEvent()` Ã¢â‚¬â€ runs on BOTH client and server. Decodes the direction from `param`, calls into `RangedPistonUtil`.
+3. `triggerEvent()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â runs on BOTH client and server. Decodes the direction from `param`, calls into `RangedPistonUtil`.
 
 **Why block events?** `MovingPistonBlock.newBlockEntity()` returns null. The client never creates `PistonMovingBlockEntity` through the normal block entity lifecycle. Vanilla creates it by running `moveBlocks()` on both sides via `triggerEvent()`. If movement code only runs server-side, blocks disappear for 2 ticks then pop in with no animation.
 
 **Why no ServerLevel guard in triggerEvent?** The entire point is that both sides run the same code. Guarding with `instanceof ServerLevel` defeats the purpose. Only guard things that genuinely must not run on client (item drops, XP, world data saves).
 
-### RangedPistonUtil Ã¢â‚¬â€ Movement Logic
+### RangedPistonUtil ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Movement Logic
 
 **Scanning**: `scanForNearest` (Repulser) and `scanForFarthest` (Attractor) walk a line from the device in its FACING direction, up to `SCAN_RANGE` (12 blocks), testing each position against a filter predicate. Currently uses `ODDSTONE_ONLY`. Future Arcane variants will use `ANY_MOVABLE`.
 
@@ -339,17 +354,17 @@ Both blocks follow the same pattern:
 2. **Create resolver**: `new PistonStructureResolver(level, devicePos, pushDir, true)`. Uses `devicePos` as pistonPos (safe, far from action). Mixin redirects startPos to actual target.
 3. **Call `resolver.resolve()`**: If false, movement is blocked (immovable block, push limit, etc.). Clean up and return.
 4. **Clear ThreadLocal**: Always in a `finally` block to prevent stale state.
-5. **Safety checks**: Verify toPush is non-empty, contains targetPos, doesn't contain devicePos. Also checks that no block's destination (sourcePos + pushDir) equals devicePos â€” prevents blocks from being pushed/pulled into and overwriting the device.
+5. **Safety checks**: Verify toPush is non-empty, contains targetPos, doesn't contain devicePos. Also checks that no block's destination (sourcePos + pushDir) equals devicePos Ã¢â‚¬â€ prevents blocks from being pushed/pulled into and overwriting the device.
 6. **Snapshot states**: Record all block states for moved and destroyed positions.
 7. **Destroy breakables**: Iterate `toDestroy` in reverse. Drop resources, set to air (flag 18).
-8. **Place MovingPistonBlock at destinations**: Iterate `toPush` in reverse (farthest first). For each: calculate destPos = sourcePos + pushDir, set `MOVING_PISTON` state (flag 68), create `PistonMovingBlockEntity` via `MovingPistonBlock.newMovingBlockEntity()`. Source blocks still exist at this point Ã¢â‚¬â€ this is correct and matches vanilla.
+8. **Place MovingPistonBlock at destinations**: Iterate `toPush` in reverse (farthest first). For each: calculate destPos = sourcePos + pushDir, set `MOVING_PISTON` state (flag 68), create `PistonMovingBlockEntity` via `MovingPistonBlock.newMovingBlockEntity()`. Source blocks still exist at this point ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â this is correct and matches vanilla.
 9. **Clear vacated sources**: Set to air (flag 82). Only positions not overwritten by a destination.
 10. **Neighbor updates**: Indirect neighbor shapes for vacated, updateNeighborsAt for destroyed and moved.
 11. **Sound**: Piston extend sound from device position.
 
 Flag 68 = SKIP_DROP(4) + NO_BLOCK_ENTITY_DROP(64). Flag 82 = UPDATE_CLIENTS(2) + SKIP_NEIGHBOR(16) + NO_BLOCK_ENTITY_DROP(64).
 
-### RangedPistonFlags Ã¢â‚¬â€ ThreadLocal Coordination
+### RangedPistonFlags ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ThreadLocal Coordination
 
 Pattern for passing runtime context from calling code into a mixin:
 
@@ -362,9 +377,9 @@ Lives in `block/` package (not `mixin/`) so both sides can access it.
 
 ### Filter Predicates
 
-`ODDSTONE_ONLY` Ã¢â‚¬â€ `state.is(ModBlocks.ODDSTONE.get())`. Used by current Repulser/Attractor.
+`ODDSTONE_ONLY` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `state.is(ModBlocks.ODDSTONE.get())`. Used by current Repulser/Attractor.
 
-`ANY_MOVABLE` Ã¢â‚¬â€ checks not air, destroySpeed >= 0, pushReaction not BLOCK or IGNORE. **Has a bug**: passes null for BlockGetter in `getDestroySpeed()`. Not currently used but needs fixing before Arcane variants.
+`ANY_MOVABLE` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â checks not air, destroySpeed >= 0, pushReaction not BLOCK or IGNORE. **Has a bug**: passes null for BlockGetter in `getDestroySpeed()`. Not currently used but needs fixing before Arcane variants.
 
 ---
 
@@ -438,11 +453,11 @@ This prevents false deactivation from unrelated neighbor updates (levers, redsto
 
 **Break effects**: `PortalUtils.clearPortalBlocks()` uses `level.destroyBlock(pos, false)` which produces break particles and the portal block's break sound -- same visual/audio as cascade-breaking via `updateShape`.
 
-`OddstonePortalBlock.updateShape()` also provides cascade breaking -- if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air. Ã¢â‚¬â€ if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air.
+`OddstonePortalBlock.updateShape()` also provides cascade breaking -- if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air. ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air.
 
 ### Teleportation
 
-`OddstonePortalBlock.entityInside()` Ã¢â‚¬â€ server only, players only.
+`OddstonePortalBlock.entityInside()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â server only, players only.
 
 **Linked portals**: Preserves relative position. Calculates player's fractional offset within source portal bounds (0.0 to 1.0 for both horizontal and vertical), applies same fraction to destination portal bounds. Works even if portals are different sizes.
 
@@ -457,8 +472,8 @@ This prevents false deactivation from unrelated neighbor updates (levers, redsto
 ### SavedData Internals
 
 Two maps maintain the registry:
-- `portalsByPosition`: Map<BlockPos, PortalEntry> Ã¢â‚¬â€ primary store
-- `portalsByAddress`: Map<String, BlockPos[2]> Ã¢â‚¬â€ quick lookup, max 2 entries per address
+- `portalsByPosition`: Map<BlockPos, PortalEntry> ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â primary store
+- `portalsByAddress`: Map<String, BlockPos[2]> ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â quick lookup, max 2 entries per address
 
 PortalEntry contains: address (String), pos (BlockPos), axis ("X" or "Z"), partnerPos (nullable BlockPos).
 
@@ -468,9 +483,95 @@ NBT format: ListTag "portals", each entry has address, x/y/z, axis, linked boole
 
 ---
 
-## 8. BLOCK SPECIFICATIONS
+## 8. MULTIBLOCK STRUCTURE FRAMEWORK
 
-### Oddstone Ã¢â‚¬â€ 5 Features in One Block
+Registration-based system for detecting, tracking, and evaluating multiblock structures. Structures are world data managed by a central Structure Manager (per-dimension SavedData) -- individual blocks don't know they're part of a structure. The Structure Manager holds all knowledge.
+
+### Architecture Overview
+
+**StructureDefinition** (abstract): Defines a structure type's ruleset -- core blocks, frame tag, scan parameters, max cluster size. Subclassed per structure type.
+
+**StructureScanner**: Stateless utility. Given a core position and definition, performs a directional pattern scan:
+- Phase 1: Flood-fill cluster of adjacent same-type cores from the starting position. Bounded by definition's maxClusterWidth/maxClusterHeight.
+- Phase 2: Compute frame bounds from cluster bounds + furnace facing direction. Uses Direction.relative() offsets, then normalizes min/max with Math.min/Math.max (directional offsets invert coordinates for NORTH/WEST facing).
+- Phase 3: Validate all positions in the 3-layer structure: back wall (all frame), side/top/bottom walls (all frame), front face (air openings required in front of each furnace).
+
+**StructureResult**: Immutable scan output. Contains core position (normalized to clusterMin), facing, cluster bounds, structure bounds, effector positions, frame positions, validity flag. Built via Builder pattern.
+
+**StructureManager** (extends SavedData): Per-dimension singleton. Stores all registered structures, handles block change events, provides query API.
+
+Data structures:
+- `structures`: UUID -> StructureRegistration (all registered structures)
+- `chunkIndex`: ChunkPos -> Set<UUID> (spatial lookup for block change events)
+- `typeIndex`: String -> Set<UUID> (structures grouped by definition name)
+- `coreExclusivity`: BlockPos -> Map<String, UUID> (one structure per type per core position)
+- `trackedCores`: Set<BlockPos> (event-placed cores not yet in structures; for future non-block-entity cores)
+
+**StructureRegistration**: Persistent entry. UUID, definition name, core position, last valid StructureResult, bounding box. NBT serialization. Null bounds guard on load.
+
+**StructureEffectHandler** (interface): Per-type effect logic. Methods: onFormed(), onRemoved(), onTick(), onUpdated(). Implementations are stateless -- they receive the StructureResult and level.
+
+### Event Flow
+
+```
+Block placed:
+  1. Check chunk index -> any registered structure nearby? -> rescan affected
+  2. Is placed block a core? -> try formation scan from it
+  3. Is placed block a frame material? -> search nearby for cores -> try formation
+
+Block broken:
+  1. Check chunk index -> any registered structure nearby? -> rescan affected
+  2. Search nearby for cores -> try formation (handles clearing blocking blocks)
+  3. Clean up trackedCores if broken block was one
+```
+
+### Core Detection (Reactive, No Chunk Scanning)
+
+Two complementary approaches, both cheap:
+
+1. **Block entity iteration**: When a relevant block is placed, iterate block entity maps from overlapping chunks (typically 0-10 entries per chunk). Catches all block-entity cores (furnaces) without explicit tracking.
+
+2. **Event-populated trackedCores**: When a core block is placed but doesn't form a structure, its position is added to the set. Checked alongside block entity results. Handles future non-block-entity core types. Cleaned up on break and on successful registration.
+
+The `isRelevantForAnyDefinition()` filter ensures only frame/core block placements trigger the nearby core search. Placing dirt, torches, etc. skips it entirely.
+
+### Current Structure Type: Furnace Array
+
+**FurnaceArrayDefinition**:
+- Cores: `minecraft:furnace`, `minecraft:blast_furnace`, `minecraft:smoker`
+- Frame tag: `#ideomod:furnace_array_frame` (18 stone-family blocks)
+- Max cluster: 3 wide x 2 tall (6 furnaces max)
+- Facing: derived from furnace's FACING property (all must face same direction)
+- Front face: must have air in front of each furnace (for item access)
+
+**FurnaceArrayEffect**: Sets custom GUI names on formation ("Enhanced Furnace", "Enhanced Blast Furnace", "Enhanced Smoker"). Clears custom names on removal.
+
+**AbstractFurnaceBlockEntityMixin**: Injects at HEAD of `AbstractFurnaceBlockEntity.serverTick()`. When a furnace is part of a registered furnace array:
+- Adds +1 extra cooking progress on even game ticks (vanilla already gives +1, so even ticks get +2, odd ticks get +1 = 50% average boost)
+- Safety clamp: if `cookingProgress >= cookingTotalTime`, sets to `cookingTotalTime - 1`. Critical because vanilla's completion check is equality (`==`), not `>=`. Without the clamp, progress could overshoot and the smelt would never complete.
+
+### Debug Tooling
+
+**Structure Debug Stick** (`ModItems.STRUCTURE_DEBUG_STICK`): Hold in either hand. StructureManager sends color-coded chat messages:
+- Green `[Structure] FORMED:` with type, position, core count
+- Red `[Structure] REMOVED:` with type, position
+- Zero overhead when nobody holds it (just a player list scan)
+
+### Adding a New Structure Type
+
+1. Create a class extending `StructureDefinition` in `multiblock/`
+2. Define core blocks, frame tag, scan parameters
+3. Override `scan()` if custom scanning needed (or use StructureScanner utilities)
+4. Create a `StructureEffectHandler` implementation for the structure's effects
+5. Create a block tag JSON for frame blocks
+6. Register the definition in `Ideomod.commonSetup()` via `StructureManager.registerDefinition()`
+7. If effects need a mixin, add to `ideomod.mixins.json`
+
+---
+
+## 9. BLOCK SPECIFICATIONS
+
+### Oddstone ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 5 Features in One Block
 
 | Feature | Implementation |
 |---------|---------------|
@@ -480,12 +581,12 @@ NBT format: ListTag "portals", each entry has address, x/y/z, axis, linked boole
 | **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. Reverse grabs blocked by immunity rules 1-3. |
 | **Portal frame** | `neighborChanged()` delegates to `OddstonePortalHandler.onNeighborChanged()`. `onRemove()` delegates to `OddstonePortalHandler.onBlockRemoved()`. |
 
-### Machine Block Ã¢â‚¬â€ 2 Features
+### Machine Block ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2 Features
 
 | Feature | Implementation |
 |---------|---------------|
 | **Selective stickiness** | `isStickyBlock()` returns true. Permissive `canStickTo()` (true for MachineBlock + all slime types). Immunity rules 4-6 block Machine Block from grabbing slime types. Net result: only grabs other Machine Blocks, but slime/honey/odd slime CAN grab it. |
-| **Redstone conduction** | POWER property (IntegerProperty 0-15). `isSignalSource()` returns true. `getSignal()`/`getDirectSignal()` return current power. `calculatePower()` checks all 6 neighbors Ã¢â‚¬â€ takes signal from Machine Blocks (decayed by 1) or from REDSTONE_COMPONENTS tag members. Static `isUpdating` flag prevents recursion during `neighborChanged()`. Color via tintIndex: `getPowerColor(power)` interpolates RGB from (80,80,80) at 0 to (255,48,48) at 15. |
+| **Redstone conduction** | POWER property (IntegerProperty 0-15). `isSignalSource()` returns true. `getSignal()`/`getDirectSignal()` return current power. `calculatePower()` checks all 6 neighbors ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â takes signal from Machine Blocks (decayed by 1) or from REDSTONE_COMPONENTS tag members. Static `isUpdating` flag prevents recursion during `neighborChanged()`. Color via tintIndex: `getPowerColor(power)` interpolates RGB from (80,80,80) at 0 to (255,48,48) at 15. |
 
 ### Odd Slime Block
 
@@ -501,13 +602,13 @@ Both extend `DirectionalBlock`. FACING + POWERED properties. Block event pattern
 
 ---
 
-## 9. JUDGEMENT EFFECT
+## 10. JUDGEMENT EFFECT
 
 A rare atmospheric event. When a player kills a non-hostile mob (Animal or AbstractVillager), there's a 1/200 chance all passive mobs within 32 blocks freeze and stare at the player for 5 seconds.
 
 **Trigger**: `LivingDeathEvent` on Forge event bus. Checks: server side, killed by player, victim is non-hostile, no active session for this player, then rolls 1/200.
 
-**Freeze mechanism**: `mob.setNoAi(true)` on each target mob. Same as vanilla `{NoAI:1}` Ã¢â‚¬â€ freezes all AI goals and movement.
+**Freeze mechanism**: `mob.setNoAi(true)` on each target mob. Same as vanilla `{NoAI:1}` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â freezes all AI goals and movement.
 
 **Stare mechanism**: Every server tick, for each frozen mob: calculate vector from mob eye position to player eye position, convert to yaw/pitch via `atan2`, set `yRot`, `xRot`, `yHeadRot`, `yBodyRot`.
 
@@ -519,7 +620,7 @@ A rare atmospheric event. When a player kills a non-hostile mob (Animal or Abstr
 
 ---
 
-## 10. CONFIGURATION
+## 11. CONFIGURATION
 
 ### Oddstone Config (`config/ideomod/oddstone.json`)
 
@@ -548,9 +649,9 @@ Auto-generated on first launch. Loaded lazily on first access.
 
 ---
 
-## 11. RESOURCE FILE TEMPLATES
+## 12. RESOURCE FILE TEMPLATES
 
-### Blockstate Ã¢â‚¬â€ Simple (no variants)
+### Blockstate ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Simple (no variants)
 
 `assets/ideomod/blockstates/oddstone.json`:
 ```json
@@ -563,7 +664,7 @@ Auto-generated on first launch. Loaded lazily on first access.
 }
 ```
 
-### Blockstate Ã¢â‚¬â€ Directional (FACING + POWERED)
+### Blockstate ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional (FACING + POWERED)
 
 `assets/ideomod/blockstates/oddstone_repulser.json`:
 
@@ -591,7 +692,7 @@ Pattern:
 
 For FACING-only (no POWERED), same pattern with just 6 entries (one per facing, no powered variants).
 
-### Block Model Ã¢â‚¬â€ Simple (cube_all)
+### Block Model ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Simple (cube_all)
 
 `assets/ideomod/models/block/oddstone.json`:
 ```json
@@ -603,7 +704,7 @@ For FACING-only (no POWERED), same pattern with just 6 entries (one per facing, 
 }
 ```
 
-### Block Model Ã¢â‚¬â€ Directional (front/back/side)
+### Block Model ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional (front/back/side)
 
 `assets/ideomod/models/block/oddstone_repulser.json`:
 
@@ -644,7 +745,7 @@ Uses custom elements instead of a parent, assigning front/back/side textures to 
 }
 ```
 
-Same pattern for all block items Ã¢â‚¬â€ just parent the block model.
+Same pattern for all block items ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â just parent the block model.
 
 ### Loot Table (standard self-drop)
 
@@ -699,7 +800,7 @@ Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd
 
 ---
 
-## 12. TAG CONTENTS
+## 13. TAG CONTENTS
 
 ### portal_corner_blocks (14 blocks)
 
@@ -719,9 +820,17 @@ Tag references: #minecraft:buttons, #minecraft:pressure_plates.
 
 This whitelist prevents Machine Block from accepting signal from generic powered solid blocks (which would create feedback loops since Machine Block itself is a signal source).
 
+### furnace_array_frame (18 blocks)
+
+`data/ideomod/tags/blocks/furnace_array_frame.json`:
+
+minecraft:stone, minecraft:cobblestone, minecraft:stone_bricks, minecraft:mossy_stone_bricks, minecraft:cracked_stone_bricks, minecraft:chiseled_stone_bricks, minecraft:smooth_stone, minecraft:bricks, minecraft:deepslate, minecraft:cobbled_deepslate, minecraft:polished_deepslate, minecraft:deepslate_bricks, minecraft:deepslate_tiles, minecraft:cut_sandstone, minecraft:cut_red_sandstone, minecraft:polished_andesite, minecraft:polished_diorite, minecraft:polished_granite.
+
+Stone-family blocks that form the frame around furnace array multiblocks. Data-driven via tag so datapacks can add/remove valid frame materials.
+
 ---
 
-## 13. KNOWN ISSUES & TECHNICAL DEBT
+## 14. KNOWN ISSUES & TECHNICAL DEBT
 
 | # | Issue | Severity | Location |
 |---|-------|----------|----------|
@@ -733,10 +842,11 @@ This whitelist prevents Machine Block from accepting signal from generic powered
 | 6 | MachineBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineBlock.java |
 | 7 | DrillBlock on hold, still registered | Intentional | N/A |
 | 8 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
+| 9 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
 
 ---
 
-## 14. CONVENTIONS & PATTERNS
+## 15. CONVENTIONS & PATTERNS
 
 **Registration**: DeferredRegister for blocks, items, creative tabs. All wired in Ideomod() constructor.
 
@@ -754,7 +864,7 @@ This whitelist prevents Machine Block from accepting signal from generic powered
 
 ---
 
-## 15. ADDING NEW CONTENT CHECKLISTS
+## 16. ADDING NEW CONTENT CHECKLISTS
 
 ### New Simple Block
 
@@ -794,7 +904,7 @@ Same as directional, plus:
 ### New Sticky Block
 
 1. Decide relationships with all existing sticky types (see section 4 matrix)
-2. Write canStickTo() Ã¢â‚¬â€ permissive (true for any type where either direction is wanted)
+2. Write canStickTo() ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â permissive (true for any type where either direction is wanted)
 3. Update OTHER blocks' canStickTo() if they need to interact with yours
 4. Register grab immunity rules in Ideomod.registerStickinessRules()
 5. Register directional rules if stickiness depends on push direction

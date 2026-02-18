@@ -1,7 +1,10 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-15*
+*Last updated: 2026-02-18 (Multiblock Structure Framework Phase 1-2 implemented, Furnace Array working, Structure Debug Stick, Machine Block modular redesign, Hollow Stone, Odd Furnace, Oddserver, Placer/Framer merge, Oddstone sticky piston immunity, Machine Pipe/Fluid Pipe signal-pull mechanics, Machine Anchor, omnidirectional face-locking rule, Machine Clock/Pulser/Toggle)*
+
+*Written by Claude (Anthropic), directed and guided by Sean.*
+*This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
 
 ---
 
@@ -9,11 +12,13 @@
 
 | Symbol | Meaning |
 |--------|---------|
-| [DONE] | Implemented & working |
+| [DONE] | Implemented & working -- but not necessarily final. May be revised, extended, or removed. |
 | [WIP] | Partially implemented / in progress |
-| [DESIGNED] | Designed, not yet coded |
+| [DESIGNED] | Design written out and agreed upon -- NOT a guarantee it will ship as written. |
 | [IDEA] | Idea / brainstorm -- needs design |
-| [HOLD] | Scrapped or on hold |
+| [HOLD] | Scrapped or on hold -- may be revisited |
+
+*Note: Even [DONE] features are subject to redesign. This document describes current intent, not final decisions.*
 
 ---
 
@@ -87,6 +92,7 @@
 | Redstone insulation | [DONE] | `isRedstoneConductor=false` -- acts like glass for redstone. |
 | Sympathetic movement | [DONE] | Wireless slime -- each face searches for nearest Oddstone within radius (default 5). BFS chaining. Push chains count toward 12-block limit. |
 | One-way stickiness | [DONE] | Oddstone grabs slime; slime does NOT grab Oddstone. Via mixin + StickinessRules. |
+| Sticky piston immunity | [IDEA] | Sticky pistons should NOT be able to grab/pull Oddstone. Thematically, Oddstone is ungrabable -- it decides what it connects to. Currently only slime/honey/odd slime are blocked; vanilla sticky piston retraction is a separate code path that also needs blocking. |
 
 **Known issues:**
 - Face search is axis-aligned only (no cone/hemisphere)
@@ -95,7 +101,10 @@
 **Future ideas:**
 - *[IDEA] Expand face search to half-sphere/cone per face*
 - *[IDEA] Non-placeholder texture (purple-grey stone currently)*
-- *[IDEA] Oddstone as universal mod economy resource -- gates Portals, Inhibitors, Machine Blocks, Placers, Disenchanting Table (see Systems > Oddstone Economy)*
+- *[IDEA] Oddstone as universal mod economy resource -- gates Portals, Inhibitors, Machine Blocks (via Hollow Stone), Placers, Disenchanting Table (see Systems > Oddstone Economy)*
+
+**Interactions:**
+- Lava source blocks adjacent to Oddstone transform into Hollow Stone (Oddstone is NOT consumed). See Hollow Stone entry.
 
 ---
 
@@ -130,8 +139,116 @@
 
 ---
 
-### Machine Block [DONE]
-> Mechanical building block with selective stickiness and redstone conduction.
+### Odd Furnace [IDEA]
+> A furnace that cooks blocks in the world behind it. Fuel goes in the front, fire comes out the back.
+
+| Property | Value |
+|----------|-------|
+| ID | `odd_furnace` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Type | Block Entity (single fuel slot) |
+| Placement | Directional (faces player look direction) |
+| Recipe | TBD (Oddstone + furnace?) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Single fuel slot | [IDEA] | Right-click to open GUI with one slot. Accepts fuel items (coal, wood, lava bucket, etc. -- same as vanilla furnace fuel). |
+| World-block smelting | [IDEA] | When fueled, checks the block directly behind it (opposite of FACING). If that block has a smelting recipe result (sand -> glass, cobblestone -> stone, raw iron -> iron ingot, etc.), converts it in place. |
+| Burning particles | [IDEA] | Open-backed visual design. Fire/smoke particles emit from the back face when active, visually "cooking" the block behind it. |
+| Fire damage | [IDEA] | Entities (players, mobs) standing directly behind an active Odd Furnace catch fire. Same behavior as standing in a campfire -- fire ticks, not instant damage. Creates trap/defense potential. |
+| Fuel consumption | [IDEA] | Consumes fuel at the same rate as a vanilla furnace per block smelted. One coal smelts 8 blocks, etc. |
+
+**Design notes:**
+- No input/output item handling -- it works directly on blocks in the world. Place sand behind it, it becomes glass. Place raw iron ore behind it... does it drop iron ingots or place an iron block? Probably drops the smelting result as an item if the result isn't a block.
+- The fire damage behind an active Odd Furnace is both thematic (open-backed furnace spitting fire) and functional (trap potential, area denial). Players and mobs alike get burned.
+- Creates an interesting automation loop with Machine Pipes and Placers: Placer puts blocks behind the Odd Furnace, Odd Furnace cooks them, results drop or transform in place.
+- Could work on a column of blocks behind it (smelts the nearest un-smelted block in a line) or just the single block directly behind it. Single block is simpler and more predictable.
+- Thematically Oddstone-adjacent: strange, slightly magical, does familiar things in unfamiliar ways.
+
+**Open questions:**
+- *Does it only smelt the one block directly behind it, or scan a line?*
+- *What happens when the result is an item not a block (e.g. raw iron ore -> iron ingot)? Drop as item entity? Need a hopper/pipe below to catch it?*
+- *Speed: same as vanilla furnace, or faster/slower?*
+- *Can it be pushed by pistons while fueled? (Probably yes -- mobile smelter.)*
+
+---
+
+### Oddserver [IDEA]
+> Sympathetic observer. Detects block changes like a vanilla observer, but instead of a local redstone pulse, wirelessly triggers other Oddservers within sympathetic range along its face axes.
+
+| Property | Value |
+|----------|-------|
+| ID | `oddserver` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Placement | Directional (faces player look direction) |
+| Recipe | TBD (Oddstone + observer?) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Block update detection | [IDEA] | Detects block changes on its front face, same as vanilla observer. |
+| Sympathetic signal output | [IDEA] | Instead of emitting a redstone pulse from its own back, wirelessly triggers the back-face output of other Oddservers that are in line with its faces, within the Oddstone sympathetic movement distance (default 5 blocks). |
+| Directional targeting | [IDEA] | Only targets Oddservers along the axis lines of its faces (6 directions). Does not broadcast omnidirectionally. |
+| Output behavior | [IDEA] | Triggered Oddservers emit a redstone pulse from their back face, as if they had detected a change themselves. |
+
+**Design notes:**
+- Think of it as a wireless observer relay. Place one Oddserver watching a door, place another Oddserver 5 blocks away facing a redstone circuit. When the door opens, the first Oddserver detects the change and wirelessly fires the second Oddserver, which pulses into the circuit.
+- The "line of faces" targeting means you have directional control. The Oddserver only talks to other Oddservers it can "see" along its axes, not everything in a radius. This prevents unwanted cross-talk.
+- Uses the same sympathetic distance as Oddstone (configurable, default 5). Ties into the Oddstone family thematically and mechanically.
+- Does NOT use Oddstone's BFS chaining -- it's a direct line-of-sight check within range, not a chain through intermediate Oddservers. (Or should it chain? TBD -- chaining would be more powerful but harder to predict.)
+
+**Open questions:**
+- *Does it chain through intermediate Oddservers? (A triggers B which triggers C?) Chaining is powerful but could create unintended cascades.*
+- *Does it trigger ALL Oddservers in range along its axes, or just the nearest one per axis?*
+- *Can it detect changes on all faces (like Machine Observer) or just the front face (like vanilla observer)?*
+- *Does it follow Oddstone variant frequency rules? (Oddserver made from Oddstone Bricks only talks to other Oddstone Brick Oddservers?)*
+
+---
+
+### Hollow Stone [IDEA]
+> Processed stone created when lava meets Oddstone. Required material for Machine Blocks. Also a decorative block with inner-block display.
+
+| Property | Value |
+|----------|-------|
+| ID | `hollow_stone` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Type | Block Entity (stores inner decorative block ID) |
+| Recipe | Not crafted directly -- see Creation below |
+
+**Creation:**
+When a lava source block is adjacent to Oddstone, the lava source transforms into Hollow Stone. The Oddstone is NOT consumed -- it acts as a catalyst. Hollow Stone can also be found naturally wherever lava sources and Oddstone coexist underground.
+
+**Mining behavior:**
+- Without Silk Touch: drops Hollow Stone Shards. If the block contained an inner decorative block, that block is also dropped as an item.
+- With Silk Touch: drops itself (preserving inner block if present). TBD.
+- Hollow Stone Shards craft back into Hollow Stone blocks (shaped/shapeless recipe TBD).
+
+**Decorative feature:**
+Each face of a Hollow Stone block has a small square hole visible in its texture. Right-clicking with a block in hand places that block "inside" the Hollow Stone -- visible through the holes on each face. Uses the same dynamic rendering approach as Framed Blocks (BlockEntityRenderer fetches inner block texture at render time), but inverted: the shell is the Hollow Stone with holes, the inner block shows through them.
+
+**Role in progression:**
+Hollow Stone is a required crafting ingredient for Machine Blocks. This creates the progression chain: find Oddstone -> expose to lava (or find naturally) -> collect Hollow Stone Shards -> craft Hollow Stone -> craft Machine Blocks.
+
+**Design notes:**
+- Oddstone is not consumed, so a single Oddstone vein near lava becomes a renewable Hollow Stone source (bring lava buckets, place sources adjacent to Oddstone, collect the results).
+- The decorative inner-block feature gives Hollow Stone a building use beyond just being a crafting step. Players can use it as a display/accent block.
+- Visually distinct from Framed Blocks: Framed Blocks have an external frame with the inner block filling most of the face. Hollow Stone has a solid stone shell with small window-like holes revealing the inner block.
+
+**Open questions:**
+- *Exact texture design -- how large are the holes? Centered square per face? Multiple small holes?*
+- *Can any block be placed inside, or restrictions (no block entities, no air)?*
+- *Does Hollow Stone have any of Oddstone's properties (mob avoidance, redstone insulation)? Probably not -- it's processed/transformed, not Oddstone itself.*
+
+---
+
+### Machine Block [DONE -- REDESIGN PLANNED]
+> Modular mechanical chassis. A block entity with a single item slot that determines its specialization. Base behavior: selective stickiness to other Machine Blocks. Insert an item to transform it into a specialized machine type.
 
 | Property | Value |
 |----------|-------|
@@ -139,23 +256,383 @@
 | Hardness | 3.0 / Blast 6.0 |
 | Tool | Pickaxe |
 | Sound | Metal |
-| Recipe | 4 iron + 4 redstone + 1 slime -> 1 machine block (placeholder) |
+| Type | Block Entity (single item slot + specialization ID) |
+| Recipe | Hollow Stone + iron + slime (TBD -- requires Hollow Stone) |
 
-**Features:**
+**Base behavior (no item inserted):**
+- Selective stickiness: sticky to all other Machine Block variants. Exclusive with slime & honey.
+- One-way with slime: slime grabs Machine Block; Machine Block does NOT grab slime. Via mixin.
+- Right-click opens a single-slot GUI. Insert an item to specialize. Right-click (or shift-right-click) to retrieve item. Block reverts to blank chassis when empty.
+
+**Current implemented features (to be refactored):**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Selective stickiness | [DONE] | Sticky only to other Machine Blocks. Exclusive with slime & honey. |
-| Redstone conduction | [DONE] | Solid-state redstone dust. Signal decays -1 per block. Whitelist prevents feedback loops. |
-| Power color tint | [DONE] | Dark steel grey (0) -> bright red (15). Runtime tint via color handlers. |
-| One-way with slime | [DONE] | Slime grabs Machine Block; Machine Block does NOT grab slime. Via mixin. |
+| Redstone conduction | [DONE] | Will become Machine Conductor specialization. |
+| Power color tint | [DONE] | Will move to Machine Conductor specialization. |
+| One-way with slime | [DONE] | Stays on base chassis. |
 
-**Known issues:**
-- Placeholder texture (needs circuit/mechanical pixel art)
-- Placeholder recipe
+**Stickiness rules:**
+All Machine Block variants (blank, Conductor, Pipe, Track, Trolley, etc.) stick to all other Machine Block variants. They are all Machine Blocks. The one exception: during a Track-initiated move operation, the Track and Trolley do not stick to each other (the Trolley slides free). In all other contexts (piston push groups, etc.), Tracks and Trolleys stick normally as Machine Blocks.
 
-**Future ideas:**
-- *[IDEA] Particle effects when powered (redstone sparkles)*
+**Block entity movement:**
+When a Machine Block is moved by a piston (or Repulser/Attractor), the block entity data is serialized (save the specialization item ID), the old block entity is destroyed, a new one is created at the destination, and the data is deserialized back. The stored data is minimal (one item ID), so overhead is negligible. Safety checks pause any active specialization behavior (item transfer, signal propagation) during the move tick. Reference implementations: Create mod contraption assembly, Carpet mod movable block entities.
+
+**Visual feedback:**
+Each specialization should have a distinct visual indicator so players can identify machine types at a glance. Approach TBD -- options include: overlay texture per specialization on each face (small icon), tint color per type, or subtle model variation. Base chassis (no item) uses the existing dark steel grey appearance.
+
+---
+
+#### Machine Specializations [IDEA]
+
+The following specializations are defined by inserting the corresponding item into a Machine Block's GUI slot. The item sits in the slot and is retrievable at any time. Removing the item reverts the block to a blank chassis.
+
+**Omnidirectional principle:** Several specializations (Piston, Observer, Repeater, Inverter) operate on all 6 faces simultaneously. The rule for these is: when a face is active (receiving signal, detecting change, etc.), only the opposite face is locked/affected. The other 4 faces remain fully independent. This means a single omnidirectional Machine Block can handle up to 3 non-opposing face pairs simultaneously, replacing what would take 3 separate vanilla blocks.
+
+---
+
+**Machine Conductor** (insert: Redstone Dust) [DONE -- needs refactor to specialization system]
+
+Solid-state redstone wire as a full block. Receives and transmits redstone signal. Signal decays by 1 per block (like redstone dust). Whitelist (redstone_components tag) prevents feedback loops since Machine Conductor is itself a signal source. Visual: power color tint from dark steel grey (0) to bright red (15).
+
+This is the existing Machine Block redstone behavior, moved into a specialization.
+
+---
+
+**Machine Pipe** (insert: Hopper) [IDEA]
+
+Signal-triggered item transport. Inert until it receives a redstone signal. On signal, pulls one item from the container on the signal-receiving face, then automatically pushes it to the next connected container or Machine Pipe. Does not pull continuously -- each pulse moves one item.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Redstone signal on any face. Pulls from the container on that face. |
+| Transfer rate | 1 item per signal pulse |
+| Default push direction | Opposite the face that received the signal (and pulled the item) |
+| Round-robin | If connected to multiple valid outputs, cycles through them on subsequent pulls, excluding the face it pulled from |
+| State tracking | Block entity stores last-output index for round-robin |
+| Filtering | None (transfers any item). Filter specialization possible later. |
+| Visual | TBD -- pipe icon overlay or subtle model change |
+
+**Transfer flow:**
+```
+Signal arrives on NORTH face ->
+  Check NORTH neighbor for inventory (chest, hopper, other pipe, etc.)
+  Pull 1 item from that inventory ->
+  Push to SOUTH (opposite face, default first output) ->
+    If SOUTH is blocked or no container, try next valid face in round-robin ->
+    Exclude NORTH (the pull face) from output candidates
+```
+
+**Design notes:**
+- Signal-triggered means the pipe is controllable with redstone timing. Clock it with a repeater for steady throughput, pulse it manually for precise transfers.
+- Simpler than hoppers: no passive suction, no comparator output (though that could be added). Just "signal in, item moves."
+- The default-to-opposite-face behavior means a straight line of pipes works intuitively without configuration.
+- Can receive items pushed from another Machine Pipe (acts as a container for the pushing pipe). When it receives an item this way, it pushes forward using the same round-robin logic.
+
+---
+
+**Machine Track** (insert: Powered Rail) [IDEA]
+
+Rail infrastructure for Machine Trolleys. Receives and conducts redstone signal (like Machine Conductor). Special behavior: when a Machine Trolley is adjacent, the Track moves the Trolley in the direction opposite to the redstone signal source.
+
+| Detail | Value |
+|--------|-------|
+| Signal behavior | Receives and conducts redstone like Machine Conductor |
+| Trolley interaction | On receiving signal, checks adjacent blocks for Trolleys. Moves Trolley away from signal source direction. |
+| Movement mechanic | Uses Repulser/Attractor-style piston move logic (RangedPistonUtil). Track acts as a context-specific Repulser for Trolleys. |
+| Stickiness exception | During a Track-initiated move, the Track and the Trolley it is moving do NOT stick to each other. The Trolley slides free. All other Machine Blocks adjacent to the Trolley stick normally (payload). |
+
+**Design notes:**
+- The movement mechanic reuses existing Repulser infrastructure -- no new movement system needed.
+- Trolleys can carry payloads: any Machine Blocks (non-Track, non-Trolley) stuck to the Trolley move with it as a piston group.
+- Signal direction determines movement direction. Power east side of track line -> trolley moves west.
+
+---
+
+**Machine Trolley** (insert: Minecart) [IDEA]
+
+Mobile platform that rides on Machine Tracks. Has no movement logic of its own -- entirely passive. The Track does the pushing.
+
+| Detail | Value |
+|--------|-------|
+| Self-movement | None. Trolley is moved by adjacent Tracks. |
+| Payload | Other Machine Blocks (not Tracks or Trolleys) stick to the Trolley and move with it as a group. |
+| Stickiness | Normal Machine Block stickiness to everything EXCEPT: does not stick to the Track that is actively moving it. |
+
+**Design notes:**
+- A Trolley sitting on a line of Tracks is essentially a block-based minecart. No entity, no rails -- just blocks.
+- Payload capacity is limited by piston push limits (or Machine Grabber-extended limits).
+- Multiple Trolleys in a group? If two Trolleys are stuck together via intermediate Machine Blocks, a Track would move the whole group. Could be useful or chaotic -- worth testing.
+
+---
+
+**Machine Inverter** (insert: Redstone Torch) [IDEA]
+
+NOT gate as a full block. Emits a redstone signal from any face that is NOT receiving a signal. When a face receives a signal, the opposite face stops emitting. Each axis operates independently -- only the opposite face is affected.
+
+| Detail | Value |
+|--------|-------|
+| Default state | Emitting on all faces (like a redstone torch) |
+| When powered on a face | Opposite face stops emitting. Other axes unaffected. |
+| Per-axis operation | North/south, east/west, up/down each operate independently. Signal in from north turns off south output, but east/west/up/down outputs remain on. |
+| Signal strength | 15 when emitting, 0 when suppressed (TBD -- or should it invert the signal level?) |
+
+**Design notes:**
+- Follows the same opposite-face-only rule as other omnidirectional specializations.
+- A single Machine Inverter can invert up to 3 independent signal lines simultaneously.
+- Default-on behavior means an unpowered Machine Inverter emits from all 6 faces at strength 15. Powering individual faces selectively disables their opposite outputs.
+
+---
+
+**Machine Repeater** (insert: Redstone Repeater) [IDEA]
+
+Signal delay block. GUI includes number buttons to set tick delay (1-4 ticks, like vanilla repeater). Receives signal on any face, outputs on the opposite face after the set delay. Only the opposite face is locked per active signal -- can delay signals on up to 3 independent axes simultaneously.
+
+| Detail | Value |
+|--------|-------|
+| Delay range | 1-4 ticks (matching vanilla repeater) |
+| GUI | Number buttons for delay selection (in addition to the specialization item slot) |
+| Directionality | Receives from any face, outputs on opposite face. Each axis operates independently. |
+| Locking | Only the opposite face is locked per signal. Can relay on up to 3 non-opposing axes simultaneously. |
+| Simultaneous operation | Signal from north (delay -> south) + signal from east (delay -> west) + signal from up (delay -> down) all operate independently with their own delay timers. |
+
+**Design notes:**
+- Each face-pair (north/south, east/west, up/down) maintains its own independent delay timer.
+- Delay setting in GUI applies to all axes (single global delay value). Per-axis delay would be more powerful but significantly more complex GUI -- probably not worth it.
+- A single Machine Repeater at a junction can delay 3 independent signal lines. Extremely space-efficient.
+
+---
+
+**Machine Clock** (insert: Clock) [IDEA]
+
+Programmable pulse generator. When receiving a redstone signal, emits a 1-tick pulse at a configurable interval. GUI has selection buttons to set the tick interval. Stops pulsing when the input signal is removed.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Requires continuous redstone input to operate. No input = no pulses. |
+| Output | 1-tick redstone pulse at the configured interval |
+| Interval | Configurable via GUI buttons (TBD -- range from every 2 ticks to every 40 ticks? Or specific presets?) |
+| Omnidirectional | Follows the opposite-face-only rule. Input on one face, output on opposite face. Up to 3 independent clock signals simultaneously. |
+
+**Design notes:**
+- Replaces the need for vanilla repeater clock circuits (the classic 2-repeater loop). One block, configurable speed, clean signal.
+- The "requires input" design means it's controllable -- feed it a signal to start the clock, cut the signal to stop. No runaway clocks.
+- Combined with Machine Pipe, this is the core of automated item transport: Clock pulses the Pipe at whatever rate you want.
+- The clock item as the specialization token is thematically perfect -- it's literally a clock.
+
+---
+
+**Machine Pulser** (insert: Button) [IDEA]
+
+Rising-edge detector. Converts any incoming signal into a single 1-tick pulse. Only fires on the rising edge (signal turning on). A constant signal produces exactly one pulse -- the signal must turn off and on again to fire another. Essentially a monostable circuit as a single block.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Rising edge of redstone signal (off -> on transition) |
+| Output | Single 1-tick pulse on the opposite face |
+| Constant signal | Ignored after the initial pulse. Signal must drop to 0 and return to fire again. |
+| Omnidirectional | Follows the opposite-face-only rule. Each face-pair tracks its own edge state independently. Up to 3 independent pulse outputs simultaneously. |
+
+**Design notes:**
+- Essential for converting sustained signals into clean pulses. Place between a lever and a Machine Piston to get one push per flip instead of a stuck piston.
+- Like a Conductor but smarter -- it doesn't just pass the signal through, it shapes it.
+- The button as specialization token is thematic: buttons produce a single pulse, so does this block.
+- Pairs naturally with Machine Clock: Clock generates periodic pulses from a constant signal, Pulser generates a single pulse from a constant signal.
+
+---
+
+**Machine Toggle** (insert: Lever) [IDEA]
+
+Redstone-controlled toggle switch. Alternates between on and off states each time it receives a rising-edge signal. First pulse turns it on (emits redstone), second pulse turns it off, third turns it on, etc. Essentially a T flip-flop as a single block.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Rising edge of redstone signal (off -> on transition) |
+| Output | Toggles between emitting signal (on) and not emitting (off) on the opposite face |
+| State | Persistent -- remembers on/off state. Survives chunk unloads. |
+| Omnidirectional | Follows the opposite-face-only rule. Each face-pair maintains its own independent toggle state. Up to 3 independent toggles simultaneously. |
+
+**Design notes:**
+- Replaces the vanilla T flip-flop (which requires multiple blocks -- sticky piston + slime + redstone). One block, clean toggle.
+- The lever as specialization token is perfect: a lever is a toggle, so is this block. But this one is redstone-controlled rather than player-controlled.
+- Useful for: button -> toggle on/off for doors, machines, lights. Pulse from Machine Observer -> toggle a circuit. Any "press once to start, press again to stop" behavior.
+- State persists through chunk unloads and game restarts (stored in block entity NBT).
+
+---
+
+**Machine Observer** (insert: Observer) [IDEA]
+
+Omni-directional block update detector. Watches ALL six faces for block changes. When a change is detected on any face, sends a signal pulse out the opposite face. Only the opposite face is locked during that pulse -- all other faces remain active and can detect/fire independently.
+
+| Detail | Value |
+|--------|-------|
+| Detection | All 6 faces simultaneously |
+| Output | Pulse on the face opposite to the detected change |
+| Locking | Only the opposite face is locked during a pulse (the output face cannot simultaneously detect). Other 4 faces remain fully active. |
+| Simultaneous events | Can detect changes on up to 3 non-opposing face pairs simultaneously, firing 3 independent output pulses. |
+| Pulse duration | 1 redstone tick (TBD) |
+
+**Design notes:**
+- Eliminates vanilla observer's biggest limitation: fixed orientation. One block, all directions covered.
+- The opposite-face-only lockout means a single Machine Observer can serve up to 3 independent circuits at once (e.g. detect north -> fire south, detect east -> fire west, detect up -> fire down, all simultaneously).
+- This makes it an incredibly dense detection hub. One block at an intersection replaces what would normally take 3 separate vanilla observers.
+
+---
+
+**Machine Piston** (insert: Piston or Sticky Piston) [IDEA]
+
+Omni-directional piston. Any face can be the pushing face, determined by which face receives the redstone signal -- pushes out from the opposite face. No piston head needed. Only the opposite face is locked per signal -- can push in up to 3 directions simultaneously.
+
+| Detail | Value |
+|--------|-------|
+| Push direction | Opposite to the face receiving signal |
+| Sticky vs non-sticky | Determined by inserted item: regular Piston = push only, Sticky Piston = push and pull |
+| Push limit | Standard (12, or extended by Machine Grabber/Extender if present in group) |
+| Movement logic | Standard piston structure resolution via existing mixin infrastructure |
+| Locking | Only the opposite face is locked per signal. Receiving signal on north locks south (pushing south), but east/west/up/down remain available. |
+| Simultaneous push | Can push in up to 3 non-opposing directions at once (e.g. signal from north + east + up = push south + west + down simultaneously). |
+
+**Design notes:**
+- No piston head block. The Machine Piston pushes from its own face directly. This means it's a full cube that doesn't extend, which is a significant space savings over vanilla pistons.
+- Simultaneous multi-directional push from a single block is extremely powerful. One Machine Piston at an intersection can serve 3 independent circuits.
+- Each push direction resolves independently -- different push groups, different block limits per direction. A push failing in one direction doesn't affect the others.
+- Combined with Machine Observer, enables very compact redstone contraptions that would normally require sprawling vanilla builds.
+
+**Open questions:**
+- *What happens if the same block is in two different push groups from the same Machine Piston? (e.g. a block that's both south and west of the piston, in both push groups) Probably: first push to resolve wins, second push recalculates with the block already moved.*
+
+---
+
+**Machine Battery** (insert: Redstone Block) [IDEA]
+
+Wireless redstone broadcaster. When receiving a redstone signal, emits that signal to all Machine Blocks within a radius.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Must receive a redstone signal to activate (unlike redstone block which is always on) |
+| Broadcast radius | TBD (5 blocks to match Oddstone sympathetic range? Or configurable via GUI?) |
+| Target | Machine Blocks only (all variants) |
+| Signal strength | TBD -- broadcasts at received strength? Fixed 15? Decays with distance? |
+
+**Design notes:**
+- Creates wireless redstone clusters without physical wire connections.
+- Potential feedback loop concern: if a Battery powers Machine Conductors, and those Conductors feed back to the Battery, infinite loop. May need the same whitelist approach as Machine Conductor, or a rule that Batteries don't trigger other Batteries.
+
+---
+
+**Machine Grabber** (insert: TBD -- possibly Piston + Slime? Or unique item?) [IDEA]
+
+Active mass-capture block. When receiving a redstone signal, grabs a 3x3x3 volume of blocks in front of it, incorporating them into the current push group. Extends the effective piston push limit for the structure it's part of.
+
+| Detail | Value |
+|--------|-------|
+| Activation | Redstone signal toggles grab state on/off |
+| Capture volume | 3x3x3 cube in front of facing direction (27 blocks max) |
+| Effect | Captured blocks become part of any piston push group that includes the Grabber |
+| Push limit | Adds captured blocks to the group regardless of normal stickiness. Effectively extends push limit by up to 27. |
+| Stickiness bypass | Grabs ANY movable block in the volume, not just sticky-connected ones |
+
+**Design notes:**
+- Unlike passive stickiness, the Grabber actively claims a volume. This lets it move heterogeneous collections of vanilla blocks that have no sticky properties.
+- The 3x3x3 volume is fixed and directional -- the Grabber faces a direction and grabs the cube in front of it.
+- When the Grabber is part of a piston group, the grabbed blocks move with it. When it's not being pushed, the grab state is just "ready" -- the blocks aren't held in place or anything.
+- Very powerful -- should be expensive to craft and/or require Oddstone.
+
+---
+
+**Machine Fluid Pipe** (insert: Bucket) [IDEA]
+
+Fluid transport. Signal-triggered, same pattern as Machine Pipe. The bucket in the slot is functional -- it fills with whatever fluid the pipe picks up. Deposits fluid out the output face like a dispenser.
+
+| Detail | Value |
+|--------|-------|
+| Trigger | Redstone signal on any face. Pulls fluid from that face. |
+| Fluid source | Picks up source blocks (water, lava) from the world, or pulls from cauldrons and fluid-handling block entities. Consumes the source block. |
+| Bucket state | The bucket in the GUI slot fills with the picked-up fluid (empty bucket -> water bucket or lava bucket). Visible in GUI. |
+| Output | Deposits fluid out the opposite face (default) or round-robins through output faces. Dispenses like a dispenser -- places a source block or fills a cauldron. |
+| Round-robin | Same as Machine Pipe: excludes pull face, cycles through valid outputs. |
+| Visual | TBD -- fluid color visible through block? Drip particles matching contained fluid? |
+
+**Fluid interaction (water meets lava):**
+
+When a fluid pipe tries to push fluid into another fluid pipe that already contains the opposing fluid, a reaction occurs:
+
+| Push | Into Pipe Containing | Result |
+|------|---------------------|--------|
+| Water | Lava (lava bucket) | Lava bucket becomes obsidian. Pipe reverts to Machine Block with obsidian in slot (Machine Anchor). Pushed water is consumed. |
+| Lava | Water (water bucket) | Water bucket becomes stone. Pipe reverts to Machine Block with stone in slot (inert). Pushed lava is consumed. |
+
+Both fluids are consumed in the reaction. The receiving pipe loses its fluid pipe specialization because the bucket is destroyed -- replaced by the reaction product (obsidian or stone) sitting in the item slot.
+
+**Design notes:**
+- The bucket being functional (not just a specialization token) is key. You can see what fluid the pipe is carrying by checking the GUI.
+- Fluid interactions create natural consequences for routing mistakes AND intentional fluid mixing. Water-into-lava producing a Machine Anchor (obsidian in slot) is a discoverable mechanic.
+- Dispenser-style output means fluid pipes can fill areas, create water/lava sources, or feed into cauldrons. Useful for irrigation, lava moats, cobblestone generators, etc.
+- Pulling from cauldrons enables controlled fluid intake from brewing/alchemy setups.
+
+---
+
+**Machine Anchor** (insert: Obsidian) [IDEA]
+
+Immovable anchor point. A Machine Block with obsidian in its slot becomes unmovable by pistons, Repulsers, Attractors, or any other movement system. Critically, it retains Machine Block stickiness -- so if a piston tries to push a group that includes a Machine Anchor, the entire push fails (same behavior as vanilla obsidian blocking a piston push).
+
+| Detail | Value |
+|--------|-------|
+| Movability | Immovable. Any push group containing a Machine Anchor fails to move. |
+| Stickiness | Normal Machine Block stickiness. Sticks to all Machine Block variants. |
+| Net effect | Acts as a brake/anchor. Locks a structure in place. |
+
+**Design notes:**
+- Primary use: fixed infrastructure. Anchor one end of a track line so Trolleys don't push the tracks. Anchor a station so moving contraptions dock against it without displacing it.
+- Discoverable through the fluid pipe water-into-lava interaction (obsidian ends up in the slot). But can also be crafted intentionally by simply inserting obsidian into a Machine Block.
+- The combination of "immovable" + "sticky" is what makes this special. Vanilla obsidian is immovable but not sticky. The Machine Anchor is both, which means it can block movement of entire connected structures, not just itself.
+- Counterplay: remove the obsidian from the slot to make it movable again.
+
+---
+
+**Machine Push Limit Extender** (insert: TBD) [IDEA]
+
+Passive push limit increase. When this Machine Block is part of a piston push group, it increases the push limit for that group. Each extender adds a fixed number to the limit (e.g. +6), but occupies one slot itself, creating a net gain with diminishing returns.
+
+| Detail | Value |
+|--------|-------|
+| Limit increase | +6 per extender (TBD -- balance dependent) |
+| Net gain | +5 per extender (gains 6 but uses 1 slot) |
+| Passive | No activation needed -- just being in the push group is enough |
+| Stacking | Multiple extenders stack additively |
+
+**Design notes:**
+- Rewards building with Machine Blocks. Want bigger contraptions? Use more Machine Block material.
+- Diminishing returns create a soft ceiling -- you can push larger structures but each additional extender is proportionally less impactful.
+- Different philosophy than Machine Grabber: Extender makes connected structures bigger. Grabber captures unconnected volumes.
+
+---
+
+#### Open Specialization Slots
+
+*The following are potential future specializations. Items listed are thematic suggestions -- the system is extensible to any item-to-behavior mapping.*
+
+| Potential Item | Possible Specialization | Notes |
+|----------------|------------------------|-------|
+| Comparator | Machine Comparator? | Signal measurement / conditional output. Reads inventory levels, signal strength comparison. |
+| Dropper | Machine Ejector? | Ejects items into the world or into adjacent blocks. |
+| TNT | Machine Launcher? | Explosive push? Launches blocks or entities? |
+| Chest | Machine Storage? | Small shared inventory accessible to adjacent Machine Pipes. |
+| Furnace | Machine Smelter? | In-line smelting within a pipe network? |
+| Sculk Sensor | Machine Vibration Sensor? | Detects vibrations, outputs redstone. Wireless detection. |
+| Note Block | Machine Speaker? | Plays sounds, redstone-activated. Programmable notes. |
+| Daylight Detector | Machine Light Sensor? | Outputs signal based on light level at the block. |
+| Compass | Machine Locator? | Detects or points toward specific block types in range? |
+| Tripwire Hook | Machine Tripwire? | Detects entity passage between two Machine Tripwires. |
+
+*This list is a brainstorm -- not all of these will necessarily be implemented. The system is designed to grow organically as new specializations prove useful.*
+
+**Known issues (current implementation):**
+- Current Machine Block is a simple block, not a block entity -- needs refactor to block entity with GUI
+- Placeholder texture (needs mechanical pixel art showing the item slot)
+- Placeholder recipe (will change to require Hollow Stone)
+- Redstone conduction currently baked into the base block -- needs extraction to Machine Conductor specialization
 
 ---
 
@@ -170,12 +647,22 @@
 | Tool | Pickaxe |
 | Drops | Normal: original block + frame block. Silk Touch: framed block item (preserves combo). |
 
+**Model approach:**
+Two overlapping 16x16x16 cuboids in the same block space:
+- Inner cuboid: dynamically uses the texture of whatever block is stored inside. Cannot be a static JSON reference -- must be fetched at render time.
+- Outer cuboid: static JSON model using the frame texture (iron or copper). The frame texture is a PNG that is mostly transparent, with opaque pixels only on the edges -- like a picture frame. This cuboid renders on top, its edge pixels overlaying the inner texture.
+
+The outer cuboid IS a normal static JSON model. The inner cuboid requires a BlockEntityRenderer (BESR) -- Java code that runs each render frame, reads the stored block ID from the block entity, looks up that block's texture in Minecraft's texture atlas, and draws it onto the inner cuboid's faces. This is why a pure JSON model cannot achieve the "any block" behavior: JSON texture references are fixed at load time, not per-instance at runtime.
+
+Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dynamic inner texture).
+
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Inner block storage | [DESIGNED] | Block entity stores ResourceLocation of wrapped block. |
-| Dynamic rendering | [DESIGNED] | Custom renderer composites inner block texture + frame overlay. 2 overlay textures total (iron, copper). Works with any block including modded. Reference: FramedBlocks mod. |
+| Inner block storage | [DESIGNED] | Block entity stores ResourceLocation of the wrapped block. |
+| Outer frame (static) | [DESIGNED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
+| Inner texture (dynamic) | [DESIGNED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
 | Machine-activated stickiness | [DESIGNED] | Framed blocks are NOT sticky by default. When a Machine Block is part of a piston push group, it "activates" adjacent framed blocks, making them sticky for that move. Activation chains through matching framed blocks (iron->iron, copper->copper). Deactivates after move resolves. |
 | Material exclusivity | [DESIGNED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
 | Slime/honey exclusivity | [DESIGNED] | Framed blocks do not interact with slime or honey stickiness. |
@@ -228,39 +715,8 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
-### The Framer [DESIGNED]
-> Directional machine that wraps blocks in iron or copper frames.
-
-| Property | Value |
-|----------|-------|
-| ID | `framer` |
-| Placement | Directional (faces player look direction, like Drill) |
-| Activation | Redstone pulse |
-| GUI | Dispenser-style inventory (holds Frame Blocks) |
-| Behavior | Consumes 1 Frame Block from inventory, converts block in front into corresponding framed variant |
-
-**Features:**
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Directional placement | [DESIGNED] | Extends DirectionalBlock + FACING property. |
-| Redstone activation | [DESIGNED] | POWERED property + neighborChanged(). Pulse -> frame one block. |
-| Frame block inventory | [DESIGNED] | Small GUI (dispenser-style, 3x3 grid). Holds Iron Frame and/or Copper Frame blocks. |
-| Block conversion | [DESIGNED] | On pulse: check block at FACING position. If frameable, replace with Framed Block entity storing original block ID. Consume 1 Frame Block matching the type used. |
-| Frame type selection | [DESIGNED] | Uses first available Frame Block in inventory. Iron Frame -> iron framed. Copper Frame -> copper framed. |
-
-**Conversion flow:**
-```
-[Framer->] [Oak Planks]  + redstone pulse + Iron Frame block in inventory
-                         v
-[Framer->] [Iron Framed Oak Planks]  (block entity storing "minecraft:oak_planks")
-```
-
-**Edge cases to decide:**
-- What blocks CAN'T be framed? (Bedrock, block entities like chests, other framed blocks, air?)
-- Can the Framer be pushed by pistons while loaded? (Probably yes -- mobile framing station.)
-
-**Future ideas:**
+### The Framer [MERGED -> Placer Block]
+> Merged into Placer Block. The Placer handles framing when it attempts to place a Frame Block and there's already a block in front of it.
 
 ---
 
@@ -302,26 +758,46 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 ---
 
 ### Placer Block [IDEA]
-> Directional block that places blocks. Inverse of the Drill. Costs Oddstone to craft.
+> Directional block that places blocks. Inverse of the Drill. Also functions as a Framer when placing Frame Blocks onto existing blocks. Costs Oddstone to craft.
 
 | Property | Value |
 |----------|-------|
 | ID | `placer` |
 | Placement | Directional (faces player look direction, like Drill) |
 | Activation | Redstone pulse |
-| Behavior | Places a block from its inventory into the space in front of it |
+| GUI | Dispenser-style inventory (3x3 grid) |
+| Behavior | Places a block from its inventory into the space in front of it. Context-sensitive: if placing a Frame Block and a block already exists in front, frames that block instead. |
 | Recipe | Oddstone + ? (TBD) |
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Block placement | [IDEA] | Dispenser-style inventory. Pulse -> place one block in facing direction. |
+| Block placement | [IDEA] | Dispenser-style inventory. Pulse -> place one block in facing direction. If space in front is air, places the block normally. |
+| Framing mode | [IDEA] | If the next item in inventory is a Frame Block (Iron Frame or Copper Frame) AND the space in front is occupied by a frameable block, converts that block into the corresponding Framed Block variant instead. Consumes 1 Frame Block. |
 | Directional | [IDEA] | Extends DirectionalBlock + FACING property, like Drill. |
+
+**Placement logic:**
+```
+Pulse fires ->
+  Next item in inventory is a normal block?
+    Space in front is air? -> Place the block. Done.
+    Space in front is occupied? -> Nothing happens.
+  Next item is a Frame Block (Iron or Copper)?
+    Space in front is air? -> Place the Frame Block as a block. Done.
+    Space in front is a frameable block? -> Convert to Framed Block. Consume Frame Block. Done.
+    Space in front is unframeable (bedrock, block entity, already framed)? -> Nothing happens.
+```
 
 **Design notes:**
 - Paired with Drill as the other half of automated building (Drill removes, Placer adds).
+- Framing mode is context-sensitive, not a separate mode toggle. The Placer just does the smart thing based on what it's holding and what's in front of it.
 - Oddstone cost puts it in the mid-game, gated by Oddstone economy.
+- Can be pushed by pistons while loaded (mobile placement/framing station).
+
+**Edge cases to decide:**
+- What blocks CAN'T be framed? (Bedrock, block entities like chests, other framed blocks, air?)
+- If inventory has mixed items (some blocks, some frames), does it use whatever's next in sequence, or prioritize one type?
 
 ---
 
@@ -516,6 +992,120 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
+### Branch Block [IDEA]
+> Connecting log-like block that forms organic tree/vine structures. Half-thickness centered log that visually joins to adjacent branches in all directions.
+
+| Property | Value |
+|----------|-------|
+| ID | `branch` |
+| Hardness | ~2.0 / Blast 0 (log-equivalent) |
+| Tool | Axe |
+| Recipe | TBD (logs?) |
+| Notes | Decorative/structural. Connects to adjacent branches, forming trees, arbors, scaffolding-like organic shapes. |
+
+**Concept:**
+A branch is a centered 8x8 (half-thickness) log core occupying the middle of a block space. When placed adjacent to other branches, they visually join together. The shape the branch displays depends entirely on which of its 6 faces have a neighboring branch.
+
+**Shape Logic:**
+Branches use a multipart blockstate system -- the final visible shape is assembled from layered model pieces, not a single model per combination. This keeps the model file count manageable.
+
+Base model pieces (all can be rotated to cover all 6 directions):
+- Core: the central 8x8x8 node (always present)
+- Arm: a 8x8 segment extending from center to one face edge (one per connected direction)
+
+The game composes: Core + whichever Arms correspond to connected faces. This gives all possible shapes automatically with only a handful of model files.
+
+**Connection directions:**
+Branches connect in all 6 directions (up, down, north, south, east, west). A branch connects to any adjacent branch regardless of that neighbor's own orientation.
+
+**Shape examples (for visualization):**
+- Isolated: just the central node (a small cube stub)
+- Two opposite connections (e.g. up + down): a vertical pillar segment
+- Two perpendicular connections (e.g. up + north): an L-bend corner
+- Three connections (e.g. up + north + east): a T or corner junction
+- Four connections in a plane (e.g. all horizontal): a flat plus/cross
+- Six connections: full junction node
+
+**Corner/bend geometry note:**
+Unlike fences (where each arm is straight and identical), a branch arm that bends 90 degrees does NOT require unique geometry -- the core node handles the visual join, and each arm is simply a straight half-log segment pointing outward. This means corner shapes are handled naturally by the multipart composition without dedicated corner models. This is a key advantage of the centered-core design.
+
+**Blockstate approach:**
+Six boolean properties: north, south, east, west, up, down (same pattern as fence). 2^6 = 64 combinations, all handled automatically by multipart composition. The blockstate JSON applies each arm piece conditionally: "when: {up: true} -> apply: arm_up model".
+
+**Block update behavior:**
+On placement and on neighbor change, the branch checks all 6 adjacent positions for other branch blocks and updates its own connection booleans accordingly. Neighbors also update their own states when a branch is placed or removed next to them (standard Minecraft neighbor update pattern -- same as how fences work).
+
+**State space summary:**
+
+| States | Count |
+|--------|-------|
+| Connection booleans (N/S/E/W/U/D) | 6 x true/false |
+| Total combinations | 64 |
+| Model files needed | ~7 (core + 1 arm, rotated via blockstate JSON) |
+
+**Design notes:**
+- Centered half-thickness means branches visually line up through corners -- no awkward offset like vanilla logs do when placed perpendicular.
+- All vanilla log types could potentially have a branch variant, or a single "branch" block could have a wood type property. TBD based on scope.
+- Could generate naturally as part of tree feature worldgen (thick canopy trees, dead trees, mangrove-style growth).
+- Does NOT need to be waterloggable initially, but worth considering for swamp aesthetics.
+- Leaf blocks placed adjacent to branches look natural -- no special behavior needed.
+
+**Open questions:**
+- *Single branch block with a wood_type property, or one branch block per wood type (like vanilla logs)?*
+- *Does it generate naturally or is it purely player-placed?*
+- *Strip-able with axe like vanilla logs?*
+- *Should isolated branches (no connections) render as a small stub node, or default to a full pillar for easier placement?*
+
+---
+
+### Bush Block [IDEA]
+> Connecting foliage block. A slightly undersized leaf-cube that expands to meet adjacent bushes, forming seamless hedges, shrubs, and ground cover.
+
+| Property | Value |
+|----------|-------|
+| ID | `bush` |
+| Hardness | ~0.2 / Blast 0 (leaf-equivalent) |
+| Tool | Shears (drops itself), Axe (drops nothing or berries TBD) |
+| Recipe | TBD |
+| Notes | Decorative foliage. Connects to adjacent bush blocks visually. Could generate naturally as undergrowth. |
+
+**Concept:**
+An isolated bush renders as a 14x14x14 cuboid centered in the block space -- slightly inset from the block edges on all sides (1 unit of gap per face). When a neighboring bush is present, that face extends out to the full 16-unit block edge, seamlessly joining the two together into one continuous mass. This is the inverse of the branch approach: instead of adding arms outward, the bush expands faces outward to close gaps.
+
+**Model approach:**
+Each face has two possible states: inset (gap present, no neighbor) or flush (full extent, neighbor present). Rather than 64 models, this can be handled with a multipart blockstate: start with the base 14x14x14 cube, then conditionally apply a thin "extension slab" piece on each face that bridges the gap to the block edge.
+
+Base pieces:
+- Core: 14x14x14 centered cube (always present)
+- Face extension: a 1x14x14 slab that fills the gap on one face (one per direction, applied when neighbor present)
+
+6 boolean properties (same as branches/fences): north, south, east, west, up, down.
+
+**Visual behavior examples:**
+- Isolated: slightly smaller cube with visible gaps on all sides -- a shrub stub
+- Two adjacent in a row: seamless rectangular mass, no visible seam
+- 3x3 ground-level hedge: completely flush top and sides, looks like a solid hedge
+- Corners: the face extensions from two perpendicular bushes overlap cleanly at the corner (both extend to the edge, filling the corner)
+
+**Difference from Branch Block:**
+Branches express their connections as arms (additive geometry extending outward from center). Bushes express their connections as face expansions (filling the gap between the inset core and the block edge). Branches are structural/skeletal; bushes are volumetric/mass-filling. Both use the same 6-boolean blockstate pattern and multipart composition strategy.
+
+**Design notes:**
+- Leaf-like appearance -- uses a foliage-tinted texture similar to leaves, or a custom denser leaf texture.
+- Does not need to be transparent in the same way leaves are (no "fast/fancy" leaf transparency needed) -- solid faces are fine and simpler.
+- Could have biome-tinted color like vanilla leaves, or fixed green variants per biome.
+- Generates naturally as undergrowth in forests, dense vegetation in jungles, hedgerows in plains.
+- Could serve as a player-cuttable resource (shears -> bush block, axe -> nothing or small drop).
+- Naturally pairs with Branch block -- branches form the skeleton of a tree or shrub, bushes fill the canopy volume.
+
+**Open questions:**
+- *Fixed texture or biome-tinted like vanilla leaves?*
+- *Drop when broken without shears -- nothing, leaves, or a unique berry/fruit item?*
+- *Should it generate naturally or be purely player-placed initially?*
+- *Multiple variants (oak bush, jungle bush, etc.) or a single universal bush block?*
+
+---
+
 ### [Template -- Copy for New Blocks]
 > *One-line description.*
 
@@ -536,7 +1126,19 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ## 2. ITEMS & TOOLS
 
-*No standalone items yet. All current items are BlockItems.*
+### Structure Debug Stick [DONE]
+> Debug/testing tool for the multiblock framework. Hold in either hand to see structure register/deregister events in chat.
+
+| Property | Value |
+|----------|-------|
+| ID | `structure_debug_stick` |
+| Type | Simple item, stacksTo 1 |
+| Texture | Vanilla stick (placeholder) |
+| Recipe | None -- creative only for now |
+
+**Behavior:** When held in mainhand or offhand, StructureManager sends color-coded chat messages on structure formation (green) and removal (red). Shows structure type name, core position, and core count. Zero overhead when nobody holds it.
+
+---
 
 **Future ideas:**
 - *[IDEA] Tool/armor modifiers via multiblock crafting stations (see Recipes & Crafting > Crafting Modifiers)*
@@ -651,12 +1253,14 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 - Slime -> Oddstone: **BLOCKED** (Oddstone is immune to slime grabs)
 - Honey -> Oddstone: **BLOCKED**
 - Odd Slime -> Oddstone: **BLOCKED**
+- Sticky Piston -> Oddstone: **BLOCKED [IDEA]** (Oddstone cannot be grabbed/retracted by sticky pistons. Oddstone is aesthetically and thematically ungrabable -- it decides what it connects to, nothing else can claim it. Requires mixin to intercept sticky piston retraction logic.)
 - Machine Block -> Slime: **BLOCKED** (Machine Block won't drag slime)
 - Machine Block -> Honey: **BLOCKED**
 - Machine Block -> Odd Slime: **BLOCKED**
 - Slime -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Honey -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Odd Slime directional rule: stickiness disabled when pushDirection != FACING
+- Machine Track <-> Machine Trolley during Track move: **CONDITIONAL [IDEA]** (not sticky to each other only during Track-initiated movement. Normal Machine Block stickiness in all other contexts.)
 
 ---
 
@@ -713,7 +1317,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5x5 outer (3x3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
+| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
@@ -1169,13 +1773,15 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 |--------|--------------|-------|
 | Oddstone Portals | High (full frame) | Most expensive single use. 5x5 minimum frame = significant investment. |
 | Inhibitor Block | Medium (TBD) | Needed for safe mining. Multiple may be needed per vein. |
-| Machine Block | Low-Medium (TBD) | Core mechanical component. Frequent use in builds. |
+| Hollow Stone (-> Machine Blocks) | Indirect (catalyst) | Oddstone is not consumed -- lava sources touching Oddstone become Hollow Stone. Oddstone gates access but is not spent. High throughput if player has lava supply. |
+| Machine Blocks | Via Hollow Stone | Crafted from Hollow Stone + iron + slime (TBD). Oddstone cost is indirect through Hollow Stone production. |
+| Machine Specializations | Via vanilla items | Items inserted into Machine Blocks (redstone, hoppers, pistons, etc.) are retrievable. No Oddstone cost per specialization. |
 | Placer Block | Medium (TBD) | Automation tool. |
 | Oddstone Repulser/Attractor | Low-Medium (TBD) | Ranged Oddstone-only pistons. Oddstone + piston base. |
 | Arcane Repulser/Attractor | Medium (TBD) | Universal ranged pistons. Oddstone + obsidian + piston base. |
 | Disenchanting Table | Medium + Heavy Core | One-time craft. Ties into Trial Chambers. |
 
-**Design principle:** Total demand should outpace supply enough to force meaningful choices, but not so much that players feel starved and frustrated. A rough cost table should be sketched out before committing to recipe numbers.
+**Design principle:** Total demand should outpace supply enough to force meaningful choices, but not so much that players feel starved and frustrated. A rough cost table should be sketched out before committing to recipe numbers. Note that Machine Blocks use Oddstone as a catalyst (not consumed), so the bottleneck is finding Oddstone + having lava, not spending Oddstone. This makes Machine Blocks more accessible than portal frames while still requiring engagement with the Oddstone system.
 
 ---
 
@@ -1200,8 +1806,8 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 
 ---
 
-### Multiblock Structure Framework [IDEA]
-> Registration-based system for detecting, tracking, and evaluating multiblock structures. Structures are world data managed by a Structure Manager -- they are not stored on or owned by any individual block. Ordinary vanilla and modded blocks participate in structures without needing custom code.
+### Multiblock Structure Framework [WIP]
+> Registration-based system for detecting, tracking, and evaluating multiblock structures. Structures are world data managed by a Structure Manager -- they are not stored on or owned by any individual block. Ordinary vanilla and modded blocks participate in structures without needing custom code. Phase 1 (framework) and Phase 2 (furnace array) are implemented and working.
 
 **Core concept:** Structure definitions (rulesets) live in a central **Structure Manager** (world-level saved data, like the portal registry). When a designated trigger block (the "Core") is placed, the Manager scans the surrounding area using that structure type's ruleset. If valid, the structure is **registered** as an independent entry in the Manager. The structure then exists as world data -- no individual block "owns" it. Any block in the structure can be broken, replaced, or added, and the Manager rescans and updates the registration accordingly.
 
@@ -1331,19 +1937,23 @@ This enables player feedback like: "Furnaces: 3 valid, 1 blocked" -- tells the p
 
 **Example Structures:**
 
-**Machine Furnace Array:**
+**Machine Furnace Array [DONE]:**
 
 | Property | Value |
 |----------|-------|
-| Core block | Furnace (also blast furnace, smoker) |
-| Connectors | Stone, cobblestone, stone bricks, deepslate, etc. (frame material) |
-| Contributors | Machine Core block (speedBonus: +0.5x per core), Machine Block (speedBonus: +0.1x) |
+| Core block | Furnace, Blast Furnace, Smoker (all vanilla furnace types) |
+| Frame | #ideomod:furnace_array_frame tag (18 stone-family blocks) |
+| Max cluster | 3 wide x 2 tall (6 furnaces) |
 | Effectors | The furnaces themselves |
-| Ignored | Air (interior space) |
-| Spatial validation | Furnaces must have at least 1 clear (air) face |
-| Effect | Furnace smelt speed multiplied by total speedBonus |
+| Effect | GUI renamed to "Enhanced Furnace/Blast Furnace/Smoker" + 50% cooking speed boost |
 
-Build: Place furnaces. Surround with stone frame. Add Machine Cores to the frame for speed. More cores = faster smelting. Furnaces need open faces to work.
+Build: Place furnaces facing the same direction. Surround back, sides, top, and bottom with stone-family frame blocks. Front faces must have air (for item access). Structure auto-detects on any relevant block placement.
+
+Implementation notes:
+- Scanner normalizes core position to clusterMin for consistent exclusivity keying
+- Frame bounds normalized with Math.min/max to handle all facing directions
+- Speed boost via AbstractFurnaceBlockEntityMixin: +1 extra progress on even ticks, clamped to totalTime - 1 (vanilla uses equality check for completion)
+- Core detection uses block entity iteration from nearby chunks (cheap, no chunk scanning)
 
 **Villager Workshop:**
 
@@ -1392,8 +2002,9 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 
 **Player Feedback:**
 
-- Structure formation/deformation: sound effect + particle burst on Core.
-- Comparator output from Core: signal strength proportional to structure completeness (0 = invalid, 1-15 = scaled).
+- Structure formation/deformation: sound effect + particle burst on Core. [IDEA]
+- Comparator output from Core: signal strength proportional to structure completeness (0 = invalid, 1-15 = scaled). [IDEA]
+- Structure Debug Stick: hold in either hand to see color-coded chat messages on register/deregister. Shows structure type, core position, core count. [DONE]
 - *[IDEA] Visual debug: hold a specific item and look at a Core to see colored outlines on all recognized structure blocks.*
 - *[IDEA] GUI panel on Core right-click showing structure stats: "Furnaces: 3, Machine Cores: 2, Speed Bonus: 2.0x"*
 - Villager workshop: villager behavior IS the feedback. They trade or they don't. Prices get better or worse. Observable without any special UI.
@@ -1414,20 +2025,20 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 
 **Implementation phasing:**
 
-| Phase | What |
-|-------|------|
-| 1 | Structure Manager saved data + Scanner utility (flood scan only) + Structure Result data class |
-| 2 | First structure: Machine Furnace Array (simplest useful case, uses existing blocks) |
-| 3 | Villager Workshop structure (tests spatial validation, complex contributor rules) |
-| 4 | Pattern scan mode + a shaped structure to test it |
-| 5 | Polish: comparator output, particles, GUI panels, visual debug mode |
-| 6 | Data-driven: refactor rulesets from Java to JSON for moddability |
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | Structure Manager saved data + Scanner utility + Structure Result data class + Effect handler interface | [DONE] |
+| 2 | First structure: Machine Furnace Array (simplest useful case, uses existing blocks) | [DONE] |
+| 3 | Villager Workshop structure (tests spatial validation, complex contributor rules) | [IDEA] |
+| 4 | Pattern scan mode + a shaped structure to test it | [IDEA] |
+| 5 | Polish: comparator output, particles, sounds, GUI panels, visual debug mode | [IDEA] |
+| 6 | Data-driven: refactor rulesets from Java to JSON for moddability | [IDEA] |
 
 ---
 
 **Open questions:**
-- *How does the Manager handle chunk boundaries? If a structure spans two chunks and one unloads, structure should probably stay registered but flag as "partially unloaded" and skip effect application until fully loaded.*
-- *Should there be a creative/debug tool for visualizing registered structures? (highlight all component blocks, show bounding box, display contributor totals)*
+- *How does the Manager handle chunk boundaries? If a structure spans two chunks and one unloads, structure should probably stay registered but flag as "partially unloaded" and skip effect application until fully loaded.* (Current implementation: structures stay registered across chunk boundaries. Effect application checks block existence at runtime. No partial-unload tracking yet.)
+- *Should there be a creative/debug tool for visualizing registered structures?* **Partially resolved**: Structure Debug Stick shows register/deregister chat messages. Visual block highlighting (colored outlines on structure blocks) still TBD for Phase 5.
 - *Villager workshop: how does villager "assignment" work? Does the villager claim the nearest valid workshop, or does the player assign them? Vanilla uses proximity -- extending that feels more vanilla+.*
 
 ---
@@ -1450,6 +2061,7 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 |------|---------|
 | `ideomod.mixins.json` | Mixin config |
 | `PistonStructureResolverMixin.java` | 4 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect |
+| `AbstractFurnaceBlockEntityMixin.java` | Furnace array speed boost (50% cooking speed when part of registered structure) |
 
 ---
 

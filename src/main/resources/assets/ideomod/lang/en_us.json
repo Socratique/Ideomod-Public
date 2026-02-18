@@ -7,5 +7,9 @@
   "block.ideomod.odd_slime": "Odd Slime",
   "block.ideomod.oddstone_repulser": "Oddstone Repulser",
   "block.ideomod.oddstone_attractor": "Oddstone Attractor",
-  "itemGroup.ideomod.ideomod_tab": "Ideomod"
+  "itemGroup.ideomod.ideomod_tab": "Ideomod",
+  "ideomod.container.enhanced_furnace": "Enhanced Furnace",
+  "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
+  "ideomod.container.enhanced_smoker": "Enhanced Smoker",
+  "item.ideomod.structure_debug_stick": "Structure Debug Stick"
 }
