@@ -6,8 +6,12 @@
 |  |     \\-- ideomancer
 |  |        \\-- ideomod
 |  |           +-- block
+|  |           |  +-- AbstractRangedPistonBlock.java
+|  |           |  +-- BlockMoveHelper.java
 |  |           |  +-- DrillBlock.java
 |  |           |  +-- MachineBlock.java
+|  |           |  +-- MachineTrackBlock.java
+|  |           |  +-- MachineTrolleyBlock.java
 |  |           |  +-- OddSlimeBlock.java
 |  |           |  +-- OddstoneAttractorBlock.java
 |  |           |  +-- OddstoneBlock.java
@@ -28,6 +32,7 @@
 |  |           |  \\-- JudgementEffect.java
 |  |           +-- entity
 |  |           +-- mixin
+|  |           |  +-- AbstractFurnaceBlockEntityMixin.java
 |  |           |  \\-- PistonStructureResolverMixin.java
 |  |           +-- registry
 |  |           |  +-- ModBlocks.java
@@ -36,6 +41,17 @@
 |  |           |  +-- ModItems.java
 |  |           |  \\-- ModTags.java
 |  |           +-- renderer
+|  |           +-- structure
+|  |           |  +-- definitions
+|  |           |  |  \\-- FurnaceArrayDefinition.java
+|  |           |  +-- effects
+|  |           |  |  \\-- FurnaceArrayEffect.java
+|  |           |  +-- StructureDefinition.java
+|  |           |  +-- StructureEffectHandler.java
+|  |           |  +-- StructureManager.java
+|  |           |  +-- StructureRegistration.java
+|  |           |  +-- StructureResult.java
+|  |           |  \\-- StructureScanner.java
 |  |           \\-- Ideomod.java
 |  \\-- resources
 |     +-- assets
@@ -44,6 +60,8 @@
 |     |     |  +-- drill.json
 |     |     |  +-- ideoblock.json
 |     |     |  +-- machine_block.json
+|     |     |  +-- machine_track.json
+|     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
 |     |     |  +-- oddstone.json
 |     |     |  +-- oddstone_attractor.json
@@ -57,6 +75,8 @@
 |     |     |  |  +-- drill_on.json
 |     |     |  |  +-- ideoblock.json
 |     |     |  |  +-- machine_block.json
+|     |     |  |  +-- machine_track.json
+|     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
 |     |     |  |  +-- oddstone.json
 |     |     |  |  +-- oddstone_attractor.json
@@ -67,10 +87,13 @@
 |     |     |     +-- drill.json
 |     |     |     +-- ideoblock.json
 |     |     |     +-- machine_block.json
+|     |     |     +-- machine_track.json
+|     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
 |     |     |     +-- oddstone.json
 |     |     |     +-- oddstone_attractor.json
-|     |     |     \\-- oddstone_repulser.json
+|     |     |     +-- oddstone_repulser.json
+|     |     |     \\-- structure_debug_stick.json
 |     |     \\-- textures
 |     |        \\-- block
 |     |           +-- drill_back.png
@@ -80,6 +103,8 @@
 |     |           +-- drill_top.png
 |     |           +-- ideoblock.png
 |     |           +-- machine_block.png
+|     |           +-- machine_track.png
+|     |           +-- machine_trolley.png
 |     |           +-- odd_slime_back.png
 |     |           +-- odd_slime_front.png
 |     |           +-- odd_slime_side.png
@@ -97,6 +122,8 @@
 |     |  |  |     +-- drill.json
 |     |  |  |     +-- ideoblock.json
 |     |  |  |     +-- machine_block.json
+|     |  |  |     +-- machine_track.json
+|     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json
 |     |  |  |     +-- oddstone.json
 |     |  |  |     +-- oddstone_attractor.json
@@ -109,6 +136,7 @@
 |     |  |  |  \\-- oddstone.json
 |     |  |  +-- tags
 |     |  |  |  \\-- blocks
+|     |  |  |     +-- furnace_array_frame.json
 |     |  |  |     +-- portal_corner_blocks.json
 |     |  |  |     \\-- redstone_components.json
 |     |  |  \\-- worldgen

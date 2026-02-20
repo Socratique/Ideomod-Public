@@ -37,9 +37,6 @@ public class Ideomod {
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
-        // NOTE: ModEntityTypes registration removed -- ranged pistons now use
-        // vanilla's MovingPistonBlock/PistonMovingBlockEntity for animation.
-        // No custom entities needed. Re-add if other custom entities are added later.
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
@@ -59,6 +56,9 @@ public class Ideomod {
     /**
      * Registers all stickiness rules for the mod.
      * See STICKINESS_SYSTEM.md for full documentation.
+     *
+     * Machine Family = MachineBlock, MachineTrackBlock, MachineTrolleyBlock.
+     * All three share the same grab immunity rules via MachineBlock.isMachineFamily().
      */
     private void registerStickinessRules() {
         // ================================================================
@@ -83,21 +83,22 @@ public class Ideomod {
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
-        // MACHINE BLOCK: Machine Block should NOT grab slime.
+        // MACHINE FAMILY: Machine Family should NOT grab slime.
+        // (Covers MachineBlock, MachineTrackBlock, MachineTrolleyBlock)
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof MachineBlock
+                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof SlimeBlock
         );
 
-        // MACHINE BLOCK: Machine Block should NOT grab honey.
+        // MACHINE FAMILY: Machine Family should NOT grab honey.
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof MachineBlock
+                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof HoneyBlock
         );
 
-        // MACHINE BLOCK: Machine Block should NOT grab Odd Slime.
+        // MACHINE FAMILY: Machine Family should NOT grab Odd Slime.
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof MachineBlock
+                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof OddSlimeBlock
         );
 
@@ -131,7 +132,6 @@ public class Ideomod {
 
     /**
      * Registers all multiblock structure definitions with the StructureManager.
-     * Definitions are static — shared across all dimensions.
      */
     private void registerStructureDefinitions() {
         StructureManager.registerDefinition(FurnaceArrayDefinition.create());
@@ -140,8 +140,6 @@ public class Ideomod {
 
     /**
      * Registers the StructureManager's Forge event handlers on the game event bus.
-     * These handle block place/break, chunk load/unload, and level load events
-     * to drive structure detection and lifecycle management.
      */
     private void registerStructureEventHandlers() {
         MinecraftForge.EVENT_BUS.register(new StructureManager.EventHandler());

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-18 (Multiblock Structure Framework Phase 1-2 implemented, Furnace Array working, Structure Debug Stick, Machine Block modular redesign, Hollow Stone, Odd Furnace, Oddserver, Placer/Framer merge, Oddstone sticky piston immunity, Machine Pipe/Fluid Pipe signal-pull mechanics, Machine Anchor, omnidirectional face-locking rule, Machine Clock/Pulser/Toggle)*
+*Last updated: 2026-02-20 (Oddstone inverse mining, Oddstone variant channels, Machine Linker, Thematic Block Families, same-type Machine stickiness redesign, Framed Block base behavior preservation, Promoter Block, Transmuter, Projector, Enhanced Enchanting Table obsidian rings, Beacon Rework fuel system, World Anchor, Magic Core, obsidian structural grammar design principle)*
 
 *Written by Claude (Anthropic), directed and guided by Sean.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -83,6 +83,8 @@
 | Hardness | 2.0 / Blast 6.0 |
 | Tool | Pickaxe |
 | Recipe | None -- natural resource only. Must be mined. |
+| Mining | Drops itself (raw Oddstone) by default. Silk Touch drops Cobbled Oddstone. Inverse of vanilla stone (stone -> cobble, Oddstone -> Oddstone raw, silk touch flips). |
+| Smelting | Oddstone in furnace -> Cobbled Oddstone. Another inversion of stone (stone cooks from cobble; Oddstone cooks INTO cobble). |
 
 **Features:**
 
@@ -109,10 +111,12 @@
 ---
 
 ### Oddstone Variants [IDEA]
-> Full stone-family variants of Oddstone (cobbled, polished, bricks, chiseled, stairs, slabs, walls, etc.). All retain Oddstone behavior but each variant is its own sympathetic frequency.
+> Full stone-family variants of Oddstone (cobbled, polished, bricks, chiseled, stairs, slabs, walls, etc.). All retain Oddstone behavior but each variant is its own sympathetic frequency. Also serve as wireless channel selectors for Machine Linker (see Machine Linker specialization).
+
+**Entry point:** Cobbled Oddstone is obtained by smelting raw Oddstone in a furnace or mining with Silk Touch. This is the inverse of vanilla stone's relationship with cobblestone. From Cobbled Oddstone, standard stonecutter/crafting recipes produce all other variants.
 
 **Variants (planned):**
-- Cobbled Oddstone
+- Cobbled Oddstone (base processed form -- entry to all other variants)
 - Polished Oddstone
 - Oddstone Bricks
 - Chiseled Oddstone
@@ -274,7 +278,16 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | One-way with slime | [DONE] | Stays on base chassis. |
 
 **Stickiness rules:**
-All Machine Block variants (blank, Conductor, Pipe, Track, Trolley, etc.) stick to all other Machine Block variants. They are all Machine Blocks. The one exception: during a Track-initiated move operation, the Track and Trolley do not stick to each other (the Trolley slides free). In all other contexts (piston push groups, etc.), Tracks and Trolleys stick normally as Machine Blocks.
+Machine Block specializations stick to **same-type only**. A Machine Conductor sticks to other Machine Conductors. A Machine Pipe sticks to other Machine Pipes. Different specialization types do NOT stick to each other.
+
+**Universal connector exceptions:** The following types stick to ALL Machine Block variants regardless of specialization:
+- Base (empty) Machine Block -- the blank chassis connects everything
+- Frame Blocks / Framed Blocks -- structural connectors bridge different systems
+- Machine Push Limit Extender -- structural support block, universal connector
+
+These universal connectors are the "glue" that lets players bridge different Machine subsystems on the same structure. Without them, each specialization type is its own isolated sticky group.
+
+**Implementation note:** Stickiness check compares specialization IDs. Two Machine Blocks stick if: (a) same specialization, OR (b) either block is a universal connector type (base, frame, extender). The one exception: during a Track-initiated move operation, the Track and Trolley do not stick to each other (the Trolley slides free). In all other contexts, Tracks and Trolleys stick normally to same-type and universal connectors.
 
 **Block entity movement:**
 When a Machine Block is moved by a piston (or Repulser/Attractor), the block entity data is serialized (save the specialization item ID), the old block entity is destroyed, a new one is created at the destination, and the data is deserialized back. The stored data is minimal (one item ID), so overhead is negligible. Safety checks pause any active specialization behavior (item transfer, signal propagation) during the move tick. Reference implementations: Create mod contraption assembly, Carpet mod movable block entities.
@@ -521,6 +534,27 @@ Wireless redstone broadcaster. When receiving a redstone signal, emits that sign
 
 ---
 
+**Machine Linker** (insert: Oddstone variant) [IDEA]
+
+Wireless redstone broadcaster paired by Oddstone variant. The Oddstone variant placed in the slot determines the "channel." All Linkers with the same Oddstone variant in range communicate. When one receives a redstone signal, it broadcasts that signal to all other Linkers on the same channel within radius.
+
+| Detail | Value |
+|--------|-------|
+| Channel | Determined by which Oddstone variant is in the slot (cobbled, bricks, polished, etc.) |
+| Broadcast | One-to-many. All Linkers with matching Oddstone variant in radius receive the signal. |
+| Signal type | Broadcasts signal strength (0-15). Transmits the received strength, not fixed 15. |
+| Radius | TBD (8-16 blocks? Could scale with Oddstone variant tier?) |
+| Target | Only other Machine Linkers with matching Oddstone variant |
+
+**Design notes:**
+- Number of available channels = number of Oddstone variants. Each variant is a frequency. Cobbled Oddstone Linkers talk to cobbled, Brick Linkers talk to brick, etc.
+- Unlike Machine Battery (which broadcasts to all Machine Blocks in range), the Linker only talks to other Linkers. More targeted, channel-based communication.
+- Synergy with Oddstone variant frequency system: the same Oddstone variant that defines sympathetic movement frequency also defines Linker communication channels. One resource, two wireless systems.
+- Feedback prevention: Linkers should probably not trigger other Linkers that are already outputting (same-tick latch), or use a brief cooldown. Alternatively, Linkers only broadcast when receiving a NON-Linker signal (external input only).
+- Part of the Odd Family thematically -- requires Oddstone to function.
+
+---
+
 **Machine Grabber** (insert: TBD -- possibly Piston + Slime? Or unique item?) [IDEA]
 
 Active mass-capture block. When receiving a redstone signal, grabs a 3x3x3 volume of blocks in front of it, incorporating them into the current push group. Extends the effective piston push limit for the structure it's part of.
@@ -636,6 +670,69 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 
 ---
 
+### Machine Track [DONE]
+> Non-directional Machine Family block. Pushes adjacent Trolleys when it receives a redstone signal. Push direction is opposite to signal source direction.
+
+| Property | Value |
+|----------|-------|
+| ID | `machine_track` |
+| Placement | Non-directional |
+| Activation | Redstone pulse (rising edge, POWER 0 -> nonzero) |
+| Target | Adjacent Machine Trolley blocks |
+| Movable | Yes (can be pushed by pistons) |
+| Redstone | Conducts signal (POWER 0-15, decay by 1, same as Machine Block) |
+| Recipe | TBD |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Signal-direction push | [DONE] | Signal from north -> push south. Checks actual sources, not weak power. |
+| All-face Trolley detection | [DONE] | Pushes ALL adjacent Trolleys in pushDir, not just the one on the push face. |
+| Redstone conduction | [DONE] | Interoperable with Machine Block conduction chains via isRedstoneConduit(). |
+| Block event sync | [DONE] | Bit-packed param (pushDir + trolleyFace) for client-server animation. |
+| Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
+
+**Known issues:**
+- Placeholder texture (uses machine_block.png)
+- Placeholder recipe
+
+**Design notes:**
+- Track is protected during pushes because its position is passed as initiatorPos to BlockMoveHelper (resolver treats it as pistonPos).
+- Does NOT use level.hasSignal() for direction detection because the Track emits strong signal, causing vanilla's weak power to leak through adjacent solid blocks (Trolleys would appear as signal sources).
+- Future: will become a Machine Block chassis variant (item-slot transform).
+
+---
+
+### Machine Trolley [DONE]
+> Passive Machine Family cargo carrier. Pushed by Machine Tracks.
+
+| Property | Value |
+|----------|-------|
+| ID | `machine_trolley` |
+| Placement | Non-directional |
+| Activation | None (passive) |
+| Movable | Yes (pushed by Tracks, pistons) |
+| Redstone | None (does not conduct) |
+| Recipe | TBD |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Cargo carrying | [DONE] | Carries anything stuck to it via Machine Family or slime stickiness. |
+| Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
+
+**Known issues:**
+- Placeholder texture (uses machine_block.png)
+- Placeholder recipe
+
+**Design notes:**
+- No active behavior. Pure cargo block.
+- Future: will become a Machine Block chassis variant (item-slot transform).
+
+---
+
 ### Framed Blocks [DESIGNED]
 > Any block wrapped in an iron or copper frame. Extends Machine Block stickiness as cheap "body" pieces.
 
@@ -666,6 +763,7 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | Machine-activated stickiness | [DESIGNED] | Framed blocks are NOT sticky by default. When a Machine Block is part of a piston push group, it "activates" adjacent framed blocks, making them sticky for that move. Activation chains through matching framed blocks (iron->iron, copper->copper). Deactivates after move resolves. |
 | Material exclusivity | [DESIGNED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
 | Slime/honey exclusivity | [DESIGNED] | Framed blocks do not interact with slime or honey stickiness. |
+| Base behavior preservation | [DESIGNED] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
 **Stickiness matrix (when activated by Machine Block):**
 
@@ -738,6 +836,7 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 | Mob discouragement (outer radius) | [IDEA] | Probabilistic -- mobs in outer zone (~24 blocks?) have a chance to want to leave. Not absolute. |
 | Phantom counter | [IDEA] | Suppresses phantom spawning in range. QoL feature that gives all players a reason to engage with the system. |
 | Mining aggro counter | [IDEA] | Counteracts the Mining Threat system (see Systems section). Required for sustained large vein mining. |
+| Obsidian multiblock base | [IDEA] | Beacon-like pyramid of obsidian blocks beneath the Inhibitor. Lapis corners increase effectiveness (stronger suppression). Diamond corners increase range. Same structural grammar as Beacon Rework, Promoter, World Anchor, Magic Core. |
 
 **Design notes:**
 - Thematic extension of Oddstone's existing mob avoidance (Oddstone = line/surface defense, Inhibitor = area defense).
@@ -754,6 +853,41 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 - *[IDEA] Fuel/maintenance cost? (redstone power, consumable resource, durability?)*
 - *[IDEA] Visual indicator of active radius? (particles, subtle glow?)*
 - *[IDEA] Stacking multiple Inhibitors -- stronger effect or just wider coverage?*
+- *[IDEA] Obsidian multiblock base structure -- beacon-like pyramid of obsidian with lapis corners (increase effectiveness) or diamond corners (increase range). See Multiblock Structures section.*
+
+---
+
+### Promoter Block [IDEA]
+> Inverse of Inhibitor. Area-of-effect mob spawn booster. Increases hostile mob spawning in its radius. Part of the Odd Family.
+
+| Property | Value |
+|----------|-------|
+| ID | `promoter` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Recipe | Oddstone + ? (TBD -- mirror of Inhibitor recipe with different modifier) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Spawn increase (inner radius) | [IDEA] | Strong spawn rate increase in close range (~8 blocks?). Exact radius TBD. |
+| Spawn attraction (outer radius) | [IDEA] | Mobs in outer zone are drawn toward the Promoter's area, concentrating them. |
+| Phantom summoning? | [IDEA] | Could force phantom spawns regardless of player sleep status. Creates a targeted aerial threat zone. |
+
+**Design notes:**
+- Primary use: mob farms. Players who want to farm mob drops can invest Oddstone into a Promoter to dramatically increase spawn rates in a controlled area.
+- Creates an interesting resource tension with Inhibitors: both consume Oddstone, so players choose between "safer mining" and "better farming."
+- Dangerous to leave uncontrolled -- placing a Promoter without containment is asking for trouble. Rewards players who build proper mob farm infrastructure.
+- Could use the same obsidian multiblock base structure as the Inhibitor: beacon-like pyramid with mineral block corners for range/effectiveness scaling.
+- Part of the Odd Family thematically -- strange stone that calls to mobs instead of repelling them.
+
+**Multiblock structure (shared with Inhibitor):**
+- Base: Beacon-like pyramid of obsidian blocks beneath the Promoter/Inhibitor
+- Lapis corners: increase effectiveness (stronger spawn suppression/boost)
+- Diamond corners: increase range
+- Each additional tier of the pyramid increases the structure's power
+- See also: Beacon Rework (same structural grammar)
 
 ---
 
@@ -824,11 +958,12 @@ Pulse fires ->
 | Block event sync | [DONE] | Uses vanilla block event system for client-server synchronization. Movement runs on both sides for proper animation. |
 
 **Known issues:**
+**Known issues:**
 - Placeholder texture
 - Placeholder recipe
-- ~90% code duplication with Attractor (could extract shared base class)
 
 **Design notes:**
+- Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
 - Range is detection range, not a containment field -- an Oddstone at position 12 can be pushed to 13.
 - Sympathetic movement chains on pushed Oddstone should still trigger (creates powerful wireless contraption potential).
 - Shares core scan/push logic with Oddstone Attractor, Arcane Repulser, and Arcane Attractor.
@@ -860,9 +995,9 @@ Pulse fires ->
 **Known issues:**
 - Placeholder texture
 - Placeholder recipe
-- ~90% code duplication with Repulser
 
 **Design notes:**
+- Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
 - Block directly in front of Attractor must be air for closest Oddstone to be pulled.
 - Shares core logic with Repulser. Implementation difference is scan direction and move direction.
 
@@ -928,6 +1063,95 @@ Pulse fires ->
 | Oddstone Attractor | Oddstone only | 12 | Yes | Early-mid | [DONE] |
 | Arcane Repulser | Any block | 12 (TBD) | No | Mid-late | [IDEA] |
 | Arcane Attractor | Any block | 12 (TBD) | No | Mid-late | [IDEA] |
+
+---
+
+### Thematic Block Families [IDEA]
+> Three thematic families organize the mod's blocks by crafting material, aesthetic identity, and gameplay niche.
+
+| Family | Primary Material | Aesthetic | Gameplay Niche |
+|--------|-----------------|-----------|----------------|
+| **Machine Family** | Hollow Stone + Iron | Dark steel, mechanical | Redstone, automation, engineering |
+| **Odd Family** | Oddstone variants | Purple-grey, strange | Wireless mechanics, mob interaction, portals |
+| **Magic Family** | Obsidian | Dark, arcane | Transmutation, enchantment, projection |
+
+**Design notes:**
+- All three families feed back into the Oddstone economy: Machine Blocks require Hollow Stone (Oddstone catalyst), Odd blocks are crafted directly from Oddstone, Magic blocks use obsidian (which interacts with the Oddstone/lava system).
+- Each family has its own visual language. Players should be able to tell at a glance whether a block is mechanical, odd, or magical.
+- Families are not exclusive -- blocks can interact across families (Machine Linker uses Oddstone variants, Framed Blocks can wrap any block type, etc.).
+
+---
+
+### Transmuter [IDEA]
+> Magic block that transmutes a block in front of it into a different type. Part of the Magic Family (obsidian-crafted).
+
+| Property | Value |
+|----------|-------|
+| ID | `transmuter` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Placement | Directional (faces player look direction) |
+| Recipe | TBD (obsidian + ? -- Magic Family crafting) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Block transmutation | [IDEA] | When activated, converts the block directly in front of it (in FACING direction) into a different block type. |
+| Activation | [IDEA] | TBD -- redstone pulse? Continuous while powered? Fuel-based? |
+
+**Design notes:**
+- Intentionally open-ended for now. The core concept is "magic block that changes one block type into another."
+- Possible directions: recipe-based (specific input -> specific output, like cobble -> stone, sand -> clay), fuel-based (consumes XP or a catalyst), or tied to the alchemy/brewing system.
+- Could be a simpler, directional alternative to the Odd Furnace (which smelts in-world). Transmuter does non-smelting transformations -- things you can't do in a furnace.
+- Part of the Magic Family -- obsidian-crafted, arcane aesthetic.
+- Pairs with the Projector for a "magic automation" toolkit alongside the Machine Family's "mechanical automation" toolkit.
+
+**Open questions:**
+- *What determines the output? Fixed recipe table? Catalyst item in a slot? Random within a set?*
+- *Fuel/cost per transmutation? Free is too powerful. XP cost? Lapis/amethyst consumption?*
+- *Can it transmute block entities (chests, furnaces)? Probably not -- only simple blocks.*
+- *Does it work on Oddstone or obsidian? Probably restricted to prevent exploits.*
+
+---
+
+### Projector [IDEA]
+> Magic block with a 3x3 GUI grid. When powered, "projects" the configured block pattern at a distance determined by redstone signal strength. Projected blocks are temporary -- they exist only while the Projector is powered. Part of the Magic Family.
+
+| Property | Value |
+|----------|-------|
+| ID | `projector` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Type | Block Entity (3x3 item grid + FACING) |
+| Placement | Directional (faces player look direction) |
+| Recipe | TBD (obsidian + glass + ? -- Magic Family crafting) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| 3x3 block grid GUI | [IDEA] | Right-click opens a 3x3 grid. Place individual blocks in slots to define the projected pattern. Empty slots project nothing (air). |
+| Signal-distance projection | [IDEA] | When powered, projects the 3x3 pattern at a distance equal to (or inversely proportional to) the redstone signal strength. Signal 1 = far, signal 15 = close? Or signal 1 = close, signal 15 = far? TBD. |
+| Temporary placement | [IDEA] | Projected blocks are real, physical, solid blocks in the world. They exist only while the Projector is powered. Removing power causes all projected blocks to vanish instantly. |
+| Collision with existing blocks | [IDEA] | If a target position is already occupied, that slot simply fails to project -- the existing block is not affected. Partial patterns are valid. |
+| Block consumption | [IDEA] | TBD -- does the Projector consume the blocks from its grid when projecting? Or are they reusable (the grid is a template, not a supply)? Template is more powerful but more interesting for building and traps. |
+
+**Design notes:**
+- Think of it as a magic holographic projector. Place blocks in the pattern grid, power it, and those blocks appear at a distance. Cut power and they vanish.
+- Primary uses: temporary bridges, traps (floor appears solid then vanishes), dynamic walls, construction scaffolding, redstone-controlled architecture.
+- The 3x3 grid means projected structures are small -- this is precision placement, not large-scale construction. For larger structures, use multiple Projectors.
+- Signal-distance control means you can sweep a projected platform across space by varying redstone signal strength. Combined with Machine Clock for gradual stepping, this enables moving platforms.
+- Projected blocks should probably not be pushable by pistons (they're projections, not real structures). They break if their Projector is moved or unpowered.
+- Part of the Magic Family -- arcane aesthetic, obsidian-crafted. The "magic" counterpart to the Machine Family's mechanical block placement (Placer Block).
+
+**Open questions:**
+- *Signal distance mapping: linear (signal 1 = 1 block, signal 15 = 15 blocks) or inverse (signal 15 = 1 block, signal 1 = 15 blocks)?*
+- *Max projection distance? Probably capped at 15-16 to match redstone signal range.*
+- *Can projected blocks be interacted with normally (mined, walked on, placed against)? They should be solid and walkable. Mining probably shouldn't drop anything -- they're projections.*
+- *What happens if the Projector itself is moved (by piston)? Projected blocks probably break/vanish.*
+- *Visual distinction? Projected blocks could have a subtle shimmer, transparency, or particle effect to distinguish them from "real" blocks. Or they could be indistinguishable for trap potential.*
+- *Does the pattern project in the FACING direction only, or can it be aimed?*
 
 ---
 
@@ -1317,7 +1541,7 @@ Branches express their connections as arms (additive geometry extending outward 
 |----------|-------|
 | Frame | Rectangular ring of Oddstone, min 5x5 outer (3x3 interior) |
 | Corners | Crafted mineral blocks in all 4 corners define the "address" |
-| Address space | 14 corner types ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã¢â‚¬Â ÃƒÂ¢Ã¢â€šÂ¬Ã¢â€žÂ¢ÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬ÃƒÂ¢Ã¢â‚¬Å¾Ã‚Â¢ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â‚¬Å¡Ã‚Â¬Ãƒâ€šÃ‚Â ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¡Ãƒâ€šÃ‚Â¬ÃƒÆ’Ã‚Â¢ÃƒÂ¢Ã¢â€šÂ¬Ã…Â¾Ãƒâ€šÃ‚Â¢-- 4 positions = 14^4 = 38,416 unique addresses per dimension |
+| Address space | 14 corner types ---- 4 positions = 14^4 = 38,416 unique addresses per dimension |
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
@@ -1773,13 +1997,16 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 |--------|--------------|-------|
 | Oddstone Portals | High (full frame) | Most expensive single use. 5x5 minimum frame = significant investment. |
 | Inhibitor Block | Medium (TBD) | Needed for safe mining. Multiple may be needed per vein. |
+| Promoter Block | Medium (TBD) | Inverse of Inhibitor. Mob farm booster. Same Oddstone cost creates tension with Inhibitors. |
 | Hollow Stone (-> Machine Blocks) | Indirect (catalyst) | Oddstone is not consumed -- lava sources touching Oddstone become Hollow Stone. Oddstone gates access but is not spent. High throughput if player has lava supply. |
 | Machine Blocks | Via Hollow Stone | Crafted from Hollow Stone + iron + slime (TBD). Oddstone cost is indirect through Hollow Stone production. |
+| Machine Linker | Via Oddstone variants | Requires Oddstone variant in slot. Variant determines wireless channel. Oddstone not consumed (stays in slot). |
 | Machine Specializations | Via vanilla items | Items inserted into Machine Blocks (redstone, hoppers, pistons, etc.) are retrievable. No Oddstone cost per specialization. |
 | Placer Block | Medium (TBD) | Automation tool. |
 | Oddstone Repulser/Attractor | Low-Medium (TBD) | Ranged Oddstone-only pistons. Oddstone + piston base. |
 | Arcane Repulser/Attractor | Medium (TBD) | Universal ranged pistons. Oddstone + obsidian + piston base. |
 | Disenchanting Table | Medium + Heavy Core | One-time craft. Ties into Trial Chambers. |
+| Oddstone Variants | Free (processing) | Smelting/stonecutting Oddstone into variants is free. The rare resource is the Oddstone itself. |
 
 **Design principle:** Total demand should outpace supply enough to force meaningful choices, but not so much that players feel starved and frustrated. A rough cost table should be sketched out before committing to recipe numbers. Note that Machine Blocks use Oddstone as a catalyst (not consumed), so the bottleneck is finding Oddstone + having lava, not spending Oddstone. This makes Machine Blocks more accessible than portal frames while still requiring engagement with the Oddstone system.
 
@@ -1974,13 +2201,45 @@ Build: Build a room. Add a workstation, bed, chest, and food source. Make sure t
 | Property | Value |
 |----------|-------|
 | Core block | Enchanting table |
-| Connectors | (none -- air is ignored, so scan flows freely within range) |
+| Base structure | 3x3 obsidian platform directly beneath the enchanting table |
+| Corner modifiers | Lapis blocks in corners add catalyst slot. Diamond blocks in corners increase available enchantment range/variety. Mixed corners allowed -- lapis and diamond can coexist. |
+| Ring expansion | Additional concentric square rings of obsidian extending outward from the 3x3 base, always connected to the table via obsidian. Each ring allows bookshelves to be placed further away while still counting toward enchant power. |
 | Contributors | Bookshelf (enchantPower: 1), amethyst cluster (luck: 1), candle (stability: 1) |
-| Effectors | Enchanting table (gains enhanced options) |
+| Effectors | Enchanting table (gains enhanced options, catalyst slot, expanded range) |
 | Ignored | Air |
-| Spatial validation | (none beyond standard range) |
-| Max distance | 3 |
-| Effect | enchantPower works like vanilla (caps at 15). Luck adds chance for better enchantments. Stability reduces "too expensive" penalties. |
+
+**Obsidian ring structure:**
+```
+Ring 0 (base):     Ring 1 (first expansion):     Ring 2 (second expansion):
+  O O O              . . . . .                      . . . . . . .
+  O [E] O            . O O O .                      . . . . . . .
+  O O O              . O [E] O .                    . . O O O . .
+                     . O O O .                      . . O [E] O . .
+                     . . . . .                      . . O O O . .
+                                                    . . . . . . .
+                                                    . . . . . . .
+
+[E] = Enchanting Table    O = Obsidian    . = Valid bookshelf zone
+```
+
+- Ring 0 alone: bookshelves must be within 2 blocks of table (vanilla distance)
+- Ring 1: bookshelves can be up to 4 blocks away and still count
+- Ring 2: bookshelves can be up to 6 blocks away
+- Each ring must be a complete, connected square of obsidian with the table at the center
+- Rings must connect back to the base via obsidian (no floating rings)
+- More rings = wider valid bookshelf area = room for more bookshelves = higher chance of better/multiple enchants
+
+**Corner modifier rules:**
+- Only the 3x3 base ring has functional corners (4 corner positions)
+- If you want BOTH lapis (catalyst slot) AND diamond (increased range), you need to build two "tiers" -- a base ring with one modifier and a second ring with the other. Or split corners (e.g. 2 lapis + 2 diamond on the base).
+- All 4 corners same type = maximum effect for that modifier
+- Mixed corners = partial effect of each
+
+**Design notes:**
+- Transforms enchanting from "place 15 bookshelves in a ring" into a genuine build project. Players who invest in larger obsidian ring structures get access to more bookshelves and wider enchant variety.
+- The obsidian base establishes the Magic Family structural grammar: obsidian frames with mineral block corners. Same language as Beacon Rework, Inhibitor/Promoter structures, and Magic Core.
+- Corner modifiers create meaningful choices: do you prioritize the catalyst slot (lapis) for biased enchanting, or wider enchant selection (diamond)?
+- Bookshelves in the wider ring zones could be mixed with other contributors (amethyst for luck, candles for stability) without crowding the immediate area around the table.
 
 ---
 
@@ -2043,6 +2302,130 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 
 ---
 
+### Beacon Rework [IDEA]
+> Overhaul of the vanilla beacon system. Mineral block composition determines range. Inserted ore/ingot acts as fuel that depletes over time.
+
+**Range by mineral block:**
+The beacon's effective range is determined by what mineral blocks the pyramid is built from. Different mineral types provide different range multipliers. A pyramid can mix blocks -- total range is averaged or weighted by composition.
+
+| Mineral Block | Range Tier | Notes |
+|---------------|-----------|-------|
+| Coal Block | Smallest | Budget option, wide availability |
+| Iron Block | Low | Common, cheap |
+| Copper Block | Low | Alternative to iron |
+| Gold Block | Medium | Current vanilla material |
+| Redstone Block | Medium | Alternative path |
+| Lapis Block | Medium | |
+| Amethyst Block | Medium-High | Harder to obtain in quantity |
+| Diamond Block | High | Expensive but powerful |
+| Emerald Block | High | Trade-gated |
+| Netherite Block | Maximum | Extremely expensive, maximum range far exceeding current vanilla beacon |
+
+**Fuel system:**
+The ore/ingot inserted to activate the beacon is consumed as fuel over time. The beacon runs for a duration based on the fuel tier, then shuts off until refueled.
+
+| Fuel Tier | Approximate Duration | Notes |
+|-----------|---------------------|-------|
+| Coal / Iron / Copper | Short (1-2 in-game days?) | Cheap, frequent replacement |
+| Gold / Redstone / Lapis | Medium (3-5 days?) | Moderate investment |
+| Diamond / Emerald | Long (10-15 days?) | Expensive, infrequent |
+| Netherite Ingot | Very Long (25-30 days?) | Maximum duration |
+
+**Design notes:**
+- Transforms the beacon from "build and forget" into a maintenance system with ongoing resource demand.
+- Creates meaningful material choices: cheap pyramid + cheap fuel (small range, frequent maintenance) vs expensive pyramid + expensive fuel (huge range, rare maintenance).
+- Netherite beacon with netherite fuel is the ultimate flex -- massive range, runs for a month, costs a fortune.
+- The fuel depletion should have visual/audio feedback: beam flickering, dimming light, warning sound when fuel is low. Grace period before shutoff so players can react.
+- Compatible with the obsidian multiblock structural grammar -- the beacon pyramid IS the structure, mineral blocks ARE the modifiers.
+
+**Open questions:**
+- *Exact range numbers per tier? Current vanilla 4-tier beacon is 20/30/40/50 blocks. Netherite could go to 200+.*
+- *Does mixing mineral types in the pyramid average the range, or use the lowest/highest tier?*
+- *Does the fuel system apply to beacon effects too, or just range? (Could tie specific effects to specific fuel types.)*
+- *Warning system: visual beam flicker + sound? Chat message? Particle effect?*
+- *Can the beacon be automated? (Machine Pipe feeding fuel into it?)*
+
+---
+
+### World Anchor [IDEA]
+> Chunk-loading block. Wraps the ender pearl chunk-loading mechanic into a dedicated block with the obsidian multiblock structure for range scaling.
+
+| Property | Value |
+|----------|-------|
+| ID | `world_anchor` |
+| Hardness | TBD (obsidian-tier?) |
+| Tool | Pickaxe (diamond minimum?) |
+| Recipe | TBD (ender pearl + obsidian + ?) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Chunk loading | [IDEA] | Keeps its chunk (and adjacent chunks based on structure size) loaded when placed and active. |
+| Obsidian multiblock base | [IDEA] | Same structural grammar as Beacon Rework and Inhibitor/Promoter. Beacon-like obsidian pyramid beneath the World Anchor. More tiers = more chunks loaded. |
+| Fuel/activation | [IDEA] | TBD -- ender pearls as fuel? Always active? Redstone-gated? |
+
+**Structure scaling:**
+
+| Structure Size | Chunks Loaded |
+|----------------|--------------|
+| No structure (bare block) | 1 chunk (the one it's in) |
+| 1-tier obsidian base | 3x3 chunk area |
+| 2-tier base | 5x5 chunk area |
+| 3-tier base | 7x7 chunk area? |
+
+**Design notes:**
+- Based on the ender pearl chunk-loading mechanic added in 1.20 (ender pearls thrown into nether portals keep chunks loaded). This block formalizes that into a deliberate, buildable system.
+- The obsidian pyramid structure mirrors the Beacon, Inhibitor, and Promoter -- consistent structural grammar across the mod's infrastructure blocks.
+- Chunk loading is very powerful -- this should be expensive and progression-gated. Ender pearls as fuel creates ongoing cost and ties into End progression.
+- Primary use: keeping farms, Machine Block contraptions, and infrastructure running when the player is elsewhere.
+- Could use mineral block corners for additional effects (like the other obsidian multiblocks), but the base functionality is just chunk loading.
+
+**Open questions:**
+- *Fuel consumption rate for ender pearls? One per in-game day? Per real-time hour?*
+- *Should it require redstone power to activate, or run passively?*
+- *Performance implications of player-controlled chunk loading -- should there be a per-world limit?*
+- *Does it work in all dimensions?*
+
+---
+
+### Magic Core [IDEA]
+> Passive area-of-effect buff structure. When active, increases the effective level of certain enchantments on gear and extends the duration of active potion effects for players within its range. Part of the Magic Family.
+
+| Property | Value |
+|----------|-------|
+| ID | `magic_core` |
+| Hardness | TBD |
+| Tool | Pickaxe |
+| Recipe | TBD (obsidian + enchanted book + lapis/diamond? -- high-cost Magic Family craft) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Enchantment boost | [IDEA] | While in range, certain enchantments on the player's equipped gear function at +1 level (or more, scaling with structure). E.g. Protection IV acts as Protection V. |
+| Potion duration extension | [IDEA] | Active potion effects on the player decay slower (or not at all?) while in range. Extends effective potion duration without consuming more potions. |
+| Obsidian multiblock base | [IDEA] | Same structural grammar as Beacon, Inhibitor/Promoter, World Anchor. Beacon-like obsidian pyramid with mineral block corners for range/power scaling. |
+| Passive operation | [IDEA] | Always active once structure is valid. No fuel, no redstone. The structure IS the investment. |
+
+**Design notes:**
+- The Magic Core is the passive enchantment/potion counterpart to the Beacon's status effects. Beacon gives you Haste/Speed/etc. Magic Core makes your existing gear and potions better.
+- Creates a strong "home base advantage" -- players who build a Magic Core in their base have stronger gear and longer-lasting potions while near it. Incentivizes returning to base and building infrastructure.
+- Enchantment boost should probably have limits -- maybe only boosts enchantments that are already present (doesn't add new ones), and caps at +1 or +2 levels above what's on the gear.
+- Potion extension means players can drink potions at home and have them last longer for expeditions, or maintain permanent potion effects while working in their base.
+- The obsidian multiblock structure means this is a significant build investment. Not something you casually place -- you build a sanctum.
+- Pairs with the Enchanting Overhaul: the enchant level budget system means +1 level is meaningful but not game-breaking. A Protection IV becoming Protection V is strong but not a new tier of power.
+
+**Open questions:**
+- *Which enchantments does it boost? All of them? Only combat enchants? Only utility enchants? A configurable list?*
+- *Boost amount: flat +1 per tier of structure? Percentage-based?*
+- *Potion extension: slower decay (2x duration)? Pause decay entirely while in range?*
+- *Does it affect all players in range, or only the builder/owner?*
+- *Range scaling with structure size -- same progression as Beacon (20/30/40/50+ blocks per tier)?*
+- *Visual effect: subtle particle aura around players in range? Ambient sound?*
+
+---
+
 ### Config System [DONE]
 > JSON-based config for Oddstone (mob list, sympathetic radius).
 
@@ -2093,6 +2476,8 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 3. **Emergent gameplay** -- Design for consequences and combinations, not just individual features.
 4. **Geological realism** -- The world should feel like it has underlying rules governing its geography and resources.
 5. **Discovery-driven** -- Players should find and figure things out, not just follow recipes.
+6. **Structural grammar** -- Consistent design language across infrastructure blocks. Obsidian = arcane base material. Mineral block corners = modifiers (lapis = utility, diamond = power/range). Concentric expansion = scaling. Players learn the pattern once, apply it everywhere (enchanting table, beacon, inhibitor, promoter, world anchor, magic core).
+7. **Thematic families** -- Blocks are organized into Machine (iron/engineering), Odd (oddstone/wireless), and Magic (obsidian/arcane) families. Each has its own resource chain, aesthetic, and gameplay niche.
 
 ---
 

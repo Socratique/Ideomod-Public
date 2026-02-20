@@ -1,5 +1,5 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
-*Comprehensive reference for the Ideomod codebase ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â architecture, systems, templates, and implementation details.*
+*Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
 *Last updated: 2026-02-18*
 
 ---
@@ -11,7 +11,7 @@
 3. [Registry System](#3-registry-system)
 4. [Stickiness System](#4-stickiness-system)
 5. [PistonStructureResolver Mixin](#5-pistonstructureresolver-mixin)
-6. [Ranged Piston System](#6-ranged-piston-system)
+6. [Block Movement System](#6-block-movement-system)
 7. [Portal System](#7-portal-system)
 8. [Multiblock Structure Framework](#8-multiblock-structure-framework)
 9. [Block Specifications](#9-block-specifications)
@@ -54,14 +54,18 @@ com.ideomancer.ideomod
   |                              and StructureManager event handler.
   |-- block/
   |     |-- OddstoneBlock.java           Core block: 5 features (see section 9)
-  |     |-- MachineBlock.java            Selective stickiness + redstone conduction
+  |     |-- MachineBlock.java            Machine Family base: stickiness + conduction
+  |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
+  |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (FACING-gated stickiness)
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- StickinessRules.java         Rule registry: grab immunity + directional
-  |     |-- RangedPistonUtil.java        Shared resolve-and-move logic (mirrors vanilla)
+  |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
+  |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor
   |     |-- RangedPistonFlags.java       ThreadLocal for resolver startPos redirect
-  |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range via block events
-  |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range via block events
+  |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
+  |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
+  |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range (extends Abstract)
   |     |-- OddstonePortalBlock.java     Portal interior fill + teleportation logic
   |     |-- OddstonePortalHandler.java   Portal activation/deactivation lifecycle
   |     |-- OddstonePortalFrameDetector.java  Frame scanning, validation, address reading
@@ -109,18 +113,20 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_block` | MachineBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. |
 | `odd_slime` | OddSlimeBlock | Friction 0.8F (slippery), slime sound, `noOcclusion()`. |
 | `oddstone_portal` | OddstonePortalBlock | `noCollission()`, hardness -1 (indestructible), light 11, `PushReaction.BLOCK`, glass sound, `noLootTable()`. |
-| `oddstone_repulser` | OddstoneRepulserBlock | Hardness 3.0/6.0, pickaxe, stone sound. |
-| `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. |
+| `oddstone_repulser` | OddstoneRepulserBlock | Hardness 3.0/6.0, pickaxe, stone sound. Extends AbstractRangedPistonBlock. |
+| `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. Extends AbstractRangedPistonBlock. |
+| `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
+| `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
 
 ### ModItems (DeferredRegister<Item>)
 
-BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings.
+BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley.
 
 Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `stacksTo(1)`. Hold in either hand to see structure register/deregister chat messages.
 
 ### ModCreativeTabs
 
-Single tab `ideomod_tab`, icon = IDEOBLOCK. Lists: Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Structure Debug Stick.
+Single tab `ideomod_tab`, icon = IDEOBLOCK. Lists: Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Structure Debug Stick.
 
 ### ModTags
 
@@ -138,7 +144,7 @@ See section 13 for the full contents of each tag.
 
 Registered on the FORGE event bus (not MOD bus) via `@Mod.EventBusSubscriber`. Listens for `RegisterCommandsEvent`.
 
-`/judgement` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â requires op level 2. Calls `JudgementEffect.trigger(player)` directly (bypasses the 1/200 chance roll).
+`/judgement` -- requires op level 2. Calls `JudgementEffect.trigger(player)` directly (bypasses the 1/200 chance roll).
 
 ---
 
@@ -148,18 +154,18 @@ This is the most architecturally complex system in the mod. It enables one-way (
 
 ### The Core Problem
 
-Forge checks `canStickTo` **bidirectionally**. When block A tries to stick to block B, BOTH `A.canStickTo(B)` AND `B.canStickTo(A)` must return true. If either returns false, the stick fails *before* any mixin code runs. This means you cannot express one-way stickiness through `canStickTo` alone ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if Machine Block says "no" to slime, then slime also can't grab Machine Block.
+Forge checks `canStickTo` **bidirectionally**. When block A tries to stick to block B, BOTH `A.canStickTo(B)` AND `B.canStickTo(A)` must return true. If either returns false, the stick fails *before* any mixin code runs. This means you cannot express one-way stickiness through `canStickTo` alone -- if Machine Block says "no" to slime, then slime also can't grab Machine Block.
 
 ### Three-Layer Architecture
 
-**Layer 1 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â canStickTo() (PERMISSIVE)**
+**Layer 1 -- canStickTo() (PERMISSIVE)**
 Lives in each block class. Returns true for any block pair where interaction is desired in EITHER direction. Only returns false for true mutual exclusions where neither side should ever stick (like slime vs honey in vanilla, or slime vs odd slime).
 
-**Layer 2 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Grab Immunity Rules (RESTRICTIVE)**
+**Layer 2 -- Grab Immunity Rules (RESTRICTIVE)**
 Lives in `StickinessRules.java`, registered in `Ideomod.registerStickinessRules()`, enforced by `PistonStructureResolverMixin`. Each rule is a `BiPredicate<BlockState, BlockState>` that tests `(grabber, target) -> should block?`. Runs after canStickTo passes. Blocks specific grabber->target pairs.
 
-**Layer 3 ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional Rules (CONDITIONAL)**
-Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Direction>` that tests `(blockState, pushDirection) -> should disable stickiness?`. Used for Odd Slime, which is only sticky when pushed in its FACING direction. When a directional rule fires, the block acts completely non-sticky for that push ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it won't grab ANY neighbors.
+**Layer 3 -- Directional Rules (CONDITIONAL)**
+Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Direction>` that tests `(blockState, pushDirection) -> should disable stickiness?`. Used for Odd Slime, which is only sticky when pushed in its FACING direction. When a directional rule fires, the block acts completely non-sticky for that push -- it won't grab ANY neighbors.
 
 ### The Golden Rule
 
@@ -169,15 +175,15 @@ Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Directio
 
 ### Stickiness Matrix
 
-Rows = grabber, columns = target:
+Rows = grabber, columns = target. "Machine Family" = Machine Block, Machine Track, Machine Trolley (all share the same rules).
 
-|              | Slime | Honey | Odd Slime | Machine | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-------:|:--------:|:------:|
-| **Slime**    | YES   | no*   | no*       | YES     | no       | YES    |
-| **Honey**    | no*   | YES   | no*       | YES     | no       | YES    |
-| **Odd Slime**| no*   | no*   | YES (d)   | YES (d) | no       | YES (d)|
-| **Machine**  | no    | no    | no        | YES     | no       | no     |
-| **Oddstone** | YES   | YES   | YES       | no      | YES      | no     |
+|              | Slime | Honey | Odd Slime | Machine Fam | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:--------:|:------:|
+| **Slime**    | YES   | no*   | no*       | YES         | no       | YES    |
+| **Honey**    | no*   | YES   | no*       | YES         | no       | YES    |
+| **Odd Slime**| no*   | no*   | YES (d)   | YES (d)     | no       | YES (d)|
+| **Machine Fam**| no  | no    | no        | YES         | no       | no     |
+| **Oddstone** | YES   | YES   | YES       | no          | YES      | no     |
 
 Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rule (Layer 2) | `(d)` = only when pushed in FACING direction (Layer 3) | "Normal" = any non-sticky block
 
@@ -190,11 +196,13 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 | 1 | SlimeBlock | OddstoneBlock | Slime can't grab Oddstone |
 | 2 | HoneyBlock | OddstoneBlock | Honey can't grab Oddstone |
 | 3 | OddSlimeBlock | OddstoneBlock | Odd Slime can't grab Oddstone |
-| 4 | MachineBlock | SlimeBlock | Machine can't grab Slime |
-| 5 | MachineBlock | HoneyBlock | Machine can't grab Honey |
-| 6 | MachineBlock | OddSlimeBlock | Machine can't grab Odd Slime |
+| 4 | Machine Family* | SlimeBlock | Machine Family can't grab Slime |
+| 5 | Machine Family* | HoneyBlock | Machine Family can't grab Honey |
+| 6 | Machine Family* | OddSlimeBlock | Machine Family can't grab Odd Slime |
 | 7 | SlimeBlock | OddSlimeBlock | Slime can't grab Odd Slime |
 | 8 | HoneyBlock | OddSlimeBlock | Honey can't grab Odd Slime |
+
+*Machine Family = MachineBlock, MachineTrackBlock, MachineTrolleyBlock. Rules 4-6 use `MachineBlock.isMachineFamily(grabber.getBlock())` to cover all three types with a single rule each.
 
 **Directional rules:**
 
@@ -206,19 +214,19 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. False for everything else (including MachineBlock).
 
-**MachineBlock**: Returns true for MachineBlock, SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. The slime/honey/odd slime returns are *permissive* ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â they let those types grab Machine Block one-way. Machine Block's own grabs toward them are blocked by immunity rules.
+**Machine Family (MachineBlock, MachineTrackBlock, MachineTrolleyBlock)**: All delegate to `MachineBlock.canMachineFamilyStickTo(other)`. Returns true for any Machine Family block, SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. The slime/honey/odd slime returns are *permissive* -- they let those types grab Machine Family one-way. Machine Family grabs toward them are blocked by immunity rules 4-6.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-### StickinessRules.java ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Internal Structure
+### StickinessRules.java -- Internal Structure
 
 Two static ArrayLists hold the registered rules. Two static check methods iterate them:
 
-`isGrabBlocked(expandingState, neighborState)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â iterates grab immunity rules. Returns true if any rule blocks the grab.
+`isGrabBlocked(expandingState, neighborState)` -- iterates grab immunity rules. Returns true if any rule blocks the grab.
 
-`isDirectionalGrabBlocked(state, pushDirection)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â iterates directional rules. Returns true if the block should be non-sticky for this push direction.
+`isDirectionalGrabBlocked(state, pushDirection)` -- iterates directional rules. Returns true if the block should be non-sticky for this push direction.
 
-This class lives in `block/` package (not `mixin/`) because both `Ideomod.java` (to register) and the mixin (to check) need to access it. The mixin package is locked down by Sponge ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â no regular classes allowed there.
+This class lives in `block/` package (not `mixin/`) because both `Ideomod.java` (to register) and the mixin (to check) need to access it. The mixin package is locked down by Sponge -- no regular classes allowed there.
 
 ---
 
@@ -238,14 +246,14 @@ This is the most complex and sensitive file in the project. It implements four f
 | `pushDirection` | Direction | Which way the piston is pushing |
 | `startPos` | BlockPos | First block to check. Shadowed with `@Mutable` so Feature 4 can override it. |
 
-Shadowed method: `addBlockLine(BlockPos pos, Direction dir)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the resolver's own method for adding a line of blocks starting from `pos`.
+Shadowed method: `addBlockLine(BlockPos pos, Direction dir)` -- the resolver's own method for adding a line of blocks starting from `pos`.
 
 ### Custom Fields
 
-`ideomod$inBranching` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `ThreadLocal<Boolean>`, defaults to false. Set true at HEAD of `addBranchingBlocks`, set false at TAIL. Used to distinguish between two phases of the resolver that both call `addBlockLine`:
+`ideomod$inBranching` -- `ThreadLocal<Boolean>`, defaults to false. Set true at HEAD of `addBranchingBlocks`, set false at TAIL. Used to distinguish between two phases of the resolver that both call `addBlockLine`:
 
-1. **Line-building phase**: `resolve()` calls `addBlockLine()` directly to build the initial push line. This is passive chain cohesion ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â blocks already in line stay connected.
-2. **Branching phase**: `resolve()` calls `addBranchingBlocks()`, which iterates every sticky block in `toPush` and checks its 6 neighbors. For each neighbor not already in the list, it calls `addBlockLine()`. This is active grabbing ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â sticky blocks reaching out.
+1. **Line-building phase**: `resolve()` calls `addBlockLine()` directly to build the initial push line. This is passive chain cohesion -- blocks already in line stay connected.
+2. **Branching phase**: `resolve()` calls `addBranchingBlocks()`, which iterates every sticky block in `toPush` and checks its 6 neighbors. For each neighbor not already in the list, it calls `addBlockLine()`. This is active grabbing -- sticky blocks reaching out.
 
 The distinction matters because grab immunity and directional rules should apply at full strength during branching (active grabbing) but need nuance during line-building (see the backward walk section below).
 
@@ -258,14 +266,14 @@ The distinction matters because grab immunity and directional rules should apply
 Only fires when `ideomod$inBranching` is true. This catches the moment a sticky block in the push list reaches out to grab a neighbor during branching.
 
 Logic:
-1. Calculate grabber position: `pos.relative(dir.getOpposite())` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â the block that's doing the grabbing
+1. Calculate grabber position: `pos.relative(dir.getOpposite())` -- the block that's doing the grabbing
 2. Verify grabber is actually in `toPush` (skip otherwise)
 3. Get both block states
 4. Skip if neighbor is air
 5. Check directional rules on the grabber: is it disabled for this push direction? If yes, cancel with `cir.setReturnValue(true)`.
 6. Check grab immunity: does the target resist this grabber? If yes, cancel with `cir.setReturnValue(true)`.
 
-**Critical detail**: The cancel return value is `true`, not `false`. The `addBlockLine` method returns boolean indicating "did this succeed without hitting the push limit." Returning `true` means "everything's fine, just didn't add anything" ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it lets the resolver continue checking other neighbors. Returning `false` would mean "push limit exceeded, abort everything" which would break unrelated blocks.
+**Critical detail**: The cancel return value is `true`, not `false`. The `addBlockLine` method returns boolean indicating "did this succeed without hitting the push limit." Returning `true` means "everything's fine, just didn't add anything" -- it lets the resolver continue checking other neighbors. Returning `false` would mean "push limit exceeded, abort everything" which would break unrelated blocks.
 
 ### Feature 1B + 2B: Backward Walk (Redirect on canStickTo)
 
@@ -282,13 +290,13 @@ In this context:
 - `other` = the "front" block (the one already in the line, calling backward)
 
 Logic:
-1. Run original `canStickTo(self, other)` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if vanilla says no, we say no.
+1. Run original `canStickTo(self, other)` -- if vanilla says no, we say no.
 2. Check directional rules on `self` (behind block). If disabled for this push, return false.
 3. Check directional rules on `other` (front block). If disabled for this push, return false.
-4. **Special case**: Check if `other` is an active OddSlimeBlock (FACING == pushDirection). If yes, skip grab immunity. Rationale: the Odd Slime is the active puller here ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â it's carrying blocks behind it in its chain. The behind block is being pulled BY the Odd Slime, not grabbing it. Without this exception, Odd Slime couldn't pull anything because grab immunity would block the backward-walk connection.
+4. **Special case**: Check if `other` is an active OddSlimeBlock (FACING == pushDirection). If yes, skip grab immunity. Rationale: the Odd Slime is the active puller here -- it's carrying blocks behind it in its chain. The behind block is being pulled BY the Odd Slime, not grabbing it. Without this exception, Odd Slime couldn't pull anything because grab immunity would block the backward-walk connection.
 5. If not the special case, apply normal grab immunity: `isGrabBlocked(self, other)`.
 
-**CRITICAL WARNING**: The Odd Slime exception MUST remain narrowly scoped to `instanceof OddSlimeBlock` with FACING check. Generalizing it to "any sticky block" or "any block without directional rules" would match Oddstone, regular slime, honey, etc. and re-break one-way stickiness. This was the Stage 5 bug ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â slime pulling Oddstone in the backward walk.
+**CRITICAL WARNING**: The Odd Slime exception MUST remain narrowly scoped to `instanceof OddSlimeBlock` with FACING check. Generalizing it to "any sticky block" or "any block without directional rules" would match Oddstone, regular slime, honey, etc. and re-break one-way stickiness. This was the Stage 5 bug -- slime pulling Oddstone in the backward walk.
 
 ### Feature 3: Sympathetic Movement (TAIL of addBranchingBlocks)
 
@@ -300,7 +308,7 @@ After vanilla finishes checking all distance-1 sticky neighbors, this extends th
 
 Key details:
 - Takes a snapshot of `toPush` before iterating (avoids ConcurrentModificationException as new blocks get added)
-- Only checks blocks matching `ModBlocks.ODDSTONE` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â other block types don't participate
+- Only checks blocks matching `ModBlocks.ODDSTONE` -- other block types don't participate
 - Scans each direction independently, stops at first Oddstone found per direction (finds nearest)
 - If any new blocks were added, sets return value to `true`, which tells the resolver's main loop in `resolve()` to re-run branching. This enables chaining: Oddstone A finds Oddstone B, next iteration B finds Oddstone C, etc.
 - All sympathetic blocks count toward the vanilla 12-block push limit
@@ -328,60 +336,100 @@ This is needed because ranged pistons pass the device's own position as `pistonP
 
 ---
 
-## 6. RANGED PISTON SYSTEM
+## 6. BLOCK MOVEMENT SYSTEM
 
-Repulser and Attractor are ranged directional pistons that push/pull Oddstone blocks at a distance. They use vanilla's block event system for client-server synchronization (see BLOCK_EVENT_LESSON.md for the full debugging story).
+General-purpose system for moving blocks using vanilla piston mechanics. Used by Repulser/Attractor (ranged pistons) and Machine Track/Trolley (directional push). All callers use vanilla's block event system for client-server synchronization (see BLOCK_EVENT_LESSON.md for the full debugging story).
 
-### Architecture
+### BlockMoveHelper -- General-Purpose Movement Utility
 
-Both blocks follow the same pattern:
+`BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)` is the single entry point for any system that needs piston-style block movement at a distance.
 
-1. `neighborChanged()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â server-only. Detects rising redstone edge. Updates POWERED state. On rising edge, calls `level.blockEvent(pos, this, EVENT_FIRE, facing.get3DDataValue())`.
-2. Block event is queued for the block event phase of this tick. Server sends `ClientboundBlockEventPacket` to all tracking clients.
-3. `triggerEvent()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â runs on BOTH client and server. Decodes the direction from `param`, calls into `RangedPistonUtil`.
+**Parameters:**
+- `level` -- Level (not ServerLevel -- must run on both client and server for animation)
+- `initiatorPos` -- position of the block causing the move (protected from overwrite)
+- `targetPos` -- position of the block to move (can be non-adjacent to initiator)
+- `pushDir` -- direction to move
+
+**Safety checks:**
+1. toPush must be non-empty and contain targetPos
+2. toPush must NOT contain initiatorPos
+3. No block's destination (sourcePos + pushDir) may equal initiatorPos
+
+**Movement steps** (mirrors vanilla PistonBaseBlock.moveBlocks()):
+1. Set ThreadLocal target via RangedPistonFlags.setTarget(targetPos)
+2. Create PistonStructureResolver with initiatorPos as pistonPos (mixin redirects startPos)
+3. Resolve full move group (respects push limits, stickiness, etc.)
+4. Clear ThreadLocal in finally block
+5. Safety checks (above)
+6. Snapshot block states
+7. Destroy breakables (reverse order, flag 18)
+8. Place MovingPistonBlock at destinations (reverse order, flag 68) -- sources still exist
+9. Clear vacated sources to air (flag 82)
+10. Neighbor updates (indirect shapes, updateNeighborsAt)
+11. Piston extend sound from initiator position
+
+Flag 68 = SKIP_DROP(4) + NO_BLOCK_ENTITY_DROP(64). Flag 82 = UPDATE_CLIENTS(2) + SKIP_NEIGHBOR(16) + NO_BLOCK_ENTITY_DROP(64).
 
 **Why block events?** `MovingPistonBlock.newBlockEntity()` returns null. The client never creates `PistonMovingBlockEntity` through the normal block entity lifecycle. Vanilla creates it by running `moveBlocks()` on both sides via `triggerEvent()`. If movement code only runs server-side, blocks disappear for 2 ticks then pop in with no animation.
 
 **Why no ServerLevel guard in triggerEvent?** The entire point is that both sides run the same code. Guarding with `instanceof ServerLevel` defeats the purpose. Only guard things that genuinely must not run on client (item drops, XP, world data saves).
 
-### RangedPistonUtil ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Movement Logic
+### RangedPistonUtil -- Scanning + Dispatch
 
-**Scanning**: `scanForNearest` (Repulser) and `scanForFarthest` (Attractor) walk a line from the device in its FACING direction, up to `SCAN_RANGE` (12 blocks), testing each position against a filter predicate. Currently uses `ODDSTONE_ONLY`. Future Arcane variants will use `ANY_MOVABLE`.
+Handles line scanning for the Repulser/Attractor family. Delegates actual movement to BlockMoveHelper.
 
-**resolveAndMove()** mirrors vanilla `PistonBaseBlock.moveBlocks()`:
+**Scanning**: `scanForNearest` (Repulser) and `scanForFarthest` (Attractor) walk a line from the device in its FACING direction, up to `SCAN_RANGE` (12 blocks), testing each position against a filter predicate.
 
-1. **Set ThreadLocal target**: `RangedPistonFlags.setTarget(targetPos)` so the mixin can redirect the resolver's startPos.
-2. **Create resolver**: `new PistonStructureResolver(level, devicePos, pushDir, true)`. Uses `devicePos` as pistonPos (safe, far from action). Mixin redirects startPos to actual target.
-3. **Call `resolver.resolve()`**: If false, movement is blocked (immovable block, push limit, etc.). Clean up and return.
-4. **Clear ThreadLocal**: Always in a `finally` block to prevent stale state.
-5. **Safety checks**: Verify toPush is non-empty, contains targetPos, doesn't contain devicePos. Also checks that no block's destination (sourcePos + pushDir) equals devicePos Ã¢â‚¬â€ prevents blocks from being pushed/pulled into and overwriting the device.
-6. **Snapshot states**: Record all block states for moved and destroyed positions.
-7. **Destroy breakables**: Iterate `toDestroy` in reverse. Drop resources, set to air (flag 18).
-8. **Place MovingPistonBlock at destinations**: Iterate `toPush` in reverse (farthest first). For each: calculate destPos = sourcePos + pushDir, set `MOVING_PISTON` state (flag 68), create `PistonMovingBlockEntity` via `MovingPistonBlock.newMovingBlockEntity()`. Source blocks still exist at this point ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â this is correct and matches vanilla.
-9. **Clear vacated sources**: Set to air (flag 82). Only positions not overwritten by a destination.
-10. **Neighbor updates**: Indirect neighbor shapes for vacated, updateNeighborsAt for destroyed and moved.
-11. **Sound**: Piston extend sound from device position.
+**Public API:**
+- `tryRepulse(level, devicePos, facing, filter)` -- scan nearest, push away
+- `tryAttract(level, devicePos, facing, filter)` -- scan farthest, pull toward device (pushDir = facing.getOpposite())
 
-Flag 68 = SKIP_DROP(4) + NO_BLOCK_ENTITY_DROP(64). Flag 82 = UPDATE_CLIENTS(2) + SKIP_NEIGHBOR(16) + NO_BLOCK_ENTITY_DROP(64).
+Both call `BlockMoveHelper.moveBlockAt()` after finding the target.
 
-### RangedPistonFlags ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â ThreadLocal Coordination
+### AbstractRangedPistonBlock -- Shared Base Class
+
+Handles all shared logic for Repulser/Attractor variants:
+- FACING + POWERED blockstate properties
+- Directional placement (piston-style, faces player look direction)
+- Rising edge detection in neighborChanged() (server-only)
+- Block event scheduling: `level.blockEvent(pos, this, EVENT_FIRE, facing.get3DDataValue())`
+- Block event dispatch in triggerEvent() (runs BOTH sides): decodes direction, calls `fire()`
+- Rotation/mirror support
+
+Subclasses implement `fire(Level level, BlockPos pos, Direction facing)` only. OddstoneRepulserBlock and OddstoneAttractorBlock are each ~15 lines.
+
+### RangedPistonFlags -- ThreadLocal Coordination
 
 Pattern for passing runtime context from calling code into a mixin:
 
-1. Caller (`RangedPistonUtil`) sets the target: `RangedPistonFlags.setTarget(targetPos)`
+1. Caller (`BlockMoveHelper`) sets the target: `RangedPistonFlags.setTarget(targetPos)`
 2. Caller creates the resolver (which triggers the mixin)
 3. Mixin reads the target: `RangedPistonFlags.getTarget()`
 4. Caller clears in finally: `RangedPistonFlags.clear()`
 
 Lives in `block/` package (not `mixin/`) so both sides can access it.
 
+### MachineTrackBlock -- Direct BlockMoveHelper Caller
+
+Machine Track skips scanning entirely -- it knows where the Trolley is (adjacent). Uses BlockMoveHelper directly from its triggerEvent().
+
+**Signal direction detection**: Track checks each neighbor to find actual signal sources. Does NOT use `level.hasSignal()` because Track emits strong signal via POWER, causing vanilla's weak power to leak through adjacent solid blocks (Trolleys would appear as signal sources). Instead checks:
+- Conduit blocks (Machine Block/Track) with POWER higher than this Track = signal source
+- Tagged redstone components with nonzero signal = signal source
+- Everything else (Trolleys, stone, air) = ignored
+
+**Push scheduling**: For each signal face, pushDir = opposite. Checks ALL 6 neighbors for Trolleys. Packs pushDir + trolleyFace into block event param via bit shifting (bits 0-2: pushDir, bits 3-5: trolleyFace).
+
+**Track self-protection**: Track's position is passed as initiatorPos to BlockMoveHelper. The PistonStructureResolver treats this as pistonPos (immovable origin), so the Track is never dragged along. This is a structural protection, not a stickiness exemption.
+
 ### Filter Predicates
 
-`ODDSTONE_ONLY` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â `state.is(ModBlocks.ODDSTONE.get())`. Used by current Repulser/Attractor.
+`ODDSTONE_ONLY` -- `state.is(ModBlocks.ODDSTONE.get())`. Used by current Repulser/Attractor.
 
-`ANY_MOVABLE` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â checks not air, destroySpeed >= 0, pushReaction not BLOCK or IGNORE. **Has a bug**: passes null for BlockGetter in `getDestroySpeed()`. Not currently used but needs fixing before Arcane variants.
+`ANY_MOVABLE` -- checks not air, destroySpeed >= 0, pushReaction not BLOCK or IGNORE. **Has a bug**: passes null for BlockGetter in `getDestroySpeed()`. Not currently used but needs fixing before Arcane variants.
 
 ---
+
 
 ## 7. PORTAL SYSTEM
 
@@ -453,11 +501,11 @@ This prevents false deactivation from unrelated neighbor updates (levers, redsto
 
 **Break effects**: `PortalUtils.clearPortalBlocks()` uses `level.destroyBlock(pos, false)` which produces break particles and the portal block's break sound -- same visual/audio as cascade-breaking via `updateShape`.
 
-`OddstonePortalBlock.updateShape()` also provides cascade breaking -- if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air. ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air.
+`OddstonePortalBlock.updateShape()` also provides cascade breaking -- if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air. -- if any adjacent block in the portal plane isn't a portal block, Oddstone, or corner block, the portal block becomes air.
 
 ### Teleportation
 
-`OddstonePortalBlock.entityInside()` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â server only, players only.
+`OddstonePortalBlock.entityInside()` -- server only, players only.
 
 **Linked portals**: Preserves relative position. Calculates player's fractional offset within source portal bounds (0.0 to 1.0 for both horizontal and vertical), applies same fraction to destination portal bounds. Works even if portals are different sizes.
 
@@ -472,8 +520,8 @@ This prevents false deactivation from unrelated neighbor updates (levers, redsto
 ### SavedData Internals
 
 Two maps maintain the registry:
-- `portalsByPosition`: Map<BlockPos, PortalEntry> ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â primary store
-- `portalsByAddress`: Map<String, BlockPos[2]> ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â quick lookup, max 2 entries per address
+- `portalsByPosition`: Map<BlockPos, PortalEntry> -- primary store
+- `portalsByAddress`: Map<String, BlockPos[2]> -- quick lookup, max 2 entries per address
 
 PortalEntry contains: address (String), pos (BlockPos), axis ("X" or "Z"), partnerPos (nullable BlockPos).
 
@@ -571,7 +619,7 @@ The `isRelevantForAnyDefinition()` filter ensures only frame/core block placemen
 
 ## 9. BLOCK SPECIFICATIONS
 
-### Oddstone ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 5 Features in One Block
+### Oddstone -- 5 Features in One Block
 
 | Feature | Implementation |
 |---------|---------------|
@@ -581,12 +629,25 @@ The `isRelevantForAnyDefinition()` filter ensures only frame/core block placemen
 | **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. Reverse grabs blocked by immunity rules 1-3. |
 | **Portal frame** | `neighborChanged()` delegates to `OddstonePortalHandler.onNeighborChanged()`. `onRemove()` delegates to `OddstonePortalHandler.onBlockRemoved()`. |
 
-### Machine Block ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â 2 Features
+### Machine Block -- 2 Features + Machine Family Base
 
 | Feature | Implementation |
 |---------|---------------|
-| **Selective stickiness** | `isStickyBlock()` returns true. Permissive `canStickTo()` (true for MachineBlock + all slime types). Immunity rules 4-6 block Machine Block from grabbing slime types. Net result: only grabs other Machine Blocks, but slime/honey/odd slime CAN grab it. |
-| **Redstone conduction** | POWER property (IntegerProperty 0-15). `isSignalSource()` returns true. `getSignal()`/`getDirectSignal()` return current power. `calculatePower()` checks all 6 neighbors ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â takes signal from Machine Blocks (decayed by 1) or from REDSTONE_COMPONENTS tag members. Static `isUpdating` flag prevents recursion during `neighborChanged()`. Color via tintIndex: `getPowerColor(power)` interpolates RGB from (80,80,80) at 0 to (255,48,48) at 15. |
+| **Selective stickiness** | `isStickyBlock()` returns true. Permissive `canStickTo()` delegates to `canMachineFamilyStickTo()` (true for Machine Family + all slime types). Immunity rules 4-6 block Machine Family from grabbing slime types. Net result: only grabs other Machine Family blocks, but slime/honey/odd slime CAN grab it. |
+| **Redstone conduction** | POWER property (IntegerProperty 0-15). `isSignalSource()` returns true. `getSignal()`/`getDirectSignal()` return current power. `calculatePower()` checks all 6 neighbors -- takes signal from conduit blocks (`isRedstoneConduit()`: MachineBlock or MachineTrackBlock, decayed by 1) or from REDSTONE_COMPONENTS tag members. Static `isUpdating` flag prevents recursion during `neighborChanged()`. Color via tintIndex: `getPowerColor(power)` interpolates RGB from (80,80,80) at 0 to (255,48,48) at 15. |
+
+**Static helpers** (used by all Machine Family blocks):
+- `isMachineFamily(Block)` -- true for MachineBlock, MachineTrackBlock, MachineTrolleyBlock
+- `isRedstoneConduit(Block)` -- true for MachineBlock, MachineTrackBlock (blocks that conduct POWER)
+- `canMachineFamilyStickTo(BlockState)` -- shared canStickTo logic for the whole family
+
+### Machine Track -- Redstone Conduction + Trolley Push
+
+Non-directional block. Part of Machine Family (sticks to Machine Block, Trolley, other Tracks). Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable). On rising edge (POWER 0 -> nonzero), checks each face for actual signal sources and pushes ALL adjacent Trolleys in the opposite direction. Uses BlockMoveHelper for piston-style movement with animation. Block event param encodes pushDir + trolleyFace via bit shifting.
+
+### Machine Trolley -- Passive Cargo Carrier
+
+Non-directional block. Part of Machine Family. No active behavior -- just stickiness. Pushed by Tracks. Carries anything stuck to it via Machine Family or slime stickiness. Does NOT conduct redstone.
 
 ### Odd Slime Block
 
@@ -598,9 +659,8 @@ Extends `DirectionalBlock`. FACING + POWERED properties. On rising redstone edge
 
 ### Oddstone Repulser / Attractor
 
-Both extend `DirectionalBlock`. FACING + POWERED properties. Block event pattern for client-server sync. Repulser finds nearest Oddstone in line, pushes away. Attractor finds farthest Oddstone, pulls toward device.
+Both extend `AbstractRangedPistonBlock`. FACING + POWERED properties. Block event pattern for client-server sync. Repulser finds nearest Oddstone in line, pushes away. Attractor finds farthest Oddstone, pulls toward device. Each is ~15 lines -- all shared logic lives in the base class. Movement delegated to BlockMoveHelper via RangedPistonUtil.
 
----
 
 ## 10. JUDGEMENT EFFECT
 
@@ -608,7 +668,7 @@ A rare atmospheric event. When a player kills a non-hostile mob (Animal or Abstr
 
 **Trigger**: `LivingDeathEvent` on Forge event bus. Checks: server side, killed by player, victim is non-hostile, no active session for this player, then rolls 1/200.
 
-**Freeze mechanism**: `mob.setNoAi(true)` on each target mob. Same as vanilla `{NoAI:1}` ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â freezes all AI goals and movement.
+**Freeze mechanism**: `mob.setNoAi(true)` on each target mob. Same as vanilla `{NoAI:1}` -- freezes all AI goals and movement.
 
 **Stare mechanism**: Every server tick, for each frozen mob: calculate vector from mob eye position to player eye position, convert to yaw/pitch via `atan2`, set `yRot`, `xRot`, `yHeadRot`, `yBodyRot`.
 
@@ -651,7 +711,7 @@ Auto-generated on first launch. Loaded lazily on first access.
 
 ## 12. RESOURCE FILE TEMPLATES
 
-### Blockstate ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Simple (no variants)
+### Blockstate -- Simple (no variants)
 
 `assets/ideomod/blockstates/oddstone.json`:
 ```json
@@ -664,7 +724,7 @@ Auto-generated on first launch. Loaded lazily on first access.
 }
 ```
 
-### Blockstate ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional (FACING + POWERED)
+### Blockstate -- Directional (FACING + POWERED)
 
 `assets/ideomod/blockstates/oddstone_repulser.json`:
 
@@ -692,7 +752,7 @@ Pattern:
 
 For FACING-only (no POWERED), same pattern with just 6 entries (one per facing, no powered variants).
 
-### Block Model ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Simple (cube_all)
+### Block Model -- Simple (cube_all)
 
 `assets/ideomod/models/block/oddstone.json`:
 ```json
@@ -704,7 +764,7 @@ For FACING-only (no POWERED), same pattern with just 6 entries (one per facing, 
 }
 ```
 
-### Block Model ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â Directional (front/back/side)
+### Block Model -- Directional (front/back/side)
 
 `assets/ideomod/models/block/oddstone_repulser.json`:
 
@@ -745,7 +805,7 @@ Uses custom elements instead of a parent, assigning front/back/side textures to 
 }
 ```
 
-Same pattern for all block items ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â just parent the block model.
+Same pattern for all block items -- just parent the block model.
 
 ### Loot Table (standard self-drop)
 
@@ -796,7 +856,7 @@ Same pattern for all block items ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â just par
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, plus the creative tab.
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, plus the creative tab.
 
 ---
 
@@ -834,17 +894,16 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 
 | # | Issue | Severity | Location |
 |---|-------|----------|----------|
-| 1 | Duplicate javadoc on triggerEvent() | Clutter | OddstoneRepulserBlock, OddstoneAttractorBlock |
-| 2 | ANY_MOVABLE passes null BlockGetter | Crash risk (unused) | RangedPistonUtil.java |
-| 3 | Repulser/Attractor 90% code duplication | Debt | Could extract AbstractRangedPistonBlock |
-| 4 | 8 grab immunity rules could be consolidated | Debt | Ideomod.registerStickinessRules() |
-| 5 | 5 portal files in flat block/ package | Organization | Could move to block/portal/ |
-| 6 | MachineBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineBlock.java |
-| 7 | DrillBlock on hold, still registered | Intentional | N/A |
-| 8 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
-| 9 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
+| 1 | ANY_MOVABLE passes null BlockGetter | Crash risk (unused) | RangedPistonUtil.java |
+| 2 | Grab immunity rules could be consolidated | Debt | Ideomod.registerStickinessRules() |
+| 3 | 5 portal files in flat block/ package | Organization | Could move to block/portal/ |
+| 4 | MachineBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineBlock.java |
+| 5 | MachineTrackBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineTrackBlock.java |
+| 6 | DrillBlock on hold, still registered | Intentional | N/A |
+| 7 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
+| 8 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
+| 9 | Track/Trolley use machine_block.png placeholder texture | Missing art | machine_track, machine_trolley |
 
----
 
 ## 15. CONVENTIONS & PATTERNS
 
@@ -904,7 +963,7 @@ Same as directional, plus:
 ### New Sticky Block
 
 1. Decide relationships with all existing sticky types (see section 4 matrix)
-2. Write canStickTo() ÃƒÂ¢Ã¢â€šÂ¬Ã¢â‚¬Â permissive (true for any type where either direction is wanted)
+2. Write canStickTo() -- permissive (true for any type where either direction is wanted)
 3. Update OTHER blocks' canStickTo() if they need to interact with yours
 4. Register grab immunity rules in Ideomod.registerStickinessRules()
 5. Register directional rules if stickiness depends on push direction

@@ -28,14 +28,18 @@ com.ideomancer.ideomod
   |                              structure definitions, StructureManager event handler.
   |-- block/
   |     |-- OddstoneBlock.java           5-feature core block (see Oddstone section)
-  |     |-- MachineBlock.java            Selective stickiness + redstone conduction
+  |     |-- MachineBlock.java            Machine Family base: stickiness + conduction
+  |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
+  |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- StickinessRules.java         Rule registry (grab immunity + directional)
-  |     |-- RangedPistonUtil.java        Shared resolve-and-move for Repulser/Attractor
+  |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
+  |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor
   |     |-- RangedPistonFlags.java       ThreadLocal for resolver startPos redirect
-  |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range
-  |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range
+  |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
+  |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
+  |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range (extends Abstract)
   |     |-- OddstonePortalBlock.java     Portal interior fill block + teleportation
   |     |-- OddstonePortalHandler.java   Activation/deactivation lifecycle (static util)
   |     |-- OddstonePortalFrameDetector.java  Frame scanning + address reading
@@ -84,29 +88,35 @@ Three-layer architecture for asymmetric and directional stickiness:
 
 Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStructureResolverMixin`.
 
-**Stickiness Matrix** (rows = grabber, cols = target):
+**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Block, Machine Track, Machine Trolley:
 
-|              | Slime | Honey | Odd Slime | Machine | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-------:|:--------:|:------:|
-| Slime        | YES   | no*   | no*       | YES     | no       | YES    |
-| Honey        | no*   | YES   | no*       | YES     | no       | YES    |
-| Odd Slime    | no*   | no*   | YES (d)   | YES (d) | no       | YES (d)|
-| Machine      | no    | no    | no        | YES     | no       | no     |
-| Oddstone     | YES   | YES   | YES       | no      | YES      | no     |
+|              | Slime | Honey | Odd Slime | Machine Fam | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:--------:|:------:|
+| Slime        | YES   | no*   | no*       | YES         | no       | YES    |
+| Honey        | no*   | YES   | no*       | YES         | no       | YES    |
+| Odd Slime    | no*   | no*   | YES (d)   | YES (d)     | no       | YES (d)|
+| Machine Fam  | no    | no    | no        | YES         | no       | no     |
+| Oddstone     | YES   | YES   | YES       | no          | YES      | no     |
 
 `no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional
 
-### 2. Ranged Piston System (Repulser/Attractor)
+### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley)
 
-**Architecture**: Uses vanilla's block event system for client-server sync (see BLOCK_EVENT_LESSON.md).
+**Architecture**: Three-layer system. BlockMoveHelper provides general-purpose piston-style movement. RangedPistonUtil adds scanning. AbstractRangedPistonBlock adds shared block logic. All use vanilla's block event system for client-server sync (see BLOCK_EVENT_LESSON.md).
 
-**Flow**: `neighborChanged()` -> `level.blockEvent()` -> `triggerEvent()` (runs BOTH sides) -> `RangedPistonUtil.tryRepulse/tryAttract()`
+**BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)**: Single entry point for any system needing piston-style block movement. Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: set ThreadLocal target -> create resolver -> resolve -> safety checks -> snapshot states -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
 
-**RangedPistonUtil.resolveAndMove()**: Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: snapshot states -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
+**Safety checks**: (1) toPush non-empty and contains target, (2) toPush doesn't contain initiator, (3) no destination equals initiator position.
 
-**RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Prevents pistonPos from overlapping real blocks. Set before `new PistonStructureResolver()`, cleared in finally block.
+**RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to 12 blocks. Delegates movement to BlockMoveHelper.
 
-**Scan range**: 12 blocks. Repulser finds nearest target, Attractor finds farthest.
+**AbstractRangedPistonBlock**: Shared base for Repulser/Attractor. Handles FACING/POWERED, rising edge, block events, rotation. Subclasses implement `fire()` only (~15 lines each).
+
+**RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Set before `new PistonStructureResolver()`, cleared in finally block.
+
+**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()` to avoid weak power misfires. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing.
+
+**MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
 **Filter predicates**: `ODDSTONE_ONLY` (current), `ANY_MOVABLE` (future Arcane variants).
 
@@ -163,16 +173,26 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 4. **One-way stickiness**: Grabs all slime types + other Oddstone. Cannot be grabbed back (grab immunity rules).
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 
-### 6. Machine Block (2 features)
+### 6. Machine Block (2 features + Machine Family base)
 
-1. **Selective stickiness**: Only actively grabs other Machine Blocks. Permissive canStickTo lets slime/honey/odd slime grab it (one-way via immunity rules).
-2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
+1. **Selective stickiness**: Only actively grabs other Machine Family blocks (MachineBlock, MachineTrackBlock, MachineTrolleyBlock). Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
+2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
 
-### 7. Odd Slime Block
+**Static helpers**: `isMachineFamily(Block)`, `isRedstoneConduit(Block)`, `canMachineFamilyStickTo(BlockState)` -- used by all Machine Family blocks.
+
+### 7. Machine Track (conduction + Trolley push)
+
+Non-directional Machine Family block. Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable chains). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement. Signal direction detected via direct source interrogation (not vanilla hasSignal).
+
+### 8. Machine Trolley (passive cargo)
+
+Non-directional Machine Family block. No active behavior. Pushed by Tracks, carries anything stuck to it. Does NOT conduct redstone.
+
+### 9. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
 
-### 8. Judgement Effect
+### 10. Judgement Effect
 
 Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 32 blocks freeze (`setNoAi(true)`), stare at player for 5 seconds (manual yaw/pitch per tick), then unfreeze. Triggered by LivingDeathEvent. Also available via `/judgement` command (op level 2).
 
@@ -180,7 +200,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY
 
 **ModItems**: BlockItems for all blocks EXCEPT ODDSTONE_PORTAL (not player-placeable). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
@@ -212,11 +232,10 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## KNOWN ISSUES & TECHNICAL DEBT
 
-1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Consider ThreadLocal if concurrency ever matters.
-2. **Duplicate javadoc on triggerEvent()** -- both Repulser and Attractor have two consecutive comment blocks above triggerEvent(). Remove the first one on each.
-3. **RangedPistonUtil.ANY_MOVABLE passes null BlockGetter** -- `state.getDestroySpeed(null, BlockPos.ZERO)` could NPE on blocks that dereference the level parameter. Needs a level reference or a different check.
-4. **Repulser/Attractor code duplication** -- 90% identical. Could extract `AbstractRangedPistonBlock` base class.
-5. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
-6. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
-7. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
-8. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
+1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
+2. **RangedPistonUtil.ANY_MOVABLE passes null BlockGetter** -- `state.getDestroySpeed(null, BlockPos.ZERO)` could NPE on blocks that dereference the level parameter. Needs a level reference or a different check.
+3. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
+4. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
+5. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
+6. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
+7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.

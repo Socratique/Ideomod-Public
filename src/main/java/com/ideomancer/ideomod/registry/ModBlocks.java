@@ -3,6 +3,8 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
 import com.ideomancer.ideomod.block.MachineBlock;
+import com.ideomancer.ideomod.block.MachineTrackBlock;
+import com.ideomancer.ideomod.block.MachineTrolleyBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneAttractorBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
@@ -23,11 +25,9 @@ import net.minecraftforge.registries.RegistryObject;
  */
 public class ModBlocks {
     
-    // Create the DeferredRegister for blocks
     public static final DeferredRegister<Block> BLOCKS = 
             DeferredRegister.create(ForgeRegistries.BLOCKS, Ideomod.MOD_ID);
     
-    // Register Ideoblock - a basic decorative block
     public static final RegistryObject<Block> IDEOBLOCK = BLOCKS.register("ideoblock",
             () -> new Block(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.STONE)
@@ -35,7 +35,6 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
             ));
     
-    // Register Drill Block - mines 3x3 when powered by redstone
     public static final RegistryObject<Block> DRILL = BLOCKS.register("drill",
             () -> new DrillBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -43,7 +42,6 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
             ));
     
-    // Register Oddstone - mob avoidance + redstone insulation + sympathetic movement + portal frame
     public static final RegistryObject<Block> ODDSTONE = BLOCKS.register("oddstone",
             () -> new OddstoneBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_PURPLE)
@@ -53,7 +51,6 @@ public class ModBlocks {
                     .isRedstoneConductor((state, level, pos) -> false)
             ));
     
-    // Register Machine Block - selective stickiness + redstone conduction
     public static final RegistryObject<Block> MACHINE_BLOCK = BLOCKS.register("machine_block",
             () -> new MachineBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -63,42 +60,29 @@ public class ModBlocks {
                     .isRedstoneConductor((state, level, pos) -> false)
             ));
     
-    // Register Odd Slime - directional slime block, only sticky when pushed in FACING direction
-    // Properties mirror vanilla slime: soft, bouncy sound, no tool required
     public static final RegistryObject<Block> ODD_SLIME = BLOCKS.register("odd_slime",
             () -> new OddSlimeBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_LIGHT_GREEN)
-                    .friction(0.8F)           // Slippery like slime
+                    .friction(0.8F)
                     .sound(SoundType.SLIME_BLOCK)
-                    .noOcclusion()             // Translucent like slime
+                    .noOcclusion()
             ));
     
-    // Register Oddstone Portal - the interior fill block for lit Oddstone portals
-    // Properties match nether portal concept but with Oddstone flavor:
-    //   - No collision (entities walk through)
-    //   - Light level 11 (same as nether portal)
-    //   - Indestructible by hand (-1 hardness) - only breaks when frame breaks
-    //   - Cannot be pushed by pistons
-    //   - Light blue map color
-    //   - Glass-like sound
     public static final RegistryObject<Block> ODDSTONE_PORTAL = BLOCKS.register("oddstone_portal",
             () -> new OddstonePortalBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_LIGHT_BLUE)
                     .noCollission()
-                    .strength(-1.0F) // Indestructible by hand
+                    .strength(-1.0F)
                     .sound(SoundType.GLASS)
                     .lightLevel(state -> 11)
-                    .pushReaction(PushReaction.BLOCK) // Can't be pushed by pistons
-                    .noLootTable() // Drops nothing
+                    .pushReaction(PushReaction.BLOCK)
+                    .noLootTable()
             ));
 
     // ========================================================================
     // REPULSER / ATTRACTOR — ranged directional pistons
     // ========================================================================
 
-    // Register Oddstone Repulser - scans line, pushes Oddstone away
-    // Mechanical feel: stone base + metal + oddstone accent
-    // Movable by pistons (can be part of contraptions)
     public static final RegistryObject<Block> ODDSTONE_REPULSER = BLOCKS.register("oddstone_repulser",
             () -> new OddstoneRepulserBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_PURPLE)
@@ -107,13 +91,36 @@ public class ModBlocks {
                     .sound(SoundType.STONE)
             ));
 
-    // Register Oddstone Attractor - scans line, pulls Oddstone toward it
-    // Same properties as Repulser — they're a matched pair
     public static final RegistryObject<Block> ODDSTONE_ATTRACTOR = BLOCKS.register("oddstone_attractor",
             () -> new OddstoneAttractorBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_PURPLE)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+            ));
+
+    // ========================================================================
+    // MACHINE TRACK / TROLLEY — directional block movement system
+    // ========================================================================
+
+    // Machine Track - pushes adjacent Trolleys based on redstone signal direction
+    // Conducts redstone like Machine Block (signal decays by 1 per block)
+    public static final RegistryObject<Block> MACHINE_TRACK = BLOCKS.register("machine_track",
+            () -> new MachineTrackBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+            ));
+
+    // Machine Trolley - passive cargo carrier, pushed by Tracks
+    // Does NOT conduct redstone (just a dumb cargo block)
+    public static final RegistryObject<Block> MACHINE_TROLLEY = BLOCKS.register("machine_trolley",
+            () -> new MachineTrolleyBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
             ));
 }

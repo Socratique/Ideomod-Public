@@ -6,6 +6,8 @@
     "ideomod:oddstone",
     "ideomod:machine_block",
     "ideomod:oddstone_repulser",
-    "ideomod:oddstone_attractor"
+    "ideomod:oddstone_attractor",
+    "ideomod:machine_track",
+    "ideomod:machine_trolley"
   ]
 }

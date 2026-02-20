@@ -14,18 +14,13 @@ import net.minecraftforge.registries.RegistryObject;
  */
 public class ModCreativeTabs {
     
-    // Create the DeferredRegister for creative tabs
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = 
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, Ideomod.MOD_ID);
     
-    // Register our main creative tab
     public static final RegistryObject<CreativeModeTab> IDEOMOD_TAB = CREATIVE_TABS.register("ideomod_tab",
             () -> CreativeModeTab.builder()
-                    // The tab icon - using our Ideoblock
                     .icon(() -> new ItemStack(ModItems.IDEOBLOCK.get()))
-                    // The tab title - uses translation key
                     .title(Component.translatable("itemGroup." + Ideomod.MOD_ID + ".ideomod_tab"))
-                    // Add all our items to this tab
                     .displayItems((parameters, output) -> {
                         // Blocks
                         output.accept(ModItems.IDEOBLOCK.get());
@@ -35,11 +30,11 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ODD_SLIME.get());
                         output.accept(ModItems.ODDSTONE_REPULSER.get());
                         output.accept(ModItems.ODDSTONE_ATTRACTOR.get());
+                        output.accept(ModItems.MACHINE_TRACK.get());
+                        output.accept(ModItems.MACHINE_TROLLEY.get());
 
                         // Tools / Debug
                         output.accept(ModItems.STRUCTURE_DEBUG_STICK.get());
-                        
-                        // Add more items here as we create them
                     })
                     .build()
     );

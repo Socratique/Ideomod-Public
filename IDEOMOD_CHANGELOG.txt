@@ -1,5 +1,110 @@
 # Ideomod Changelog
 
+## [2026-02-18] BlockMoveHelper Refactor + Machine Track & Trolley
+
+Major refactor of the ranged piston movement system into a general-purpose
+block movement utility, plus two new Machine Family blocks.
+
+### BlockMoveHelper extraction:
+- Extracted the core resolve-and-move logic from RangedPistonUtil into a
+  new general-purpose utility: BlockMoveHelper.java.
+- BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir) is
+  the single entry point for any system that needs piston-style block movement.
+  Handles structure resolution, animation, safety checks, neighbor updates,
+  sound -- everything.
+- RangedPistonUtil slimmed down to scanning logic + filter predicates only.
+  tryRepulse/tryAttract now delegate to BlockMoveHelper.moveBlockAt().
+- RangedPistonFlags.java unchanged -- still handles ThreadLocal coordination.
+
+### AbstractRangedPistonBlock base class:
+- Extracted shared code from OddstoneRepulserBlock and OddstoneAttractorBlock
+  into AbstractRangedPistonBlock. Handles FACING/POWERED states, rising edge
+  detection, block event scheduling, rotation/mirror.
+- Subclasses implement fire(level, pos, facing) only.
+- OddstoneRepulserBlock: ~15 lines. OddstoneAttractorBlock: ~15 lines.
+- Eliminates the ~90% code duplication noted in design docs.
+
+### Machine Family helper methods:
+- Added MachineBlock.isMachineFamily(Block) -- returns true for MachineBlock,
+  MachineTrackBlock, MachineTrolleyBlock. Used by stickiness rules.
+- Added MachineBlock.isRedstoneConduit(Block) -- returns true for MachineBlock
+  and MachineTrackBlock. Used by calculatePower() in both classes.
+- Added MachineBlock.canMachineFamilyStickTo(BlockState) -- shared canStickTo
+  logic used by all three Machine Family blocks.
+- Grab immunity rules in Ideomod.java updated to use isMachineFamily() so
+  Track and Trolley automatically inherit all Machine Block stickiness rules.
+- MachineBlock.calculatePower() updated to use isRedstoneConduit() so
+  Machine Block <-> Track conduction chains work seamlessly.
+
+### Machine Track (new block):
+- Non-directional Machine Family block that pushes adjacent Trolleys.
+- Push direction determined by signal source direction: signal from north
+  face -> push south. Checks actual signal sources (conduit blocks with
+  higher POWER, tagged redstone components) rather than vanilla's
+  level.hasSignal() to avoid weak power misfires.
+- Pushes ALL adjacent Trolleys in the computed direction, not just the one
+  on the push face. Example: Track at (0,0), Trolley at (0,1), signal
+  from west -> Trolley moves to (1,1).
+- Conducts redstone like Machine Block (POWER 0-15, decay by 1 per block).
+  Interoperable with Machine Block conduction chains.
+- Block event param packs two directions via bit shifting (pushDir in
+  bits 0-2, trolleyFace in bits 3-5) for proper client-server sync.
+- Part of Machine Family -- sticks to Machine Block, Track, Trolley.
+  Track protected from being dragged during pushes because its position
+  is passed as initiatorPos (resolver treats it as pistonPos).
+
+### Machine Trolley (new block):
+- Passive Machine Family cargo carrier. No active behavior.
+- Pushed by Tracks, carries anything stuck to it.
+- Part of Machine Family -- same stickiness rules as Machine Block.
+- Does NOT conduct redstone (pure cargo).
+- Can be pushed by regular pistons.
+
+### Bugs fixed during development:
+1. Track only checked push-face for Trolleys. Fixed: checks all 6 faces.
+2. After adding redstone conduction, vanilla's weak power mechanic caused
+   Trolleys to appear as signal sources (solid blocks adjacent to signal
+   source inherit weak power). Track was computing push direction from
+   Trolley position instead of actual signal origin. Fixed: replaced
+   level.hasSignal() with direct source interrogation -- only conduit
+   blocks with higher POWER and tagged redstone components are recognized
+   as signal sources.
+
+### Files added:
+- BlockMoveHelper.java (com.ideomancer.ideomod.block)
+- AbstractRangedPistonBlock.java (com.ideomancer.ideomod.block)
+- MachineTrackBlock.java (com.ideomancer.ideomod.block)
+- MachineTrolleyBlock.java (com.ideomancer.ideomod.block)
+- assets/ideomod/blockstates/machine_track.json
+- assets/ideomod/blockstates/machine_trolley.json
+- assets/ideomod/models/block/machine_track.json
+- assets/ideomod/models/block/machine_trolley.json
+- assets/ideomod/models/item/machine_track.json
+- assets/ideomod/models/item/machine_trolley.json
+- data/ideomod/loot_tables/blocks/machine_track.json
+- data/ideomod/loot_tables/blocks/machine_trolley.json
+
+### Files changed:
+- RangedPistonUtil.java: slimmed to scanning + filters, delegates to BlockMoveHelper
+- OddstoneRepulserBlock.java: extends AbstractRangedPistonBlock, implements fire()
+- OddstoneAttractorBlock.java: extends AbstractRangedPistonBlock, implements fire()
+- MachineBlock.java: added isMachineFamily(), isRedstoneConduit(),
+  canMachineFamilyStickTo(), calculatePower uses isRedstoneConduit()
+- Ideomod.java: grab immunity rules use isMachineFamily() for Track/Trolley coverage
+- ModBlocks.java: added MACHINE_TRACK, MACHINE_TROLLEY registrations
+- ModItems.java: added MACHINE_TRACK, MACHINE_TROLLEY BlockItems
+- ModCreativeTabs.java: added Track and Trolley to creative tab
+- data/minecraft/tags/blocks/mineable/pickaxe.json: added Track and Trolley
+- en_us.json: added Machine Track and Machine Trolley names
+
+### Files unchanged:
+- RangedPistonFlags.java (works as-is with BlockMoveHelper)
+- StickinessRules.java (no changes needed)
+- PistonStructureResolverMixin.java (no changes needed)
+
+### Textures:
+- Both blocks use machine_block.png as placeholder.
+
 ## [2026-02-18] Multiblock Structure Framework -- Phase 1 & Furnace Array
 
 Implemented the Multiblock Structure Framework and its first structure type,

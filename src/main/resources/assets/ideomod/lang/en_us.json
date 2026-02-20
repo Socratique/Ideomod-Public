@@ -11,5 +11,7 @@
   "ideomod.container.enhanced_furnace": "Enhanced Furnace",
   "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
   "ideomod.container.enhanced_smoker": "Enhanced Smoker",
-  "item.ideomod.structure_debug_stick": "Structure Debug Stick"
+  "item.ideomod.structure_debug_stick": "Structure Debug Stick",
+  "block.ideomod.machine_track": "Machine Track",
+  "block.ideomod.machine_trolley": "Machine Trolley"
 }
