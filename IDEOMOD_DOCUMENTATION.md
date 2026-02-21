@@ -182,17 +182,18 @@ Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Directio
 
 ### Stickiness Matrix
 
-Rows = grabber, columns = target. "Machine Family" = Machine Block, Machine Track, Machine Trolley (all share the same rules).
+Rows = grabber, columns = target. "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Block variants). Frame Family shown as one row since both materials share the same grab immunity rules.
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:--------:|:------:|
-| **Slime**    | YES   | no*   | no*       | YES         | no       | YES    |
-| **Honey**    | no*   | YES   | no*       | YES         | no       | YES    |
-| **Odd Slime**| no*   | no*   | YES (d)   | YES (d)     | no       | YES (d)|
-| **Machine Fam**| no  | no    | no        | YES         | no       | no     |
-| **Oddstone** | YES   | YES   | YES       | no          | YES      | no     |
+|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
+| **Slime**    |  YES  |  no*  |    no*    |     YES     |    YES    |    no    |  YES   |
+| **Honey**    |  no*  |  YES  |    no*    |     YES     |    YES    |    no    |  YES   |
+| **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
+| **Machine Fam**| no  |  no   |    no     |     YES     |    YES    |    no    |   no   |
+| **Frame Fam (active)**| no | no | no     |     YES     |  YES (m)  |    no    |   no   |
+| **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
-Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rule (Layer 2) | `(d)` = only when pushed in FACING direction (Layer 3) | "Normal" = any non-sticky block
+Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rule (Layer 2) | `(d)` = only when pushed in FACING direction (Layer 3) | `(m)` = material-matched (iron<->iron, copper<->copper via canStickTo) | Frame Fam only sticky when ACTIVE=true | "Normal" = any non-sticky block
 
 ### Currently Registered Rules
 
@@ -208,8 +209,12 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 | 6 | Machine Family* | OddSlimeBlock | Machine Family can't grab Odd Slime |
 | 7 | SlimeBlock | OddSlimeBlock | Slime can't grab Odd Slime |
 | 8 | HoneyBlock | OddSlimeBlock | Honey can't grab Odd Slime |
+| 9 | Frame Family** | SlimeBlock | Frames can't grab Slime |
+| 10 | Frame Family** | HoneyBlock | Frames can't grab Honey |
+| 11 | Frame Family** | OddSlimeBlock | Frames can't grab Odd Slime |
 
-*Machine Family = MachineBlock, MachineTrackBlock, MachineTrolleyBlock. Rules 4-6 use `MachineBlock.isMachineFamily(grabber.getBlock())` to cover all three types with a single rule each.
+*Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock. Rules 4-6 use `MachineFrameBlock.isMachineFamily()`.
+**Frame Family = Any IFrameBlock (FrameBlock and future Framed Blocks). Rules 9-11 use `StickinessRules.isFrameFamily()`.
 
 **Directional rules:**
 
@@ -219,21 +224,13 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 ### canStickTo Implementations (Layer 1)
 
-**OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. False for everything else (including MachineBlock).
+**OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. False for everything else (including MachineBlock, Frame Family).
 
-**Machine Family (MachineBlock, MachineTrackBlock, MachineTrolleyBlock)**: All delegate to `MachineBlock.canMachineFamilyStickTo(other)`. Returns true for any Machine Family block, SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. The slime/honey/odd slime returns are *permissive* -- they let those types grab Machine Family one-way. Machine Family grabs toward them are blocked by immunity rules 4-6.
+**Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All delegate to `MachineFrameBlock.canMachineFamilyStickTo(other)`. Returns true for any Machine Family block, Frame Family block (via `FrameActivation.isFrameFamily()`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-### StickinessRules.java -- Internal Structure
-
-Two static ArrayLists hold the registered rules. Two static check methods iterate them:
-
-`isGrabBlocked(expandingState, neighborState)` -- iterates grab immunity rules. Returns true if any rule blocks the grab.
-
-`isDirectionalGrabBlocked(state, pushDirection)` -- iterates directional rules. Returns true if the block should be non-sticky for this push direction.
-
-This class lives in `block/` package (not `mixin/`) because both `Ideomod.java` (to register) and the mixin (to check) need to access it. The mixin package is locked down by Sponge -- no regular classes allowed there.
+**Frame Family (FrameBlock, future Framed Blocks)**: Returns true for same-material IFrameBlock (iron<->iron, copper<->copper), Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). Returns false for cross-material IFrameBlock (mutual exclusion), OddstoneBlock, and all other blocks. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime one-way.
 
 ---
 
@@ -501,6 +498,45 @@ BlockMoveHelper has its own save logic in step 2.5 for Repulser/Attractor/Track 
 ---
 
 
+
+## 6b. FRAME ACTIVATION SYSTEM
+
+The Frame Activation system controls when Frame Blocks (and future Framed Blocks) become sticky. It uses a redstone-style "wipe-and-rebuild" approach: Machine Blocks are signal sources, Frame Blocks are passive conductors.
+
+### Architecture
+
+**FrameActivation.java** is a static utility class with one public method: `recalculate(Level, BlockPos)`. This is called by all lifecycle hooks on both Machine Blocks and Frame Blocks (onPlace, onRemove, neighborChanged).
+
+### The Algorithm
+
+When `recalculate()` is called:
+
+1. **DISCOVER**: BFS from the change point through all connected frames (any material, active or inactive). Finds the entire frame network.
+2. **WIPE**: Set every discovered frame to ACTIVE=false. Uses `Block.UPDATE_CLIENTS` (flag 2) only -- no neighborChanged cascade during the sweep.
+3. **FIND SOURCES**: For every frame in the network AND the change position, check all 6 neighbors for Machine Blocks (via `MachineFrameBlock.isMachineFamily()`).
+4. **RE-ACTIVATE**: From each Machine Block found, flood-fill activation through same-material frame chains. Each material is processed independently. Capped at `MAX_ACTIVATION_RANGE` (12) blocks per chain per source.
+
+### Why Wipe-and-Rebuild?
+
+Earlier attempts used incremental/reactive approaches (frames checking their own activation state, cascade deactivation, etc.) and all failed because frames in chains would see still-active neighbors and incorrectly retain their state. The wipe-and-rebuild pattern avoids this entirely by ensuring all frames start from a clean `false` state before any activation propagates.
+
+### Key Types
+
+| Type | Role |
+|------|------|
+| `IFrameBlock` | Interface. Marker for Frame Family blocks. Provides `getFrameMaterial()`. |
+| `FrameMaterial` | Enum: IRON, COPPER. Used for material matching in activation and stickiness. |
+| `FrameBlock` | Base block class. `BooleanProperty ACTIVE` (default false). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.recalculate()`. |
+| `FrameActivation` | Static utility. `recalculate()` is the single entry point. Also provides `isFrameFamily(Block)` and `getFrameMaterial(BlockState)` helpers. |
+
+### Performance
+
+Networks are bounded by the physical size of frame chains (in practice, piston push limit of 12). Wipe-and-rebuild touches each frame at most twice (once to wipe, once to activate). For a 12-frame chain this is 24 setBlock calls -- negligible.
+
+### Rendering
+
+Frame blocks use `RenderType.cutout()` (registered in `Ideomod.clientSetup()`) and `noOcclusion()` (in block properties) so transparent texture pixels render correctly instead of appearing as black.
+
 ## 7. PORTAL SYSTEM
 
 The Oddstone Portal is an address-based teleportation system using mineral block corners to define destinations.
@@ -723,6 +759,19 @@ Non-directional block. Part of Machine Family (sticks to Machine Block, Trolley,
 ### Machine Trolley -- Passive Cargo Carrier
 
 Non-directional block. Part of Machine Family. No active behavior -- just stickiness. Pushed by Tracks. Carries anything stuck to it via Machine Family or slime stickiness. Does NOT conduct redstone.
+
+### Frame Blocks (Iron Frame, Copper Frame)
+
+Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock`. `BooleanProperty ACTIVE` (default false). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.recalculate()`. See section 6b for the activation algorithm.
+
+| Feature | Implementation |
+|---------|---------------|
+| **Activation-based stickiness** | ACTIVE property driven by FrameActivation. Passive -- frames never decide their own state. Machine Blocks are signal sources. |
+| **Material exclusivity** | canStickTo returns true for same-material IFrameBlock only. Iron<->iron, copper<->copper. Cross-material returns false (mutual exclusion at Layer 1). |
+| **Machine Family interaction** | canStickTo returns true for Machine Family. Bidirectional -- Machine Family's canMachineFamilyStickTo also includes Frame Family. |
+| **Slime/honey interaction** | canStickTo returns true for slime/honey/odd slime (permissive). Grab immunity rules 9-11 block frames from grabbing them. Net: slime can grab active frames, frames cannot grab slime. |
+| **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. |
+
 
 ### Odd Slime Block
 

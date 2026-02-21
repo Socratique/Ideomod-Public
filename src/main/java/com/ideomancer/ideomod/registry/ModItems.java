@@ -48,4 +48,14 @@ public class ModItems {
 
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
+
+    // ========================================================================
+    // FRAME BLOCKS
+    // ========================================================================
+
+    public static final RegistryObject<Item> IRON_FRAME = ITEMS.register("iron_frame",
+            () -> new BlockItem(ModBlocks.IRON_FRAME.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> COPPER_FRAME = ITEMS.register("copper_frame",
+            () -> new BlockItem(ModBlocks.COPPER_FRAME.get(), new Item.Properties()));
 }

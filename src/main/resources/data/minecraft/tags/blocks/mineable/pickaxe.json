@@ -8,6 +8,8 @@
     "ideomod:oddstone_repulser",
     "ideomod:oddstone_attractor",
     "ideomod:machine_track",
-    "ideomod:machine_trolley"
+    "ideomod:machine_trolley",
+    "ideomod:iron_frame",
+    "ideomod:copper_frame"
   ]
 }

@@ -36,6 +36,10 @@ com.ideomancer.ideomod
   |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
   |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
+  |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
+  |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
+  |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
+  |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- StickinessRules.java         Rule registry (grab immunity + directional)
   |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
@@ -95,17 +99,18 @@ Three-layer architecture for asymmetric and directional stickiness:
 
 Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStructureResolverMixin`.
 
-**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Block, Machine Track, Machine Trolley:
+**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Blocks):
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:--------:|:------:|
-| Slime        | YES   | no*   | no*       | YES         | no       | YES    |
-| Honey        | no*   | YES   | no*       | YES         | no       | YES    |
-| Odd Slime    | no*   | no*   | YES (d)   | YES (d)     | no       | YES (d)|
-| Machine Fam  | no    | no    | no        | YES         | no       | no     |
-| Oddstone     | YES   | YES   | YES       | no          | YES      | no     |
+|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
+| Slime        |  YES  |  no*  |    no*    |     YES     |    YES    |    no    |  YES   |
+| Honey        |  no*  |  YES  |    no*    |     YES     |    YES    |    no    |  YES   |
+| Odd Slime    |  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
+| Machine Fam  |  no   |  no   |    no     |     YES     |    YES    |    no    |   no   |
+| Frame Fam (active) | no | no |    no     |     YES     |  YES (m)  |    no    |   no   |
+| Oddstone     |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
-`no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional
+`no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional | `(m)` = material-matched
 
 ### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
@@ -188,25 +193,45 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock.
 
-1. **Selective stickiness**: Only actively grabs other Machine Family blocks (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock). Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
+1. **Selective stickiness**: Only actively grabs other Machine Family blocks and Frame Family blocks. Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
 2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
 3. **Block entity with GUI**: MachineFrameBlockEntity with single item slot. IPistonMovable implementation preserves inventory through all piston move types. onRemove() drops contents only when broken (movedByPiston guard).
 
-**Static helpers**: `isMachineFamily(Block)`, `isRedstoneConduit(Block)`, `canMachineFamilyStickTo(BlockState)` -- used by all Machine Family blocks.
+**Static helpers**: `isMachineFamily(Block)`, `isRedstoneConduit(Block)`, `canMachineFamilyStickTo(BlockState)` -- used by all Machine Family blocks. canMachineFamilyStickTo includes Frame Family via `FrameActivation.isFrameFamily()`.
 
-### 7. Machine Track (conduction + Trolley push)
+**Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.recalculate(level, pos)` to trigger frame network wipe-and-rebuild.
+
+### 7. Frame Blocks (activation-based stickiness)
+
+Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrameBlock).
+
+1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source.
+2. **Material exclusivity**: canStickTo returns true only for same-material IFrameBlock. Iron<->iron, copper<->copper. Cross-material is mutual exclusion (canStickTo returns false both sides).
+3. **Grab immunity**: Rules 9-11 prevent frames from grabbing slime/honey/odd slime. canStickTo is permissive (lets those types grab frames one-way).
+
+**FrameActivation algorithm** (redstone-style wipe-and-rebuild):
+1. DISCOVER: BFS from change point through all connected frames (any material, active or inactive)
+2. WIPE: Set all frames to active=false (UPDATE_CLIENTS only, no neighbor cascade)
+3. FIND SOURCES: Check all frames + change position for adjacent Machine Blocks
+4. RE-ACTIVATE: From each Machine Block, flood-fill through same-material chains (cap 12)
+
+Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlace/onRemove/neighborChanged. Single entry point: `FrameActivation.recalculate(level, pos)`.
+
+**Rendering**: RenderType.cutout() registered in Ideomod.clientSetup(). noOcclusion() in block properties. Transparent interior pixels render correctly.
+
+### 8. Machine Track (conduction + Trolley push)
 
 Non-directional Machine Family block. Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable chains). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement. Signal direction detected via direct source interrogation (not vanilla hasSignal).
 
-### 8. Machine Trolley (passive cargo)
+### 9. Machine Trolley (passive cargo)
 
 Non-directional Machine Family block. No active behavior. Pushed by Tracks, carries anything stuck to it. Does NOT conduct redstone.
 
-### 9. Odd Slime Block
+### 10. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
 
-### 10. Judgement Effect
+### 11. Judgement Effect
 
 Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 32 blocks freeze (`setNoAi(true)`), stare at player for 5 seconds (manual yaw/pitch per tick), then unfreeze. Triggered by LivingDeathEvent. Also available via `/judgement` command (op level 2).
 
@@ -214,7 +239,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, IRON_FRAME, COPPER_FRAME
 
 **ModItems**: BlockItems for all blocks EXCEPT ODDSTONE_PORTAL (not player-placeable). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
@@ -238,6 +263,8 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **Stickiness rule pattern**: `canStickTo` = permissive (allow both directions), `StickinessRules` = restrictive (block specific grabbers). Never express one-way behavior in canStickTo alone.
 
+**Frame activation pattern**: All lifecycle hooks call `FrameActivation.recalculate()`. Single entry point, wipe-and-rebuild, no incremental logic. Machine Blocks are sources, frames are passive conductors.
+
 **Multiblock definitions**: Extend StructureDefinition, register with StructureManager in commonSetup(). Use block tags for frame/component blocks. Scanner normalizes bounds and core positions.
 
 **SavedData pattern**: Per-dimension via `level.getDataStorage().computeIfAbsent()`. NBT serialization. Static factory `get(ServerLevel)`. Used by both OddstonePortalSavedData and StructureManager.
@@ -253,3 +280,5 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 5. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
 6. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
 7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
+8. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
+9. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.

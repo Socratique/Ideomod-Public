@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block;
 
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -41,6 +42,8 @@ import java.util.function.BiPredicate;
  * in there, and normal code can't reference classes in the mixin package.
  * This class needs to be called by both Ideomod.java (to register rules)
  * and the mixin (to check rules), so it must be in a normal package.
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class StickinessRules {
 
@@ -122,5 +125,19 @@ public class StickinessRules {
             }
         }
         return false;
+    }
+
+    // ========================================================================
+    // TYPE-CHECK HELPERS (used in rule predicates)
+    // ========================================================================
+
+    /**
+     * Check if a block is part of the Frame Family (any material).
+     * Covers Iron Frame, Copper Frame, and future Framed Block variants.
+     * Convenience wrapper around FrameActivation.isFrameFamily() for use
+     * in rule registration predicates.
+     */
+    public static boolean isFrameFamily(Block block) {
+        return FrameActivation.isFrameFamily(block);
     }
 }

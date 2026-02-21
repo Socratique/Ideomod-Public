@@ -2,6 +2,8 @@ package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
+import com.ideomancer.ideomod.block.FrameBlock;
+import com.ideomancer.ideomod.block.FrameMaterial;
 import com.ideomancer.ideomod.block.MachineFrameBlock;
 import com.ideomancer.ideomod.block.MachineTrackBlock;
 import com.ideomancer.ideomod.block.MachineTrolleyBlock;
@@ -115,5 +117,27 @@ public class ModBlocks {
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
+            ));
+
+    // ========================================================================
+    // FRAME BLOCKS
+    // ========================================================================
+
+    public static final RegistryObject<Block> IRON_FRAME = BLOCKS.register("iron_frame",
+            () -> new FrameBlock(FrameMaterial.IRON, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+            ));
+
+    public static final RegistryObject<Block> COPPER_FRAME = BLOCKS.register("copper_frame",
+            () -> new FrameBlock(FrameMaterial.COPPER, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_ORANGE)
+                    .strength(2.5f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.COPPER)
+                    .noOcclusion()
             ));
 }

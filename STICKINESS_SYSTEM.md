@@ -66,19 +66,23 @@ If you want A to grab B but not B to grab A:
 
 ### Stickiness Matrix
 
-Who grabs whom (rows = grabber, columns = target). "Machine Family" covers Machine Block, Machine Track, and Machine Trolley -- all share identical stickiness rules via `MachineBlock.canMachineFamilyStickTo()` and `MachineBlock.isMachineFamily()`.
+Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Block variants). Frame Family shown as one row since both materials share the same grab immunity rules -- material exclusivity is handled by canStickTo (Layer 1).
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:--------:|:------:|
-| **Slime**    |  YES  |  no*  |    no     |     YES     |    no    |  YES   |
-| **Honey**    |  no*  |  YES  |    no     |     YES     |    no    |  YES   |
-| **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |    no    | YES (d)|
-| **Machine Fam**| no  |  no   |    no     |     YES     |    no    |   no   |
-| **Oddstone** |  YES  |  YES  |    YES    |      no     |   YES    |   no   |
+|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
+| **Slime**    |  YES  |  no*  |    no*    |     YES     |    YES    |    no    |  YES   |
+| **Honey**    |  no*  |  YES  |    no*    |     YES     |    YES    |    no    |  YES   |
+| **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
+| **Machine Fam**| no  |  no   |    no     |     YES     |    YES    |    no    |   no   |
+| **Frame Fam (active)**| no | no | no     |     YES     |  YES (m)  |    no    |   no   |
+| **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
 - `no*` = mutual exclusion (canStickTo returns false on both sides)
 - `no` = blocked by grab immunity rule (canStickTo says yes, mixin says no)
 - `(d)` = directional -- only when pushed in FACING direction
+- `(m)` = material-matched -- iron sticks to iron only, copper to copper only (Layer 1 canStickTo)
+- Frame Fam (active) = only sticky when BooleanProperty ACTIVE=true (driven by FrameActivation)
+- When inactive, isStickyBlock()=false and frames behave as normal non-sticky blocks
 - Normal = any non-sticky block (stone, dirt, etc.)
 
 ### How Each Pair Is Implemented
@@ -91,11 +95,12 @@ Who grabs whom (rows = grabber, columns = target). "Machine Family" covers Machi
 
 **Slime -> Machine Family**: ALLOWED. Both `canStickTo` return `true`. No grab immunity rule.
 
-**Machine Family -> Slime**: BLOCKED. Both `canStickTo` return `true` (permissive). Grab immunity rule: machine family grabber + slime target = blocked. Uses `MachineBlock.isMachineFamily()` to cover MachineBlock, MachineTrackBlock, and MachineTrolleyBlock with one rule.
+**Machine Family -> Slime**: BLOCKED. Both `canStickTo` return `true` (permissive). Grab immunity rule: machine family grabber + slime target = blocked. Uses `MachineFrameBlock.isMachineFamily()` to cover MachineFrameBlock, MachineTrackBlock, and MachineTrolleyBlock with one rule.
 
 **Machine Family -> Machine Family**: ALLOWED. `canMachineFamilyStickTo()` returns true for all Machine Family types. No grab immunity rule. Machine Block, Track, and Trolley all stick to each other.
 
 Note: During Track-initiated pushes, Track is not dragged because its position is the resolver's pistonPos (immovable origin), not via a stickiness exemption.
+
 **Slime <-> Odd Slime**: Mutual exclusion. Both `canStickTo` return `false`.
 
 **Honey <-> Odd Slime**: Mutual exclusion. Both `canStickTo` return `false`.
@@ -110,6 +115,28 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 
 **Odd Slime -> anything (wrong direction)**: BLOCKED by directional rule. Push direction != FACING -> all grabs disabled.
 
+**Slime -> Frame Family**: ALLOWED. Slime sticks to everything except honey. Frame's canStickTo returns true for slime (permissive). No grab immunity rule blocks this direction.
+
+**Frame Family -> Slime**: BLOCKED. canStickTo returns true (permissive). Grab immunity rule 9: frame family grabber + slime target = blocked.
+
+**Honey -> Frame Family**: ALLOWED. Honey sticks to everything except slime. Frame's canStickTo returns true (permissive).
+
+**Frame Family -> Honey**: BLOCKED. Grab immunity rule 10.
+
+**Odd Slime -> Frame Family**: ALLOWED (directional). Both canStickTo return true. Directional rule gates Odd Slime activation.
+
+**Frame Family -> Odd Slime**: BLOCKED. Grab immunity rule 11.
+
+**Machine Family -> Frame Family**: ALLOWED. canMachineFamilyStickTo() returns true for frame family. No immunity rule.
+
+**Frame Family -> Machine Family**: ALLOWED when active. canStickTo returns true for Machine Family. No immunity rule.
+
+**Frame Family -> Frame Family (same material)**: ALLOWED when active. canStickTo returns true for same-material IFrameBlock. No immunity rule.
+
+**Frame Family -> Frame Family (cross-material)**: BLOCKED at Layer 1. canStickTo returns false for different-material IFrameBlock. Mutual exclusion.
+
+**Frame Family <-> Oddstone**: NOT POSSIBLE. Both canStickTo return false for each other. No interaction.
+
 ---
 
 ## Where The Code Lives
@@ -121,6 +148,8 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 | Directional rules | `StickinessRules.java` | Layer 3: blocks grabs based on push direction |
 | Rule registration | `Ideomod.java -> registerStickinessRules()` | Registers all rules at startup |
 | Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
+| Frame activation | `FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
+| Frame type checks | `StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
 
 ### Mixin Injection Points
 

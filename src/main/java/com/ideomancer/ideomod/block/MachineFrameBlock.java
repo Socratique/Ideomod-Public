@@ -14,7 +14,6 @@ import net.minecraft.world.level.block.RenderShape;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
@@ -22,33 +21,11 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Machine Frame (formerly Machine Block) -- modular mechanical chassis.
  *
- * A block entity with a single item slot that determines its specialization.
- * Right-click to open a GUI. Insert an item to specialize. Remove the item
- * to revert to blank chassis.
- *
- * PISTON MOVEMENT:
- * ================
- * Machine Frame is movable by pistons (PushReaction.NORMAL set in ModBlocks
- * properties + PistonBaseBlockMixin bypasses vanilla's block entity check).
- *
- * Data preservation during moves:
- *   SAVE: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5
- *         (Repulser/Attractor/Track) saves IPistonMovable data to
- *         MovingBlockEntityData keyed by destination position.
- *   RESTORE: PistonMovingBlockEntityMixin restores data after the 2-tick
- *         animation completes and the fresh block entity exists.
- *
- * IMPORTANT: Do NOT add restoration logic to onPlace(). During setBlock(),
- * onPlace() fires BEFORE the block entity is created by newBlockEntity().
- * Any data retrieved in onPlace() would be consumed but the block entity
- * doesn't exist yet to receive it. The mixin handles restoration at the
- * correct time.
- *
- * REGISTRY ID NOTE:
- * ==================
- * Registry ID remains "machine_block" for world compatibility. Display name
- * and class name changed to "Machine Frame". TODO: Rename registry ID in a
- * future breaking change version.
+ * FRAME ACTIVATION:
+ * =================
+ * Machine Frames are the SOURCE of activation for Frame Block chains.
+ * All lifecycle events call FrameActivation.recalculate() which does a
+ * full network wipe-and-rebuild — like redstone signal recalculation.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -57,10 +34,6 @@ public class MachineFrameBlock extends Block implements EntityBlock {
     public MachineFrameBlock(Properties properties) {
         super(properties);
     }
-
-    // ========================================================================
-    // BLOCK ENTITY
-    // ========================================================================
 
     @Nullable
     @Override
@@ -73,85 +46,73 @@ public class MachineFrameBlock extends Block implements EntityBlock {
         return RenderShape.MODEL;
     }
 
-    // ========================================================================
-    // GUI INTERACTION
-    // ========================================================================
-
     @Override
     public InteractionResult use(BlockState state, Level level, BlockPos pos,
                                   Player player, InteractionHand hand, BlockHitResult hit) {
-        if (level.isClientSide()) {
-            return InteractionResult.SUCCESS;
-        }
-
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof MachineFrameBlockEntity machineFrame) {
             if (player instanceof ServerPlayer serverPlayer) {
                 NetworkHooks.openScreen(serverPlayer, machineFrame, pos);
             }
         }
-
         return InteractionResult.CONSUME;
     }
 
-    // ========================================================================
-    // DROP ITEMS ON BREAK
-    // ========================================================================
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos,
+                         BlockState oldState, boolean movedByPiston) {
+        super.onPlace(state, level, pos, oldState, movedByPiston);
+        if (!level.isClientSide() && !state.is(oldState.getBlock())) {
+            FrameActivation.recalculate(level, pos);
+        }
+    }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,
                           BlockState newState, boolean movedByPiston) {
-        // Only drop contents when the block is actually broken, not when
-        // being moved by a piston (movedByPiston = true means it's being
-        // replaced by MovingPistonBlock during transit)
         if (!state.is(newState.getBlock()) && !movedByPiston) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineFrameBlockEntity machineFrame) {
                 Containers.dropContents(level, pos, machineFrame);
             }
+            FrameActivation.recalculate(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
+    @Override
+    public void neighborChanged(BlockState state, Level level, BlockPos pos,
+                                 Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
+        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
+        if (!level.isClientSide()) {
+            FrameActivation.recalculate(level, pos);
+        }
+    }
+
     // ========================================================================
-    // MACHINE FAMILY HELPERS (static -- used by all Machine Family blocks)
+    // MACHINE FAMILY HELPERS
     // ========================================================================
 
-    /**
-     * Check if a block is part of the Machine Family.
-     * Machine Family = Machine Frame, Machine Track, Machine Trolley.
-     *
-     * When adding new Machine Family block types, update this method.
-     */
     public static boolean isMachineFamily(Block block) {
         return block instanceof MachineFrameBlock
             || block instanceof MachineTrackBlock
             || block instanceof MachineTrolleyBlock;
     }
 
-    /**
-     * Check if a block is a redstone conduit (carries signal with decay).
-     * Currently only Machine Track conducts.
-     */
     public static boolean isRedstoneConduit(Block block) {
         return block instanceof MachineTrackBlock;
     }
 
-    /**
-     * Shared canStickTo logic for all Machine Family blocks.
-     */
     public static boolean canMachineFamilyStickTo(BlockState other) {
         Block otherBlock = other.getBlock();
         if (isMachineFamily(otherBlock)) return true;
+        if (FrameActivation.isFrameFamily(otherBlock)) return true;
         if (otherBlock instanceof SlimeBlock) return true;
         if (otherBlock instanceof HoneyBlock) return true;
         if (otherBlock instanceof OddSlimeBlock) return true;
         return false;
     }
-
-    // ========================================================================
-    // FEATURE 1: Selective Stickiness (Forge hooks + mixin)
-    // ========================================================================
 
     @Override
     public boolean isStickyBlock(BlockState state) {

@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "active=false": {
+      "model": "ideomod:block/iron_frame"
+    },
+    "active=true": {
+      "model": "ideomod:block/iron_frame"
+    }
+  }
+}

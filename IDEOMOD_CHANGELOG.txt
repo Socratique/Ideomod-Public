@@ -1,5 +1,66 @@
 # Ideomod Changelog
 
+## [2026-02-21] Frame Blocks -- Machine-Activated Stickiness System
+
+Implemented Iron Frame and Copper Frame blocks with activation-based stickiness
+driven by adjacent Machine Blocks. Frame blocks are passive conductors analogous
+to redstone dust: Machine Blocks are the signal source, and frames propagate
+activation through same-material chains.
+
+### New system: Frame Activation (redstone-style wipe-and-rebuild)
+
+The activation system uses a "turn it off and on again" approach. When anything
+changes (machine or frame placed/broken/neighbor updated), the entire connected
+frame network is discovered via BFS, wiped to inactive, then rebuilt from all
+adjacent Machine Block sources. This avoids incremental update race conditions
+where frames in chains would see still-active neighbors and incorrectly retain
+their activation state.
+
+- FrameActivation.recalculate(level, pos): Single entry point called by all
+  lifecycle hooks on both Machine Blocks and Frame Blocks.
+  1. DISCOVER: BFS from change point through all connected frames (any material)
+  2. WIPE: Set all frames to active=false (UPDATE_CLIENTS only)
+  3. FIND SOURCES: Check all frames + change position for adjacent Machine Blocks
+  4. RE-ACTIVATE: Flood-fill from each Machine Block through same-material chains
+     (capped at 12 blocks per chain, matching piston push limit)
+
+### New files:
+- com/ideomancer/ideomod/block/IFrameBlock.java -- Interface for Frame Family
+- com/ideomancer/ideomod/block/FrameMaterial.java -- Enum: IRON, COPPER
+- com/ideomancer/ideomod/block/FrameBlock.java -- Base frame block with ACTIVE property
+- com/ideomancer/ideomod/block/FrameActivation.java -- Wipe-and-rebuild utility
+
+### New blocks:
+- iron_frame: Iron Frame (FrameMaterial.IRON, strength 3.0/6.0, SoundType.METAL)
+- copper_frame: Copper Frame (FrameMaterial.COPPER, strength 2.5/6.0, SoundType.COPPER)
+
+### New stickiness rules (grab immunity 9-11):
+| # | Grabber | Target | Effect |
+|---|---------|--------|--------|
+| 9 | Frame Family | SlimeBlock | Frames can't grab Slime |
+| 10 | Frame Family | HoneyBlock | Frames can't grab Honey |
+| 11 | Frame Family | OddSlimeBlock | Frames can't grab Odd Slime |
+
+### New resources:
+- blockstates, models, textures, loot tables, recipes for both frame blocks
+- Updated: en_us.json, pickaxe.json mineable tag
+
+### Files changed:
+- MachineFrameBlock.java: Added lifecycle hooks calling FrameActivation.recalculate().
+  Added Frame Family to canMachineFamilyStickTo().
+- StickinessRules.java: Added isFrameFamily() helper.
+- Ideomod.java: Registered 3 frame grab immunity rules. Registered RenderType.cutout()
+  for frame blocks in clientSetup().
+- ModBlocks/ModItems/ModCreativeTabs: Registered IRON_FRAME, COPPER_FRAME.
+
+### Challenges resolved:
+1. Deactivation race condition (v1-v5): Reactive self-evaluation failed because
+   frames in chains always saw still-active neighbors. Resolved with redstone-style
+   wipe-and-rebuild pattern.
+2. Black transparency: Fixed with RenderType.cutout() + noOcclusion().
+
+Written by Claude, directed and guided by The Ideomancer.
+
 ## [2026-02-21] IPistonMovable -- Block Entity Piston Movement System
 
 Complete implementation of block entity data preservation during piston moves.

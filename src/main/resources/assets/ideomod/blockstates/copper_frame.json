@@ -1,0 +1,10 @@
+{
+  "variants": {
+    "active=false": {
+      "model": "ideomod:block/copper_frame"
+    },
+    "active=true": {
+      "model": "ideomod:block/copper_frame"
+    }
+  }
+}

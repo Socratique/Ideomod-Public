@@ -33,6 +33,10 @@ public class ModCreativeTabs {
                         output.accept(ModItems.MACHINE_TRACK.get());
                         output.accept(ModItems.MACHINE_TROLLEY.get());
 
+                        // Frame Blocks
+                        output.accept(ModItems.IRON_FRAME.get());
+                        output.accept(ModItems.COPPER_FRAME.get());
+
                         // Tools / Debug
                         output.accept(ModItems.STRUCTURE_DEBUG_STICK.get());
                     })

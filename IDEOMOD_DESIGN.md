@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-20 (Oddstone inverse mining, Oddstone variant channels, Machine Linker, Thematic Block Families, same-type Machine stickiness redesign, Framed Block base behavior preservation, Promoter Block, Transmuter, Projector, Enhanced Enchanting Table obsidian rings, Beacon Rework fuel system, World Anchor, Magic Core, obsidian structural grammar design principle)*
+*Last updated: 2026-02-21 (Frame Blocks implementation, Frame Activation system, updated stickiness matrix with Frame Family)*
 
 *Written by Claude (Anthropic), directed and guided by Sean.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -763,29 +763,24 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | Inner block storage | [DESIGNED] | Block entity stores ResourceLocation of the wrapped block. |
 | Outer frame (static) | [DESIGNED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
 | Inner texture (dynamic) | [DESIGNED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
-| Machine-activated stickiness | [DESIGNED] | Framed blocks are NOT sticky by default. When a Machine Block is part of a piston push group, it "activates" adjacent framed blocks, making them sticky for that move. Activation chains through matching framed blocks (iron->iron, copper->copper). Deactivates after move resolves. |
+| Machine-activated stickiness | [DESIGNED] | Will use the Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. Activation chains through matching material (iron->iron, copper->copper), capped at 12 blocks. |
 | Material exclusivity | [DESIGNED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
-| Slime/honey exclusivity | [DESIGNED] | Framed blocks do not interact with slime or honey stickiness. |
+| Slime/honey exclusivity | [DESIGNED] | Framed blocks do not interact with slime or honey stickiness. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
 | Base behavior preservation | [DESIGNED] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
 **Stickiness matrix (when activated by Machine Block):**
 
-| | Machine Block | Iron Framed | Copper Framed | Slime | Honey |
-|---|---|---|---|---|---|
-| Iron Framed | [Y] | [Y] | [N] | [N] | [N] |
-| Copper Framed | [Y] | [N] | [Y] | [N] | [N] |
+| | Machine Block | Iron Framed | Copper Framed | Iron Frame | Copper Frame | Slime | Honey | Odd Slime |
+|---|---|---|---|---|---|---|---|---|
+| Iron Framed | [Y] | [Y] | [N] | [Y] | [N] | [N] | [N] | [N] |
+| Copper Framed | [Y] | [N] | [Y] | [N] | [Y] | [N] | [N] | [N] |
 
-**Activation propagation example:**
-```
-[Piston] [Machine] [IronFramed] [IronFramed] [IronFramed]
-  push ->   sticky -> activated  -> chains     -> chains
-                     (touches M)  (touches    (touches
-                                   activated)  activated)
-```
-Without a Machine Block in the group, framed blocks are inert and get pushed individually.
+**Activation model (redstone-style wipe-and-rebuild):**
+Framed Blocks will use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
-- Activation chaining requires mixin pre-pass: scan outward from Machine Blocks, mark connected framed blocks as active, then let resolver run, then clear marks.
+- BESR rendering not yet implemented (Phase 2).
+- "Any block" framing requires Placer Block (not yet implemented).
 
 **Future ideas:**
 - *[IDEA] Copper frames oxidize over time? Waxable?*
@@ -793,26 +788,56 @@ Without a Machine Block in the group, framed blocks are inert and get pushed ind
 
 ---
 
-### Frame Blocks [DESIGNED]
-> Transparent decorative blocks -- an empty iron or copper frame. Same stickiness rules as Framed Blocks.
+### Frame Blocks [DONE]
+> Transparent decorative blocks -- an empty iron or copper frame. Same stickiness family as Framed Blocks.
 
 | Property | Value |
 |----------|-------|
 | ID | `iron_frame`, `copper_frame` |
-| Hardness | Iron: ~3.0 / Copper: ~2.5 (TBD) |
+| Class | FrameBlock (extends Block, implements IFrameBlock) |
+| Hardness | Iron: 3.0 / Copper: 2.5 (blast 6.0) |
 | Tool | Pickaxe |
-| Transparency | Non-solid, see-through (like iron bars as a full block outline) |
-| Recipe | TBD (iron ingots / copper ingots in frame pattern?) |
+| Transparency | Non-solid, see-through. Uses RenderType.cutout() and noOcclusion(). |
+| Recipe | 4 iron/copper ingots in diamond pattern -> 4 frames |
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Decorative transparency | [DESIGNED] | Renders as an open frame/cage outline. Not a full solid block. |
-| Machine-activated stickiness | [DESIGNED] | Same rules as Framed Blocks -- activated by Machine Block presence in push group, chains with matching material type. |
-| Material exclusivity | [DESIGNED] | Iron frames stick to iron frames and iron framed blocks. Copper to copper. Cross-material does not stick. |
+| Decorative transparency | [DONE] | Renders with transparent interior. RenderType.cutout() registered in clientSetup(). noOcclusion() in block properties. |
+| Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.recalculate() -- redstone-style wipe-and-rebuild from Machine Block sources. |
+| Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material canStickTo returns false (mutual exclusion). Both materials stick to Machine Family when active. |
+| Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
+| Activation chaining | [DONE] | Chains through same-material frames up to 12 blocks from Machine Block source. Cross-material stops propagation. |
 
-**Notes:** Frame Blocks are essentially "empty" Framed Blocks. They share the same stickiness family. An Iron Frame and an Iron Framed Stone will stick to each other when activated.
+**Activation model (redstone-style wipe-and-rebuild):**
+Frames are passive like redstone dust. They never decide their own activation state.
+All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.recalculate(pos),
+which does a full network wipe-and-rebuild:
+1. DISCOVER: BFS from change point through all connected frames (any material, active or not)
+2. WIPE: Set all discovered frames to active=false (UPDATE_CLIENTS only, no neighbor cascade)
+3. FIND SOURCES: Check all frames + change position for adjacent Machine Blocks
+4. RE-ACTIVATE: Flood-fill from each Machine Block through same-material chains (capped at 12)
+
+Machine Blocks also call FrameActivation.recalculate() in their own lifecycle hooks.
+
+**Stickiness matrix (when active):**
+
+| | Machine Fam | Iron Frame | Copper Frame | Slime | Honey | Odd Slime | Oddstone | Normal |
+|---|---|---|---|---|---|---|---|---|
+| Iron Frame (active) | YES | YES | no* | no | no | no | no | no |
+| Copper Frame (active) | YES | no* | YES | no | no | no | no | no |
+
+- `no*` = mutual canStickTo exclusion (cross-material)
+- `no` = grab immunity rule (rules 9-11) or canStickTo returns false
+- When inactive: isStickyBlock() returns false, block is non-sticky
+
+**Known issues:**
+- Placeholder textures (2px edge frame pattern)
+- Placeholder recipes
+- Placeholder model (cube_all -- should be custom frame shape)
+
+**Notes:** Frame Blocks share the IFrameBlock interface and FrameMaterial enum with future Framed Blocks. An Iron Frame and an Iron Framed Stone will stick to each other when activated (same material family).
 
 ---
 

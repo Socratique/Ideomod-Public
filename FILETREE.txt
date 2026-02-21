@@ -9,9 +9,17 @@
 |  |           |  +-- AbstractRangedPistonBlock.java
 |  |           |  +-- BlockMoveHelper.java
 |  |           |  +-- DrillBlock.java
-|  |           |  +-- MachineBlock.java
+|  |           |  +-- FrameActivation.java
+|  |           |  +-- FrameBlock.java
+|  |           |  +-- FrameMaterial.java
+|  |           |  +-- IFrameBlock.java
+|  |           |  +-- IPistonMovable.java
+|  |           |  +-- MachineFrameBlock.java
+|  |           |  +-- MachineFrameBlockEntity.java
+|  |           |  +-- MachineFrameMenu.java
 |  |           |  +-- MachineTrackBlock.java
 |  |           |  +-- MachineTrolleyBlock.java
+|  |           |  +-- MovingBlockEntityData.java
 |  |           |  +-- OddSlimeBlock.java
 |  |           |  +-- OddstoneAttractorBlock.java
 |  |           |  +-- OddstoneBlock.java
@@ -25,6 +33,7 @@
 |  |           |  +-- RangedPistonUtil.java
 |  |           |  \\-- StickinessRules.java
 |  |           +-- client
+|  |           |  +-- MachineFrameScreen.java
 |  |           |  \\-- ModColorHandlers.java
 |  |           +-- config
 |  |           |  \\-- OddstoneConfig.java
@@ -33,12 +42,16 @@
 |  |           +-- entity
 |  |           +-- mixin
 |  |           |  +-- AbstractFurnaceBlockEntityMixin.java
+|  |           |  +-- PistonBaseBlockMixin.java
+|  |           |  +-- PistonMovingBlockEntityMixin.java
 |  |           |  \\-- PistonStructureResolverMixin.java
 |  |           +-- registry
+|  |           |  +-- ModBlockEntities.java
 |  |           |  +-- ModBlocks.java
 |  |           |  +-- ModCommands.java
 |  |           |  +-- ModCreativeTabs.java
 |  |           |  +-- ModItems.java
+|  |           |  +-- ModMenuTypes.java
 |  |           |  \\-- ModTags.java
 |  |           +-- renderer
 |  |           +-- structure
@@ -57,8 +70,10 @@
 |     +-- assets
 |     |  \\-- ideomod
 |     |     +-- blockstates
+|     |     |  +-- copper_frame.json
 |     |     |  +-- drill.json
 |     |     |  +-- ideoblock.json
+|     |     |  +-- iron_frame.json
 |     |     |  +-- machine_block.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
@@ -71,9 +86,11 @@
 |     |     |  \\-- en_us.json
 |     |     +-- models
 |     |     |  +-- block
+|     |     |  |  +-- copper_frame.json
 |     |     |  |  +-- drill.json
 |     |     |  |  +-- drill_on.json
 |     |     |  |  +-- ideoblock.json
+|     |     |  |  +-- iron_frame.json
 |     |     |  |  +-- machine_block.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
@@ -84,8 +101,10 @@
 |     |     |  |  +-- oddstone_portal_ns.json
 |     |     |  |  \\-- oddstone_repulser.json
 |     |     |  \\-- item
+|     |     |     +-- copper_frame.json
 |     |     |     +-- drill.json
 |     |     |     +-- ideoblock.json
+|     |     |     +-- iron_frame.json
 |     |     |     +-- machine_block.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
@@ -95,32 +114,38 @@
 |     |     |     +-- oddstone_repulser.json
 |     |     |     \\-- structure_debug_stick.json
 |     |     \\-- textures
-|     |        \\-- block
-|     |           +-- drill_back.png
-|     |           +-- drill_front.png
-|     |           +-- drill_front_on.png
-|     |           +-- drill_side.png
-|     |           +-- drill_top.png
-|     |           +-- ideoblock.png
-|     |           +-- machine_block.png
-|     |           +-- machine_track.png
-|     |           +-- machine_trolley.png
-|     |           +-- odd_slime_back.png
-|     |           +-- odd_slime_front.png
-|     |           +-- odd_slime_side.png
-|     |           +-- oddstone.png
-|     |           +-- oddstone_attractor_back.png
-|     |           +-- oddstone_attractor_front.png
-|     |           +-- oddstone_attractor_side.png
-|     |           +-- oddstone_repulser_back.png
-|     |           +-- oddstone_repulser_front.png
-|     |           \\-- oddstone_repulser_side.png
+|     |        +-- block
+|     |        |  +-- copper_frame.png
+|     |        |  +-- drill_back.png
+|     |        |  +-- drill_front.png
+|     |        |  +-- drill_front_on.png
+|     |        |  +-- drill_side.png
+|     |        |  +-- drill_top.png
+|     |        |  +-- ideoblock.png
+|     |        |  +-- iron_frame.png
+|     |        |  +-- machine_block.png
+|     |        |  +-- machine_track.png
+|     |        |  +-- machine_trolley.png
+|     |        |  +-- odd_slime_back.png
+|     |        |  +-- odd_slime_front.png
+|     |        |  +-- odd_slime_side.png
+|     |        |  +-- oddstone.png
+|     |        |  +-- oddstone_attractor_back.png
+|     |        |  +-- oddstone_attractor_front.png
+|     |        |  +-- oddstone_attractor_side.png
+|     |        |  +-- oddstone_repulser_back.png
+|     |        |  +-- oddstone_repulser_front.png
+|     |        |  \\-- oddstone_repulser_side.png
+|     |        \\-- gui
+|     |           \\-- machine_frame.png
 |     +-- data
 |     |  +-- ideomod
 |     |  |  +-- loot_tables
 |     |  |  |  \\-- blocks
+|     |  |  |     +-- copper_frame.json
 |     |  |  |     +-- drill.json
 |     |  |  |     +-- ideoblock.json
+|     |  |  |     +-- iron_frame.json
 |     |  |  |     +-- machine_block.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_trolley.json
@@ -129,8 +154,10 @@
 |     |  |  |     +-- oddstone_attractor.json
 |     |  |  |     \\-- oddstone_repulser.json
 |     |  |  +-- recipes
+|     |  |  |  +-- copper_frame.json
 |     |  |  |  +-- drill.json
 |     |  |  |  +-- ideoblock.json
+|     |  |  |  +-- iron_frame.json
 |     |  |  |  +-- machine_block.json
 |     |  |  |  +-- odd_slime.json
 |     |  |  |  \\-- oddstone.json

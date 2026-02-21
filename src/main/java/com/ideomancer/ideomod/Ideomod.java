@@ -14,6 +14,8 @@ import com.ideomancer.ideomod.structure.StructureManager;
 import com.ideomancer.ideomod.structure.definitions.FurnaceArrayDefinition;
 import com.mojang.logging.LogUtils;
 import net.minecraft.client.gui.screens.MenuScreens;
+import net.minecraft.client.renderer.ItemBlockRenderTypes;
+import net.minecraft.client.renderer.RenderType;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.HoneyBlock;
@@ -66,59 +68,73 @@ public class Ideomod {
      * See STICKINESS_SYSTEM.md for full documentation.
      *
      * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock.
-     * All three share the same grab immunity rules via MachineFrameBlock.isMachineFamily().
+     * Frame Family = IronFrame, CopperFrame (and future Framed Block variants).
      */
     private void registerStickinessRules() {
         // ================================================================
         // GRAB IMMUNITY RULES (type-based)
         // ================================================================
 
-        // ODDSTONE: Slime should NOT grab Oddstone.
+        // --- ODDSTONE rules (1-3) ---
+
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
-        // ODDSTONE: Honey should NOT grab Oddstone.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
-        // ODDSTONE: Odd Slime should NOT grab Oddstone.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof OddSlimeBlock
                                   && target.getBlock() instanceof OddstoneBlock
         );
 
-        // MACHINE FAMILY: Machine Family should NOT grab slime.
-        // (Covers MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)
+        // --- MACHINE FAMILY rules (4-6) ---
+
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof SlimeBlock
         );
 
-        // MACHINE FAMILY: Machine Family should NOT grab honey.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof HoneyBlock
         );
 
-        // MACHINE FAMILY: Machine Family should NOT grab Odd Slime.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof OddSlimeBlock
         );
 
-        // SLIME: Slime should NOT grab Odd Slime (mutual exclusion).
+        // --- ODD SLIME mutual exclusion rules (7-8) ---
+
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
                                   && target.getBlock() instanceof OddSlimeBlock
         );
 
-        // HONEY: Honey should NOT grab Odd Slime (mutual exclusion).
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
+                                  && target.getBlock() instanceof OddSlimeBlock
+        );
+
+        // --- FRAME FAMILY rules (9-11) ---
+
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
+                                  && target.getBlock() instanceof SlimeBlock
+        );
+
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
+                                  && target.getBlock() instanceof HoneyBlock
+        );
+
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
                                   && target.getBlock() instanceof OddSlimeBlock
         );
 
@@ -126,7 +142,6 @@ public class Ideomod {
         // DIRECTIONAL RULES
         // ================================================================
 
-        // ODD SLIME: Only sticky when pushed in its FACING direction.
         StickinessRules.registerDirectionalRule(
                 (state, pushDirection) -> {
                     if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
@@ -135,7 +150,7 @@ public class Ideomod {
                 }
         );
 
-        LOGGER.info("Registered stickiness rules (grab immunity + directional)");
+        LOGGER.info("Registered stickiness rules: 11 grab immunity + 1 directional");
     }
 
     private void registerStructureDefinitions() {
@@ -151,6 +166,10 @@ public class Ideomod {
     private void clientSetup(final FMLClientSetupEvent event) {
         event.enqueueWork(() -> {
             MenuScreens.register(ModMenuTypes.MACHINE_FRAME.get(), MachineFrameScreen::new);
+
+            // Frame blocks use CUTOUT render type for transparency
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.IRON_FRAME.get(), RenderType.cutout());
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.COPPER_FRAME.get(), RenderType.cutout());
         });
         LOGGER.info("Ideomod client setup complete!");
     }
