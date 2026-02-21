@@ -10,7 +10,8 @@ import net.minecraftforge.registries.RegistryObject;
 
 /**
  * Registry for creative mode tabs
- * Creates a custom tab for all Ideomod items
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class ModCreativeTabs {
     
@@ -22,7 +23,6 @@ public class ModCreativeTabs {
                     .icon(() -> new ItemStack(ModItems.IDEOBLOCK.get()))
                     .title(Component.translatable("itemGroup." + Ideomod.MOD_ID + ".ideomod_tab"))
                     .displayItems((parameters, output) -> {
-                        // Blocks
                         output.accept(ModItems.IDEOBLOCK.get());
                         output.accept(ModItems.DRILL.get());
                         output.accept(ModItems.ODDSTONE.get());

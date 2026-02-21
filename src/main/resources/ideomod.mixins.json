@@ -6,9 +6,12 @@
   "refmap": "ideomod.refmap.json",
   "mixins": [
     "PistonStructureResolverMixin",
-    "AbstractFurnaceBlockEntityMixin"
+    "AbstractFurnaceBlockEntityMixin",
+    "PistonBaseBlockMixin",
+    "PistonMovingBlockEntityMixin"
   ],
   "client": [],
+  "server": [],
   "injectors": {
     "defaultRequire": 1
   }

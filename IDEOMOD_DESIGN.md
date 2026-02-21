@@ -251,8 +251,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 
 ---
 
-### Machine Block [DONE -- REDESIGN PLANNED]
-> Modular mechanical chassis. A block entity with a single item slot that determines its specialization. Base behavior: selective stickiness to other Machine Blocks. Insert an item to transform it into a specialized machine type.
+### Machine Block [DONE]
+> Modular mechanical chassis. A block entity with a single item slot that determines its specialization. Base behavior: selective stickiness to other Machine Blocks. Insert an item to transform it into a specialized machine type. Now called "Machine Frame" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
 
 | Property | Value |
 |----------|-------|
@@ -261,6 +261,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Tool | Pickaxe |
 | Sound | Metal |
 | Type | Block Entity (single item slot + specialization ID) |
+| Movable | Yes -- PushReaction.NORMAL, PistonBaseBlockMixin bypasses vanilla's BE check |
 | Recipe | Hollow Stone + iron + slime (TBD -- requires Hollow Stone) |
 
 **Base behavior (no item inserted):**
@@ -268,7 +269,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 - One-way with slime: slime grabs Machine Block; Machine Block does NOT grab slime. Via mixin.
 - Right-click opens a single-slot GUI. Insert an item to specialize. Right-click (or shift-right-click) to retrieve item. Block reverts to blank chassis when empty.
 
-**Current implemented features (to be refactored):**
+**Current implemented features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
@@ -276,6 +277,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Redstone conduction | [DONE] | Will become Machine Conductor specialization. |
 | Power color tint | [DONE] | Will move to Machine Conductor specialization. |
 | One-way with slime | [DONE] | Stays on base chassis. |
+| Block entity with GUI | [DONE] | Single item slot. Right-click to open. Insert to specialize, remove to revert. |
+| Piston movement data preservation | [DONE] | IPistonMovable interface. Works for push, pull, Repulser, Attractor, Track. |
 
 **Stickiness rules:**
 Machine Block specializations stick to **same-type only**. A Machine Conductor sticks to other Machine Conductors. A Machine Pipe sticks to other Machine Pipes. Different specialization types do NOT stick to each other.
@@ -289,8 +292,8 @@ These universal connectors are the "glue" that lets players bridge different Mac
 
 **Implementation note:** Stickiness check compares specialization IDs. Two Machine Blocks stick if: (a) same specialization, OR (b) either block is a universal connector type (base, frame, extender). The one exception: during a Track-initiated move operation, the Track and Trolley do not stick to each other (the Trolley slides free). In all other contexts, Tracks and Trolleys stick normally to same-type and universal connectors.
 
-**Block entity movement:**
-When a Machine Block is moved by a piston (or Repulser/Attractor), the block entity data is serialized (save the specialization item ID), the old block entity is destroyed, a new one is created at the destination, and the data is deserialized back. The stored data is minimal (one item ID), so overhead is negligible. Safety checks pause any active specialization behavior (item transfer, signal propagation) during the move tick. Reference implementations: Create mod contraption assembly, Carpet mod movable block entities.
+**Block entity movement** [DONE]:
+When a Machine Block is moved by a piston (or Repulser/Attractor/Track), the block entity data is serialized via IPistonMovable.saveMovementData(), stored in MovingBlockEntityData keyed by destination position, and restored into the fresh block entity after the 2-tick animation by PistonMovingBlockEntityMixin. PistonBaseBlockMixin bypasses vanilla's block entity pushability check. Data preservation works for all movement types: vanilla piston push, sticky piston retract, Repulser push, Attractor pull, and Track-driven Trolley movement. The stored data is the full inventory contents (currently one item), serialized via ContainerHelper.
 
 **Visual feedback:**
 Each specialization should have a distinct visual indicator so players can identify machine types at a glance. Approach TBD -- options include: overlay texture per specialization on each face (small icon), tint color per type, or subtle model variation. Base chassis (no item) uses the existing dark steel grey appearance.

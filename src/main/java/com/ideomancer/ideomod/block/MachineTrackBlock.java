@@ -20,64 +20,42 @@ import net.minecraft.world.level.block.state.properties.IntegerProperty;
  * The Track figures out which face received the redstone signal and pushes
  * in the OPPOSITE direction. Signal direction is determined by checking
  * actual signal sources -- redstone components (via tag) and conduit blocks
- * (Machine Block / Track with higher power). Vanilla's level.hasSignal()
- * is NOT used because it includes weak power leaking through solid blocks,
- * which would cause Trolleys and other inert blocks to appear as signal
- * sources.
+ * (currently only other Tracks, since Machine Frame no longer conducts).
+ * Vanilla's level.hasSignal() is NOT used because it includes weak power
+ * leaking through solid blocks, which would cause Trolleys and other inert
+ * blocks to appear as signal sources.
  *
  *   Signal from NORTH face → push SOUTH
  *   Signal from TOP        → push DOWN
  *   etc.
  *
  * ALL adjacent Trolleys are pushed in that direction, not just the one
- * on the push face. Example:
- *   Track at (0,0), Trolley at (0,1), signal from WEST.
- *   pushDir = EAST. Trolley at (0,1) moves to (1,1).
+ * on the push face.
  *
  * REDSTONE CONDUCTION:
  * ====================
- * Same as Machine Block -- conducts redstone signal with decay of 1 per
- * block. Interoperable with Machine Block conduction chains. This means
- * a line of Tracks can carry signal, and signal direction is preserved
- * (the face receiving the strongest signal determines push direction).
- *
- * Uses POWER (0-15) instead of a boolean POWERED. Rising edge for push
- * activation is detected as: old power was 0, new power > 0.
- *
- * EDGE CASES:
- * ===========
- * - Trolley directly opposite the signal (on the push face): pushed away.
- * - Trolley on the signal face: would need to move through the Track.
- *   BlockMoveHelper's safety check rejects this (destination = Track pos).
- * - Signal arrives through a Trolley: Trolley is not a redstone component
- *   or conduit, so it's never treated as a signal source. Other adjacent
- *   actual sources determine push direction.
- * - Multiple signals on different faces: each fires independently.
- *   Multiple Trolleys pushed in the same direction: each is independent.
+ * Conducts redstone signal with decay of 1 per block. Track-to-Track chains
+ * work. Track-to-Machine Frame chains are broken (Machine Frame no longer
+ * conducts). The connection will restore when the Machine Conductor
+ * specialization is implemented (insert redstone dust into Machine Frame).
  *
  * STICKINESS:
  * ===========
- * Part of the Machine Family -- sticks to Machine Blocks, other Tracks,
+ * Part of the Machine Family -- sticks to Machine Frames, other Tracks,
  * and Trolleys. During a Track-initiated push, the Track itself is
  * protected from being included in the move group because its position
- * is passed as initiatorPos to BlockMoveHelper, and the
- * PistonStructureResolver treats that as pistonPos (immovable origin).
+ * is passed as initiatorPos to BlockMoveHelper.
  *
  * Uses block event system for proper client-server animation sync.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class MachineTrackBlock extends Block {
 
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
 
-    /**
-     * Block event ID: push a trolley.
-     * param encodes two directions packed into one int:
-     *   bits 0-2: pushDir (direction to push)
-     *   bits 3-5: trolleyFace (which face the Trolley is on, relative to Track)
-     */
     private static final int EVENT_PUSH = 0;
 
-    /** Guard flag to prevent infinite recursion during redstone updates. */
     private static boolean isUpdating = false;
 
     public MachineTrackBlock(Properties properties) {
@@ -102,11 +80,11 @@ public class MachineTrackBlock extends Block {
 
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        return MachineBlock.canMachineFamilyStickTo(other);
+        return MachineFrameBlock.canMachineFamilyStickTo(other);
     }
 
     // ========================================================================
-    // REDSTONE CONDUCTION (mirrors MachineBlock)
+    // REDSTONE CONDUCTION (independent -- Track conducts on its own)
     // ========================================================================
 
     @Override
@@ -146,7 +124,6 @@ public class MachineTrackBlock extends Block {
                 isUpdating = false;
             }
 
-            // Rising edge: was unpowered, now powered → schedule pushes
             if (oldPower == 0 && newPower > 0) {
                 scheduleAllPushes(level, pos, newPower);
             }
@@ -189,8 +166,7 @@ public class MachineTrackBlock extends Block {
             BlockState neighborState = level.getBlockState(neighborPos);
             Block neighborBlock = neighborState.getBlock();
 
-            // Accept decayed signal from other conductors (Machine Block + Track)
-            if (MachineBlock.isRedstoneConduit(neighborBlock)) {
+            if (MachineFrameBlock.isRedstoneConduit(neighborBlock)) {
                 int neighborPower = neighborState.getValue(POWER) - 1;
                 if (neighborPower > bestPower) {
                     bestPower = neighborPower;
@@ -214,23 +190,6 @@ public class MachineTrackBlock extends Block {
     // PUSH SCHEDULING
     // ========================================================================
 
-    /**
-     * Determine which faces have actual signal sources, then push all
-     * adjacent Trolleys in the opposite direction.
-     *
-     * IMPORTANT: Does NOT use level.hasSignal() because that includes
-     * vanilla's "weak power" mechanic, where solid blocks adjacent to a
-     * signal source appear to have signal themselves. Since the Track now
-     * emits strong signal via POWER, any solid block next to it (including
-     * Trolleys) would appear to be a signal source, causing misfires.
-     *
-     * Instead, checks neighbors directly:
-     *   - Conduit blocks (Machine Block / Track) with higher POWER = signal source
-     *   - Tagged redstone components with nonzero signal = signal source
-     *   - Everything else (Trolleys, stone, air, etc.) = ignored
-     *
-     * @param myPower the Track's current power level (just set this tick)
-     */
     private void scheduleAllPushes(Level level, BlockPos pos, int myPower) {
         for (Direction signalDir : Direction.values()) {
             BlockPos neighborPos = pos.relative(signalDir);
@@ -239,22 +198,18 @@ public class MachineTrackBlock extends Block {
 
             boolean isActualSource = false;
 
-            if (MachineBlock.isRedstoneConduit(neighborBlock)) {
-                // Another conduit with higher power = signal flows from there to here
+            if (MachineFrameBlock.isRedstoneConduit(neighborBlock)) {
                 int neighborPower = neighborState.getValue(POWER);
                 isActualSource = neighborPower > myPower;
             } else if (isRedstoneComponent(neighborBlock)) {
-                // Tagged redstone component (lever, dust, repeater, etc.)
                 int signal = level.getSignal(neighborPos, signalDir);
                 isActualSource = signal > 0;
             }
-            // Everything else (Trolleys, stone, air, etc.) is never a signal source
 
             if (!isActualSource) continue;
 
             Direction pushDir = signalDir.getOpposite();
 
-            // Check ALL 6 adjacent faces for Trolleys to push in this direction
             for (Direction trolleyFace : Direction.values()) {
                 BlockPos trolleyPos = pos.relative(trolleyFace);
                 if (level.getBlockState(trolleyPos).getBlock() instanceof MachineTrolleyBlock) {
@@ -265,11 +220,6 @@ public class MachineTrackBlock extends Block {
         }
     }
 
-    /**
-     * Block event handler -- runs on BOTH client and server.
-     * Unpacks pushDir and trolleyFace from param, re-verifies the Trolley
-     * is still there, then pushes it.
-     */
     @Override
     public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int id, int param) {
         if (id == EVENT_PUSH) {
@@ -277,9 +227,8 @@ public class MachineTrackBlock extends Block {
             Direction trolleyFace = unpackTrolleyFace(param);
             BlockPos trolleyPos = pos.relative(trolleyFace);
 
-            // Re-verify: Trolley must still be there
             if (!(level.getBlockState(trolleyPos).getBlock() instanceof MachineTrolleyBlock)) {
-                return true; // consumed event, but nothing to push
+                return true;
             }
 
             BlockMoveHelper.moveBlockAt(level, pos, trolleyPos, pushDir);
@@ -292,10 +241,6 @@ public class MachineTrackBlock extends Block {
     // DIRECTION PACKING
     // ========================================================================
 
-    /**
-     * Pack two Direction values into one int.
-     * Bits 0-2: pushDir (0-5), bits 3-5: trolleyFace (0-5).
-     */
     private static int packDirections(Direction pushDir, Direction trolleyFace) {
         return pushDir.get3DDataValue() | (trolleyFace.get3DDataValue() << 3);
     }

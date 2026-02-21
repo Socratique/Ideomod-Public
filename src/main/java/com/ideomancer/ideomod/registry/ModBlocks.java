@@ -2,7 +2,7 @@ package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
-import com.ideomancer.ideomod.block.MachineBlock;
+import com.ideomancer.ideomod.block.MachineFrameBlock;
 import com.ideomancer.ideomod.block.MachineTrackBlock;
 import com.ideomancer.ideomod.block.MachineTrolleyBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
@@ -22,6 +22,8 @@ import net.minecraftforge.registries.RegistryObject;
 /**
  * Registry for all mod blocks
  * Uses DeferredRegister for safe, ordered registration
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class ModBlocks {
     
@@ -50,14 +52,17 @@ public class ModBlocks {
                     .sound(SoundType.STONE)
                     .isRedstoneConductor((state, level, pos) -> false)
             ));
-    
+
+    // Registry ID remains "machine_block" for world compatibility.
+    // Display name and class renamed to "Machine Frame".
+    // TODO: Rename registry ID to "machine_frame" in a future breaking change version.
     public static final RegistryObject<Block> MACHINE_BLOCK = BLOCKS.register("machine_block",
-            () -> new MachineBlock(BlockBehaviour.Properties.of()
+            () -> new MachineFrameBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
-                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
             ));
     
     public static final RegistryObject<Block> ODD_SLIME = BLOCKS.register("odd_slime",
@@ -79,10 +84,6 @@ public class ModBlocks {
                     .noLootTable()
             ));
 
-    // ========================================================================
-    // REPULSER / ATTRACTOR — ranged directional pistons
-    // ========================================================================
-
     public static final RegistryObject<Block> ODDSTONE_REPULSER = BLOCKS.register("oddstone_repulser",
             () -> new OddstoneRepulserBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_PURPLE)
@@ -99,12 +100,6 @@ public class ModBlocks {
                     .sound(SoundType.STONE)
             ));
 
-    // ========================================================================
-    // MACHINE TRACK / TROLLEY — directional block movement system
-    // ========================================================================
-
-    // Machine Track - pushes adjacent Trolleys based on redstone signal direction
-    // Conducts redstone like Machine Block (signal decays by 1 per block)
     public static final RegistryObject<Block> MACHINE_TRACK = BLOCKS.register("machine_track",
             () -> new MachineTrackBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -114,8 +109,6 @@ public class ModBlocks {
                     .isRedstoneConductor((state, level, pos) -> false)
             ));
 
-    // Machine Trolley - passive cargo carrier, pushed by Tracks
-    // Does NOT conduct redstone (just a dumb cargo block)
     public static final RegistryObject<Block> MACHINE_TROLLEY = BLOCKS.register("machine_trolley",
             () -> new MachineTrolleyBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)

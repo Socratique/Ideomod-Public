@@ -1,15 +1,19 @@
 package com.ideomancer.ideomod;
 
-import com.ideomancer.ideomod.block.MachineBlock;
+import com.ideomancer.ideomod.block.MachineFrameBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.StickinessRules;
+import com.ideomancer.ideomod.client.MachineFrameScreen;
+import com.ideomancer.ideomod.registry.ModBlockEntities;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModCreativeTabs;
 import com.ideomancer.ideomod.registry.ModItems;
+import com.ideomancer.ideomod.registry.ModMenuTypes;
 import com.ideomancer.ideomod.structure.StructureManager;
 import com.ideomancer.ideomod.structure.definitions.FurnaceArrayDefinition;
 import com.mojang.logging.LogUtils;
+import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.HoneyBlock;
@@ -25,6 +29,8 @@ import org.slf4j.Logger;
 /**
  * Main mod class for Ideomod
  * A vanilla+ style overhaul mod by Ideomancer
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 @Mod(Ideomod.MOD_ID)
 public class Ideomod {
@@ -37,6 +43,8 @@ public class Ideomod {
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
+        ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
+        ModMenuTypes.MENUS.register(modEventBus);
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
@@ -57,8 +65,8 @@ public class Ideomod {
      * Registers all stickiness rules for the mod.
      * See STICKINESS_SYSTEM.md for full documentation.
      *
-     * Machine Family = MachineBlock, MachineTrackBlock, MachineTrolleyBlock.
-     * All three share the same grab immunity rules via MachineBlock.isMachineFamily().
+     * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock.
+     * All three share the same grab immunity rules via MachineFrameBlock.isMachineFamily().
      */
     private void registerStickinessRules() {
         // ================================================================
@@ -84,21 +92,21 @@ public class Ideomod {
         );
 
         // MACHINE FAMILY: Machine Family should NOT grab slime.
-        // (Covers MachineBlock, MachineTrackBlock, MachineTrolleyBlock)
+        // (Covers MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
+                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof SlimeBlock
         );
 
         // MACHINE FAMILY: Machine Family should NOT grab honey.
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
+                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof HoneyBlock
         );
 
         // MACHINE FAMILY: Machine Family should NOT grab Odd Slime.
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineBlock.isMachineFamily(grabber.getBlock())
+                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
                                   && target.getBlock() instanceof OddSlimeBlock
         );
 
@@ -130,23 +138,20 @@ public class Ideomod {
         LOGGER.info("Registered stickiness rules (grab immunity + directional)");
     }
 
-    /**
-     * Registers all multiblock structure definitions with the StructureManager.
-     */
     private void registerStructureDefinitions() {
         StructureManager.registerDefinition(FurnaceArrayDefinition.create());
         LOGGER.info("Registered multiblock structure definitions");
     }
 
-    /**
-     * Registers the StructureManager's Forge event handlers on the game event bus.
-     */
     private void registerStructureEventHandlers() {
         MinecraftForge.EVENT_BUS.register(new StructureManager.EventHandler());
         LOGGER.info("Registered structure event handlers");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {
+        event.enqueueWork(() -> {
+            MenuScreens.register(ModMenuTypes.MACHINE_FRAME.get(), MachineFrameScreen::new);
+        });
         LOGGER.info("Ideomod client setup complete!");
     }
 }

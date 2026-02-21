@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-18*
+*Last updated: 2026-02-21*
 
 ---
 
@@ -28,7 +28,11 @@ com.ideomancer.ideomod
   |                              structure definitions, StructureManager event handler.
   |-- block/
   |     |-- OddstoneBlock.java           5-feature core block (see Oddstone section)
-  |     |-- MachineBlock.java            Machine Family base: stickiness + conduction
+  |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI (renamed from MachineBlock)
+  |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
+  |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
+  |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
+  |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
   |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
   |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
@@ -46,13 +50,16 @@ com.ideomancer.ideomod
   |     |-- OddstonePortalSavedData.java      Per-dimension portal registry (SavedData)
   |     \-- PortalUtils.java             Corner validation, interior nav, clearing
   |-- client/
-  |     \-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
+  |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
+  |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
+  |     |-- PistonBaseBlockMixin.java          Allows IPistonMovable BE movement + saves data
+  |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
   |     \-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
   |-- multiblock/
   |     |-- StructureDefinition.java     Abstract base for structure type rulesets
@@ -100,13 +107,17 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 `no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional
 
-### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley)
+### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
 **Architecture**: Three-layer system. BlockMoveHelper provides general-purpose piston-style movement. RangedPistonUtil adds scanning. AbstractRangedPistonBlock adds shared block logic. All use vanilla's block event system for client-server sync (see BLOCK_EVENT_LESSON.md).
 
-**BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)**: Single entry point for any system needing piston-style block movement. Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: set ThreadLocal target -> create resolver -> resolve -> safety checks -> snapshot states -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
+**BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)**: Single entry point for any system needing piston-style block movement. Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: set ThreadLocal target -> create resolver -> resolve -> safety checks -> snapshot states -> save IPistonMovable data (server-only, step 2.5) -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
 
 **Safety checks**: (1) toPush non-empty and contains target, (2) toPush doesn't contain initiator, (3) no destination equals initiator position.
+
+**IPistonMovable pipeline**: Opt-in block entity data preservation during piston moves. Save phase: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5 (our systems). Both server-only -- client block entities lack synced inventories and would overwrite server data. Transit: MovingBlockEntityData static ConcurrentHashMap. Restore: PistonMovingBlockEntityMixin tick() TAIL (server-only, waits for real block). Single consumer pattern -- retrieve() is destructive.
+
+**PistonBaseBlockMixin**: Two features. (1) isPushable HEAD inject returns true for IPistonMovable block entities. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group.
 
 **RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to 12 blocks. Delegates movement to BlockMoveHelper.
 
@@ -173,10 +184,13 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 4. **One-way stickiness**: Grabs all slime types + other Oddstone. Cannot be grabbed back (grab immunity rules).
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 
-### 6. Machine Block (2 features + Machine Family base)
+### 6. Machine Frame (3 features + Machine Family base)
 
-1. **Selective stickiness**: Only actively grabs other Machine Family blocks (MachineBlock, MachineTrackBlock, MachineTrolleyBlock). Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
+Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock.
+
+1. **Selective stickiness**: Only actively grabs other Machine Family blocks (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock). Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
 2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
+3. **Block entity with GUI**: MachineFrameBlockEntity with single item slot. IPistonMovable implementation preserves inventory through all piston move types. onRemove() drops contents only when broken (movedByPiston guard).
 
 **Static helpers**: `isMachineFamily(Block)`, `isRedstoneConduit(Block)`, `canMachineFamilyStickTo(BlockState)` -- used by all Machine Family blocks.
 

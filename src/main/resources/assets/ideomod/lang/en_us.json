@@ -2,16 +2,17 @@
   "block.ideomod.ideoblock": "Ideoblock",
   "block.ideomod.drill": "Mining Drill",
   "block.ideomod.oddstone": "Oddstone",
-  "block.ideomod.machine_block": "Machine Block",
+  "block.ideomod.machine_block": "Machine Frame",
   "block.ideomod.oddstone_portal": "Oddstone Portal",
   "block.ideomod.odd_slime": "Odd Slime",
   "block.ideomod.oddstone_repulser": "Oddstone Repulser",
   "block.ideomod.oddstone_attractor": "Oddstone Attractor",
+  "block.ideomod.machine_track": "Machine Track",
+  "block.ideomod.machine_trolley": "Machine Trolley",
   "itemGroup.ideomod.ideomod_tab": "Ideomod",
   "ideomod.container.enhanced_furnace": "Enhanced Furnace",
   "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
   "ideomod.container.enhanced_smoker": "Enhanced Smoker",
-  "item.ideomod.structure_debug_stick": "Structure Debug Stick",
-  "block.ideomod.machine_track": "Machine Track",
-  "block.ideomod.machine_trolley": "Machine Trolley"
+  "ideomod.container.machine_frame": "Machine Frame",
+  "item.ideomod.structure_debug_stick": "Structure Debug Stick"
 }

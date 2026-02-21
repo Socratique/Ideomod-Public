@@ -4,6 +4,7 @@ import com.google.common.collect.Maps;
 import com.ideomancer.ideomod.Ideomod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
@@ -16,6 +17,7 @@ import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,26 +33,37 @@ import java.util.Map;
  * Everything else (structure resolution, animation, push limits, stickiness
  * rules, sound) comes along for free from vanilla's piston system.
  *
+ * BLOCK ENTITY MOVEMENT:
+ * ======================
+ * Block entities that implement {@link IPistonMovable} get their data
+ * serialized before the move and restored after the 2-tick animation.
+ * This is an OPT-IN system -- only block entities that explicitly implement
+ * the interface are affected. Vanilla block entities are untouched.
+ *
+ * The save/restore flow:
+ *   1. During snapshot phase, check each block in toPush for IPistonMovable
+ *   2. If found, call saveMovementData() and store the CompoundTag in
+ *      MovingBlockEntityData keyed by DESTINATION position
+ *   3. After the 2-tick animation completes, PistonMovingBlockEntityMixin
+ *      retrieves the saved data and loads it into the fresh block entity.
+ *
+ * CRITICAL: The save phase (step 2.5) must ONLY run on the server side.
+ * This method is called from triggerEvent() so it runs on both client and
+ * server. Client-side block entities don't have synced inventory data, so
+ * client saves would overwrite server saves with empty data in the shared
+ * static MovingBlockEntityData map.
+ *
  * CALLERS:
  * ========
  *   - RangedPistonUtil (Repulser/Attractor) -- scans a line, then calls here
  *   - MachineTrackBlock -- knows the Trolley is adjacent, calls here directly
  *   - Future: any system that needs piston-style block movement
  *
- * HOW IT WORKS (mirrors vanilla PistonBaseBlock.moveBlocks()):
- * ===========================================================
- *   1. Set ThreadLocal target so mixin redirects resolver's startPos
- *   2. Create PistonStructureResolver with initiatorPos as pistonPos
- *      (safe, far from action -- mixin redirects to real target)
- *   3. Resolve the full move group (respects push limits, stickiness, etc.)
- *   4. Safety check: no block may land on initiatorPos
- *   5. Snapshot states, destroy breakables, place MovingPistonBlock at
- *      destinations (sources still exist), clear vacated sources, run
- *      neighbor updates, play sound
- *
  * MUST be called from triggerEvent() (or equivalent block event handler)
  * so that it runs on BOTH client and server. This is required for
  * PistonMovingBlockEntity rendering -- see BLOCK_EVENT_LESSON.md.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class BlockMoveHelper {
 
@@ -91,9 +104,6 @@ public class BlockMoveHelper {
         if (toPush.contains(initiatorPos)) return false;
 
         // Safety: reject if ANY block's destination is the initiator itself.
-        // Prevents sympathetic/sticky blocks from being pushed into and
-        // overwriting the device. Mirrors how vanilla pistons can't push
-        // blocks into the piston base.
         for (BlockPos pushPos : toPush) {
             if (pushPos.relative(pushDir).equals(initiatorPos)) {
                 Ideomod.LOGGER.debug("BlockMoveHelper at {} -- blocked, block at {} would move into initiator",
@@ -110,6 +120,32 @@ public class BlockMoveHelper {
             BlockState state = level.getBlockState(pos);
             movedStates.add(state);
             map.put(pos, state);
+        }
+
+        // ---- STEP 2.5: Save IPistonMovable block entity data (Ideomod addition) ----
+        // CRITICAL: Only save on server side. Client block entities don't have
+        // synced inventories, so client saves overwrite server saves with empty
+        // data. MovingBlockEntityData is a shared static map -- client writes
+        // clobber server writes with the same key. This was the cause of the
+        // "item deleted on move" bug for BlockMoveHelper-driven systems.
+        String dimensionKey = level.dimension().location().toString();
+        Map<BlockPos, CompoundTag> savedBlockEntityData = new HashMap<>();
+
+        if (!level.isClientSide()) {
+            for (int i = 0; i < toPush.size(); i++) {
+                BlockPos sourcePos = toPush.get(i);
+                BlockEntity be = level.getBlockEntity(sourcePos);
+
+                if (be instanceof IPistonMovable movable) {
+                    BlockPos destPos = sourcePos.relative(pushDir);
+                    CompoundTag data = movable.saveMovementData();
+                    if (data != null) {
+                        savedBlockEntityData.put(destPos, data);
+                        Ideomod.LOGGER.info("[BlockMoveHelper] SAVED IPistonMovable data from {} -> dest {} (tags: {})",
+                                sourcePos, destPos, data.getAllKeys());
+                    }
+                }
+            }
         }
 
         BlockState[] allOriginalStates = new BlockState[toPush.size() + toDestroy.size()];
@@ -144,6 +180,14 @@ public class BlockMoveHelper {
             allOriginalStates[stateIdx++] = sourceState;
         }
 
+        // ---- STEP 4.5: Register saved block entity data for restoration (Ideomod addition) ----
+        // Now that blocks are in transit, store the saved data so that when
+        // PistonMovingBlockEntityMixin fires at tick completion, the data can
+        // be retrieved and restored into the fresh block entity.
+        for (Map.Entry<BlockPos, CompoundTag> entry : savedBlockEntityData.entrySet()) {
+            MovingBlockEntityData.store(dimensionKey, entry.getKey(), entry.getValue());
+        }
+
         // ---- STEP 5: Clear vacated source positions to air (mirrors vanilla lines 324-327) ----
         BlockState air = Blocks.AIR.defaultBlockState();
         for (BlockPos vacatedPos : map.keySet()) {
@@ -175,8 +219,8 @@ public class BlockMoveHelper {
         level.playSound(null, initiatorPos, SoundEvents.PISTON_EXTEND,
                 SoundSource.BLOCKS, 0.5F, 0.8F);
 
-        Ideomod.LOGGER.debug("BlockMoveHelper at {} -- moved {} blocks {}",
-                initiatorPos, toPush.size(), pushDir);
+        Ideomod.LOGGER.debug("BlockMoveHelper at {} -- moved {} blocks {} ({} with block entity data)",
+                initiatorPos, toPush.size(), pushDir, savedBlockEntityData.size());
 
         return true;
     }

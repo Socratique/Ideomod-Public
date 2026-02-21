@@ -1,5 +1,114 @@
 # Ideomod Changelog
 
+## [2026-02-21] IPistonMovable -- Block Entity Piston Movement System
+
+Complete implementation of block entity data preservation during piston moves.
+Machine Frame (formerly Machine Block) block entities now retain their
+specialization item through all movement types: vanilla pistons (push and
+sticky retract), Repulser, Attractor, and Machine Track/Trolley.
+
+### New system: IPistonMovable interface + data pipeline
+- New interface: IPistonMovable (com.ideomancer.ideomod.block)
+  - saveMovementData() -> CompoundTag: serialize data before move
+  - loadMovementData(CompoundTag): restore data after move
+  - Opt-in system: only block entities that implement it are affected
+- New class: MovingBlockEntityData (com.ideomancer.ideomod.block)
+  - Static ConcurrentHashMap registry for data in transit
+  - Keys: "dimension:x,y,z" at DESTINATION position
+  - store() and retrieve() (destructive -- removes on read)
+- MachineFrameBlockEntity implements IPistonMovable
+  - Saves/loads inventory contents via ContainerHelper
+
+### New mixin: PistonBaseBlockMixin (PistonBaseBlock)
+- Feature 1 (isPushable): Allows IPistonMovable block entities to be
+  pushed by pistons. Vanilla hardcodes return !hasBlockEntity() -- our
+  HEAD inject returns true for IPistonMovable blocks instead.
+- Feature 2 (moveBlocks): Saves IPistonMovable data before vanilla
+  destroys block entities during the move.
+  - Extension path: uses PistonStructureResolver to find toPush blocks
+  - Retraction path: resolver fails for our blocks (internal isPushable
+    calls with different parameters). Falls back to direct position scan
+    at pistonPos + direction * 2, then BFS for sticky group members.
+  - Sticky group scan respects isStickyBlock(), canStickTo(), and
+    12-block push limit.
+
+### New mixin: PistonMovingBlockEntityMixin (PistonMovingBlockEntity)
+- Injects at TAIL of tick() to restore data after 2-tick animation
+- Guards: server-only, waits for real block (not MOVING_PISTON)
+- Retrieves data from MovingBlockEntityData (destructive read)
+- Loads into fresh block entity via IPistonMovable.loadMovementData()
+
+### BlockMoveHelper updated (step 2.5)
+- Added server-side guard (if (!level.isClientSide())) around the
+  IPistonMovable save logic in step 2.5
+- This was the same bug as the PistonBaseBlockMixin client overwrite
+
+### Machine Frame block entity refactor
+- MachineBlock renamed to MachineFrameBlock (class only, registry ID
+  stays "machine_block" for world compatibility)
+- MachineFrameBlockEntity: single-slot GUI, item determines specialization
+- MachineFrameMenu + MachineFrameScreen: container menu + client GUI
+- onRemove() drops contents only when broken, NOT when moved by piston
+  (movedByPiston guard)
+
+### Bugs resolved:
+
+Bug 1 -- "item deleted on move" (onPlace timing):
+Block lifecycle order during setBlock(): onPlace() fires BEFORE
+newBlockEntity() creates the block entity. If onPlace() calls
+MovingBlockEntityData.retrieve(), data is consumed but block entity
+does not exist yet to receive it. Fix: removed all retrieval logic from
+onPlace(). PistonMovingBlockEntityMixin is the sole consumer.
+
+Bug 2 -- "client overwrites server data":
+moveBlocks() runs on BOTH client and server (via triggerEvent block
+events). Client-side block entities do not have synced inventory data
+(container inventories are not sent to clients by default). Without a
+client guard, the client's save (with empty inventory) overwrites the
+server's valid save in the shared static MovingBlockEntityData map.
+Fix: added if (level.isClientSide()) return; to both PistonBaseBlockMixin
+and BlockMoveHelper step 2.5.
+
+Bug 3 -- "retraction resolver fails":
+PistonStructureResolver.resolve() returns false for retraction
+(extending=false) with our IPistonMovable blocks. Root cause: the
+resolver's internal isPushable calls use different parameters during
+retraction that our HEAD mixin does not intercept the same way. Yet
+vanilla's own moveBlocks succeeds because its triggerEvent pre-check
+passes separately. Fix: retraction path bypasses the resolver entirely.
+Instead scans the pull position directly and BFS-scans the sticky group.
+
+### Key lessons learned:
+1. Vanilla block lifecycle: setBlock() -> onPlace() -> newBlockEntity().
+   Block entity does NOT exist during onPlace().
+2. Static maps shared between logical sides: integrated server shares
+   JVM statics between client and server threads. Client writes can
+   clobber server data. Always guard with isClientSide().
+3. retrieve() is destructive: ConcurrentHashMap.remove() consumes data.
+   Multiple consumers = race condition. Single consumer only.
+4. PistonStructureResolver behaves differently for extension vs
+   retraction. Do not assume a resolver that works for push will work
+   for pull.
+5. Debug logging at INFO level is essential during development. Forge
+   filters DEBUG by default in latest.log.
+
+### Files added:
+- IPistonMovable.java (com.ideomancer.ideomod.block)
+- MovingBlockEntityData.java (com.ideomancer.ideomod.block)
+- MachineFrameBlock.java (renamed from MachineBlock.java)
+- MachineFrameBlockEntity.java (com.ideomancer.ideomod.block)
+- MachineFrameMenu.java (com.ideomancer.ideomod.block)
+- MachineFrameScreen.java (com.ideomancer.ideomod.client)
+- PistonBaseBlockMixin.java (com.ideomancer.ideomod.mixin)
+- PistonMovingBlockEntityMixin.java (com.ideomancer.ideomod.mixin)
+
+### Files changed:
+- BlockMoveHelper.java: added server-side guard on IPistonMovable save
+- ideomod.mixins.json: added PistonBaseBlockMixin, PistonMovingBlockEntityMixin
+- Ideomod.java: registered MachineFrameBlockEntity, menu type
+
+Written by Claude, directed and guided by The Ideomancer.
+
 ## [2026-02-18] BlockMoveHelper Refactor + Machine Track & Trolley
 
 Major refactor of the ranged piston movement system into a general-purpose
