@@ -5,18 +5,24 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HoneyBlock;
+import net.minecraft.world.level.block.Mirror;
 import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.Rotation;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.SoundType;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.level.block.state.properties.DirectionProperty;
+import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import net.minecraft.world.phys.shapes.CollisionContext;
@@ -44,12 +50,33 @@ import org.jetbrains.annotations.Nullable;
  *
  * STICKINESS MODEL:
  * =================
- * isStickyBlock() always returns true. The actual stickiness behavior is
- * controlled by canStickTo() which combines:
- *   - Frame family rules (same-material frames, machine blocks)
- *   - Inner block's own stickiness (if the inner block is slime/honey/etc.)
- * Plus StickinessRules grab immunity prevents frames from grabbing
- * slime/honey/odd slime (rules 9-11).
+ * isStickyBlock() returns true when ACTIVE (frame stickiness) OR when
+ * INNER_STICKY > 0 (inner block is natively sticky).
+ *
+ * canStickTo() combines:
+ *   - Frame family rules (same-material frames, machine blocks) — gated by ACTIVE
+ *   - Inner block stickiness rules — gated by INNER_STICKY value
+ *   - Permissive entries for vanilla stickies
+ *
+ * StickinessRules grab immunity (rules 9-11) prevents frames from actively
+ * grabbing slime/honey/odd slime, BUT a carve-out in Ideomod.java exempts
+ * framed blocks whose inner IS the same sticky type. E.g. a Framed Slime
+ * Block IS allowed to grab normal blocks like real slime would.
+ *
+ * INNER_STICKY values:
+ *   0 = not sticky (default)
+ *   1 = slime-type (grabs everything except honey, odd slime, oddstone)
+ *   2 = honey-type (grabs everything except slime, odd slime, oddstone)
+ *   3 = odd-slime-type (grabs everything except slime, honey, oddstone;
+ *       directional — only when pushed in FACING direction)
+ *
+ * FACING:
+ * =======
+ * All framed blocks have a FACING property set from player look direction
+ * at placement. For most inner blocks this is cosmetic/unused. For Framed
+ * Odd Slime (INNER_STICKY=3) it controls directional stickiness — the
+ * block is only sticky when pushed in its FACING direction, matching
+ * real Odd Slime behavior.
  *
  * FRAME ACTIVATION:
  * =================
@@ -62,13 +89,37 @@ import org.jetbrains.annotations.Nullable;
 public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
+    public static final DirectionProperty FACING = DirectionalBlock.FACING;
+
+    /**
+     * Inner block sticky type. Encoded on the blockstate so isStickyBlock()
+     * and canStickTo() can read it without position context.
+     *
+     * 0 = not sticky (default)
+     * 1 = slime-type inner
+     * 2 = honey-type inner
+     * 3 = odd-slime-type inner
+     *
+     * Set by FramedBlockEntity when the inner block is loaded or changed,
+     * via updateBlockstateFromInner().
+     */
+    public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 3);
+
+    /** Constants for INNER_STICKY values */
+    public static final int STICKY_NONE = 0;
+    public static final int STICKY_SLIME = 1;
+    public static final int STICKY_HONEY = 2;
+    public static final int STICKY_ODD_SLIME = 3;
 
     private final FrameMaterial frameMaterial;
 
     public FramedBlock(FrameMaterial material, Properties properties) {
         super(properties);
         this.frameMaterial = material;
-        this.registerDefaultState(this.stateDefinition.any().setValue(ACTIVE, false));
+        this.registerDefaultState(this.stateDefinition.any()
+                .setValue(ACTIVE, false)
+                .setValue(FACING, Direction.NORTH)
+                .setValue(INNER_STICKY, STICKY_NONE));
     }
 
     @Override
@@ -78,7 +129,31 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(ACTIVE);
+        builder.add(ACTIVE, FACING, INNER_STICKY);
+    }
+
+    // ========================================================================
+    // PLACEMENT — set FACING from player look direction
+    // ========================================================================
+
+    @Override
+    public BlockState getStateForPlacement(BlockPlaceContext context) {
+        return this.defaultBlockState()
+                .setValue(FACING, context.getNearestLookingDirection().getOpposite());
+    }
+
+    // ========================================================================
+    // ROTATION / MIRROR SUPPORT
+    // ========================================================================
+
+    @Override
+    public BlockState rotate(BlockState state, Rotation rotation) {
+        return state.setValue(FACING, rotation.rotate(state.getValue(FACING)));
+    }
+
+    @Override
+    public BlockState mirror(BlockState state, Mirror mirror) {
+        return state.rotate(mirror.getRotation(state.getValue(FACING)));
     }
 
     // ========================================================================
@@ -142,7 +217,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     @Override
     public float getExplosionResistance() {
         // Can't delegate without position — use our own default.
-        // Per-position delegation would require the method signature to include BlockPos.
         return super.getExplosionResistance();
     }
 
@@ -158,13 +232,11 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public float getSpeedFactor() {
-        // No position available — conservative default
         return super.getSpeedFactor();
     }
 
     @Override
     public float getJumpFactor() {
-        // No position available — conservative default
         return super.getJumpFactor();
     }
 
@@ -197,13 +269,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        // Can't delegate without position. Return true conservatively —
-        // getSignal will return 0 for non-source inner blocks, which
-        // effectively makes it a non-source at the signal level.
-        // However, returning true always would cause unnecessary updates.
-        // Compromise: return true. The cost is minor (extra neighbor updates
-        // for non-redstone-source framed blocks) but ensures framed redstone
-        // blocks actually work as sources.
         return true;
     }
 
@@ -224,9 +289,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         }
         return 0;
     }
-
-    // Note: isRedstoneConductor is set via Properties lambda in ModBlocks.
-    // We delegate it there with a lambda that checks the inner block.
 
     // ========================================================================
     // DELEGATED BEHAVIORS — Mob Pathfinding
@@ -265,86 +327,122 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // STICKINESS — Always sticky, rules handled by canStickTo + StickinessRules
+    // STICKINESS — Active-gated frame stickiness + inner block stickiness
     // ========================================================================
 
+    /**
+     * Framed blocks are sticky when:
+     *   - ACTIVE (powered by Machine Block) — frame stickiness
+     *   - INNER_STICKY > 0 — inner block is natively sticky
+     */
     @Override
     public boolean isStickyBlock(BlockState state) {
-        // Always true. Actual stickiness is controlled by canStickTo()
-        // and StickinessRules grab immunity. This ensures:
-        // - When ACTIVE: sticks to same-material frames + machine blocks
-        // - When inner is sticky: preserves inner stickiness behavior
-        // - When neither: canStickTo returns false for everything, so
-        //   being "sticky" has no net effect
-        return true;
+        return state.getValue(ACTIVE) || state.getValue(INNER_STICKY) > 0;
     }
 
     /**
-     * Combined stickiness: frame rules + inner block rules.
+     * Combined stickiness: frame rules (gated by ACTIVE) + inner block
+     * rules (gated by INNER_STICKY) + permissive entries.
      *
-     * Frame rules (when ACTIVE):
+     * FRAME RULES (ONLY when ACTIVE):
      *   - Same-material IFrameBlock: YES
      *   - Machine Family: YES
      *
-     * Inner block rules (always):
-     *   - Delegates to inner block's canStickTo for its own relationships
+     * INNER BLOCK RULES (when INNER_STICKY > 0):
+     *   Mirrors the canStickTo behavior of the actual inner block type.
+     *   - Slime (1): sticks to everything EXCEPT honey and odd slime
+     *   - Honey (2): sticks to everything EXCEPT slime and odd slime
+     *   - Odd Slime (3): sticks to everything EXCEPT slime and honey
+     *   Note: oddstone grab immunity is handled by StickinessRules.
+     *   Directional gating for odd slime is handled by a StickinessRules
+     *   directional rule registered in Ideomod.java.
      *
-     * Grab immunity rules 9-11 in StickinessRules prevent this block
-     * from ACTIVELY grabbing slime/honey/odd slime (frame blocks don't
-     * grab vanilla stickies). But inner block delegation means a framed
-     * slime block CAN stick to things that slime sticks to.
+     * PERMISSIVE ENTRIES (always):
+     *   Allow vanilla stickies to grab us if THEY initiate.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
         Block otherBlock = other.getBlock();
+        int innerSticky = state.getValue(INNER_STICKY);
 
-        // Frame family rules (active when machine-powered)
-        if (otherBlock instanceof IFrameBlock otherFrame) {
-            return otherFrame.getFrameMaterial() == this.frameMaterial;
+        // --- Frame family rules — ONLY when activated by Machine Block ---
+        if (state.getValue(ACTIVE)) {
+            if (otherBlock instanceof IFrameBlock otherFrame) {
+                return otherFrame.getFrameMaterial() == this.frameMaterial;
+            }
+            if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
         }
-        if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
 
-        // Inner block delegation: check what the inner block would stick to.
-        // This is position-independent — we can't look up the BE from just a state.
-        // For the common case (non-sticky inner blocks), this returns false.
-        // For sticky inner blocks (slime, honey, odd slime), we check their rules.
-        //
-        // IMPORTANT: We use the inner block's CLASS to delegate, not an instance
-        // lookup. This means we need the inner block's type encoded in some way.
-        // Since canStickTo only receives states (no position), we check if OUR
-        // block's base stickiness rules should apply based on what types of
-        // inner blocks exist.
-        //
-        // The practical approach: slime sticks to everything except honey.
-        // Honey sticks to everything except slime. Odd slime has its own rules.
-        // Since we can't know which inner block THIS position has from just a
-        // state, we rely on StickinessRules grab immunity to handle the
-        // asymmetric cases. The canStickTo here is permissive — the mixin
-        // handles blocking.
+        // --- Inner block stickiness rules ---
+        if (innerSticky > 0) {
+            // Each sticky type excludes the other two sticky types.
+            // Everything else is allowed (permissive), with oddstone grab
+            // immunity handled by StickinessRules at the mixin level.
+            switch (innerSticky) {
+                case STICKY_SLIME:
+                    // Slime excludes honey and odd slime (mutual exclusion)
+                    if (otherBlock instanceof HoneyBlock) return false;
+                    if (otherBlock instanceof OddSlimeBlock) return false;
+                    if (otherBlock instanceof FramedBlock) {
+                        int otherSticky = other.getValue(INNER_STICKY);
+                        if (otherSticky == STICKY_HONEY || otherSticky == STICKY_ODD_SLIME) return false;
+                    }
+                    return true;
 
-        // Permissive: allow sticking to vanilla stickies (slime, honey, odd slime)
-        // StickinessRules grab immunity (rules 9-11) will prevent us from
-        // GRABBING them, but if THEY grab US, the connection is allowed.
+                case STICKY_HONEY:
+                    // Honey excludes slime and odd slime
+                    if (otherBlock instanceof SlimeBlock) return false;
+                    if (otherBlock instanceof OddSlimeBlock) return false;
+                    if (otherBlock instanceof FramedBlock) {
+                        int otherSticky = other.getValue(INNER_STICKY);
+                        if (otherSticky == STICKY_SLIME || otherSticky == STICKY_ODD_SLIME) return false;
+                    }
+                    return true;
+
+                case STICKY_ODD_SLIME:
+                    // Odd slime excludes slime and honey
+                    if (otherBlock instanceof SlimeBlock) return false;
+                    if (otherBlock instanceof HoneyBlock) return false;
+                    if (otherBlock instanceof FramedBlock) {
+                        int otherSticky = other.getValue(INNER_STICKY);
+                        if (otherSticky == STICKY_SLIME || otherSticky == STICKY_HONEY) return false;
+                    }
+                    return true;
+            }
+        }
+
+        // --- Permissive entries (always) ---
+        // Allow vanilla stickies and oddstone to grab us if THEY initiate.
         if (otherBlock instanceof SlimeBlock) return true;
         if (otherBlock instanceof HoneyBlock) return true;
         if (otherBlock instanceof OddSlimeBlock) return true;
-
-        // Also allow sticking to Oddstone (inner oddstone delegation)
         if (otherBlock instanceof OddstoneBlock) return true;
+
+        // Also be permissive to other framed blocks that are inner-sticky,
+        // so their inner stickiness can reach us
+        if (otherBlock instanceof FramedBlock && other.getValue(INNER_STICKY) > 0) return true;
 
         return false;
     }
 
     // ========================================================================
-    // LIFECYCLE — Frame activation triggers
+    // LIFECYCLE — Frame activation triggers + inner sticky sync
     // ========================================================================
 
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
-        if (!level.isClientSide() && !state.is(oldState.getBlock())) {
-            FrameActivation.recalculate(level, pos);
+        if (!level.isClientSide()) {
+            // Sync INNER_STICKY from block entity data (item NBT loaded by now)
+            FramedBlockEntity fbe = getFramedBE(level, pos);
+            if (fbe != null) {
+                fbe.updateBlockstateFromInner();
+            }
+
+            if (!state.is(oldState.getBlock())) {
+                FrameActivation.recalculate(level, pos);
+            }
         }
     }
 
@@ -372,12 +470,9 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public boolean propagatesSkylightDown(BlockState state, BlockGetter level, BlockPos pos) {
-        // Frame overlay is partial — allow some light through
         return true;
     }
 
-    // Full cube shape so face culling with adjacent solid blocks works correctly.
-    // The frame overlay is rendered by the BESR on top of the inner block texture.
     @Override
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos,
                                 CollisionContext context) {
@@ -392,7 +487,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null && fbe.getInnerBlockId() != null) {
-            // Determine which item (iron or copper)
             net.minecraft.world.item.Item item = (this.frameMaterial == FrameMaterial.IRON)
                     ? com.ideomancer.ideomod.registry.ModItems.IRON_FRAMED_BLOCK.get()
                     : com.ideomancer.ideomod.registry.ModItems.COPPER_FRAMED_BLOCK.get();

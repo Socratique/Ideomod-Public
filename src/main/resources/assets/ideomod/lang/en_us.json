@@ -11,8 +11,12 @@
   "block.ideomod.machine_trolley": "Machine Trolley",
   "block.ideomod.iron_frame": "Iron Frame",
   "block.ideomod.copper_frame": "Copper Frame",
-  "itemGroup.ideomod.ideomod_tab": "Ideomod",
   "block.ideomod.iron_framed_block": "Iron Framed Block",
   "block.ideomod.copper_framed_block": "Copper Framed Block",
-  "itemGroup.ideomod.framed_blocks_tab": "Framed Blocks"
+  "itemGroup.ideomod.ideomod_tab": "Ideomod",
+  "itemGroup.ideomod.framed_blocks_tab": "Framed Blocks",
+  "ideomod.container.machine_frame": "Machine Frame",
+  "ideomod.container.enhanced_furnace": "Enhanced Furnace",
+  "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
+  "ideomod.container.enhanced_smoker": "Enhanced Smoker"
 }

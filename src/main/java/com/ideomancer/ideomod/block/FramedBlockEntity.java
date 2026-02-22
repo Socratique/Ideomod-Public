@@ -10,6 +10,8 @@ import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.HoneyBlock;
+import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
@@ -22,6 +24,19 @@ import org.jetbrains.annotations.Nullable;
  * Implements IPistonMovable so the inner block data survives piston moves.
  * Client sync via getUpdateTag/getUpdatePacket so the renderer knows
  * which inner block texture to draw.
+ *
+ * INNER STICKY TYPE:
+ * ==================
+ * When the inner block is a sticky type (slime, honey, odd slime), the
+ * block entity computes the sticky type value and syncs it to the
+ * blockstate's INNER_STICKY property via updateBlockstateFromInner().
+ * This is needed because isStickyBlock() and canStickTo() only receive
+ * a BlockState (no position context) and cannot look up the block entity.
+ *
+ * updateBlockstateFromInner() is called from:
+ *   - FramedBlock.onPlace() — after item NBT is loaded into the BE
+ *   - loadMovementData() — after piston restore
+ *   - load() via onLoad() — after chunk loading (level available)
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -55,6 +70,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         if (level != null && !level.isClientSide()) {
             level.sendBlockUpdated(worldPosition, getBlockState(), getBlockState(),
                     Block.UPDATE_ALL);
+            updateBlockstateFromInner();
         }
     }
 
@@ -106,6 +122,45 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     }
 
     // ========================================================================
+    // INNER STICKY TYPE — blockstate sync
+    // ========================================================================
+
+    /**
+     * Compute the sticky type for the current inner block.
+     *
+     * @return 0 (none), 1 (slime), 2 (honey), 3 (odd slime)
+     */
+    public static int computeStickyType(Block innerBlock) {
+        if (innerBlock instanceof SlimeBlock) return FramedBlock.STICKY_SLIME;
+        if (innerBlock instanceof HoneyBlock) return FramedBlock.STICKY_HONEY;
+        if (innerBlock instanceof OddSlimeBlock) return FramedBlock.STICKY_ODD_SLIME;
+        return FramedBlock.STICKY_NONE;
+    }
+
+    /**
+     * Sync the INNER_STICKY blockstate property from the current inner block.
+     * Called after any operation that changes the inner block identity:
+     * placement, piston restore, chunk load.
+     *
+     * Also preserves ACTIVE and FACING from the existing blockstate.
+     */
+    public void updateBlockstateFromInner() {
+        if (level == null || level.isClientSide()) return;
+
+        BlockState currentState = getBlockState();
+        if (!(currentState.getBlock() instanceof FramedBlock)) return;
+
+        int stickyType = computeStickyType(getInnerBlock());
+        int currentSticky = currentState.getValue(FramedBlock.INNER_STICKY);
+
+        if (stickyType != currentSticky) {
+            BlockState newState = currentState.setValue(FramedBlock.INNER_STICKY, stickyType);
+            // Use flag 2 (UPDATE_CLIENTS) — no neighbor cascade needed for this
+            level.setBlock(worldPosition, newState, Block.UPDATE_CLIENTS);
+        }
+    }
+
+    // ========================================================================
     // NBT SERIALIZATION
     // ========================================================================
 
@@ -123,6 +178,19 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         if (tag.contains(TAG_INNER_BLOCK)) {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null; // Force re-resolve
+        }
+    }
+
+    /**
+     * Called when the block entity's level is set (after chunk load).
+     * This is the earliest point where we have both the inner block data
+     * (from load()) and a valid level reference for blockstate updates.
+     */
+    @Override
+    public void onLoad() {
+        super.onLoad();
+        if (level != null && !level.isClientSide() && hasInnerBlock()) {
+            updateBlockstateFromInner();
         }
     }
 
@@ -164,6 +232,8 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null;
             setChanged();
+            // Sync INNER_STICKY to blockstate after piston restore
+            updateBlockstateFromInner();
         }
     }
 }

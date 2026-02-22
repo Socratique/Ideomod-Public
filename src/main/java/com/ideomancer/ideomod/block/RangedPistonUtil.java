@@ -22,7 +22,9 @@ import java.util.function.Predicate;
  * FILTER PREDICATES:
  * ==================
  *   - ODDSTONE_ONLY: Oddstone Repulser/Attractor
- *   - ANY_MOVABLE: Arcane Repulser/Attractor (future)
+ *   - anyMovable(level): Arcane Repulser/Attractor (future)
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class RangedPistonUtil {
 
@@ -93,11 +95,25 @@ public class RangedPistonUtil {
     public static final Predicate<BlockState> ODDSTONE_ONLY =
             state -> state.is(ModBlocks.ODDSTONE.get());
 
-    /** Any piston-movable block. Used by Arcane variants (future). */
-    public static final Predicate<BlockState> ANY_MOVABLE = state -> {
-        if (state.isAir()) return false;
-        if (state.getDestroySpeed(null, BlockPos.ZERO) < 0) return false;
-        PushReaction reaction = state.getPistonPushReaction();
-        return reaction != PushReaction.BLOCK && reaction != PushReaction.IGNORE;
-    };
+    /**
+     * Any piston-movable block. Used by Arcane variants (future).
+     *
+     * Returns a Predicate that captures the Level reference, avoiding the
+     * null BlockGetter crash that the old static ANY_MOVABLE had.
+     * getDestroySpeed() requires a valid BlockGetter -- passing null would
+     * NPE on any block whose implementation uses the level parameter.
+     *
+     * Usage: RangedPistonUtil.anyMovable(level) instead of ANY_MOVABLE.
+     *
+     * @param level the world to check destroy speed against
+     * @return predicate that matches any non-air, non-indestructible, movable block
+     */
+    public static Predicate<BlockState> anyMovable(Level level) {
+        return state -> {
+            if (state.isAir()) return false;
+            if (state.getDestroySpeed(level, BlockPos.ZERO) < 0) return false;
+            PushReaction reaction = state.getPistonPushReaction();
+            return reaction != PushReaction.BLOCK && reaction != PushReaction.IGNORE;
+        };
+    }
 }

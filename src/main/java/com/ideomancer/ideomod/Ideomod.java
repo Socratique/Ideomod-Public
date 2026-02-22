@@ -82,6 +82,29 @@ public class Ideomod {
      *
      * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock.
      * Frame Family = IronFrame, CopperFrame, IronFramedBlock, CopperFramedBlock.
+     *
+     * INNER STICKY CARVE-OUT (rules 9-11):
+     * =====================================
+     * Frame Family blocks normally can't grab slime/honey/odd slime (rules 9-11).
+     * BUT when a FramedBlock's inner block IS that same sticky type, the grab
+     * immunity is lifted — a Framed Slime Block should grab normal blocks just
+     * like real slime does. The carve-out checks INNER_STICKY on the grabber:
+     *   - Rule 9 (frame -> slime): exempted when grabber INNER_STICKY == SLIME
+     *   - Rule 10 (frame -> honey): exempted when grabber INNER_STICKY == HONEY
+     *   - Rule 11 (frame -> odd slime): exempted when grabber INNER_STICKY == ODD_SLIME
+     *
+     * FRAMED ODD SLIME DIRECTIONAL BEHAVIOR:
+     * =======================================
+     * Framed Odd Slime does NOT use a blanket directional rule here. A blanket
+     * rule would disable ALL stickiness (including frame stickiness) when pushed
+     * in non-FACING directions, which is wrong — an ACTIVE Framed Odd Slime
+     * should still stick to same-material frames regardless of push direction.
+     *
+     * Instead, the directional gating for Framed Odd Slime's INNER stickiness
+     * is handled directly in PistonStructureResolverMixin, which has the context
+     * to distinguish "inner sticky blocked by direction" from "frame sticky
+     * independently allowed." See the mixin's ideomod$isFramedOddSlimeDirectionallyBlocked
+     * and ideomod$wouldFrameStickinessAllow helpers.
      */
     private void registerStickinessRules() {
         // ================================================================
@@ -89,20 +112,40 @@ public class Ideomod {
         // ================================================================
 
         // --- ODDSTONE rules (1-3) ---
+        // Slime/honey/odd slime can't grab Oddstone.
+        // Also applies to framed blocks with those inner types.
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
-                                  && target.getBlock() instanceof OddstoneBlock
+                (grabber, target) -> {
+                    if (target.getBlock() instanceof OddstoneBlock) {
+                        if (grabber.getBlock() instanceof SlimeBlock) return true;
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_SLIME) return true;
+                    }
+                    return false;
+                }
         );
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
-                                  && target.getBlock() instanceof OddstoneBlock
+                (grabber, target) -> {
+                    if (target.getBlock() instanceof OddstoneBlock) {
+                        if (grabber.getBlock() instanceof HoneyBlock) return true;
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_HONEY) return true;
+                    }
+                    return false;
+                }
         );
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof OddSlimeBlock
-                                  && target.getBlock() instanceof OddstoneBlock
+                (grabber, target) -> {
+                    if (target.getBlock() instanceof OddstoneBlock) {
+                        if (grabber.getBlock() instanceof OddSlimeBlock) return true;
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) return true;
+                    }
+                    return false;
+                }
         );
 
         // --- MACHINE FAMILY rules (4-6) ---
@@ -135,28 +178,44 @@ public class Ideomod {
         );
 
         // --- FRAME FAMILY rules (9-11) ---
-        // Covers both empty Frame Blocks AND Framed Blocks (both implement IFrameBlock
-        // via isFrameFamily check)
+        // CARVE-OUT: FramedBlock whose inner IS the target type is exempted.
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof SlimeBlock
+                (grabber, target) -> {
+                    if (!(target.getBlock() instanceof SlimeBlock)) return false;
+                    if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
+                    if (grabber.getBlock() instanceof FramedBlock
+                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_SLIME) return false;
+                    return true;
+                }
         );
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof HoneyBlock
+                (grabber, target) -> {
+                    if (!(target.getBlock() instanceof HoneyBlock)) return false;
+                    if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
+                    if (grabber.getBlock() instanceof FramedBlock
+                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_HONEY) return false;
+                    return true;
+                }
         );
 
         StickinessRules.registerGrabImmunity(
-                (grabber, target) -> StickinessRules.isFrameFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof OddSlimeBlock
+                (grabber, target) -> {
+                    if (!(target.getBlock() instanceof OddSlimeBlock)) return false;
+                    if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
+                    if (grabber.getBlock() instanceof FramedBlock
+                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) return false;
+                    return true;
+                }
         );
 
         // ================================================================
         // DIRECTIONAL RULES
         // ================================================================
 
+        // Real Odd Slime: only sticky when pushed in FACING direction.
+        // Blanket rule is fine — real Odd Slime has no other stickiness source.
         StickinessRules.registerDirectionalRule(
                 (state, pushDirection) -> {
                     if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
@@ -164,6 +223,9 @@ public class Ideomod {
                     return !pushDirection.equals(facing);
                 }
         );
+
+        // NOTE: Framed Odd Slime does NOT register a directional rule here.
+        // See class javadoc for explanation. Handled in mixin instead.
 
         LOGGER.info("Registered stickiness rules: 11 grab immunity + 1 directional");
     }
@@ -182,36 +244,22 @@ public class Ideomod {
         event.enqueueWork(() -> {
             MenuScreens.register(ModMenuTypes.MACHINE_FRAME.get(), MachineFrameScreen::new);
 
-            // Frame blocks use CUTOUT render type for transparency
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.IRON_FRAME.get(), RenderType.cutout());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.COPPER_FRAME.get(), RenderType.cutout());
 
-            // Framed blocks use CUTOUT_MIPPED for the frame overlay model
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.IRON_FRAMED_BLOCK.get(), RenderType.cutoutMipped());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.COPPER_FRAMED_BLOCK.get(), RenderType.cutoutMipped());
 
-            // Register BESR for framed blocks
             BlockEntityRenderers.register(ModBlockEntities.FRAMED_BLOCK.get(), FramedBlockRenderer::new);
 
-            // Register F3 debug overlay for framed blocks
             MinecraftForge.EVENT_BUS.register(new com.ideomancer.ideomod.client.FramedBlockDebugOverlay());
         });
         LOGGER.info("Ideomod client setup complete!");
     }
 
-    /**
-     * Wrap the framed block item models with FramedBlockItemModel so that
-     * items in inventory/creative show the inner block texture composited
-     * with the frame overlay, instead of just the plain frame texture.
-     *
-     * ModelEvent.ModifyBakingResult fires after all models are baked but
-     * before they're used. We find the framed block item models by their
-     * ModelResourceLocation and replace them with our wrapper.
-     */
     private void onModifyBakingResult(final ModelEvent.ModifyBakingResult event) {
         Map<ResourceLocation, BakedModel> models = event.getModels();
 
-        // Item models use ModelResourceLocation with "inventory" variant
         ModelResourceLocation ironKey = new ModelResourceLocation(
                 MOD_ID, "iron_framed_block", "inventory");
         ModelResourceLocation copperKey = new ModelResourceLocation(
