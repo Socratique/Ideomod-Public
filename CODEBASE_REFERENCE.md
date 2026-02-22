@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-21*
+*Last updated: 2026-02-22*
 
 ---
 
@@ -40,6 +40,13 @@ com.ideomancer.ideomod
   |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
   |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
   |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
+  |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
+  |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
+  |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
+  |     |-- FramedBlockItem.java         Dynamic getName(), NBT stack creation
+  |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
+  |     |-- FramedBlockLoot.java         Helper for manual drop creation
+  |     |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- StickinessRules.java         Rule registry (grab immunity + directional)
   |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
@@ -55,7 +62,9 @@ com.ideomancer.ideomod
   |     \-- PortalUtils.java             Corner validation, interior nav, clearing
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
-  |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |-- FramedBlockRenderer.java    BESR for framed blocks (inner texture)
+  |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -99,7 +108,7 @@ Three-layer architecture for asymmetric and directional stickiness:
 
 Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStructureResolverMixin`.
 
-**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Blocks):
+**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock):
 
 |              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
@@ -120,7 +129,7 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 **Safety checks**: (1) toPush non-empty and contains target, (2) toPush doesn't contain initiator, (3) no destination equals initiator position.
 
-**IPistonMovable pipeline**: Opt-in block entity data preservation during piston moves. Save phase: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5 (our systems). Both server-only -- client block entities lack synced inventories and would overwrite server data. Transit: MovingBlockEntityData static ConcurrentHashMap. Restore: PistonMovingBlockEntityMixin tick() TAIL (server-only, waits for real block). Single consumer pattern -- retrieve() is destructive.
+**IPistonMovable pipeline**: Opt-in block entity data preservation during piston moves. Implementing blocks: MachineFrameBlockEntity, FramedBlockEntity. Save phase: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5 (our systems). Both server-only. Transit: MovingBlockEntityData static ConcurrentHashMap. Restore: PistonMovingBlockEntityMixin via TWO paths -- tick() TAIL (normal 2-tick animation) and finalTick() TAIL (1-tick pulses). Single consumer pattern -- retrieve() is destructive.
 
 **PistonBaseBlockMixin**: Two features. (1) isPushable HEAD inject returns true for IPistonMovable block entities. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group.
 
@@ -219,6 +228,23 @@ Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlac
 
 **Rendering**: RenderType.cutout() registered in Ideomod.clientSetup(). noOcclusion() in block properties. Transparent interior pixels render correctly.
 
+
+### 7b. Framed Blocks (dynamic block wrapping)
+
+Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (implements IFrameBlock + EntityBlock).
+
+1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~15 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding all preserved.
+2. **Two-layer rendering**: BESR (FramedBlockRenderer) draws inner block texture with epsilon inset (0.001). JSON model draws frame overlay on top. Per-face light sampling from neighbors.
+3. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). Grab immunity rules 9-11 shared with Frame Blocks.
+4. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT. ModRecipeSerializers provides serializer.
+5. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
+6. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
+7. **Middle-click**: getCloneItemStack() returns proper NBT ItemStack.
+
+**FrameabilityHelper**: Static utility. Checks: full cube collision, no BE, not already framed, not IFrameBlock, not indestructible, not air/liquid. Try-catch on getCollisionShape for NPE-prone blocks.
+
+**FramedBlockItem**: Custom BlockItem. Dynamic getName() composing "Iron Framed Stone" etc. Static createStack() for NBT setup.
+
 ### 8. Machine Track (conduction + Trolley push)
 
 Non-directional Machine Family block. Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable chains). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement. Signal direction detected via direct source interrogation (not vanilla hasSignal).
@@ -239,13 +265,13 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, IRON_FRAME, COPPER_FRAME
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
 
-**ModItems**: BlockItems for all blocks EXCEPT ODDSTONE_PORTAL (not player-placeable). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks).
 
-**ModCreativeTabs**: Single tab "ideomod_tab" with icon IDEOBLOCK. Lists all BlockItems + Structure Debug Stick.
+**ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from ALL registered blocks via FrameabilityHelper).
 
 ---
 
@@ -282,3 +308,6 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
 8. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
 9. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
+10. **Framed block inner texture invisible during piston animation** -- would need PistonHeadRenderer hook.
+11. **Framed block items show only frame texture in inventory** -- would need custom BakedModel.
+12. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.

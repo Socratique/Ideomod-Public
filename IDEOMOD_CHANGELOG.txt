@@ -1,5 +1,83 @@
 # Ideomod Changelog
 
+## [2026-02-22] Framed Blocks — Dynamic Block Wrapping System
+
+Implemented Iron Framed Block and Copper Framed Block — blocks that wrap any
+valid "inner block" with a metal frame, preserving the inner block's functional
+behavior while adding frame-family stickiness on top.
+
+### Architecture: Proxy Block Entity + BESR Rendering
+
+Two registered block IDs (iron_framed_block, copper_framed_block) serve as
+transparent proxies. A shared FramedBlockEntity stores the inner block's
+ResourceLocation. FramedBlock overrides ~15 behavioral methods, each querying
+the inner block's defaultBlockState() for delegation. The BESR renders the
+inner block's per-face textures as a full-size cuboid with epsilon inset
+(0.001 blocks) to prevent z-fighting, with the frame overlay JSON model
+rendering on top.
+
+### New files:
+- block/FrameabilityHelper.java — Static checks for frameability (full cube,
+  no BE, not already framed, etc.). Try-catch on getCollisionShape(null, null)
+  for blocks like MovingPistonBlock that NPE without world context.
+- block/FramedBlock.java — IFrameBlock + EntityBlock. ACTIVE property.
+  Delegates ~15 methods to inner block. getCloneItemStack() for middle-click.
+  isStickyBlock() always true, canStickTo() combines frame + inner block rules.
+- block/FramedBlockEntity.java — Stores ResourceLocation innerBlockId.
+  Client sync via getUpdateTag/getUpdatePacket. IPistonMovable.
+- block/FramedBlockItem.java — Dynamic getName() ("Iron Framed Stone" etc.).
+  Static createStack() helpers for NBT setup.
+- block/FramedBlockRecipe.java — CustomRecipe: 1 frame + 1 frameable block.
+- block/ModRecipeSerializers.java — DeferredRegister for recipe serializers.
+- block/FramedBlockLoot.java — Helper for manual drop creation.
+- client/FramedBlockRenderer.java — BESR. Per-face TextureAtlasSprite from
+  inner block's BakedModel. Epsilon inset, per-face light sampling.
+- client/FramedBlockDebugOverlay.java — F3 debug overlay showing inner block.
+
+### New creative tab:
+- framed_blocks_tab: Dynamically populated from ALL registered blocks via
+  FrameabilityHelper.isFrameable(). Iron + copper variants for each valid block.
+
+### New recipe type:
+- ideomod:framed_block — Special shapeless recipe: frame + block = framed block
+  with inner block NBT.
+
+### 1-tick piston data preservation fix (affects ALL IPistonMovable blocks):
+- PistonMovingBlockEntityMixin.java — Added finalTick() TAIL inject. Vanilla
+  calls finalTick() (non-static instance method) instead of tick() (static) for
+  1-tick piston pulses. Without this hook, data was saved but never restored.
+  Root cause: finalTick() immediately places the real block without the normal
+  2-tick tick() animation. Our restore in tick() never saw the "real block placed"
+  condition. Fixes data loss for BOTH FramedBlockEntity AND MachineFrameBlockEntity.
+
+### Updated files:
+- ModBlocks, ModItems, ModBlockEntities, ModCreativeTabs, Ideomod.java
+- PistonStructureResolverMixin.java — sympathetic movement "sees through" frames
+- PistonMovingBlockEntityMixin.java — added finalTick() hook (see above)
+
+### Bugs resolved:
+1. FrameabilityHelper crash: MovingPistonBlock NPE during creative tab population.
+   Fix: try-catch wrapper on getCollisionShape(null, null).
+2. BESR winding: Side faces rendered backfaces. Fix: CW winding on sides, CCW on
+   top/bottom matching Minecraft convention.
+3. BESR z-fighting: Inner texture and frame overlay flickered on same plane.
+   Fix: epsilon inset (0.001 blocks).
+4. BESR darkness: BESR faces lack chunk ambient occlusion.
+   Fix: per-face light sampling from neighboring block positions.
+5. Item model missing texture: models/item/ files had _item suffix instead of
+   matching registry name. Fix: iron_framed_block.json not iron_framed_block_item.json.
+6. 1-tick piston data loss: finalTick() hook (see above).
+7. Middle-click gave empty frame: Added getCloneItemStack() override.
+
+### Known visual polish items (deferred):
+- Piston move animation: Inner block not visible during 2-tick transit.
+  Would require PistonHeadRenderer hook.
+- Creative menu item rendering: Items show only frame texture.
+  Would require custom BakedModel override.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-21] Frame Blocks -- Machine-Activated Stickiness System
 
 Implemented Iron Frame and Copper Frame blocks with activation-based stickiness

@@ -10,6 +10,8 @@
     "ideomod:machine_track",
     "ideomod:machine_trolley",
     "ideomod:iron_frame",
-    "ideomod:copper_frame"
+    "ideomod:copper_frame",
+    "ideomod:iron_framed_block",
+    "ideomod:copper_framed_block"
   ]
 }

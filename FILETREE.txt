@@ -9,8 +9,14 @@
 |  |           |  +-- AbstractRangedPistonBlock.java
 |  |           |  +-- BlockMoveHelper.java
 |  |           |  +-- DrillBlock.java
+|  |           |  +-- FrameabilityHelper.java
 |  |           |  +-- FrameActivation.java
 |  |           |  +-- FrameBlock.java
+|  |           |  +-- FramedBlock.java
+|  |           |  +-- FramedBlockEntity.java
+|  |           |  +-- FramedBlockItem.java
+|  |           |  +-- FramedBlockLoot.java
+|  |           |  +-- FramedBlockRecipe.java
 |  |           |  +-- FrameMaterial.java
 |  |           |  +-- IFrameBlock.java
 |  |           |  +-- IPistonMovable.java
@@ -19,6 +25,7 @@
 |  |           |  +-- MachineFrameMenu.java
 |  |           |  +-- MachineTrackBlock.java
 |  |           |  +-- MachineTrolleyBlock.java
+|  |           |  +-- ModRecipeSerializers.java
 |  |           |  +-- MovingBlockEntityData.java
 |  |           |  +-- OddSlimeBlock.java
 |  |           |  +-- OddstoneAttractorBlock.java
@@ -33,6 +40,7 @@
 |  |           |  +-- RangedPistonUtil.java
 |  |           |  \\-- StickinessRules.java
 |  |           +-- client
+|  |           |  +-- FramedBlockDebugOverlay.java
 |  |           |  +-- MachineFrameScreen.java
 |  |           |  \\-- ModColorHandlers.java
 |  |           +-- config
@@ -54,6 +62,7 @@
 |  |           |  +-- ModMenuTypes.java
 |  |           |  \\-- ModTags.java
 |  |           +-- renderer
+|  |           |  \\-- FramedBlockRenderer.java
 |  |           +-- structure
 |  |           |  +-- definitions
 |  |           |  |  \\-- FurnaceArrayDefinition.java
@@ -71,9 +80,11 @@
 |     |  \\-- ideomod
 |     |     +-- blockstates
 |     |     |  +-- copper_frame.json
+|     |     |  +-- copper_framed_block.json
 |     |     |  +-- drill.json
 |     |     |  +-- ideoblock.json
 |     |     |  +-- iron_frame.json
+|     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
@@ -87,10 +98,14 @@
 |     |     +-- models
 |     |     |  +-- block
 |     |     |  |  +-- copper_frame.json
+|     |     |  |  +-- copper_framed_block.json
+|     |     |  |  +-- copper_framed_block_active.json
 |     |     |  |  +-- drill.json
 |     |     |  |  +-- drill_on.json
 |     |     |  |  +-- ideoblock.json
 |     |     |  |  +-- iron_frame.json
+|     |     |  |  +-- iron_framed_block.json
+|     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
@@ -102,9 +117,11 @@
 |     |     |  |  \\-- oddstone_repulser.json
 |     |     |  \\-- item
 |     |     |     +-- copper_frame.json
+|     |     |     +-- copper_framed_block.json
 |     |     |     +-- drill.json
 |     |     |     +-- ideoblock.json
 |     |     |     +-- iron_frame.json
+|     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
@@ -116,6 +133,7 @@
 |     |     \\-- textures
 |     |        +-- block
 |     |        |  +-- copper_frame.png
+|     |        |  +-- copper_frame_active.png
 |     |        |  +-- drill_back.png
 |     |        |  +-- drill_front.png
 |     |        |  +-- drill_front_on.png
@@ -123,6 +141,7 @@
 |     |        |  +-- drill_top.png
 |     |        |  +-- ideoblock.png
 |     |        |  +-- iron_frame.png
+|     |        |  +-- iron_frame_active.png
 |     |        |  +-- machine_block.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_trolley.png
@@ -143,9 +162,11 @@
 |     |  |  +-- loot_tables
 |     |  |  |  \\-- blocks
 |     |  |  |     +-- copper_frame.json
+|     |  |  |     +-- copper_framed_block.json
 |     |  |  |     +-- drill.json
 |     |  |  |     +-- ideoblock.json
 |     |  |  |     +-- iron_frame.json
+|     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_trolley.json
@@ -156,6 +177,7 @@
 |     |  |  +-- recipes
 |     |  |  |  +-- copper_frame.json
 |     |  |  |  +-- drill.json
+|     |  |  |  +-- framed_block.json
 |     |  |  |  +-- ideoblock.json
 |     |  |  |  +-- iron_frame.json
 |     |  |  |  +-- machine_block.json

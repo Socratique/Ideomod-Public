@@ -1,0 +1,7 @@
+{
+  "parent": "ideomod:block/iron_framed_block",
+  "textures": {
+    "frame": "ideomod:block/iron_frame_active",
+    "particle": "ideomod:block/iron_frame_active"
+  }
+}

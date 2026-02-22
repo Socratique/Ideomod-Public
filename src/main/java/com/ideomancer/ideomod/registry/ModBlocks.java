@@ -4,6 +4,8 @@ import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.DrillBlock;
 import com.ideomancer.ideomod.block.FrameBlock;
 import com.ideomancer.ideomod.block.FrameMaterial;
+import com.ideomancer.ideomod.block.FramedBlock;
+import com.ideomancer.ideomod.block.FramedBlockEntity;
 import com.ideomancer.ideomod.block.MachineFrameBlock;
 import com.ideomancer.ideomod.block.MachineTrackBlock;
 import com.ideomancer.ideomod.block.MachineTrolleyBlock;
@@ -14,6 +16,7 @@ import com.ideomancer.ideomod.block.OddstonePortalBlock;
 import com.ideomancer.ideomod.block.OddstoneRepulserBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.level.material.PushReaction;
@@ -22,8 +25,8 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * Registry for all mod blocks
- * Uses DeferredRegister for safe, ordered registration
+ * Registry for all mod blocks.
+ * Uses DeferredRegister for safe, ordered registration.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -139,5 +142,52 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.COPPER)
                     .noOcclusion()
+            ));
+
+    // ========================================================================
+    // FRAMED BLOCKS (inner block stored in block entity)
+    // ========================================================================
+
+    /**
+     * Iron Framed Block. Generic placeholder properties — actual behavior is
+     * delegated to the inner block at runtime via FramedBlockEntity.
+     *
+     * isRedstoneConductor delegates to the inner block via block entity lookup.
+     * pushReaction NORMAL so pistons can move it (IPistonMovable preserves data).
+     */
+    public static final RegistryObject<Block> IRON_FRAMED_BLOCK = BLOCKS.register("iron_framed_block",
+            () -> new FramedBlock(FrameMaterial.IRON, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+                    .isRedstoneConductor((state, level, pos) -> {
+                        // Delegate to inner block
+                        BlockEntity be = level.getBlockEntity(pos);
+                        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+                            return fbe.getInnerDefaultState().isRedstoneConductor(level, pos);
+                        }
+                        return true; // Default: conduct (like most solid blocks)
+                    })
+            ));
+
+    /**
+     * Copper Framed Block. Same pattern as Iron Framed Block with copper material.
+     */
+    public static final RegistryObject<Block> COPPER_FRAMED_BLOCK = BLOCKS.register("copper_framed_block",
+            () -> new FramedBlock(FrameMaterial.COPPER, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_ORANGE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.COPPER)
+                    .pushReaction(PushReaction.NORMAL)
+                    .isRedstoneConductor((state, level, pos) -> {
+                        BlockEntity be = level.getBlockEntity(pos);
+                        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+                            return fbe.getInnerDefaultState().isRedstoneConductor(level, pos);
+                        }
+                        return true;
+                    })
             ));
 }

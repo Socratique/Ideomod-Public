@@ -17,12 +17,20 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
  * Mixin into PistonMovingBlockEntity to restore IPistonMovable block entity
- * data after the 2-tick piston animation completes.
+ * data after piston animation completes.
  *
  * This is the RESTORE phase of the piston movement data pipeline:
  *   SAVE:    PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper (our systems)
- *   TRANSIT: MovingBlockEntityData holds the data during the 2-tick animation
+ *   TRANSIT: MovingBlockEntityData holds the data during animation
  *   RESTORE: This mixin (runs for ALL piston completions)
+ *
+ * TWO RESTORE PATHS:
+ *   1. tick() TAIL — normal 2-tick piston animation. Block transitions from
+ *      MOVING_PISTON to real block on the final tick.
+ *   2. finalTick() TAIL — 1-tick (0-tick) piston pulses. Vanilla calls
+ *      finalTick() instead of the normal tick() cycle, which immediately
+ *      places the real block. Without hooking this, data is lost on 1-tick
+ *      pulses because tick() never sees the "real block placed" condition.
  *
  * CRITICAL: Do NOT add competing retrieval logic elsewhere (e.g. Block.onPlace).
  * MovingBlockEntityData.retrieve() CONSUMES the data. If onPlace() calls retrieve()
@@ -35,6 +43,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(PistonMovingBlockEntity.class)
 public abstract class PistonMovingBlockEntityMixin {
 
+    /**
+     * Normal restore path: 2-tick piston animation completion.
+     * Fires at TAIL of tick() — checks if the real block has been placed
+     * (no longer MOVING_PISTON) and restores data if found.
+     */
     @Inject(method = "tick", at = @At("TAIL"))
     private static void ideomod$restoreMovableBlockEntityData(
             Level level, BlockPos pos, BlockState state,
@@ -42,12 +55,36 @@ public abstract class PistonMovingBlockEntityMixin {
 
         if (level.isClientSide()) return;
 
-        // Only attempt restore when the real block has been placed.
-        // During animation ticks, the block is still MOVING_PISTON.
-        // retrieve() CONSUMES data -- calling it too early would lose it.
         BlockState currentState = level.getBlockState(pos);
         if (currentState.is(Blocks.MOVING_PISTON)) return;
 
+        ideomod$tryRestore(level, pos);
+    }
+
+    /**
+     * Fast restore path: 1-tick piston pulse completion.
+     * finalTick() immediately places the real block without going through
+     * the normal tick() animation cycle. We hook TAIL to restore data
+     * after the block has been placed.
+     *
+     * NOTE: finalTick() is a non-static instance method (unlike tick() which
+     * is static). The inject callback receives 'this' implicitly via the mixin.
+     */
+    @Inject(method = "finalTick", at = @At("TAIL"))
+    private void ideomod$restoreMovableBlockEntityDataFinalTick(CallbackInfo ci) {
+        PistonMovingBlockEntity self = (PistonMovingBlockEntity)(Object)this;
+        Level level = self.getLevel();
+        BlockPos pos = self.getBlockPos();
+
+        if (level == null || level.isClientSide()) return;
+
+        ideomod$tryRestore(level, pos);
+    }
+
+    /**
+     * Shared restore logic for both tick() and finalTick() paths.
+     */
+    private static void ideomod$tryRestore(Level level, BlockPos pos) {
         String dimensionKey = level.dimension().location().toString();
         CompoundTag savedData = MovingBlockEntityData.retrieve(dimensionKey, pos);
 

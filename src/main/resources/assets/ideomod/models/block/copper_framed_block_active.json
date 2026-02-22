@@ -1,0 +1,7 @@
+{
+  "parent": "ideomod:block/copper_framed_block",
+  "textures": {
+    "frame": "ideomod:block/copper_frame_active",
+    "particle": "ideomod:block/copper_frame_active"
+  }
+}

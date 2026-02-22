@@ -1,6 +1,9 @@
 package com.ideomancer.ideomod.mixin;
 
+import com.ideomancer.ideomod.block.FramedBlock;
+import com.ideomancer.ideomod.block.FramedBlockEntity;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
+import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.RangedPistonFlags;
 import com.ideomancer.ideomod.block.StickinessRules;
 import com.ideomancer.ideomod.config.OddstoneConfig;
@@ -9,6 +12,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import org.spongepowered.asm.mixin.Final;
@@ -52,7 +56,8 @@ import java.util.List;
  * 
  * FEATURE 3: ODDSTONE SYMPATHETIC MOVEMENT
  * =========================================
- * Extended range sticky search for Oddstone blocks.
+ * Extended range sticky search for Oddstone blocks AND Framed Blocks
+ * whose inner block is Oddstone. "See through" frames for sympathetic.
  * 
  * FEATURE 4: RANGED PISTON START POSITION REDIRECT
  * =================================================
@@ -78,6 +83,8 @@ import java.util.List;
  *   honey, etc. and re-opens the Stage 5 bug.
  * - The current exemption specifically checks for OddSlimeBlock with
  *   FACING matching pushDirection. Only this block type gets the pass.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 @Mixin(PistonStructureResolver.class)
 public abstract class PistonStructureResolverMixin {
@@ -112,17 +119,6 @@ public abstract class PistonStructureResolverMixin {
     // FEATURE 4: RANGED PISTON START POSITION REDIRECT
     // ====================================================================
 
-    /**
-     * At HEAD of resolve(): if a ranged piston operation is active,
-     * override startPos to point at the real target block instead of
-     * the calculated pistonPos + pushDirection.
-     * 
-     * This is the core fix for the sympathetic boundary issue. The
-     * virtual piston sits at the device position (far away), so its
-     * pistonPos can't collide with any blocks that should be in the
-     * move group. The startPos redirect ensures the resolver still
-     * starts walking from the correct target block.
-     */
     @Inject(method = "resolve", at = @At("HEAD"))
     private void ideomod$redirectStartPos(CallbackInfoReturnable<Boolean> cir) {
         BlockPos target = RangedPistonFlags.getTarget();
@@ -149,14 +145,6 @@ public abstract class PistonStructureResolverMixin {
     // FEATURE 1A + 2A: ONE-WAY & DIRECTIONAL STICKINESS -- SIDEWAYS GRABS
     // ====================================================================
 
-    /**
-     * At HEAD of addBlockLine: check if this grab should be blocked.
-     * Only active during branching (sideways neighbor expansion phase).
-     * 
-     * This is the "active grabbing" phase -- a sticky block reaches out
-     * to its neighbors. Both grab immunity AND directional rules apply
-     * with full force here.
-     */
     @Inject(method = "addBlockLine", at = @At("HEAD"), cancellable = true)
     private void ideomod$blockOneWayGrabs(BlockPos pos, Direction dir,
                                            CallbackInfoReturnable<Boolean> cir) {
@@ -171,13 +159,11 @@ public abstract class PistonStructureResolverMixin {
         if (neighborState.isAir()) return;
 
         if (grabberState.isStickyBlock()) {
-            // Check 1: Directional stickiness -- is the grabber disabled for this push?
             if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
                 cir.setReturnValue(true);
                 return;
             }
 
-            // Check 2: Grab immunity -- does the target resist the grabber?
             if (StickinessRules.isGrabBlocked(grabberState, neighborState)) {
                 cir.setReturnValue(true);
                 return;
@@ -189,62 +175,22 @@ public abstract class PistonStructureResolverMixin {
     // FEATURE 1B + 2B: ONE-WAY & DIRECTIONAL STICKINESS -- BACKWARD WALK
     // ====================================================================
 
-    /**
-     * @Redirect on canStickTo inside addBlockLine.
-     * 
-     * Context: addBlockLine walks backward from the given position,
-     * checking if each block sticks to the one in front of it. This is
-     * the "chain cohesion" phase -- not active grabbing, but maintaining
-     * connections within an existing line.
-     * 
-     * We intercept canStickTo here to apply BOTH grab immunity AND
-     * directional stickiness rules to the backward walk.
-     * 
-     * SPECIAL CASE -- ODD SLIME AS TARGET:
-     * When the target (block in front) is an OddSlimeBlock whose FACING
-     * matches pushDirection, we SKIP grab immunity. Why? Because in this
-     * case, the Odd Slime is the active puller -- it's carrying blocks
-     * behind it in its chain. The block behind is being pulled along BY
-     * the Odd Slime, not grabbing it. Without this exception, Odd Slime
-     * couldn't pull anything because grab immunity would block the
-     * backward-walk connection.
-     * 
-     * WARNING: This exception MUST remain narrowly scoped to OddSlimeBlock.
-     * Generalizing it will re-break one-way stickiness (Stage 5 bug).
-     * 
-     * @param self     The BlockState calling canStickTo (the "behind" block)
-     * @param other    The BlockState being stuck to (the "front" block / target)
-     * @return true if they can stick, false if blocked by our rules
-     */
     @Redirect(method = "addBlockLine",
               at = @At(value = "INVOKE",
                        target = "Lnet/minecraft/world/level/block/state/BlockState;canStickTo(Lnet/minecraft/world/level/block/state/BlockState;)Z"))
     private boolean ideomod$checkCanStickToWithRules(BlockState self, BlockState other) {
-        // Run the original canStickTo first
         if (!self.canStickTo(other)) {
             return false;
         }
 
-        // Apply directional rules to the "behind" block (self).
-        // If it shouldn't be sticky for this push direction, block the stick.
         if (StickinessRules.isDirectionalGrabBlocked(self, this.pushDirection)) {
             return false;
         }
 
-        // Apply directional rules to the "front" block (other).
         if (StickinessRules.isDirectionalGrabBlocked(other, this.pushDirection)) {
             return false;
         }
 
-        // Check grab immunity -- with narrow exception for active Odd Slime targets.
-        //
-        // If the target (front block) is an OddSlimeBlock that is active for
-        // this push direction, it's the one doing the pulling. The grabber
-        // (behind block) should come along regardless of grab immunity.
-        //
-        // IMPORTANT: This check is intentionally specific to OddSlimeBlock.
-        // Do NOT generalize to "any sticky block" -- that re-opens the Stage 5
-        // bug (slime pulling Oddstone in backward walk).
         boolean targetIsActivePuller = false;
         if (other.getBlock() instanceof OddSlimeBlock) {
             Direction facing = other.getValue(DirectionalBlock.FACING);
@@ -252,7 +198,6 @@ public abstract class PistonStructureResolverMixin {
         }
 
         if (!targetIsActivePuller) {
-            // Normal case: apply grab immunity
             if (StickinessRules.isGrabBlocked(self, other)) {
                 return false;
             }
@@ -268,11 +213,12 @@ public abstract class PistonStructureResolverMixin {
     /**
      * At TAIL of addBranchingBlocks: after vanilla/Forge has finished
      * checking all sticky neighbors at distance 1, we extend the search
-     * for any Oddstone blocks in toPush. For each one, we scan along
-     * each face for distant Oddstones and call addBlockLine to add them.
-     * 
-     * If we added any new blocks, we override the return value to true,
-     * which tells the resolver's loop in resolve() to re-run branching.
+     * for Oddstone blocks and Framed Blocks wrapping Oddstone. For each
+     * one found in toPush, we scan along each face for distant Oddstones
+     * (real or framed) and call addBlockLine to add them.
+     *
+     * "See through" logic: a FramedBlock whose inner block is OddstoneBlock
+     * participates in sympathetic movement just like real Oddstone.
      */
     @Inject(method = "addBranchingBlocks", at = @At("TAIL"), cancellable = true)
     private void ideomod$sympatheticSearch(CallbackInfoReturnable<Boolean> cir) {
@@ -283,22 +229,20 @@ public abstract class PistonStructureResolverMixin {
         boolean addedAny = false;
 
         for (BlockPos oddPos : snapshot) {
-            BlockState state = this.level.getBlockState(oddPos);
-            if (!state.is(ModBlocks.ODDSTONE.get())) continue;
+            if (!ideomod$isOddstoneOrFramedOddstone(oddPos)) continue;
 
             for (Direction face : Direction.values()) {
                 for (int dist = 2; dist <= radius; dist++) {
                     BlockPos checkPos = oddPos.relative(face, dist);
-                    BlockState checkState = this.level.getBlockState(checkPos);
 
-                    if (checkState.is(ModBlocks.ODDSTONE.get())) {
+                    if (ideomod$isOddstoneOrFramedOddstone(checkPos)) {
                         if (!this.toPush.contains(checkPos)) {
                             boolean result = this.addBlockLine(checkPos, face);
                             if (this.toPush.contains(checkPos)) {
                                 addedAny = true;
                             }
                         }
-                        break;
+                        break; // Found nearest oddstone along this axis
                     }
                 }
             }
@@ -307,5 +251,27 @@ public abstract class PistonStructureResolverMixin {
         if (addedAny) {
             cir.setReturnValue(true);
         }
+    }
+
+    /**
+     * Check if a position contains Oddstone or a Framed Block wrapping Oddstone.
+     * This is the "see through frames" logic for sympathetic movement.
+     */
+    @Unique
+    private boolean ideomod$isOddstoneOrFramedOddstone(BlockPos pos) {
+        BlockState state = this.level.getBlockState(pos);
+
+        // Direct Oddstone check
+        if (state.is(ModBlocks.ODDSTONE.get())) return true;
+
+        // Framed Oddstone check: is it a FramedBlock whose inner block is Oddstone?
+        if (state.getBlock() instanceof FramedBlock) {
+            BlockEntity be = this.level.getBlockEntity(pos);
+            if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+                return fbe.getInnerBlock() instanceof OddstoneBlock;
+            }
+        }
+
+        return false;
     }
 }

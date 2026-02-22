@@ -736,7 +736,7 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 
 ---
 
-### Framed Blocks [DESIGNED]
+### Framed Blocks [IMPLEMENTED]
 > Any block wrapped in an iron or copper frame. Extends Machine Block stickiness as cheap "body" pieces.
 
 | Property | Value |
@@ -760,13 +760,13 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Inner block storage | [DESIGNED] | Block entity stores ResourceLocation of the wrapped block. |
-| Outer frame (static) | [DESIGNED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
-| Inner texture (dynamic) | [DESIGNED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
-| Machine-activated stickiness | [DESIGNED] | Will use the Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. Activation chains through matching material (iron->iron, copper->copper), capped at 12 blocks. |
-| Material exclusivity | [DESIGNED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
-| Slime/honey exclusivity | [DESIGNED] | Framed blocks do not interact with slime or honey stickiness. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
-| Base behavior preservation | [DESIGNED] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
+| Inner block storage | [IMPLEMENTED] | Block entity stores ResourceLocation of the wrapped block. |
+| Outer frame (static) | [IMPLEMENTED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
+| Inner texture (dynamic) | [IMPLEMENTED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
+| Machine-activated stickiness | [IMPLEMENTED] | Will use the Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. Activation chains through matching material (iron->iron, copper->copper), capped at 12 blocks. |
+| Material exclusivity | [IMPLEMENTED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
+| Slime/honey exclusivity | [IMPLEMENTED] | Framed blocks do not interact with slime or honey stickiness. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
+| Base behavior preservation | [IMPLEMENTED] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
 **Stickiness matrix (when activated by Machine Block):**
 
@@ -779,8 +779,27 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 Framed Blocks will use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
-- BESR rendering not yet implemented (Phase 2).
-- "Any block" framing requires Placer Block (not yet implemented).
+- Piston animation: inner block not visible during 2-tick transit (would need PistonHeadRenderer hook).
+- Creative item rendering: items show only frame texture (would need custom BakedModel).
+- Active textures are placeholders.
+- "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
+- Framed Slime Block does not grab normal blocks. Frame grab immunity (rules 9-11) currently overrides inner block stickiness. See planned fix below.
+
+**Planned improvements:**
+
+*[TODO] Inner block stickiness override:*
+When a framed block's inner block is itself sticky (e.g. slime, honey, odd slime), the inner block's grab behavior should override the frame's grab immunity for non-frame targets. A Framed Slime Block should grab normal blocks the same way a regular slime block does -- the frame adds Machine-activated stickiness ON TOP, it shouldn't suppress the inner block's native stickiness. Implementation: the PistonStructureResolverMixin grab immunity check needs a carve-out -- when the grabber is a FramedBlock whose inner block is sticky and the target is something the inner block would normally grab, skip the frame grab immunity rule.
+
+*[TODO] Facing/orientation properties:*
+Certain inner blocks have meaningful orientation (furnaces, pistons, observers, dispensers, etc.). Currently framed blocks do not preserve or expose facing. Planned: when a directional block is framed, the FramedBlockEntity should store its facing/orientation, and FramedBlock should expose a FACING property that delegates to the stored value. This affects rendering (BESR needs to rotate textures per face based on inner block facing) and behavior delegation (a framed observer should observe in the stored direction).
+
+*[TODO] Frameability exclusion list:*
+FrameabilityHelper.isFrameable() currently accepts any full-cube non-BE block. Several block categories should be excluded:
+- Interactive blocks: crafting_table, smithing_table, cartography_table, loom, stonecutter, grindstone, enchanting_table, anvil, brewing_stand, etc. (blocks with right-click GUI behavior that FramedBlock cannot delegate)
+- Mechanical blocks: piston, sticky_piston, observer, dispenser, dropper, hopper (blocks with active tick/neighbor behavior too complex to delegate)
+- Mod blocks with complex behavior: oddstone_repulser, oddstone_attractor, machine_block, machine_track, machine_trolley, drill (our own blocks that have specialized mechanics)
+- Redstone machinery: repeater, comparator, daylight_detector (non-full-cube but worth explicitly excluding)
+Implementation: add a blacklist Set<Block> in FrameabilityHelper populated during mod init. Could also be a block tag for datapack extensibility.
 
 **Future ideas:**
 - *[IDEA] Copper frames oxidize over time? Waxable?*

@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-21*
+*Last updated: 2026-02-22*
 
 ---
 
@@ -62,6 +62,13 @@ com.ideomancer.ideomod
   |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
   |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (FACING-gated stickiness)
+  |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
+  |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
+  |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
+  |     |-- FramedBlockItem.java         Dynamic getName(), NBT stack creation
+  |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
+  |     |-- FramedBlockLoot.java         Helper for manual drop creation
+  |     |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- StickinessRules.java         Rule registry: grab immunity + directional
   |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
@@ -77,7 +84,9 @@ com.ideomancer.ideomod
   |     \-- PortalUtils.java             Corner validation, interior nav, clearing helpers
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (tintIndex system)
-  |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |-- FramedBlockRenderer.java    BESR for framed blocks (inner texture)
+  |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -124,16 +133,24 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. Extends AbstractRangedPistonBlock. |
 | `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
+| `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. |
+| `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. |
+| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, delegated `isRedstoneConductor`. EntityBlock. |
+| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, delegated `isRedstoneConductor`. EntityBlock. |
 
 ### ModItems (DeferredRegister<Item>)
 
-BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley.
+BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
+
+Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
 Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `stacksTo(1)`. Hold in either hand to see structure register/deregister chat messages.
 
 ### ModCreativeTabs
 
-Single tab `ideomod_tab`, icon = IDEOBLOCK. Lists: Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Structure Debug Stick.
+Two tabs:
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Iron Frame, Copper Frame, Structure Debug Stick).
+- `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- iterates ALL registered blocks, checks `FrameabilityHelper.isFrameable()`, creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
 
@@ -230,7 +247,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-**Frame Family (FrameBlock, future Framed Blocks)**: Returns true for same-material IFrameBlock (iron<->iron, copper<->copper), Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). Returns false for cross-material IFrameBlock (mutual exclusion), OddstoneBlock, and all other blocks. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime one-way.
+**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock combines frame family rules (same-material IFrameBlock + Machine Family) PLUS inner block delegation (inner slime block adds slime stickiness on top). Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime one-way.
 
 ---
 
@@ -440,7 +457,7 @@ Opt-in interface for block entities that need to preserve data through piston mo
 - `CompoundTag saveMovementData()` -- serialize data before move. Return null to skip.
 - `void loadMovementData(CompoundTag data)` -- restore data after move.
 
-**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory via ContainerHelper).
+**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory via ContainerHelper), FramedBlockEntity (saves/loads inner block ResourceLocation).
 
 **Data registry** (`MovingBlockEntityData`):
 - Static `ConcurrentHashMap<String, CompoundTag>` keyed by `"dimension:x,y,z"` at DESTINATION.
@@ -485,7 +502,12 @@ Retraction sticky group BFS: Starting from the pulled block, scans all 6 neighbo
 
 Target: `net.minecraft.world.level.block.piston.PistonMovingBlockEntity`
 
-Single inject at TAIL of `tick()`. Restores IPistonMovable data from MovingBlockEntityData after the 2-tick piston animation completes. Guards: `level.isClientSide()` (server only), `currentState.is(Blocks.MOVING_PISTON)` (wait for real block to be placed). Sole consumer of `MovingBlockEntityData.retrieve()`.
+TWO restore paths (sole consumer of `MovingBlockEntityData.retrieve()`):
+
+1. `tick()` TAIL — normal 2-tick piston animation. Checks block is no longer MOVING_PISTON before restoring. Server-only guard.
+2. `finalTick()` TAIL — 1-tick piston pulses. Vanilla calls `finalTick()` (non-static instance method) instead of `tick()` (static method) for 1-tick pulses. Without this hook, data is lost because `tick()` never sees the "real block placed" condition. Added 2026-02-22.
+
+Note: `finalTick()` inject uses `(PistonMovingBlockEntity)(Object)this` to access the instance since it is non-static, unlike `tick()`.
 
 **BlockMoveHelper integration** (step 2.5):
 BlockMoveHelper has its own save logic in step 2.5 for Repulser/Attractor/Track moves. Wrapped in `if (!level.isClientSide())` guard. Same pattern as PistonBaseBlockMixin but within the BlockMoveHelper flow. Restore uses the same PistonMovingBlockEntityMixin.
@@ -536,6 +558,64 @@ Networks are bounded by the physical size of frame chains (in practice, piston p
 ### Rendering
 
 Frame blocks use `RenderType.cutout()` (registered in `Ideomod.clientSetup()`) and `noOcclusion()` (in block properties) so transparent texture pixels render correctly instead of appearing as black.
+
+
+## 6c. FRAMED BLOCKS SYSTEM
+
+Framed Blocks wrap any valid block with a metal frame, preserving inner block behavior while adding frame-family stickiness. Two registered block IDs (iron_framed_block, copper_framed_block) serve as transparent proxies.
+
+### Architecture
+
+FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrides ~15 behavioral methods, each querying the inner block's defaultBlockState() for delegation. Implements IFrameBlock (same interface as FrameBlock) and EntityBlock. IPistonMovable for piston data preservation.
+
+### FrameabilityHelper
+
+Static utility determining whether a block can be framed. Criteria: (1) Full cube collision shape -- uses try-catch on getCollisionShape(null, null) for blocks like MovingPistonBlock that NPE without world context. (2) NOT a block entity holder. (3) NOT already a FramedBlock. (4) NOT a Frame Block (IFrameBlock). (5) NOT indestructible (destroySpeed < 0). (6) NOT air or liquid.
+
+### Behavioral Delegation
+
+| Method | Delegation | Notes |
+|--------|-----------|-------|
+| getDestroyProgress | Per-position | Mining speed matches inner block |
+| getSoundType | Per-position | Walk/break sounds match inner |
+| getFriction | Per-position | Slime friction preserved |
+| getLightEmission | Per-position | Glowstone light preserved |
+| getMapColor | Per-position | Map color matches inner |
+| isSignalSource | Always true | Conservative -- causes minor extra updates |
+| getSignal | Per-position | Redstone block signal preserved |
+| getDirectSignal | Per-position | Strong signal preserved |
+| isRedstoneConductor | Per-position (lambda) | Via ModBlocks Properties lambda |
+| isPathfindable | Per-position | Oddstone mob avoidance preserved |
+| getBlockPathType | Per-position | Mob AI pathfinding preserved |
+| getAdjacentBlockPathType | Per-position | Adjacent pathfinding preserved |
+| getCloneItemStack | Per-position | Middle-click returns proper NBT stack |
+
+### Rendering (Two-Layer System)
+
+**Layer 1 (BESR — FramedBlockRenderer)**: Full-size inner block texture per face. Epsilon inset (0.001 blocks) prevents z-fighting with frame overlay. Per-face light sampling from neighboring blocks for proper brightness. Extracts TextureAtlasSprite from inner block's BakedModel per face direction. CW winding on sides, CCW on top/bottom (Minecraft convention). RenderType: cutoutMipped.
+
+**Layer 2 (JSON model — RenderShape.MODEL)**: Frame overlay with transparent interior pixels. Active variant uses brighter texture. Full block size. RenderType: cutoutMipped.
+
+### Recipe System
+
+FramedBlockRecipe (CustomRecipe): matches 1 frame item + 1 frameable BlockItem. Output is corresponding framed block item with BlockEntityTag.InnerBlock NBT. Single JSON trigger file (data/ideomod/recipes/framed_block.json). Serializer registered via ModRecipeSerializers (DeferredRegister<RecipeSerializer<?>>).
+
+### Creative Tab
+
+FRAMED_BLOCKS_TAB dynamically iterates ALL registered blocks at tab population time, checks FrameabilityHelper.isFrameable(), creates iron + copper ItemStack with NBT for each valid block. Automatically includes modded blocks.
+
+### F3 Debug Overlay
+
+FramedBlockDebugOverlay subscribes to CustomizeGuiOverlayEvent.DebugText. When F3 is open (`mc.options.renderDebug`) and player is looking at a FramedBlock, appends "Inner Block: minecraft:stone" (or appropriate ID) to right-side debug text. Registered on MinecraftForge.EVENT_BUS in clientSetup.
+
+### Sympathetic Movement Through Frames
+
+PistonStructureResolverMixin's sympathetic search checks for both direct OddstoneBlock AND FramedBlock with inner OddstoneBlock. Framed Oddstone participates in sympathetic movement chains.
+
+### Known Visual Polish Items (Deferred)
+
+1. **Piston move animation**: Inner block not visible during 2-tick transit. Block appears as empty frame during move. Would require hooking into PistonHeadRenderer or PistonMovingBlockEntity rendering.
+2. **Creative/inventory item rendering**: Items in inventory/creative tab show only the frame texture, not the inner block. Would require a custom BakedModel override or dynamic item texture system.
 
 ## 7. PORTAL SYSTEM
 
@@ -773,6 +853,22 @@ Transparent decorative blocks with activation-based stickiness. Implements `IFra
 | **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. |
 
 
+
+### Framed Blocks (Iron Framed Block, Copper Framed Block)
+
+Proxy blocks wrapping any valid inner block. Implements `IFrameBlock` + `EntityBlock`. Shared `FramedBlockEntity` stores inner block ResourceLocation. See section 6c for full system documentation.
+
+| Feature | Implementation |
+|---------|---------------|
+| **Inner block storage** | FramedBlockEntity stores ResourceLocation. IPistonMovable for piston data preservation. Client sync via getUpdateTag/getUpdatePacket. |
+| **Dynamic rendering** | Two-layer BESR + JSON model. Inner texture per face from inner block's BakedModel. Epsilon inset prevents z-fighting. Per-face light sampling. |
+| **Behavioral delegation** | ~15 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding all preserved. |
+| **Activation-based stickiness** | IFrameBlock with ACTIVE property. Same FrameActivation wipe-and-rebuild system as Frame Blocks. |
+| **Material exclusivity** | Iron framed sticks to iron framed/iron frame only. Copper to copper only. Both stick to Machine Family when active. |
+| **Crafting** | CustomRecipe: 1 frame item + 1 frameable block = framed block with NBT. |
+| **Middle-click** | getCloneItemStack() reads block entity, returns proper NBT ItemStack. |
+| **F3 debug** | FramedBlockDebugOverlay shows "Inner Block: minecraft:stone" on F3 right side. |
+
 ### Odd Slime Block
 
 Extends `DirectionalBlock`. FACING property, piston-style placement. `isStickyBlock()` returns true. `canStickTo()` returns false for SlimeBlock and HoneyBlock (mutual exclusion), true for everything else. Directional stickiness gating handled entirely by StickinessRules directional rule + mixin.
@@ -980,7 +1076,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, plus the creative tab.
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 
@@ -1027,6 +1123,9 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 7 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
 | 8 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
 | 9 | Track/Trolley use machine_block.png placeholder texture | Missing art | machine_track, machine_trolley |
+| 10 | Framed block inner texture invisible during piston animation | Visual polish | FramedBlockRenderer / PistonHeadRenderer |
+| 11 | Framed block items show only frame texture in inventory | Visual polish | Would need custom BakedModel |
+| 12 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
 
 
 ## 15. CONVENTIONS & PATTERNS

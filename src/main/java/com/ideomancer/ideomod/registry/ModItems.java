@@ -1,6 +1,8 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.block.FrameMaterial;
+import com.ideomancer.ideomod.block.FramedBlockItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
@@ -8,7 +10,7 @@ import net.minecraftforge.registries.ForgeRegistries;
 import net.minecraftforge.registries.RegistryObject;
 
 /**
- * Registry for all mod items
+ * Registry for all mod items.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -58,4 +60,16 @@ public class ModItems {
 
     public static final RegistryObject<Item> COPPER_FRAME = ITEMS.register("copper_frame",
             () -> new BlockItem(ModBlocks.COPPER_FRAME.get(), new Item.Properties()));
+
+    // ========================================================================
+    // FRAMED BLOCKS (custom BlockItem with NBT inner block data)
+    // ========================================================================
+
+    public static final RegistryObject<Item> IRON_FRAMED_BLOCK = ITEMS.register("iron_framed_block",
+            () -> new FramedBlockItem(ModBlocks.IRON_FRAMED_BLOCK.get(),
+                    FrameMaterial.IRON, new Item.Properties()));
+
+    public static final RegistryObject<Item> COPPER_FRAMED_BLOCK = ITEMS.register("copper_framed_block",
+            () -> new FramedBlockItem(ModBlocks.COPPER_FRAMED_BLOCK.get(),
+                    FrameMaterial.COPPER, new Item.Properties()));
 }

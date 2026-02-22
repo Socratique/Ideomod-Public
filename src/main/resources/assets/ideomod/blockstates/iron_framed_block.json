@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "active=false": { "model": "ideomod:block/iron_framed_block" },
+    "active=true": { "model": "ideomod:block/iron_framed_block_active" }
+  }
+}
