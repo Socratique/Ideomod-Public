@@ -1,5 +1,150 @@
 # Ideomod Changelog
 
+## [2026-02-22f] Framed Blocks — Rendering Overhaul + FACING + INNER_STICKY
+
+Major rendering rewrite and two new blockstate properties for framed blocks.
+Resolves all known framed block rendering issues and implements directional
+inner sticky behavior.
+
+### New blockstate properties: FACING + INNER_STICKY
+
+Added two properties to FramedBlock:
+
+1. **FACING** (DirectionProperty, 6 values): Set from player look direction on
+   placement (piston-style). Transfers to inner block's orientation property
+   during rendering — DirectionalBlock.FACING (6-way), HorizontalDirectionalBlock
+   .FACING (4-way, vertical clamped to NORTH), RotatedPillarBlock.AXIS (logs,
+   mapped FACING→axis). Also controls Framed Odd Slime's directional stickiness.
+
+2. **INNER_STICKY** (IntegerProperty, 0-3): Synced from inner block type.
+   0=none, 1=slime, 2=honey, 3=odd_slime. Computed by
+   FramedBlockEntity.updateBlockstateFromInner() on setInnerBlock(), onLoad(),
+   loadMovementData(), and onPlace(). Enables inner sticky behavior at the
+   blockstate level without needing block entity lookups in hot paths.
+
+Total blockstate count: 2 → 48 (ACTIVE × FACING × INNER_STICKY).
+
+### Inner sticky behavior
+
+Framed blocks with sticky inner blocks (slime, honey, odd slime) now preserve
+their native stickiness. A Framed Slime Block grabs normal blocks like real
+slime. Implementation:
+
+- FramedBlock.isStickyBlock(): returns true when ACTIVE || INNER_STICKY > 0
+- FramedBlock.canStickTo(): combines frame rules (ACTIVE-gated, same-material
+  + machine family) with inner sticky rules (INNER_STICKY-gated, applies
+  vanilla exclusions per type)
+- Grab immunity rules 1-3 extended: Framed Slime/Honey/Odd Slime also blocked
+  from grabbing Oddstone (matching real sticky behavior)
+- Grab immunity rules 9-11 carve-out: when a FramedBlock's INNER_STICKY matches
+  the target sticky type, grab immunity is lifted (Framed Slime CAN grab slime)
+
+### Framed Odd Slime directional behavior
+
+Framed Odd Slime only has inner stickiness when pushed in FACING direction.
+However, frame stickiness (ACTIVE + same-material) must work in ALL directions.
+A blanket directional rule would kill both, so directional gating is handled in
+PistonStructureResolverMixin with a second-chance check:
+
+- ideomod$isFramedOddSlimeDirectionallyBlocked(): checks if inner stickiness
+  should be blocked by direction
+- ideomod$wouldFrameStickinessAllow(): second-chance — if ACTIVE and neighbor
+  is same-material frame or machine family, allow despite directional block
+- ideomod$isActivePuller(): covers both real Odd Slime and Framed Odd Slime
+  for backward-walk active puller exemption
+
+No blanket directional rule registered in Ideomod.java. Rule count: 11 grab
+immunity + 1 directional (real Odd Slime only).
+
+### Rendering overhaul — renderSingleBlock approach
+
+Replaced manual per-face quad drawing with BlockRenderDispatcher.renderSingleBlock().
+This handles all model geometry natively:
+
+- **Multi-element models**: Slime's nested cubes render correctly
+- **Translucent/cutout blocks**: Glass, slime, odd slime render with proper
+  alpha blending via the block's native render type
+- **Block tinting**: Grass, leaves get biome colors
+- **Directional textures**: Inner state constructed with FACING from framed
+  block — odd slime front/back/side textures match placement direction
+- **Axis-based blocks**: Logs, pillars, hay bales rotate via AXIS property
+  mapped from FACING
+
+Inner block rendered at 0.998 scale (0.001 inset per side) via poseStack
+scale + translate, replacing old manual epsilon vertex positions.
+
+Lighting: brightest-of-6-neighbors (max block + max sky light from all face
+neighbors). Single packed light value passed to renderSingleBlock.
+
+### See-through-world fix
+
+Root cause: framed blocks were registered WITHOUT noOcclusion() in their block
+properties. Neighboring blocks culled their faces against the framed block.
+When the inner block was translucent (glass, slime), the culled neighbor faces
+were invisible, and the inner block's transparent pixels showed void.
+
+Fix: Added .noOcclusion() to both IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK
+in ModBlocks.java. Neighbors now keep all faces rendered.
+
+Previous attempts at renderer-level fixes (custom depth-only render types,
+two-pass rendering, depth backing cuboids) were all unnecessary — the single
+missing noOcclusion() was the root cause.
+
+### Transit data pipeline update
+
+MovingFrameData expanded from Map<BlockPos, ResourceLocation> to
+Map<BlockPos, FrameTransitInfo> where FrameTransitInfo is a record containing
+innerBlockId, facing, and innerSticky. PistonBaseBlockClientMixin captures all
+three values before vanilla destroys block entities during piston movement.
+Transit renderer constructs inner state with correct FACING from cached data.
+
+### Item model update
+
+FramedBlockItemModel.CompositeModel now stores and uses the inner block's
+defaultBlockState() when querying quads (was passing null). Fixes multi-element
+model resolution and state-dependent texture lookup for item display.
+
+Known limitation: translucent inner blocks don't show transparency in item
+rendering. The quad-compositing approach renders everything in one pass.
+Purely cosmetic — in-world rendering is correct.
+
+### Updated files:
+- block/FramedBlock.java — FACING, INNER_STICKY properties, combined stickiness
+- block/FramedBlockEntity.java — computeStickyType(), updateBlockstateFromInner()
+- registry/ModBlocks.java — added noOcclusion() to framed block properties
+- Ideomod.java — extended rules 1-3, carve-outs for 9-11, removed Framed Odd
+  Slime directional rule, updated log to "11 + 1"
+- mixin/PistonStructureResolverMixin.java — framed odd slime helpers, active
+  puller for framed odd slime in backward walk
+- client/FramedBlockRenderer.java — renderSingleBlock + buildInnerState
+- client/MovingFrameData.java — FrameTransitInfo record
+- client/FramedBlockItemModel.java — uses defaultBlockState() in CompositeModel
+- mixin/client/PistonBaseBlockClientMixin.java — captures facing + innerSticky
+- mixin/client/PistonMovingBlockEntityRendererMixin.java — renderSingleBlock +
+  buildInnerState + blended lighting
+
+### Deleted files:
+- client/FramedBlockRenderTypes.java — custom render types no longer needed
+
+### Bugs resolved:
+1. Always-sticky bug (from 2026-02-22): isStickyBlock() now ACTIVE-gated for
+   frame stickiness. Inner stickiness gated by INNER_STICKY > 0.
+2. See-through-world: noOcclusion() added to block properties.
+3. Inner block orientation wrong: FACING property transferred to inner state.
+4. Multi-element models lost (slime): renderSingleBlock handles natively.
+5. Translucent blocks rendering as opaque: renderSingleBlock uses correct type.
+6. Framed Odd Slime directional override killing frame stickiness: handled in
+   mixin with second-chance check instead of blanket directional rule.
+7. GUI translation keys: Machine Frame and furnace array names now correct.
+8. RangedPistonUtil null BlockGetter: converted to anyMovable(Level) method.
+
+### Known limitations:
+- Item model translucency: translucent inner blocks render opaque in inventory.
+- Item model facing: items always show default orientation (no world-facing).
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-22c] Framed Blocks — Piston Transit Flicker Fix
 
 Resolved the dark flicker artifact during piston transit of framed blocks.

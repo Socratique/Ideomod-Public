@@ -29,18 +29,15 @@ import java.util.Set;
 /**
  * CLIENT-SIDE mixin into PistonBaseBlock.moveBlocks().
  *
- * Captures FramedBlock inner block IDs BEFORE vanilla destroys the block
- * entities during piston movement. Stores them in MovingFrameData so the
- * PistonMovingBlockEntityRendererMixin can render the inner block texture
- * during the 2-tick sliding animation.
+ * Captures FramedBlock inner block IDs, facing, and inner sticky type
+ * BEFORE vanilla destroys the block entities during piston movement.
+ * Stores them in MovingFrameData so the transit renderer can render
+ * the inner block with correct orientation during the 2-tick animation.
  *
  * EXTENSION: Uses PistonStructureResolver (works reliably).
  *
- * RETRACTION: Resolver fails for our IPistonMovable blocks (documented in
- * changelog and IDEOMOD_DOCUMENTATION.md). Instead, mirrors the server-side
- * PistonBaseBlockMixin approach: direct scan at the pull position, then
- * sticky-group-aware BFS that only follows blocks connected via
- * isStickyBlock()/canStickTo() chains.
+ * RETRACTION: Resolver fails for our IPistonMovable blocks. Uses
+ * sticky-group-aware BFS mirroring the server-side approach.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -58,10 +55,8 @@ public abstract class PistonBaseBlockClientMixin {
             Level level, BlockPos pistonPos, Direction direction,
             boolean extending, CallbackInfoReturnable<Boolean> cir) {
 
-        // ONLY run on the client
         if (!level.isClientSide()) return;
 
-        // Clear stale data from previous piston operations
         MovingFrameData.clearAll();
 
         int captured;
@@ -77,10 +72,6 @@ public abstract class PistonBaseBlockClientMixin {
         }
     }
 
-    /**
-     * Extension: use PistonStructureResolver to find all blocks being pushed.
-     * This handles branching groups properly.
-     */
     @Unique
     private static int ideomod$captureExtension(Level level, BlockPos pistonPos, Direction direction) {
         PistonStructureResolver resolver = new PistonStructureResolver(
@@ -100,46 +91,26 @@ public abstract class PistonBaseBlockClientMixin {
         return captured;
     }
 
-    /**
-     * Retraction: resolver fails for our blocks. Mirror the server-side
-     * PistonBaseBlockMixin approach:
-     *
-     * 1. Find the "pull position" at pistonPos + direction * 2
-     *    (the block directly behind the retracting piston head)
-     * 2. Walk the line backward from there (in the push direction)
-     *    collecting all pushable blocks in a chain
-     * 3. BFS from ALL collected blocks, following sticky connections
-     *    to find branching group members
-     *
-     * All blocks move in direction.getOpposite() (toward the piston).
-     */
     @Unique
     private static int ideomod$captureRetraction(Level level, BlockPos pistonPos, Direction direction) {
-        Direction moveDir = direction.getOpposite(); // blocks move toward piston
+        Direction moveDir = direction.getOpposite();
 
-        // The block being pulled is 2 blocks from piston in the facing direction
         BlockPos pullPos = pistonPos.relative(direction, 2);
         BlockState pullState = level.getBlockState(pullPos);
 
-        // If the pull position is air or unpushable, nothing to capture
         if (pullState.isAir() || pullState.getPistonPushReaction() == net.minecraft.world.level.material.PushReaction.DESTROY) {
             return 0;
         }
 
-        // Step 1: Walk the line from pull position outward (in push direction)
-        // collecting all connected blocks in a line
         List<BlockPos> lineBlocks = new ArrayList<>();
         BlockPos current = pullPos;
         for (int i = 0; i < MAX_PUSH_BLOCKS; i++) {
             BlockState state = level.getBlockState(current);
             if (state.isAir()) break;
             lineBlocks.add(current);
-            current = current.relative(direction); // walk further from piston
+            current = current.relative(direction);
         }
 
-        // Step 2: Sticky-group BFS from all line blocks
-        // Only follow connections where the existing block isStickyBlock()
-        // AND both sides agree on canStickTo()
         Set<BlockPos> allBlocks = new HashSet<>(lineBlocks);
         Queue<BlockPos> queue = new LinkedList<>(lineBlocks);
 
@@ -147,7 +118,6 @@ public abstract class PistonBaseBlockClientMixin {
             BlockPos pos = queue.poll();
             BlockState state = level.getBlockState(pos);
 
-            // Only expand from sticky blocks
             if (!state.isStickyBlock()) continue;
 
             for (Direction face : Direction.values()) {
@@ -157,7 +127,6 @@ public abstract class PistonBaseBlockClientMixin {
                 BlockState neighborState = level.getBlockState(neighbor);
                 if (neighborState.isAir()) continue;
 
-                // Check bidirectional stickiness (same as Forge's check)
                 if (state.canStickTo(neighborState) && neighborState.canStickTo(state)) {
                     allBlocks.add(neighbor);
                     queue.add(neighbor);
@@ -165,7 +134,6 @@ public abstract class PistonBaseBlockClientMixin {
             }
         }
 
-        // Step 3: Capture all FramedBlocks found
         int captured = 0;
         for (BlockPos sourcePos : allBlocks) {
             if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(moveDir))) {
@@ -177,8 +145,8 @@ public abstract class PistonBaseBlockClientMixin {
 
     /**
      * If the block at sourcePos is a FramedBlock with an inner block,
-     * store its inner block ID in MovingFrameData keyed by destPos.
-     * Returns true if data was stored.
+     * store its inner block ID, facing, and inner sticky type in
+     * MovingFrameData keyed by destPos.
      */
     @Unique
     private static boolean ideomod$captureIfFramed(Level level, BlockPos sourcePos, BlockPos destPos) {
@@ -192,7 +160,10 @@ public abstract class PistonBaseBlockClientMixin {
         ResourceLocation innerBlockId = framedBE.getInnerBlockId();
         if (innerBlockId == null) return false;
 
-        MovingFrameData.store(destPos, innerBlockId);
+        Direction facing = state.getValue(FramedBlock.FACING);
+        int innerSticky = state.getValue(FramedBlock.INNER_STICKY);
+
+        MovingFrameData.store(destPos, innerBlockId, facing, innerSticky);
         return true;
     }
 }

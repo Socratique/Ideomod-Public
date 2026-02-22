@@ -1,49 +1,51 @@
 package com.ideomancer.ideomod.client;
 
+import com.ideomancer.ideomod.block.FramedBlock;
 import com.ideomancer.ideomod.block.FramedBlockEntity;
 import com.mojang.blaze3d.vertex.PoseStack;
-import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
-import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
-import net.minecraft.client.renderer.block.model.BakedQuad;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
-import net.minecraft.client.renderer.texture.TextureAtlasSprite;
-import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.HorizontalDirectionalBlock;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.block.state.BlockState;
-
-import java.util.List;
 
 /**
  * BlockEntityRenderer for Framed Blocks.
  *
  * TWO-LAYER RENDERING:
- *   Layer 1 (this BESR): Inner block texture, drawn as a cuboid very slightly
- *           inset (epsilon = 0.001) so the frame overlay always wins depth test.
+ *   Layer 1 (this BESR): Inner block rendered via renderSingleBlock(),
+ *           slightly scaled down (0.998) to sit behind the frame surface.
+ *           Handles multi-element models, tinting, translucency, and all
+ *           model geometry natively.
  *   Layer 2 (JSON model via RenderShape.MODEL): Frame overlay texture with
  *           transparent center pixels. Renders at full block size on top.
  *
- * LIGHTING:
- * BESR-drawn faces don't receive chunk ambient occlusion. We sample the
- * world light at the neighboring block position for each face and use that
- * as the packed light, giving proper directional brightness matching
- * surrounding blocks.
+ * TRANSLUCENCY:
+ * Framed blocks use noOcclusion() in their block properties, which prevents
+ * neighboring blocks from culling their faces. This means terrain behind a
+ * framed glass/slime/odd slime is always rendered. The inner block's
+ * translucent pixels correctly blend with the visible neighbor faces behind.
+ *
+ * FACING TRANSFER:
+ * Covers DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING,
+ * and RotatedPillarBlock.AXIS.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class FramedBlockRenderer implements BlockEntityRenderer<FramedBlockEntity> {
 
-    private static final float E = 0.001f;
-    private static final float MIN = E;
-    private static final float MAX = 1f - E;
+    private static final float INNER_SCALE = 0.998f;
+    private static final float INNER_OFFSET = (1f - INNER_SCALE) / 2f;
 
     public FramedBlockRenderer(BlockEntityRendererProvider.Context context) {
     }
@@ -53,144 +55,84 @@ public class FramedBlockRenderer implements BlockEntityRenderer<FramedBlockEntit
                         MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
         if (!be.hasInnerBlock()) return;
 
-        BlockState innerState = be.getInnerDefaultState();
-        BlockRenderDispatcher dispatcher = Minecraft.getInstance().getBlockRenderer();
-        BakedModel model = dispatcher.getBlockModel(innerState);
-        RandomSource random = RandomSource.create(42L);
-
-        VertexConsumer consumer = bufferSource.getBuffer(RenderType.cutoutMipped());
-
-        poseStack.pushPose();
-
         Level level = be.getLevel();
         BlockPos pos = be.getBlockPos();
+        Block innerBlock = be.getInnerBlock();
 
-        for (Direction face : Direction.values()) {
-            TextureAtlasSprite sprite = getFaceSprite(model, innerState, face, random);
-            if (sprite == null) continue;
+        BlockState framedState = be.getBlockState();
+        BlockState innerState = buildInnerState(innerBlock, framedState);
 
-            // Sample light from the neighbor on this face for proper brightness
-            int faceLight = packedLight;
-            if (level != null) {
-                BlockPos neighbor = pos.relative(face);
-                int blockLight = level.getBrightness(LightLayer.BLOCK, neighbor);
-                int skyLight = level.getBrightness(LightLayer.SKY, neighbor);
-                faceLight = LightTexture.pack(blockLight, skyLight);
-            }
+        int light = sampleBestLight(level, pos, packedLight);
 
-            drawFace(poseStack, consumer, face, sprite, faceLight, packedOverlay);
-        }
+        BlockRenderDispatcher dispatcher = Minecraft.getInstance().getBlockRenderer();
+
+        poseStack.pushPose();
+        poseStack.translate(INNER_OFFSET, INNER_OFFSET, INNER_OFFSET);
+        poseStack.scale(INNER_SCALE, INNER_SCALE, INNER_SCALE);
+
+        dispatcher.renderSingleBlock(innerState, poseStack, bufferSource, light, packedOverlay);
 
         poseStack.popPose();
     }
 
-    private TextureAtlasSprite getFaceSprite(BakedModel model, BlockState state,
-                                              Direction face, RandomSource random) {
-        List<BakedQuad> quads = model.getQuads(state, face, random);
-        if (!quads.isEmpty()) {
-            return quads.get(0).getSprite();
-        }
-        quads = model.getQuads(state, null, random);
-        if (!quads.isEmpty()) {
-            return quads.get(0).getSprite();
-        }
-        return model.getParticleIcon();
-    }
+    // ========================================================================
+    // INNER STATE CONSTRUCTION
+    // ========================================================================
 
     /**
-     * Draw one face of the epsilon-inset cuboid.
+     * Build inner state with orientation from the framed block's FACING.
      *
-     * Side faces (NORTH/SOUTH/EAST/WEST): CW when viewed from outside.
-     * Top/Bottom faces (UP/DOWN): CCW when viewed from outside.
-     *
-     * This mixed convention matches how Minecraft's rendering pipeline
-     * actually processes quads after coordinate transforms.
+     * Transfers:
+     *   - DirectionalBlock.FACING (6-way: odd slime, pistons, observers)
+     *   - HorizontalDirectionalBlock.FACING (4-way: furnaces, carved pumpkins)
+     *     — vertical FACING clamped to NORTH for horizontal-only blocks
+     *   - RotatedPillarBlock.AXIS (logs, pillars, hay bales)
+     *     — FACING mapped to axis: UP/DOWN→Y, NORTH/SOUTH→Z, EAST/WEST→X
      */
-    private void drawFace(PoseStack poseStack, VertexConsumer consumer, Direction face,
-                           TextureAtlasSprite sprite, int packedLight, int packedOverlay) {
-        PoseStack.Pose pose = poseStack.last();
+    static BlockState buildInnerState(Block innerBlock, BlockState framedState) {
+        BlockState innerState = innerBlock.defaultBlockState();
+        Direction framedFacing = framedState.getValue(FramedBlock.FACING);
 
-        float u0 = sprite.getU0();
-        float u1 = sprite.getU1();
-        float v0 = sprite.getV0();
-        float v1 = sprite.getV1();
-
-        switch (face) {
-            case DOWN -> {  // Y=MIN, normal (0,-1,0)
-                quad(pose, consumer,
-                    0,   MIN, 0,   u0, v1,
-                    1,   MIN, 0,   u1, v1,
-                    1,   MIN, 1,   u1, v0,
-                    0,   MIN, 1,   u0, v0,
-                    0, -1, 0, packedLight, packedOverlay);
-            }
-            case UP -> {    // Y=MAX, normal (0,1,0)
-                quad(pose, consumer,
-                    0,   MAX, 1,   u0, v0,
-                    1,   MAX, 1,   u1, v0,
-                    1,   MAX, 0,   u1, v1,
-                    0,   MAX, 0,   u0, v1,
-                    0, 1, 0, packedLight, packedOverlay);
-            }
-            case NORTH -> { // Z=MIN, normal (0,0,-1)
-                quad(pose, consumer,
-                    0,   MAX, MIN, u0, v0,
-                    1,   MAX, MIN, u1, v0,
-                    1,   MIN, MIN, u1, v1,
-                    0,   MIN, MIN, u0, v1,
-                    0, 0, -1, packedLight, packedOverlay);
-            }
-            case SOUTH -> { // Z=MAX, normal (0,0,1)
-                quad(pose, consumer,
-                    1,   MAX, MAX, u0, v0,
-                    0,   MAX, MAX, u1, v0,
-                    0,   MIN, MAX, u1, v1,
-                    1,   MIN, MAX, u0, v1,
-                    0, 0, 1, packedLight, packedOverlay);
-            }
-            case WEST -> {  // X=MIN, normal (-1,0,0)
-                quad(pose, consumer,
-                    MIN, MAX, 1,   u0, v0,
-                    MIN, MAX, 0,   u1, v0,
-                    MIN, MIN, 0,   u1, v1,
-                    MIN, MIN, 1,   u0, v1,
-                    -1, 0, 0, packedLight, packedOverlay);
-            }
-            case EAST -> {  // X=MAX, normal (1,0,0)
-                quad(pose, consumer,
-                    MAX, MAX, 0,   u0, v0,
-                    MAX, MAX, 1,   u1, v0,
-                    MAX, MIN, 1,   u1, v1,
-                    MAX, MIN, 0,   u0, v1,
-                    1, 0, 0, packedLight, packedOverlay);
-            }
+        if (innerState.hasProperty(DirectionalBlock.FACING)) {
+            return innerState.setValue(DirectionalBlock.FACING, framedFacing);
         }
+
+        if (innerState.hasProperty(HorizontalDirectionalBlock.FACING)) {
+            Direction horizontal = framedFacing;
+            if (framedFacing == Direction.UP || framedFacing == Direction.DOWN) {
+                horizontal = Direction.NORTH;
+            }
+            return innerState.setValue(HorizontalDirectionalBlock.FACING, horizontal);
+        }
+
+        if (innerState.hasProperty(RotatedPillarBlock.AXIS)) {
+            return innerState.setValue(RotatedPillarBlock.AXIS, framedFacing.getAxis());
+        }
+
+        return innerState;
     }
 
-    private void quad(PoseStack.Pose pose, VertexConsumer consumer,
-                       float x0, float y0, float z0, float u0, float v0,
-                       float x1, float y1, float z1, float u1, float v1,
-                       float x2, float y2, float z2, float u2, float v2,
-                       float x3, float y3, float z3, float u3, float v3,
-                       float nx, float ny, float nz,
-                       int packedLight, int packedOverlay) {
-        vertex(pose, consumer, x0, y0, z0, u0, v0, nx, ny, nz, packedLight, packedOverlay);
-        vertex(pose, consumer, x1, y1, z1, u1, v1, nx, ny, nz, packedLight, packedOverlay);
-        vertex(pose, consumer, x2, y2, z2, u2, v2, nx, ny, nz, packedLight, packedOverlay);
-        vertex(pose, consumer, x3, y3, z3, u3, v3, nx, ny, nz, packedLight, packedOverlay);
-    }
+    // ========================================================================
+    // LIGHTING
+    // ========================================================================
 
-    private void vertex(PoseStack.Pose pose, VertexConsumer consumer,
-                         float x, float y, float z,
-                         float u, float v,
-                         float nx, float ny, float nz,
-                         int packedLight, int packedOverlay) {
-        consumer.vertex(pose.pose(), x, y, z)
-                .color(255, 255, 255, 255)
-                .uv(u, v)
-                .overlayCoords(packedOverlay)
-                .uv2(packedLight)
-                .normal(pose.normal(), nx, ny, nz)
-                .endVertex();
+    /**
+     * Sample the best (brightest) light from all 6 face neighbors.
+     * renderSingleBlock takes a single packed light value, so we use the
+     * maximum block and sky light from all directions.
+     */
+    private static int sampleBestLight(Level level, BlockPos pos, int fallbackLight) {
+        if (level == null) return fallbackLight;
+
+        int maxBlock = 0;
+        int maxSky = 0;
+
+        for (Direction face : Direction.values()) {
+            BlockPos neighbor = pos.relative(face);
+            maxBlock = Math.max(maxBlock, level.getBrightness(LightLayer.BLOCK, neighbor));
+            maxSky = Math.max(maxSky, level.getBrightness(LightLayer.SKY, neighbor));
+        }
+
+        return LightTexture.pack(maxBlock, maxSky);
     }
 }

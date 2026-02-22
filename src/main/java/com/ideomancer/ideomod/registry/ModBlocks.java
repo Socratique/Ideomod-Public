@@ -162,6 +162,7 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
+                    .noOcclusion()
                     .isRedstoneConductor((state, level, pos) -> {
                         // Delegate to inner block
                         BlockEntity be = level.getBlockEntity(pos);
@@ -182,6 +183,7 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.COPPER)
                     .pushReaction(PushReaction.NORMAL)
+                    .noOcclusion()
                     .isRedstoneConductor((state, level, pos) -> {
                         BlockEntity be = level.getBlockEntity(pos);
                         if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {

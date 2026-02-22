@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-22c*
+*Last updated: 2026-02-22f*
 
 ---
 
@@ -63,9 +63,9 @@ com.ideomancer.ideomod
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
   |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
-  |     |-- FramedBlockRenderer.java    BESR for framed blocks (inner texture)
-  |     |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (shows inner texture)
-  |     |-- MovingFrameData.java        Client-side cache for inner block IDs during piston transit
+  |     |-- FramedBlockRenderer.java    BESR for framed blocks (renderSingleBlock with facing transfer)
+  |     |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
+  |     |-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
   |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
@@ -239,16 +239,23 @@ Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlac
 Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (implements IFrameBlock + EntityBlock).
 
 1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~15 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding all preserved.
-2. **Two-layer rendering**: BESR (FramedBlockRenderer) draws inner block texture with epsilon inset (0.001). JSON model draws frame overlay on top. Per-face light sampling from neighbors.
-3. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). Grab immunity rules 9-11 shared with Frame Blocks.
-4. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT. ModRecipeSerializers provides serializer.
-5. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
-6. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
-7. **Middle-click**: getCloneItemStack() returns proper NBT ItemStack.
+2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
+3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
+4. **INNER_STICKY property** (IntegerProperty 0-3): 0=none, 1=slime, 2=honey, 3=odd_slime. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
+5. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
+6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rules 9-11 have carve-outs for matching inner types.
+7. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance check in PistonStructureResolverMixin. No blanket directional rule registered.
+8. **noOcclusion()**: Block properties include noOcclusion() to prevent neighbor face culling (required for translucent inner blocks).
+9. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
+10. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
+11. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
+12. **Middle-click**: getCloneItemStack() returns proper NBT ItemStack.
 
 **FrameabilityHelper**: Static utility. Checks: full cube collision, no BE, not already framed, not IFrameBlock, not indestructible, not air/liquid. Try-catch on getCollisionShape for NPE-prone blocks.
 
 **FramedBlockItem**: Custom BlockItem. Dynamic getName() composing "Iron Framed Stone" etc. Static createStack() for NBT setup.
+
+**MovingFrameData**: Client-side ConcurrentHashMap<BlockPos, FrameTransitInfo>. FrameTransitInfo record contains innerBlockId, facing, innerSticky. Populated by PistonBaseBlockClientMixin before vanilla destroys block entities. Read by transit renderer mixin.
 
 ### 8. Machine Track (conduction + Trolley push)
 
@@ -305,13 +312,15 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 ## KNOWN ISSUES & TECHNICAL DEBT
 
 1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
-2. **RangedPistonUtil.ANY_MOVABLE passes null BlockGetter** -- `state.getDestroySpeed(null, BlockPos.ZERO)` could NPE on blocks that dereference the level parameter. Needs a level reference or a different check.
-3. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
-4. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
-5. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
-6. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
-7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
-8. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
-9. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
-10. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
-11. **Framed blocks always-sticky bug** -- Framed blocks currently stick to same-material frames regardless of ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation system. isStickyBlock() likely returns true unconditionally instead of checking ACTIVE property.
+2. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
+3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
+4. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
+5. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
+6. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
+7. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
+8. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
+9. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
+10. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
+11. **Item model facing** -- Framed block items always show default orientation. No world-facing context in item rendering.
+
+Written by Claude, directed and guided by The Ideomancer.

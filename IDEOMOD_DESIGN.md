@@ -1,9 +1,9 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-22 (Framed Blocks visual polish -- piston transit + item rendering, always-sticky bug noted)*
+*Last updated: 2026-02-22f (Rendering overhaul, FACING + INNER_STICKY properties, inner stickiness, noOcclusion fix)*
 
-*Written by Claude (Anthropic), directed and guided by Sean.*
+*Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
 
 ---
@@ -760,39 +760,52 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Inner block storage | [IMPLEMENTED] | Block entity stores ResourceLocation of the wrapped block. |
-| Outer frame (static) | [IMPLEMENTED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
-| Inner texture (dynamic) | [IMPLEMENTED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
-| Piston transit rendering | [IMPLEMENTED] | Client-side mixin renders inner block during 2-tick piston animation. Per-face light sampling with source/dest interpolation for seamless visual handoff. |
-| Item/inventory rendering | [IMPLEMENTED] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. |
-| Machine-activated stickiness | [IMPLEMENTED] | Will use the Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. Activation chains through matching material (iron->iron, copper->copper), capped at 12 blocks. |
-| Material exclusivity | [IMPLEMENTED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
-| Slime/honey exclusivity | [IMPLEMENTED] | Framed blocks do not interact with slime or honey stickiness. Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
-| Base behavior preservation | [IMPLEMENTED] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
+| Inner block storage | [DONE] | Block entity stores ResourceLocation of the wrapped block. |
+| Outer frame (static) | [DONE] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). noOcclusion() prevents neighbor face culling. |
+| Inner texture (dynamic) | [DONE] | BESR uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. |
+| FACING property | [DONE] | DirectionProperty set from player look direction. Transferred to inner block orientation during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). |
+| INNER_STICKY property | [DONE] | IntegerProperty 0-3 (none/slime/honey/odd_slime). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). |
+| Piston transit rendering | [DONE] | Client-side mixin renders inner block during 2-tick piston animation. Brightest-of-neighbors light sampling blended by progress. FrameTransitInfo carries facing + innerSticky. |
+| Item/inventory rendering | [DONE] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. Translucent inners render opaque (cosmetic limitation). |
+| Machine-activated stickiness | [DONE] | Uses Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. isStickyBlock() ACTIVE-gated for frame stickiness. |
+| Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional). Grab immunity rules 9-11 carve-outs for matching inner types. |
+| Material exclusivity | [DONE] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
+| Base behavior preservation | [DONE] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
 **Stickiness matrix (when activated by Machine Block):**
 
+Frame-only stickiness (no inner sticky block):
 | | Machine Block | Iron Framed | Copper Framed | Iron Frame | Copper Frame | Slime | Honey | Odd Slime |
 |---|---|---|---|---|---|---|---|---|
 | Iron Framed | [Y] | [Y] | [N] | [Y] | [N] | [N] | [N] | [N] |
 | Copper Framed | [Y] | [N] | [Y] | [N] | [Y] | [N] | [N] | [N] |
 
+With inner sticky block (e.g., Framed Slime): inherits inner block's grab behavior in addition to frame stickiness above. Framed Slime grabs Normal blocks. Framed Odd Slime grabs directionally.
+
 **Activation model (redstone-style wipe-and-rebuild):**
-Framed Blocks will use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
+Framed Blocks use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
 - Active textures are placeholders.
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
-- Framed Slime Block does not grab normal blocks. Frame grab immunity (rules 9-11) currently overrides inner block stickiness. See planned fix below.
-- **Always-sticky bug**: Framed blocks currently stick to same-material frames regardless of ACTIVE state. isStickyBlock() returns true unconditionally instead of checking the ACTIVE property. Should only be sticky when activated by adjacent Machine Block via FrameActivation system, matching Frame Block behavior.
+- Item model translucency: translucent inner blocks (glass, slime) render opaque in inventory. Cosmetic only.
+- Item model facing: items always show default orientation.
+
+**Completed improvements (2026-02-22f):**
+
+*[DONE] Inner block stickiness override:*
+Implemented via INNER_STICKY blockstate property (IntegerProperty 0-3: none/slime/honey/odd_slime). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rules 9-11 have carve-outs: when grabber's INNER_STICKY matches target type, immunity is lifted. Framed Slime now grabs normal blocks like real slime.
+
+*[DONE] Facing/orientation properties:*
+FACING (DirectionProperty) set from player look direction on placement. Transferred to inner block's orientation property during rendering via buildInnerState() -- handles DirectionalBlock.FACING (6-way), HorizontalDirectionalBlock.FACING (4-way, vertical clamped to NORTH), RotatedPillarBlock.AXIS (mapped from FACING). Also controls Framed Odd Slime directional stickiness.
+
+*[DONE] Always-sticky bug fix:*
+isStickyBlock() now returns ACTIVE || INNER_STICKY > 0 instead of unconditional true. Frame stickiness properly ACTIVE-gated. Inner stickiness properly INNER_STICKY-gated.
+
+*[DONE] See-through-world rendering fix:*
+Added noOcclusion() to framed block properties in ModBlocks.java. Prevents neighbor face culling for translucent inner blocks. Renderer rewritten to use BlockRenderDispatcher.renderSingleBlock() with FACING transfer, handling multi-element models, translucency, and tinting natively.
 
 **Planned improvements:**
-
-*[TODO] Inner block stickiness override:*
-When a framed block's inner block is itself sticky (e.g. slime, honey, odd slime), the inner block's grab behavior should override the frame's grab immunity for non-frame targets. A Framed Slime Block should grab normal blocks the same way a regular slime block does -- the frame adds Machine-activated stickiness ON TOP, it shouldn't suppress the inner block's native stickiness. Implementation: the PistonStructureResolverMixin grab immunity check needs a carve-out -- when the grabber is a FramedBlock whose inner block is sticky and the target is something the inner block would normally grab, skip the frame grab immunity rule.
-
-*[TODO] Facing/orientation properties:*
-Certain inner blocks have meaningful orientation (furnaces, pistons, observers, dispensers, etc.). Currently framed blocks do not preserve or expose facing. Planned: when a directional block is framed, the FramedBlockEntity should store its facing/orientation, and FramedBlock should expose a FACING property that delegates to the stored value. This affects rendering (BESR needs to rotate textures per face based on inner block facing) and behavior delegation (a framed observer should observe in the stored direction).
 
 *[TODO] Frameability exclusion list:*
 FrameabilityHelper.isFrameable() currently accepts any full-cube non-BE block. Several block categories should be excluded:

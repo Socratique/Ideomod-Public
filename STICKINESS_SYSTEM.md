@@ -75,15 +75,37 @@ Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame
 | **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
 | **Machine Fam**| no  |  no   |    no     |     YES     |    YES    |    no    |   no   |
 | **Frame Fam (active)**| no | no | no     |     YES     |  YES (m)  |    no    |   no   |
+| **Framed Slime (active)**| YES | no* | no* | YES | YES (m) | no | YES |
+| **Framed Honey (active)**| no* | YES | no* | YES | YES (m) | no | YES |
+| **Framed Odd Slime (active)**| no* | no* | YES (d) | YES | YES (m) | no | YES (d) |
+| **Framed Sticky (inactive)**| (i) | (i) | (i) | no | no | no | (i) |
 | **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
 - `no*` = mutual exclusion (canStickTo returns false on both sides)
 - `no` = blocked by grab immunity rule (canStickTo says yes, mixin says no)
 - `(d)` = directional -- only when pushed in FACING direction
 - `(m)` = material-matched -- iron sticks to iron only, copper to copper only (Layer 1 canStickTo)
+- `(i)` = inner sticky behavior only -- Framed Slime grabs like slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional). No frame stickiness when inactive.
 - Frame Fam (active) = only sticky when BooleanProperty ACTIVE=true (driven by FrameActivation)
-- When inactive, isStickyBlock()=false and frames behave as normal non-sticky blocks
+- Framed Sticky (active) = has BOTH inner stickiness + frame stickiness simultaneously
+- Framed Sticky (inactive) = inner stickiness only, no frame stickiness
+- When inactive and INNER_STICKY=0, isStickyBlock()=false — behaves as normal non-sticky block
 - Normal = any non-sticky block (stone, dirt, etc.)
+
+### Inner Sticky Carve-Out (rules 9-11)
+
+Frame Family normally can't grab slime/honey/odd slime (rules 9-11). But when a FramedBlock's INNER_STICKY matches the target type, the immunity is lifted:
+- Rule 9 exempted when grabber INNER_STICKY == SLIME (Framed Slime CAN grab normal blocks like real slime)
+- Rule 10 exempted when grabber INNER_STICKY == HONEY
+- Rule 11 exempted when grabber INNER_STICKY == ODD_SLIME
+
+### Framed Odd Slime Directional Behavior
+
+Framed Odd Slime does NOT use a blanket directional rule. A blanket rule would disable ALL stickiness including frame stickiness when pushed in non-FACING directions. Instead, the directional gating is handled in PistonStructureResolverMixin:
+
+1. ideomod$isFramedOddSlimeDirectionallyBlocked() — checks if inner stickiness should be blocked by direction
+2. ideomod$wouldFrameStickinessAllow() — second-chance: if ACTIVE and neighbor is same-material frame or machine family, allow despite directional block
+3. Result: pushed in FACING dir → both inner + frame stickiness work. Pushed in other dir → only frame stickiness works (if ACTIVE).
 
 ### How Each Pair Is Implemented
 
@@ -182,3 +204,5 @@ The mixin enforces rules at **two** points in `PistonStructureResolver`:
 This also prevents slime from grabbing Machine Block. Use a grab immunity rule instead:
 
 [OK] `canStickTo` returns `true` for slime. Register rule: `(grabber=MachineBlock, target=Slime) -> BLOCKED`.
+
+Written by Claude, directed and guided by The Ideomancer.
