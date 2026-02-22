@@ -314,13 +314,6 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
 2. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
 3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
-4. **DrillBlock is on hold** -- still registered and taking up registry space. Fine for staging.
-5. **Furnace array has no particle/sound on formation** -- structures register silently (debug stick only). Planned for Phase 5.
-6. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
-7. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
-8. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
-9. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
-10. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
-11. **Item model facing** -- Framed block items always show default orientation. No world-facing context in item rendering.
+4. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
 
 Written by Claude, directed and guided by The Ideomancer.

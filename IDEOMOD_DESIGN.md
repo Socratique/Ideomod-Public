@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-22f (Rendering overhaul, FACING + INNER_STICKY properties, inner stickiness, noOcclusion fix)*
+*Last updated: 2026-02-22g (Issues cleanup -- removed placeholder art, Drill hold, and furnace indicator from tracked issues)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -98,11 +98,9 @@
 
 **Known issues:**
 - Face search is axis-aligned only (no cone/hemisphere)
-- Placeholder texture & recipe
 
 **Future ideas:**
 - *[IDEA] Expand face search to half-sphere/cone per face*
-- *[IDEA] Non-placeholder texture (purple-grey stone currently)*
 - *[IDEA] Oddstone as universal mod economy resource -- gates Portals, Inhibitors, Machine Blocks (via Hollow Stone), Placers, Disenchanting Table (see Systems > Oddstone Economy)*
 
 **Interactions:**
@@ -667,8 +665,6 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 
 **Known issues (current implementation):**
 - Current Machine Block is a simple block, not a block entity -- needs refactor to block entity with GUI
-- Placeholder texture (needs mechanical pixel art showing the item slot)
-- Placeholder recipe (will change to require Hollow Stone)
 - Redstone conduction currently baked into the base block -- needs extraction to Machine Conductor specialization
 
 ---
@@ -697,8 +693,7 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 | Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
 
 **Known issues:**
-- Placeholder texture (uses machine_block.png)
-- Placeholder recipe
+- None currently
 
 **Design notes:**
 - Track is protected during pushes because its position is passed as initiatorPos to BlockMoveHelper (resolver treats it as pistonPos).
@@ -727,8 +722,7 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 | Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
 
 **Known issues:**
-- Placeholder texture (uses machine_block.png)
-- Placeholder recipe
+- None currently
 
 **Design notes:**
 - No active behavior. Pure cargo block.
@@ -786,10 +780,8 @@ With inner sticky block (e.g., Framed Slime): inherits inner block's grab behavi
 Framed Blocks use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
-- Active textures are placeholders.
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
 - Item model translucency: translucent inner blocks (glass, slime) render opaque in inventory. Cosmetic only.
-- Item model facing: items always show default orientation.
 
 **Completed improvements (2026-02-22f):**
 
@@ -866,9 +858,7 @@ Machine Blocks also call FrameActivation.recalculate() in their own lifecycle ho
 - When inactive: isStickyBlock() returns false, block is non-sticky
 
 **Known issues:**
-- Placeholder textures (2px edge frame pattern)
-- Placeholder recipes
-- Placeholder model (cube_all -- should be custom frame shape)
+- Model is cube_all -- should be custom frame shape
 
 **Notes:** Frame Blocks share the IFrameBlock interface and FrameMaterial enum with future Framed Blocks. An Iron Frame and an Iron Framed Stone will stick to each other when activated (same material family).
 
@@ -1019,9 +1009,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Uses vanilla block event system for client-server synchronization. Movement runs on both sides for proper animation. |
 
 **Known issues:**
-**Known issues:**
-- Placeholder texture
-- Placeholder recipe
+- None currently
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -1054,8 +1042,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Same block event pattern as Repulser for client-server animation. |
 
 **Known issues:**
-- Placeholder texture
-- Placeholder recipe
+- None currently
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -1575,7 +1562,7 @@ Branches express their connections as arms (additive geometry extending outward 
 | Chain pulling | [DONE] | When active (pushed in FACING direction), Odd Slime pulls blocks behind it in the backward walk. Special mixin exemption allows this despite grab immunity. |
 
 **Known issues:**
-- Placeholder texture
+- None currently
 
 ---
 

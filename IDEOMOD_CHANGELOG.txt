@@ -1,5 +1,41 @@
 # Ideomod Changelog
 
+## [2026-02-22g] Documentation — Issues Cleanup
+
+Removed non-actionable items from the Known Issues sections across all three
+documentation files (IDEOMOD_DOCUMENTATION.md, CODEBASE_REFERENCE.md,
+IDEOMOD_DESIGN.md).
+
+### Removed items:
+
+- **Placeholder textures/art**: Removed from tracked issues across all docs and
+  per-block Known Issues in Design doc. Textures are end-stage polish, not
+  development blockers. Replacements are already underway.
+- **DrillBlock on hold**: Removed as a tracked issue. It's intentional staging
+  behavior, not a problem to solve.
+- **Furnace array formation indicator (particle/sound)**: Removed. The renamed
+  furnace GUI name ("Enhanced Furnace" etc.) already communicates formation
+  status to the player. No additional indicator needed.
+- **Framed block active texture placeholders**: Same as above — art polish,
+  not a tracked issue.
+- **Frame Block placeholder textures/recipes**: Same rationale.
+- **Item model facing**: Removed. Default orientation in inventory is standard
+  behavior for block items, not a bug or limitation.
+
+### Renumbered remaining issues:
+
+Documentation (6 remaining): stickiness consolidation, portal file org,
+two ThreadLocal risks, config reload command, item model translucency.
+
+Codebase Reference (4 remaining): ThreadLocal risk, portal file org,
+stickiness consolidation, item model translucency.
+
+Also fixed a duplicate "Known issues:" line in the Oddstone Repulser
+section of IDEOMOD_DESIGN.md.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-22f] Framed Blocks — Rendering Overhaul + FACING + INNER_STICKY
 
 Major rendering rewrite and two new blockstate properties for framed blocks.

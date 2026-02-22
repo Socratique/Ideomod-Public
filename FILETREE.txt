@@ -42,6 +42,7 @@
 |  |           +-- client
 |  |           |  +-- FramedBlockDebugOverlay.java
 |  |           |  +-- FramedBlockItemModel.java
+|  |           |  +-- FramedBlockRenderTypes.java
 |  |           |  +-- MachineFrameScreen.java
 |  |           |  +-- ModColorHandlers.java
 |  |           |  \\-- MovingFrameData.java

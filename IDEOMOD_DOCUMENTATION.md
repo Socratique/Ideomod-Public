@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-22f*
+*Last updated: 2026-02-22g*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -1185,13 +1185,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 2 | 5 portal files in flat block/ package | Organization | Could move to block/portal/ |
 | 3 | MachineFrameBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineFrameBlock.java |
 | 4 | MachineTrackBlock.isUpdating is static (not ThreadLocal) | Low risk | MachineTrackBlock.java |
-| 5 | DrillBlock on hold, still registered | Intentional | N/A |
-| 6 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
-| 7 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
-| 8 | Track/Trolley use machine_block.png placeholder texture | Missing art | machine_track, machine_trolley |
-| 9 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
-| 10 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. |
-| 11 | Item model facing | Cosmetic | Framed block items always show default orientation. No world-facing context in item rendering. |
+| 5 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
+| 6 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. |
 
 
 ## 15. CONVENTIONS & PATTERNS
