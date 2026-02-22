@@ -1,5 +1,52 @@
 # Ideomod Changelog
 
+## [2026-02-22c] Framed Blocks — Piston Transit Flicker Fix
+
+Resolved the dark flicker artifact during piston transit of framed blocks.
+The flicker was most noticeable on vertical pushes (especially downward)
+and appeared as a brief brightness pop mid-animation.
+
+### Root cause:
+
+The transit renderer (PistonMovingBlockEntityRendererMixin) was using a
+SINGLE light value for all 6 faces of the inner block cuboid. The BESR
+(FramedBlockRenderer) uses PER-FACE light sampling — each face checks
+its own directional neighbor for light. The mismatch between these two
+lighting models caused a visible brightness "pop" at the transition
+boundaries (BESR → transit renderer → BESR).
+
+Vertical movement was worst because the UP face (bright sky neighbor)
+and DOWN face (dark ground neighbor) have the largest light difference.
+When the transit renderer averaged them into a single value, the UP face
+suddenly dimmed and the DOWN face suddenly brightened for the duration
+of the animation. Horizontal movement was barely affected because all
+side-face neighbors are at the same Y level with similar light.
+
+### Fix:
+
+PistonMovingBlockEntityRendererMixin now samples light PER FACE from
+the face-direction neighbor, matching the BESR approach exactly. It
+samples at both the source and destination positions and smoothly
+interpolates based on animation progress using Mth.lerp(). At
+progress=0.0 the lighting matches the BESR at the source position; at
+progress=1.0 it matches the BESR at the destination. No pop at either
+boundary.
+
+### Updated files:
+- mixin/client/PistonMovingBlockEntityRendererMixin.java — per-face
+  light sampling with source/dest interpolation
+
+### Diagnostic tooling:
+- Added per-push diagnostic counter (DIAG_FRAMES_PER_PUSH). Set to 0
+  (disabled) by default. Set to e.g. 60 to log per-frame light data
+  for debugging. Resets per piston operation, not globally.
+- Previous diagnostic (global counter) was broken — burned through all
+  frames on first push, never logged subsequent pushes. Fixed by
+  resetting when a new destPos is detected.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-22b] Framed Blocks — Visual Polish (Piston Transit + Item Rendering)
 
 Resolved both deferred visual polish items from the Framed Blocks implementation.
@@ -35,7 +82,8 @@ doesn't know about FramedBlockRenderer's two-layer rendering system.
    - Draws inner block cuboid with epsilon inset (same geometry as BESR)
    - Uses ItemBlockRenderTypes.getMovingBlockRenderType() for proper Forge
      render pipeline compatibility
-   - Samples light at source position (first half) / dest position (second half)
+   - Per-face light sampling from directional neighbors, blended between
+     source and destination positions by animation progress
    - Vanilla then renders the frame overlay on top with the same transform
 
 ### Fix 2: Item Rendering (inner block visible in inventory/creative)
@@ -91,11 +139,10 @@ frame texture. "Iron Framed Stone" vs "Iron Framed Dirt" indistinguishable.
    which internally call getExtendedProgress() handling both extension and
    retraction correctly.
 
-### Known remaining artifacts:
-- Brief dark flicker (1-2 frames) at animation start/end during transition
-  between BESR and transit renderer. More noticeable on downward pushes due
-  to light sampling at destination position (potentially underground/darker).
-  Acceptable for current stage.
+5. Lighting model mismatch: Transit renderer initially used single light value
+   for all faces. BESR uses per-face neighbor sampling. Mismatch caused visible
+   brightness pop at animation boundaries, worst on vertical moves. Fixed in
+   [2026-02-22c].
 
 ### Known bug discovered:
 - Framed blocks currently behave as always-sticky to same-material frames,
@@ -176,8 +223,9 @@ rendering on top.
 6. 1-tick piston data loss: finalTick() hook (see above).
 7. Middle-click gave empty frame: Added getCloneItemStack() override.
 
-### Known visual polish items (resolved in 2026-02-22b):
+### Known visual polish items (resolved in 2026-02-22b and 2026-02-22c):
 - Piston move animation: FIXED. Client-side mixin renders inner block during transit.
+  Flicker artifact resolved via per-face light sampling.
 - Creative menu item rendering: FIXED. Custom BakedModel shows inner block texture.
 
 Written by Claude, directed and guided by The Ideomancer.

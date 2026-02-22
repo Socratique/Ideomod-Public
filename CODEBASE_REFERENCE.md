@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-22*
+*Last updated: 2026-02-22c*
 
 ---
 
@@ -313,6 +313,5 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
 8. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
 9. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
-10. **Framed block piston transit rendering has minor flicker** -- Brief dark flicker (1-2 frames) at animation start/end. More noticeable on downward pushes. Acceptable for current stage.
-11. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
-12. **Framed blocks always-sticky bug** -- Framed blocks currently stick to same-material frames regardless of ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation system. isStickyBlock() likely returns true unconditionally instead of checking ACTIVE property.
+10. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
+11. **Framed blocks always-sticky bug** -- Framed blocks currently stick to same-material frames regardless of ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation system. isStickyBlock() likely returns true unconditionally instead of checking ACTIVE property.

@@ -41,14 +41,19 @@
 |  |           |  \\-- StickinessRules.java
 |  |           +-- client
 |  |           |  +-- FramedBlockDebugOverlay.java
+|  |           |  +-- FramedBlockItemModel.java
 |  |           |  +-- MachineFrameScreen.java
-|  |           |  \\-- ModColorHandlers.java
+|  |           |  +-- ModColorHandlers.java
+|  |           |  \\-- MovingFrameData.java
 |  |           +-- config
 |  |           |  \\-- OddstoneConfig.java
 |  |           +-- effect
 |  |           |  \\-- JudgementEffect.java
 |  |           +-- entity
 |  |           +-- mixin
+|  |           |  +-- client
+|  |           |  |  +-- PistonBaseBlockClientMixin.java
+|  |           |  |  \\-- PistonMovingBlockEntityRendererMixin.java
 |  |           |  +-- AbstractFurnaceBlockEntityMixin.java
 |  |           |  +-- PistonBaseBlockMixin.java
 |  |           |  +-- PistonMovingBlockEntityMixin.java

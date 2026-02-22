@@ -17,6 +17,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LightLayer;
@@ -44,10 +45,14 @@ import java.util.List;
  * Vanilla proceeds to render the frame overlay with the same offset.
  *
  * LIGHTING:
- *   The PMBE sits at the destination position, but the block is visually
- *   sliding from the source. We sample light at the block's current visual
- *   position by computing the source position from the PMBE direction and
- *   interpolating based on progress.
+ *   Uses PER-FACE light sampling matching the BESR (FramedBlockRenderer):
+ *   for each face direction, sample light from the neighbor block on that
+ *   side. This is done at BOTH the source and destination positions, then
+ *   blended by animation progress.
+ *
+ *   This eliminates the visual "pop" when transitioning between the BESR
+ *   (which does per-face neighbor sampling) and a flat single-light-value
+ *   approach. The lighting now matches at both animation boundaries.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -62,6 +67,20 @@ public abstract class PistonMovingBlockEntityRendererMixin {
 
     @Unique
     private static boolean ideomod$loggedOnce = false;
+
+    /**
+     * Diagnostic: counts down per piston operation, not globally.
+     * Resets each time we see a new destPos (new piston push).
+     * Set to 0 to disable all diagnostic logging.
+     */
+    @Unique
+    private static final int DIAG_FRAMES_PER_PUSH = 0; // Set to e.g. 60 to enable
+
+    @Unique
+    private static int ideomod$diagCounter = 0;
+
+    @Unique
+    private static BlockPos ideomod$lastDiagPos = null;
 
     @Inject(method = "render(Lnet/minecraft/world/level/block/piston/PistonMovingBlockEntity;FLcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;II)V",
             at = @At("HEAD"))
@@ -107,31 +126,72 @@ public abstract class PistonMovingBlockEntityRendererMixin {
                 blockEntity.getZOff(partialTick)
         );
 
-        // === LIGHTING ===
-        // Sample light at the block's current VISUAL position, not the PMBE's
-        // block position (which is the destination, possibly underground).
+        // === PER-FACE LIGHTING ===
         //
-        // Vanilla's PistonHeadRenderer samples light at:
-        //   blockpos = getBlockPos().relative(getMovementDirection().getOpposite())
-        // which is the SOURCE position. We do the same — the source position
-        // is where the block appears to be for most of the animation.
+        // The BESR (FramedBlockRenderer) samples light per face by checking
+        // the neighbor block in that face's direction. We must match this
+        // approach during transit to avoid a brightness "pop" at the start
+        // and end of the animation.
+        //
+        // For each face:
+        //   1. Sample light at sourcePos.relative(face) — the neighbor the
+        //      BESR would sample at the animation start
+        //   2. Sample light at destPos.relative(face) — the neighbor the
+        //      BESR will sample at the animation end
+        //   3. Blend between them based on animation progress
+        //
+        // This means at progress=0.0 the lighting exactly matches what the
+        // BESR was showing before the move started, and at progress=1.0 it
+        // exactly matches what the BESR will show after the move finishes.
+        // No pop at either boundary.
+
         BlockPos sourcePos = destPos.relative(blockEntity.getMovementDirection().getOpposite());
-
-        // Use the source position's light for the first half of the animation,
-        // and the destination's light for the second half.
         float progress = blockEntity.getProgress(partialTick);
-        BlockPos lightPos = progress < 0.5f ? sourcePos : destPos;
 
-        int lightAtPos = LightTexture.pack(
-                level.getBrightness(LightLayer.BLOCK, lightPos),
-                level.getBrightness(LightLayer.SKY, lightPos)
-        );
+        // Reset diagnostic counter when we see a new position (new push)
+        if (DIAG_FRAMES_PER_PUSH > 0 && !destPos.equals(ideomod$lastDiagPos)) {
+            ideomod$lastDiagPos = destPos.immutable();
+            ideomod$diagCounter = DIAG_FRAMES_PER_PUSH;
+        }
 
         for (Direction face : Direction.values()) {
             TextureAtlasSprite sprite = ideomod$getFaceSprite(model, innerState, face, random);
             if (sprite == null) continue;
 
-            ideomod$drawFace(poseStack, consumer, face, sprite, lightAtPos, packedOverlay);
+            // Sample light from the face-direction neighbor at both positions
+            BlockPos srcNeighbor = sourcePos.relative(face);
+            BlockPos dstNeighbor = destPos.relative(face);
+
+            int srcBlockLight = level.getBrightness(LightLayer.BLOCK, srcNeighbor);
+            int srcSkyLight   = level.getBrightness(LightLayer.SKY, srcNeighbor);
+            int dstBlockLight = level.getBrightness(LightLayer.BLOCK, dstNeighbor);
+            int dstSkyLight   = level.getBrightness(LightLayer.SKY, dstNeighbor);
+
+            // Smooth blend based on animation progress
+            int blendedBlock = Math.round(Mth.lerp(progress, srcBlockLight, dstBlockLight));
+            int blendedSky   = Math.round(Mth.lerp(progress, srcSkyLight, dstSkyLight));
+            int faceLight = LightTexture.pack(blendedBlock, blendedSky);
+
+            // Diagnostic logging (per-face, only when enabled)
+            if (ideomod$diagCounter > 0 && face == Direction.UP) {
+                IDEOMOD_LOGGER.info("[RendererMixin] DIAG #{} progress={} face={} " +
+                                "srcNeighbor={} srcLight=({},{}) dstNeighbor={} dstLight=({},{}) " +
+                                "blended=({},{}) vanillaLight={}",
+                        ideomod$diagCounter,
+                        String.format("%.3f", progress),
+                        face,
+                        srcNeighbor, srcBlockLight, srcSkyLight,
+                        dstNeighbor, dstBlockLight, dstSkyLight,
+                        blendedBlock, blendedSky,
+                        packedLight);
+            }
+
+            ideomod$drawFace(poseStack, consumer, face, sprite, faceLight, packedOverlay);
+        }
+
+        // Decrement diagnostic counter after all faces drawn
+        if (ideomod$diagCounter > 0) {
+            ideomod$diagCounter--;
         }
 
         poseStack.popPose();

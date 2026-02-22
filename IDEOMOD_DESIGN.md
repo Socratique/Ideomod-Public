@@ -763,7 +763,7 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | Inner block storage | [IMPLEMENTED] | Block entity stores ResourceLocation of the wrapped block. |
 | Outer frame (static) | [IMPLEMENTED] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). |
 | Inner texture (dynamic) | [IMPLEMENTED] | BlockEntityRenderer (BESR) fetches the stored block's texture from the atlas at render time and draws it on the inner cuboid faces. Works with any block including modded. |
-| Piston transit rendering | [IMPLEMENTED] | Client-side mixin renders inner block during 2-tick piston animation. Minor dark flicker artifact at animation boundaries. |
+| Piston transit rendering | [IMPLEMENTED] | Client-side mixin renders inner block during 2-tick piston animation. Per-face light sampling with source/dest interpolation for seamless visual handoff. |
 | Item/inventory rendering | [IMPLEMENTED] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. |
 | Machine-activated stickiness | [IMPLEMENTED] | Will use the Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. Activation chains through matching material (iron->iron, copper->copper), capped at 12 blocks. |
 | Material exclusivity | [IMPLEMENTED] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
@@ -781,7 +781,6 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 Framed Blocks will use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
-- Piston animation: minor dark flicker (1-2 frames) at animation start/end. More noticeable on downward pushes. Acceptable for current stage.
 - Active textures are placeholders.
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
 - Framed Slime Block does not grab normal blocks. Frame grab immunity (rules 9-11) currently overrides inner block stickiness. See planned fix below.

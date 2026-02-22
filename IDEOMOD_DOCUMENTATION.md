@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-22*
+*Last updated: 2026-02-22c*
 
 ---
 
@@ -601,7 +601,7 @@ Static utility determining whether a block can be framed. Criteria: (1) Full cub
 
 **Layer 2 (JSON model — RenderShape.MODEL)**: Frame overlay with transparent interior pixels. Active variant uses brighter texture. Full block size. RenderType: cutoutMipped.
 
-**Layer 3 (Transit Renderer — PistonMovingBlockEntityRendererMixin)**: Client-side mixin into PistonHeadRenderer.render(). Renders inner block texture during piston 2-tick animation. Uses same epsilon-inset geometry as the BESR. Animation offset via vanilla's getXOff/getYOff/getZOff. Light sampled at source position (first half) / destination (second half). Data provided by PistonBaseBlockClientMixin's capture pass into MovingFrameData cache.
+**Layer 3 (Transit Renderer — PistonMovingBlockEntityRendererMixin)**: Client-side mixin into PistonHeadRenderer.render(). Renders inner block texture during piston 2-tick animation. Uses same epsilon-inset geometry as the BESR. Animation offset via vanilla's getXOff/getYOff/getZOff. Per-face light sampling from directional neighbors at both source and destination positions, blended by animation progress via Mth.lerp() — matches BESR lighting model for seamless handoff. Data provided by PistonBaseBlockClientMixin's capture pass into MovingFrameData cache.
 
 **Layer 4 (Item Rendering — FramedBlockItemModel)**: Custom BakedModel wrapping the standard frame model. ItemOverrides.resolve() reads BlockEntityTag.InnerBlock from ItemStack NBT, fetches inner block's BakedModel, returns CompositeModel merging inner + frame quads. ConcurrentHashMap cache keyed by inner block ResourceLocation. Registered via ModelEvent.ModifyBakingResult in Ideomod.java.
 
@@ -625,7 +625,7 @@ RENDER (client-only, runs each frame during 2-tick animation):
 
 ### Known Visual Artifacts
 
-- Brief dark flicker (1-2 frames) at animation start/end during transition between BESR and transit renderer. More noticeable on downward pushes due to light sampling at destination position. Acceptable for current stage.
+- None currently. Previous dark flicker artifact (1-2 frames, most visible on vertical pushes) was resolved by switching the transit renderer from single-value light sampling to per-face neighbor sampling matching the BESR approach. See changelog [2026-02-22c].
 
 ### Recipe System (CustomRecipe): matches 1 frame item + 1 frameable BlockItem. Output is corresponding framed block item with BlockEntityTag.InnerBlock NBT. Single JSON trigger file (data/ideomod/recipes/framed_block.json). Serializer registered via ModRecipeSerializers (DeferredRegister<RecipeSerializer<?>>).
 
@@ -643,7 +643,7 @@ PistonStructureResolverMixin's sympathetic search checks for both direct Oddston
 
 ### Visual Polish Items (Resolved 2026-02-22)
 
-1. **Piston move animation**: FIXED. Inner block visible during 2-tick transit via PistonMovingBlockEntityRendererMixin + MovingFrameData cache. Minor flicker artifact remains (see Known Visual Artifacts above).
+1. **Piston move animation**: FIXED. Inner block visible during 2-tick transit via PistonMovingBlockEntityRendererMixin + MovingFrameData cache. Flicker artifact resolved via per-face light sampling matching BESR (see changelog [2026-02-22c]).
 2. **Creative/inventory item rendering**: FIXED. FramedBlockItemModel (custom BakedModel) reads inner block from NBT and composites inner + frame quads. Items correctly show inner block texture.
 
 ## 7. PORTAL SYSTEM
@@ -1152,9 +1152,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 7 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
 | 8 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
 | 9 | Track/Trolley use machine_block.png placeholder texture | Missing art | machine_track, machine_trolley |
-| 10 | Framed block piston transit has minor dark flicker | Visual artifact | PistonMovingBlockEntityRendererMixin |
-| 11 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
-| 12 | Framed blocks always-sticky bug | Functional bug | FramedBlock.isStickyBlock() ignores ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation. Currently sticks to same-material frames unconditionally. |
+| 10 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
+| 11 | Framed blocks always-sticky bug | Functional bug | FramedBlock.isStickyBlock() ignores ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation. Currently sticks to same-material frames unconditionally. |
 
 
 ## 15. CONVENTIONS & PATTERNS
