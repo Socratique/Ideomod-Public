@@ -39,7 +39,7 @@
 
 Build config files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
-Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, and `PistonMovingBlockEntityMixin` in the `mixins` array (common, not client-only). Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
+Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array — Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
 
 gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.0`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
 
@@ -85,7 +85,9 @@ com.ideomancer.ideomod
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (tintIndex system)
   |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
-  |     |-- FramedBlockRenderer.java    BESR for framed blocks (inner texture)
+  |     |-- FramedBlockRenderer.java     BESR for framed blocks (inner texture at rest)
+  |     |-- FramedBlockItemModel.java    Custom BakedModel for framed items (inner texture in inventory)
+  |     |-- MovingFrameData.java         Client-side cache for inner block IDs during piston transit
   |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
@@ -95,7 +97,10 @@ com.ideomancer.ideomod
   |     |-- PistonStructureResolverMixin.java    4-feature mixin (see section 5)
   |     |-- PistonBaseBlockMixin.java            Allows IPistonMovable BE movement + saves data
   |     |-- PistonMovingBlockEntityMixin.java    Restores IPistonMovable data after animation
-  |     \-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (section 8)
+  |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (section 8)
+  |     \-- client/
+  |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
+  |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
   |-- multiblock/
   |     |-- StructureDefinition.java     Abstract base for structure type rulesets
   |     |-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame, sizing)
@@ -590,15 +595,39 @@ Static utility determining whether a block can be framed. Criteria: (1) Full cub
 | getAdjacentBlockPathType | Per-position | Adjacent pathfinding preserved |
 | getCloneItemStack | Per-position | Middle-click returns proper NBT stack |
 
-### Rendering (Two-Layer System)
+### Rendering (Three-Layer System)
 
-**Layer 1 (BESR — FramedBlockRenderer)**: Full-size inner block texture per face. Epsilon inset (0.001 blocks) prevents z-fighting with frame overlay. Per-face light sampling from neighboring blocks for proper brightness. Extracts TextureAtlasSprite from inner block's BakedModel per face direction. CW winding on sides, CCW on top/bottom (Minecraft convention). RenderType: cutoutMipped.
+**Layer 1 (BESR — FramedBlockRenderer)**: Full-size inner block texture per face when block is at rest. Epsilon inset (0.001 blocks) prevents z-fighting with frame overlay. Per-face light sampling from neighboring blocks for proper brightness. Extracts TextureAtlasSprite from inner block's BakedModel per face direction. CW winding on sides, CCW on top/bottom (Minecraft convention). RenderType: cutoutMipped.
 
 **Layer 2 (JSON model — RenderShape.MODEL)**: Frame overlay with transparent interior pixels. Active variant uses brighter texture. Full block size. RenderType: cutoutMipped.
 
-### Recipe System
+**Layer 3 (Transit Renderer — PistonMovingBlockEntityRendererMixin)**: Client-side mixin into PistonHeadRenderer.render(). Renders inner block texture during piston 2-tick animation. Uses same epsilon-inset geometry as the BESR. Animation offset via vanilla's getXOff/getYOff/getZOff. Light sampled at source position (first half) / destination (second half). Data provided by PistonBaseBlockClientMixin's capture pass into MovingFrameData cache.
 
-FramedBlockRecipe (CustomRecipe): matches 1 frame item + 1 frameable BlockItem. Output is corresponding framed block item with BlockEntityTag.InnerBlock NBT. Single JSON trigger file (data/ideomod/recipes/framed_block.json). Serializer registered via ModRecipeSerializers (DeferredRegister<RecipeSerializer<?>>).
+**Layer 4 (Item Rendering — FramedBlockItemModel)**: Custom BakedModel wrapping the standard frame model. ItemOverrides.resolve() reads BlockEntityTag.InnerBlock from ItemStack NBT, fetches inner block's BakedModel, returns CompositeModel merging inner + frame quads. ConcurrentHashMap cache keyed by inner block ResourceLocation. Registered via ModelEvent.ModifyBakingResult in Ideomod.java.
+
+### Client-Side Transit Data Pipeline
+
+```
+CAPTURE (client-only, runs on Render thread via block events):
+  PistonBaseBlockClientMixin.moveBlocks() at HEAD
+    Extension: PistonStructureResolver finds toPush list
+    Retraction: Sticky-group-aware BFS (resolver fails for IPistonMovable)
+       |
+       v
+CACHE: MovingFrameData (ConcurrentHashMap<BlockPos, ResourceLocation>)
+  Cleared at start of each capture pass. Keyed by DESTINATION position.
+       |
+       v
+RENDER (client-only, runs each frame during 2-tick animation):
+  PistonMovingBlockEntityRendererMixin.render() at HEAD
+  Reads from MovingFrameData, draws inner block cuboid before frame overlay.
+```
+
+### Known Visual Artifacts
+
+- Brief dark flicker (1-2 frames) at animation start/end during transition between BESR and transit renderer. More noticeable on downward pushes due to light sampling at destination position. Acceptable for current stage.
+
+### Recipe System (CustomRecipe): matches 1 frame item + 1 frameable BlockItem. Output is corresponding framed block item with BlockEntityTag.InnerBlock NBT. Single JSON trigger file (data/ideomod/recipes/framed_block.json). Serializer registered via ModRecipeSerializers (DeferredRegister<RecipeSerializer<?>>).
 
 ### Creative Tab
 
@@ -612,10 +641,10 @@ FramedBlockDebugOverlay subscribes to CustomizeGuiOverlayEvent.DebugText. When F
 
 PistonStructureResolverMixin's sympathetic search checks for both direct OddstoneBlock AND FramedBlock with inner OddstoneBlock. Framed Oddstone participates in sympathetic movement chains.
 
-### Known Visual Polish Items (Deferred)
+### Visual Polish Items (Resolved 2026-02-22)
 
-1. **Piston move animation**: Inner block not visible during 2-tick transit. Block appears as empty frame during move. Would require hooking into PistonHeadRenderer or PistonMovingBlockEntity rendering.
-2. **Creative/inventory item rendering**: Items in inventory/creative tab show only the frame texture, not the inner block. Would require a custom BakedModel override or dynamic item texture system.
+1. **Piston move animation**: FIXED. Inner block visible during 2-tick transit via PistonMovingBlockEntityRendererMixin + MovingFrameData cache. Minor flicker artifact remains (see Known Visual Artifacts above).
+2. **Creative/inventory item rendering**: FIXED. FramedBlockItemModel (custom BakedModel) reads inner block from NBT and composites inner + frame quads. Items correctly show inner block texture.
 
 ## 7. PORTAL SYSTEM
 
@@ -1123,9 +1152,9 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 7 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | OddstoneConfig.java |
 | 8 | Furnace array has no particle/sound on formation | Missing polish | StructureManager / FurnaceArrayEffect |
 | 9 | Track/Trolley use machine_block.png placeholder texture | Missing art | machine_track, machine_trolley |
-| 10 | Framed block inner texture invisible during piston animation | Visual polish | FramedBlockRenderer / PistonHeadRenderer |
-| 11 | Framed block items show only frame texture in inventory | Visual polish | Would need custom BakedModel |
-| 12 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
+| 10 | Framed block piston transit has minor dark flicker | Visual artifact | PistonMovingBlockEntityRendererMixin |
+| 11 | Framed block active textures are placeholders | Missing art | iron_frame_active.png, copper_frame_active.png |
+| 12 | Framed blocks always-sticky bug | Functional bug | FramedBlock.isStickyBlock() ignores ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation. Currently sticks to same-material frames unconditionally. |
 
 
 ## 15. CONVENTIONS & PATTERNS

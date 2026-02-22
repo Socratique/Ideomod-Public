@@ -6,6 +6,7 @@ import com.ideomancer.ideomod.block.ModRecipeSerializers;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.StickinessRules;
+import com.ideomancer.ideomod.client.FramedBlockItemModel;
 import com.ideomancer.ideomod.client.FramedBlockRenderer;
 import com.ideomancer.ideomod.client.MachineFrameScreen;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
@@ -20,10 +21,14 @@ import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
+import net.minecraft.client.resources.model.BakedModel;
+import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.core.Direction;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
+import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
 import net.minecraftforge.fml.common.Mod;
@@ -31,6 +36,8 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
 import net.minecraftforge.fml.javafmlmod.FMLJavaModLoadingContext;
 import org.slf4j.Logger;
+
+import java.util.Map;
 
 /**
  * Main mod class for Ideomod
@@ -55,6 +62,7 @@ public class Ideomod {
 
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
+        modEventBus.addListener(this::onModifyBakingResult);
 
         MinecraftForge.EVENT_BUS.register(this);
 
@@ -189,5 +197,36 @@ public class Ideomod {
             MinecraftForge.EVENT_BUS.register(new com.ideomancer.ideomod.client.FramedBlockDebugOverlay());
         });
         LOGGER.info("Ideomod client setup complete!");
+    }
+
+    /**
+     * Wrap the framed block item models with FramedBlockItemModel so that
+     * items in inventory/creative show the inner block texture composited
+     * with the frame overlay, instead of just the plain frame texture.
+     *
+     * ModelEvent.ModifyBakingResult fires after all models are baked but
+     * before they're used. We find the framed block item models by their
+     * ModelResourceLocation and replace them with our wrapper.
+     */
+    private void onModifyBakingResult(final ModelEvent.ModifyBakingResult event) {
+        Map<ResourceLocation, BakedModel> models = event.getModels();
+
+        // Item models use ModelResourceLocation with "inventory" variant
+        ModelResourceLocation ironKey = new ModelResourceLocation(
+                MOD_ID, "iron_framed_block", "inventory");
+        ModelResourceLocation copperKey = new ModelResourceLocation(
+                MOD_ID, "copper_framed_block", "inventory");
+
+        BakedModel ironOriginal = models.get(ironKey);
+        if (ironOriginal != null) {
+            models.put(ironKey, new FramedBlockItemModel(ironOriginal));
+            LOGGER.info("Wrapped iron_framed_block item model with FramedBlockItemModel");
+        }
+
+        BakedModel copperOriginal = models.get(copperKey);
+        if (copperOriginal != null) {
+            models.put(copperKey, new FramedBlockItemModel(copperOriginal));
+            LOGGER.info("Wrapped copper_framed_block item model with FramedBlockItemModel");
+        }
     }
 }

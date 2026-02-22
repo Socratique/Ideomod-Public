@@ -1,5 +1,112 @@
 # Ideomod Changelog
 
+## [2026-02-22b] Framed Blocks — Visual Polish (Piston Transit + Item Rendering)
+
+Resolved both deferred visual polish items from the Framed Blocks implementation.
+Inner block textures now render during piston transit animations and in
+inventory/creative menu items.
+
+### Fix 1: Piston Transit Rendering (inner block visible during 2-tick animation)
+
+**Problem**: During piston movement, framed blocks showed only the empty frame
+overlay. The inner block texture disappeared because vanilla's PistonHeadRenderer
+doesn't know about FramedBlockRenderer's two-layer rendering system.
+
+**Solution**: Two client-side mixins + a data cache:
+
+1. `client/MovingFrameData.java` — ConcurrentHashMap cache storing destination
+   position -> inner block ResourceLocation. Client-only, populated before
+   vanilla destroys block entities.
+
+2. `mixin/client/PistonBaseBlockClientMixin.java` — Injects at HEAD of
+   PistonBaseBlock.moveBlocks() on client side. Captures FramedBlock inner
+   block IDs before vanilla destroys the block entities during the move.
+   - Extension: uses PistonStructureResolver (handles branching groups)
+   - Retraction: resolver fails for IPistonMovable blocks (documented Bug 3).
+     Uses sticky-group-aware BFS mirroring the server-side PistonBaseBlockMixin
+     approach: line walk from pull position + isStickyBlock()/canStickTo()
+     neighbor expansion.
+   - Clears stale MovingFrameData at start of each capture pass.
+
+3. `mixin/client/PistonMovingBlockEntityRendererMixin.java` — Injects at HEAD
+   of PistonHeadRenderer.render(). When the moved block is a FramedBlock:
+   - Looks up inner block ID from MovingFrameData
+   - Applies animation offset using vanilla's own getXOff/getYOff/getZOff
+   - Draws inner block cuboid with epsilon inset (same geometry as BESR)
+   - Uses ItemBlockRenderTypes.getMovingBlockRenderType() for proper Forge
+     render pipeline compatibility
+   - Samples light at source position (first half) / dest position (second half)
+   - Vanilla then renders the frame overlay on top with the same transform
+
+### Fix 2: Item Rendering (inner block visible in inventory/creative)
+
+**Problem**: All framed block items looked identical in inventory — just the
+frame texture. "Iron Framed Stone" vs "Iron Framed Dirt" indistinguishable.
+
+**Solution**: Custom BakedModel wrapper:
+
+1. `client/FramedBlockItemModel.java` — BakedModel with custom ItemOverrides.
+   Reads BlockEntityTag.InnerBlock from ItemStack NBT, looks up inner block's
+   BakedModel, returns CompositeModel merging inner block quads + frame overlay
+   quads. ConcurrentHashMap cache keyed by ResourceLocation.
+
+2. `Ideomod.java` — Added onModifyBakingResult(ModelEvent.ModifyBakingResult)
+   listener. Wraps iron_framed_block and copper_framed_block item models with
+   FramedBlockItemModel at bake time.
+
+### Updated files:
+- Ideomod.java — Added onModifyBakingResult listener, ResourceLocation import
+- ideomod.mixins.json — Added client mixins to common array (Forge dev
+  environment does not process the "client" array reliably; client mixins
+  have their own isClientSide guards or target client-only classes)
+
+### New files:
+- client/MovingFrameData.java
+- client/FramedBlockItemModel.java
+- mixin/client/PistonBaseBlockClientMixin.java
+- mixin/client/PistonMovingBlockEntityRendererMixin.java
+
+### Challenges resolved:
+1. Mixin config "client" array: Forge dev environment silently ignores the
+   "client" array in mixin JSON configs. Mixins applied but never fired.
+   Fix: moved client mixins to "mixins" (common) array with runtime guards.
+   Discovered via debug.log — mixins showed as "Mixing into..." but produced
+   no runtime log output. The "client" array showed zero trace in logs.
+
+2. INVOKE ordinal mismatch: Initial approach targeted renderBlock() ordinal=2,
+   but Forge patches the method (renderPistonMovedBlocks replaces vanilla code
+   inside if(false) block), changing the call count. The normal moved block
+   branch is ordinal=3, not ordinal=2. Fix: switched to HEAD injection with
+   vanilla's own getXOff/getYOff/getZOff offset methods.
+
+3. Retraction capture failure: PistonStructureResolver.resolve() returns false
+   for retraction with IPistonMovable blocks (same as server-side Bug 3).
+   Fix: sticky-group-aware BFS for retraction, matching the server-side
+   PistonBaseBlockMixin approach. Only follows isStickyBlock()/canStickTo()
+   connections (naive BFS captured stationary blocks causing texture swap bugs).
+
+4. Animation offset math: PMBE sits at destination position but animates from
+   source. Initial manual offset calculation (direction * (progress - 1.0))
+   caused position mismatches. Fix: use vanilla's getXOff/getYOff/getZOff
+   which internally call getExtendedProgress() handling both extension and
+   retraction correctly.
+
+### Known remaining artifacts:
+- Brief dark flicker (1-2 frames) at animation start/end during transition
+  between BESR and transit renderer. More noticeable on downward pushes due
+  to light sampling at destination position (potentially underground/darker).
+  Acceptable for current stage.
+
+### Known bug discovered:
+- Framed blocks currently behave as always-sticky to same-material frames,
+  ignoring the ACTIVE property. They should only activate stickiness when
+  connected to a Machine Block via the FrameActivation system, same as Frame
+  Blocks. The isStickyBlock() method likely returns true unconditionally
+  instead of checking the ACTIVE state. Needs investigation and fix.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-22] Framed Blocks — Dynamic Block Wrapping System
 
 Implemented Iron Framed Block and Copper Framed Block — blocks that wrap any
@@ -69,11 +176,9 @@ rendering on top.
 6. 1-tick piston data loss: finalTick() hook (see above).
 7. Middle-click gave empty frame: Added getCloneItemStack() override.
 
-### Known visual polish items (deferred):
-- Piston move animation: Inner block not visible during 2-tick transit.
-  Would require PistonHeadRenderer hook.
-- Creative menu item rendering: Items show only frame texture.
-  Would require custom BakedModel override.
+### Known visual polish items (resolved in 2026-02-22b):
+- Piston move animation: FIXED. Client-side mixin renders inner block during transit.
+- Creative menu item rendering: FIXED. Custom BakedModel shows inner block texture.
 
 Written by Claude, directed and guided by The Ideomancer.
 

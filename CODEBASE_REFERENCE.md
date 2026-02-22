@@ -64,6 +64,8 @@ com.ideomancer.ideomod
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
   |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
   |     |-- FramedBlockRenderer.java    BESR for framed blocks (inner texture)
+  |     |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (shows inner texture)
+  |     |-- MovingFrameData.java        Client-side cache for inner block IDs during piston transit
   |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
@@ -73,7 +75,10 @@ com.ideomancer.ideomod
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
   |     |-- PistonBaseBlockMixin.java          Allows IPistonMovable BE movement + saves data
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
-  |     \-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
+  |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
+  |     \-- client/
+  |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
+  |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
   |-- multiblock/
   |     |-- StructureDefinition.java     Abstract base for structure type rulesets
   |     |-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame tag, sizing)
@@ -308,6 +313,6 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 7. **Track/Trolley use machine_block.png placeholder texture** -- need unique art.
 8. **Frame Blocks use placeholder textures** -- 2px edge outline. Need proper frame models (not cube_all).
 9. **Frame Blocks use placeholder recipes** -- 4 ingots in diamond pattern. TBD final recipe.
-10. **Framed block inner texture invisible during piston animation** -- would need PistonHeadRenderer hook.
-11. **Framed block items show only frame texture in inventory** -- would need custom BakedModel.
-12. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
+10. **Framed block piston transit rendering has minor flicker** -- Brief dark flicker (1-2 frames) at animation start/end. More noticeable on downward pushes. Acceptable for current stage.
+11. **Framed block active textures are placeholders** -- iron_frame_active.png, copper_frame_active.png.
+12. **Framed blocks always-sticky bug** -- Framed blocks currently stick to same-material frames regardless of ACTIVE state. Should only be sticky when activated by adjacent Machine Block via FrameActivation system. isStickyBlock() likely returns true unconditionally instead of checking ACTIVE property.
