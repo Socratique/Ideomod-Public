@@ -6,46 +6,53 @@
 |  |     \\-- ideomancer
 |  |        \\-- ideomod
 |  |           +-- block
-|  |           |  +-- AbstractRangedPistonBlock.java
-|  |           |  +-- BlockMoveHelper.java
+|  |           |  +-- frame
+|  |           |  |  +-- FrameabilityHelper.java
+|  |           |  |  +-- FrameActivation.java
+|  |           |  |  +-- FrameBlock.java
+|  |           |  |  +-- FramedBlock.java
+|  |           |  |  +-- FramedBlockEntity.java
+|  |           |  |  +-- FramedBlockItem.java
+|  |           |  |  +-- FramedBlockLoot.java
+|  |           |  |  +-- FramedBlockRecipe.java
+|  |           |  |  +-- FrameMaterial.java
+|  |           |  |  \\-- IFrameBlock.java
+|  |           |  +-- machine
+|  |           |  |  +-- MachineFrameBlock.java
+|  |           |  |  +-- MachineFrameBlockEntity.java
+|  |           |  |  +-- MachineFrameMenu.java
+|  |           |  |  +-- MachineTrackBlock.java
+|  |           |  |  \\-- MachineTrolleyBlock.java
+|  |           |  +-- movement
+|  |           |  |  +-- BlockMoveHelper.java
+|  |           |  |  +-- IPistonMovable.java
+|  |           |  |  +-- MovingBlockEntityData.java
+|  |           |  |  \\-- StickinessRules.java
+|  |           |  +-- piston
+|  |           |  |  +-- AbstractRangedPistonBlock.java
+|  |           |  |  +-- OddstoneAttractorBlock.java
+|  |           |  |  +-- OddstoneRepulserBlock.java
+|  |           |  |  +-- RangedPistonFlags.java
+|  |           |  |  \\-- RangedPistonUtil.java
+|  |           |  +-- portal
+|  |           |  |  +-- OddstonePortalBlock.java
+|  |           |  |  +-- OddstonePortalFrameDetector.java
+|  |           |  |  +-- OddstonePortalHandler.java
+|  |           |  |  +-- OddstonePortalSavedData.java
+|  |           |  |  \\-- PortalUtils.java
 |  |           |  +-- DrillBlock.java
-|  |           |  +-- FrameabilityHelper.java
-|  |           |  +-- FrameActivation.java
-|  |           |  +-- FrameBlock.java
-|  |           |  +-- FramedBlock.java
-|  |           |  +-- FramedBlockEntity.java
-|  |           |  +-- FramedBlockItem.java
-|  |           |  +-- FramedBlockLoot.java
-|  |           |  +-- FramedBlockRecipe.java
-|  |           |  +-- FrameMaterial.java
-|  |           |  +-- IFrameBlock.java
-|  |           |  +-- IPistonMovable.java
-|  |           |  +-- MachineFrameBlock.java
-|  |           |  +-- MachineFrameBlockEntity.java
-|  |           |  +-- MachineFrameMenu.java
-|  |           |  +-- MachineTrackBlock.java
-|  |           |  +-- MachineTrolleyBlock.java
-|  |           |  +-- ModRecipeSerializers.java
-|  |           |  +-- MovingBlockEntityData.java
 |  |           |  +-- OddSlimeBlock.java
-|  |           |  +-- OddstoneAttractorBlock.java
-|  |           |  +-- OddstoneBlock.java
-|  |           |  +-- OddstonePortalBlock.java
-|  |           |  +-- OddstonePortalFrameDetector.java
-|  |           |  +-- OddstonePortalHandler.java
-|  |           |  +-- OddstonePortalSavedData.java
-|  |           |  +-- OddstoneRepulserBlock.java
-|  |           |  +-- PortalUtils.java
-|  |           |  +-- RangedPistonFlags.java
-|  |           |  +-- RangedPistonUtil.java
-|  |           |  \\-- StickinessRules.java
+|  |           |  \\-- OddstoneBlock.java
 |  |           +-- client
+|  |           |  +-- gui
+|  |           |  |  \\-- MachineFrameScreen.java
+|  |           |  +-- render
+|  |           |  |  +-- FramedBlockItemModel.java
+|  |           |  |  +-- FramedBlockRenderer.java
+|  |           |  |  +-- FramedBlockRenderTypes.java
+|  |           |  |  \\-- MovingFrameData.java
 |  |           |  +-- FramedBlockDebugOverlay.java
-|  |           |  +-- FramedBlockItemModel.java
-|  |           |  +-- FramedBlockRenderTypes.java
-|  |           |  +-- MachineFrameScreen.java
-|  |           |  +-- ModColorHandlers.java
-|  |           |  \\-- MovingFrameData.java
+|  |           |  \\-- ModColorHandlers.java
 |  |           +-- config
 |  |           |  \\-- OddstoneConfig.java
 |  |           +-- effect
@@ -59,17 +66,7 @@
 |  |           |  +-- PistonBaseBlockMixin.java
 |  |           |  +-- PistonMovingBlockEntityMixin.java
 |  |           |  \\-- PistonStructureResolverMixin.java
-|  |           +-- registry
-|  |           |  +-- ModBlockEntities.java
-|  |           |  +-- ModBlocks.java
-|  |           |  +-- ModCommands.java
-|  |           |  +-- ModCreativeTabs.java
-|  |           |  +-- ModItems.java
-|  |           |  +-- ModMenuTypes.java
-|  |           |  \\-- ModTags.java
-|  |           +-- renderer
-|  |           |  \\-- FramedBlockRenderer.java
-|  |           +-- structure
+|  |           +-- multiblock
 |  |           |  +-- definitions
 |  |           |  |  \\-- FurnaceArrayDefinition.java
 |  |           |  +-- effects
@@ -80,6 +77,15 @@
 |  |           |  +-- StructureRegistration.java
 |  |           |  +-- StructureResult.java
 |  |           |  \\-- StructureScanner.java
+|  |           +-- registry
+|  |           |  +-- ModBlockEntities.java
+|  |           |  +-- ModBlocks.java
+|  |           |  +-- ModCommands.java
+|  |           |  +-- ModCreativeTabs.java
+|  |           |  +-- ModItems.java
+|  |           |  +-- ModMenuTypes.java
+|  |           |  +-- ModRecipeSerializers.java
+|  |           |  \\-- ModTags.java
 |  |           \\-- Ideomod.java
 |  \\-- resources
 |     +-- assets

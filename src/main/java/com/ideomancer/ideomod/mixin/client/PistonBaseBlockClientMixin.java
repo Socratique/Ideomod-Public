@@ -1,8 +1,8 @@
 package com.ideomancer.ideomod.mixin.client;
 
-import com.ideomancer.ideomod.block.FramedBlock;
-import com.ideomancer.ideomod.block.FramedBlockEntity;
-import com.ideomancer.ideomod.client.MovingFrameData;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.client.render.MovingFrameData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;

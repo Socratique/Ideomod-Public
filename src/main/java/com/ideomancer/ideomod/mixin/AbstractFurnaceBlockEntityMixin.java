@@ -1,6 +1,6 @@
 package com.ideomancer.ideomod.mixin;
 
-import com.ideomancer.ideomod.structure.effects.FurnaceArrayEffect;
+import com.ideomancer.ideomod.multiblock.effects.FurnaceArrayEffect;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.AbstractFurnaceBlockEntity;

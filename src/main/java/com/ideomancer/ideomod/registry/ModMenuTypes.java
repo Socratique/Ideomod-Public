@@ -1,7 +1,7 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.MachineFrameMenu;
+import com.ideomancer.ideomod.block.machine.MachineFrameMenu;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraftforge.common.extensions.IForgeMenuType;
 import net.minecraftforge.registries.DeferredRegister;

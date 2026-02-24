@@ -13,6 +13,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import org.jetbrains.annotations.Nullable;
+import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
 
 /**
  * Oddstone - a strange stone block with five unique properties:

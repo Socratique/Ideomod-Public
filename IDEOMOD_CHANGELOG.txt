@@ -1,5 +1,99 @@
 # Ideomod Changelog
 
+## [2026-02-23a] Package Reorganization + Full Codebase Review
+
+Major package reorganization of the flat block/, client/, and structure/
+packages into domain-specific subpackages. Also performed a full codebase
+review and synced all documentation to the actual state of the code.
+
+### Package reorganization:
+
+Reorganized 40+ files from flat packages into logical subpackages:
+
+block/ subpackages:
+- block/frame/ -- IFrameBlock, FrameMaterial, FrameBlock, FrameActivation,
+  FrameabilityHelper, FramedBlock, FramedBlockEntity, FramedBlockItem,
+  FramedBlockRecipe, FramedBlockLoot
+- block/machine/ -- MachineFrameBlock, MachineFrameBlockEntity,
+  MachineFrameMenu, MachineTrackBlock, MachineTrolleyBlock
+- block/movement/ -- IPistonMovable, MovingBlockEntityData, BlockMoveHelper,
+  StickinessRules
+- block/piston/ -- AbstractRangedPistonBlock, OddstoneRepulserBlock,
+  OddstoneAttractorBlock, RangedPistonUtil, RangedPistonFlags
+- block/portal/ -- OddstonePortalBlock, OddstonePortalHandler,
+  OddstonePortalFrameDetector, OddstonePortalSavedData, PortalUtils
+- block/ (stayed) -- OddstoneBlock, OddSlimeBlock, DrillBlock
+
+client/ subpackages:
+- client/gui/ -- MachineFrameScreen
+- client/render/ -- FramedBlockRenderer, FramedBlockItemModel,
+  FramedBlockRenderTypes, MovingFrameData
+- client/ (stayed) -- ModColorHandlers, FramedBlockDebugOverlay
+
+multiblock/ subpackages:
+- multiblock/definitions/ -- FurnaceArrayDefinition
+- multiblock/effects/ -- FurnaceArrayEffect
+- multiblock/ (stayed) -- StructureDefinition, StructureScanner,
+  StructureResult, StructureRegistration, StructureManager,
+  StructureEffectHandler
+
+Other moves:
+- ModRecipeSerializers.java moved from block/ to registry/ (where all
+  other DeferredRegisters live)
+- FramedBlockRenderer.java moved from renderer/ to client/render/
+
+### Update scope:
+
+- 56 files: package declarations and existing imports updated
+- 31 files: new cross-subpackage imports added (classes formerly in the
+  same package now need explicit imports across subpackages)
+- False-positive imports (class names only in comments) identified and
+  removed in a cleanup pass
+- Empty renderer/ and structure/ directories deleted
+
+### Full codebase review findings:
+
+Priority 1 -- Potential bugs:
+1. OddstonePortalBlock.getShape() axis mapping may be inverted vs vanilla
+   NetherPortalBlock (returns Z_AXIS_AABB for AXIS=X). Needs in-game test.
+2. OddstonePortalBlock.linkedTeleport() division-by-zero risk if portal
+   has zero width/height (corrupted SavedData edge case).
+3. OddstoneConfig lazy-load race condition -- loaded flag checked without
+   synchronization. Multiple threads could trigger concurrent loads.
+4. FramedBlockRenderer be.getLevel() used before null guard in
+   sampleBestLight(). Could NPE if block entity not in a level.
+5. OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey() could
+   return null -- missing null check before .toString().
+
+Priority 2 -- Performance:
+6. ModCreativeTabs iterates BuiltInRegistries.BLOCK every time framed
+   blocks tab opens. Should cache frameable blocks list.
+7. MovingBlockEntityData store/retrieve log at INFO level, causing spam
+   during heavy piston activity. Should be DEBUG.
+8. OddstonePortalBlock.findAnyPortalBlock() nested 20x20 loop during
+   teleportation. Could use measured portal dimensions.
+
+Priority 3 -- Code quality:
+9. DrillBlock.java unused variable (facingAxis computed but never used).
+10. FramedBlockRecipe matches() and assemble() duplicate the same loop.
+11. ModBlocks.java duplicated isRedstoneConductor lambda for both framed
+    block registrations.
+
+### Documentation sync:
+
+- CODEBASE_REFERENCE.md: full package tree rewritten, known issues updated
+  (resolved #2 "portal files in flat package", added 5 new issues from
+  codebase review)
+- IDEOMOD_DOCUMENTATION.md: package tree rewritten, known issues table
+  expanded with review findings
+- STICKINESS_SYSTEM.md: "Where The Code Lives" file paths updated
+- IDEOMOD_DESIGN.md: Machine Track and Machine Trolley updated from [IDEA]
+  to [DONE] with implementation details matching the actual code
+- FILETREE.txt: regenerated from actual filesystem
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-22g] Documentation — Issues Cleanup
 
 Removed non-actionable items from the Known Issues sections across all three

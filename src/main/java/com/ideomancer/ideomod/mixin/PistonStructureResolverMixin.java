@@ -1,13 +1,13 @@
 package com.ideomancer.ideomod.mixin;
 
-import com.ideomancer.ideomod.block.FramedBlock;
-import com.ideomancer.ideomod.block.FramedBlockEntity;
-import com.ideomancer.ideomod.block.IFrameBlock;
-import com.ideomancer.ideomod.block.MachineFrameBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.frame.IFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
-import com.ideomancer.ideomod.block.RangedPistonFlags;
-import com.ideomancer.ideomod.block.StickinessRules;
+import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
+import com.ideomancer.ideomod.block.movement.StickinessRules;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;

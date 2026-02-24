@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-22g (Issues cleanup -- removed placeholder art, Drill hold, and furnace indicator from tracked issues)*
+*Last updated: 2026-02-23a (Package reorganization. Machine Track/Trolley updated to [DONE].)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -346,38 +346,41 @@ Signal arrives on NORTH face ->
 
 ---
 
-**Machine Track** (insert: Powered Rail) [IDEA]
+**Machine Track** (insert: Powered Rail) [DONE]
 
-Rail infrastructure for Machine Trolleys. Receives and conducts redstone signal (like Machine Conductor). Special behavior: when a Machine Trolley is adjacent, the Track moves the Trolley in the direction opposite to the redstone signal source.
+Rail infrastructure for Machine Trolleys. Implemented as standalone block (MachineTrackBlock). Receives and conducts redstone signal (like Machine Conductor). When a Machine Trolley is adjacent, the Track moves the Trolley in the direction opposite to the redstone signal source. Uses BlockMoveHelper directly (not RangedPistonUtil). Signal direction detected via direct source interrogation (conduit blocks with higher POWER, tagged redstone components) rather than vanilla hasSignal().
 
 | Detail | Value |
 |--------|-------|
-| Signal behavior | Receives and conducts redstone like Machine Conductor |
-| Trolley interaction | On receiving signal, checks adjacent blocks for Trolleys. Moves Trolley away from signal source direction. |
-| Movement mechanic | Uses Repulser/Attractor-style piston move logic (RangedPistonUtil). Track acts as a context-specific Repulser for Trolleys. |
-| Stickiness exception | During a Track-initiated move, the Track and the Trolley it is moving do NOT stick to each other. The Trolley slides free. All other Machine Blocks adjacent to the Trolley stick normally (payload). |
+| ID | `machine_track` |
+| Signal behavior | Receives and conducts redstone like Machine Conductor. POWER 0-15, decay by 1. |
+| Trolley interaction | On rising edge, checks all 6 adjacent blocks for Trolleys. Pushes ALL found Trolleys in computed direction. |
+| Movement mechanic | Uses BlockMoveHelper.moveBlockAt() directly. Block event encodes pushDir + trolleyFace via bit packing for client sync. |
+| Stickiness | Machine Family stickiness (sticks to Machine Frame, other Tracks, Trolleys, Frame Family). |
 
 **Design notes:**
-- The movement mechanic reuses existing Repulser infrastructure -- no new movement system needed.
-- Trolleys can carry payloads: any Machine Blocks (non-Track, non-Trolley) stuck to the Trolley move with it as a piston group.
-- Signal direction determines movement direction. Power east side of track line -> trolley moves west.
+- Uses BlockMoveHelper directly rather than RangedPistonUtil -- no scanning needed, just push the adjacent Trolley.
+- Signal direction computed from actual conduit neighbors with higher power, not vanilla hasSignal() (avoids weak power misfires).
+- Pushes ALL adjacent Trolleys simultaneously in the computed direction.
 
 ---
 
-**Machine Trolley** (insert: Minecart) [IDEA]
+**Machine Trolley** (insert: Minecart) [DONE]
 
-Mobile platform that rides on Machine Tracks. Has no movement logic of its own -- entirely passive. The Track does the pushing.
+Passive cargo carrier. Implemented as standalone block (MachineTrolleyBlock). Has no movement logic of its own -- entirely passive. Pushed by Tracks.
 
 | Detail | Value |
 |--------|-------|
+| ID | `machine_trolley` |
 | Self-movement | None. Trolley is moved by adjacent Tracks. |
 | Payload | Other Machine Blocks (not Tracks or Trolleys) stick to the Trolley and move with it as a group. |
-| Stickiness | Normal Machine Block stickiness to everything EXCEPT: does not stick to the Track that is actively moving it. |
+| Stickiness | Machine Family stickiness. Delegates to MachineFrameBlock.canMachineFamilyStickTo(). |
 
 **Design notes:**
 - A Trolley sitting on a line of Tracks is essentially a block-based minecart. No entity, no rails -- just blocks.
 - Payload capacity is limited by piston push limits (or Machine Grabber-extended limits).
 - Multiple Trolleys in a group? If two Trolleys are stuck together via intermediate Machine Blocks, a Track would move the whole group. Could be useful or chaotic -- worth testing.
+- Does NOT conduct redstone (unlike Track).
 
 ---
 

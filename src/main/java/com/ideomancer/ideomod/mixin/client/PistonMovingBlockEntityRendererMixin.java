@@ -1,7 +1,7 @@
 package com.ideomancer.ideomod.mixin.client;
 
-import com.ideomancer.ideomod.block.FramedBlock;
-import com.ideomancer.ideomod.client.MovingFrameData;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.client.render.MovingFrameData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.LightTexture;

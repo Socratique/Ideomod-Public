@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-22f*
+*Last updated: 2026-02-23a (package reorganization + codebase review)*
 
 ---
 
@@ -28,45 +28,52 @@ com.ideomancer.ideomod
   |                              structure definitions, StructureManager event handler.
   |-- block/
   |     |-- OddstoneBlock.java           5-feature core block (see Oddstone section)
-  |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI (renamed from MachineBlock)
-  |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
-  |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
-  |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
-  |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
-  |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
-  |     |-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
-  |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
-  |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
-  |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
-  |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
-  |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
-  |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
-  |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
-  |     |-- FramedBlockItem.java         Dynamic getName(), NBT stack creation
-  |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
-  |     |-- FramedBlockLoot.java         Helper for manual drop creation
-  |     |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
-  |     |-- StickinessRules.java         Rule registry (grab immunity + directional)
-  |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
-  |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor
-  |     |-- RangedPistonFlags.java       ThreadLocal for resolver startPos redirect
-  |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
-  |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
-  |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range (extends Abstract)
-  |     |-- OddstonePortalBlock.java     Portal interior fill block + teleportation
-  |     |-- OddstonePortalHandler.java   Activation/deactivation lifecycle (static util)
-  |     |-- OddstonePortalFrameDetector.java  Frame scanning + address reading
-  |     |-- OddstonePortalSavedData.java      Per-dimension portal registry (SavedData)
-  |     \-- PortalUtils.java             Corner validation, interior nav, clearing
+  |     |-- frame/
+  |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
+  |     |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
+  |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
+  |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
+  |     |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
+  |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
+  |     |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
+  |     |     |-- FramedBlockItem.java         Dynamic getName(), NBT stack creation
+  |     |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
+  |     |     \-- FramedBlockLoot.java         Helper for manual drop creation
+  |     |-- machine/
+  |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI
+  |     |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
+  |     |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
+  |     |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
+  |     |     \-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
+  |     |-- movement/
+  |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
+  |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
+  |     |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
+  |     |     \-- StickinessRules.java         Rule registry (grab immunity + directional)
+  |     |-- piston/
+  |     |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
+  |     |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
+  |     |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range (extends Abstract)
+  |     |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor
+  |     |     \-- RangedPistonFlags.java       ThreadLocal for resolver startPos redirect
+  |     \-- portal/
+  |           |-- OddstonePortalBlock.java     Portal interior fill block + teleportation
+  |           |-- OddstonePortalHandler.java   Activation/deactivation lifecycle (static util)
+  |           |-- OddstonePortalFrameDetector.java  Frame scanning + address reading
+  |           |-- OddstonePortalSavedData.java      Per-dimension portal registry (SavedData)
+  |           \-- PortalUtils.java             Corner validation, interior nav, clearing
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
-  |     |-- MachineFrameScreen.java      GUI screen for Machine Frame
-  |     |-- FramedBlockRenderer.java    BESR for framed blocks (renderSingleBlock with facing transfer)
-  |     |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
-  |     |-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
-  |     \-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
+  |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
+  |     |-- gui/
+  |     |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     \-- render/
+  |           |-- FramedBlockRenderer.java    BESR for framed blocks (renderSingleBlock with facing transfer)
+  |           |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
+  |           |-- FramedBlockRenderTypes.java Custom RenderType for framed block overlays
+  |           \-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -81,18 +88,23 @@ com.ideomancer.ideomod
   |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
   |-- multiblock/
   |     |-- StructureDefinition.java     Abstract base for structure type rulesets
-  |     |-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame tag, sizing)
   |     |-- StructureScanner.java        Directional pattern scanner (cluster + frame)
   |     |-- StructureResult.java         Immutable scan output (builder pattern)
   |     |-- StructureRegistration.java   Persistent registration entry (UUID, NBT)
   |     |-- StructureManager.java        Per-dimension SavedData + event handling + queries
   |     |-- StructureEffectHandler.java  Interface for per-type effects
-  |     \-- FurnaceArrayEffect.java      GUI rename on formation/removal
+  |     |-- definitions/
+  |     |     \-- FurnaceArrayDefinition.java  Furnace array ruleset (cores, frame tag, sizing)
+  |     \-- effects/
+  |           \-- FurnaceArrayEffect.java      GUI rename on formation/removal
   \-- registry/
         |-- ModBlocks.java               DeferredRegister<Block> -- all block registrations
         |-- ModItems.java                DeferredRegister<Item> -- BlockItems + debug stick
         |-- ModCreativeTabs.java         Creative tab with all mod items
         |-- ModCommands.java             /judgement command (Forge event bus)
+        |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
+        |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
+        |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>
         \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
                                          FURNACE_ARRAY_FRAME tags
 ```
@@ -312,8 +324,12 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 ## KNOWN ISSUES & TECHNICAL DEBT
 
 1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
-2. **Portal files in flat block/ package** -- 5+ portal-related files could live in `block/portal/` subpackage.
+2. **OddstoneConfig lazy-load not thread-safe** -- `getSympatheticRadius()` and `isMobAffected()` check a `loaded` flag without synchronization. Multiple threads could trigger concurrent loads. Consider `synchronized` or `volatile` + double-checked locking.
 3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
 4. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
+5. **MovingBlockEntityData.java uses INFO-level logging** -- store/retrieve operations log at INFO level, causing spam during heavy piston activity. Should be DEBUG.
+6. **OddstonePortalBlock.getShape() axis mapping** -- Returns Z_AXIS_AABB for AXIS=X and vice versa. May be inverted relative to vanilla NetherPortalBlock pattern. Needs in-game verification.
+7. **FramedBlockRenderer.java missing null check** -- `be.getLevel()` can return null; used before the null-guarded `sampleBestLight()` method. Should add early null check.
+8. **ModCreativeTabs iterates entire block registry** -- `BuiltInRegistries.BLOCK` is iterated every time the framed blocks tab opens. Should cache the frameable blocks list.
 
 Written by Claude, directed and guided by The Ideomancer.

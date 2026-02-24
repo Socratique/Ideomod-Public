@@ -1,7 +1,7 @@
 package com.ideomancer.ideomod.client;
 
-import com.ideomancer.ideomod.block.FramedBlock;
-import com.ideomancer.ideomod.block.FramedBlockEntity;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;

@@ -1,8 +1,8 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.FrameMaterial;
-import com.ideomancer.ideomod.block.FramedBlockItem;
+import com.ideomancer.ideomod.block.frame.FrameMaterial;
+import com.ideomancer.ideomod.block.frame.FramedBlockItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;

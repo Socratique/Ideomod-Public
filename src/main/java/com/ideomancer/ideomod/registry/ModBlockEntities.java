@@ -1,8 +1,8 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.FramedBlockEntity;
-import com.ideomancer.ideomod.block.MachineFrameBlockEntity;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;

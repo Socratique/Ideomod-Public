@@ -1,8 +1,8 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.FrameabilityHelper;
-import com.ideomancer.ideomod.block.FramedBlockItem;
+import com.ideomancer.ideomod.block.frame.FrameabilityHelper;
+import com.ideomancer.ideomod.block.frame.FramedBlockItem;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;

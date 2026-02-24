@@ -166,12 +166,12 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 | Component | File | Role |
 |-----------|------|------|
 | `canStickTo` overrides | Each block class | Layer 1: type compatibility (permissive) |
-| Grab immunity rules | `StickinessRules.java` | Layer 2: blocks specific grabber->target pairs |
-| Directional rules | `StickinessRules.java` | Layer 3: blocks grabs based on push direction |
+| Grab immunity rules | `block/movement/StickinessRules.java` | Layer 2: blocks specific grabber->target pairs |
+| Directional rules | `block/movement/StickinessRules.java` | Layer 3: blocks grabs based on push direction |
 | Rule registration | `Ideomod.java -> registerStickinessRules()` | Registers all rules at startup |
-| Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
-| Frame activation | `FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
-| Frame type checks | `StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
+| Rule enforcement | `mixin/PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
+| Frame activation | `block/frame/FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
+| Frame type checks | `block/movement/StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
 
 ### Mixin Injection Points
 

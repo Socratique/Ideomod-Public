@@ -1,8 +1,8 @@
 package com.ideomancer.ideomod.mixin;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.IPistonMovable;
-import com.ideomancer.ideomod.block.MovingBlockEntityData;
+import com.ideomancer.ideomod.block.movement.IPistonMovable;
+import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.world.level.Level;
