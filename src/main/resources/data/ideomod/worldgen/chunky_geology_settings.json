@@ -1,0 +1,12 @@
+{
+  "skip_decoration": false,
+  
+  "plateau_enabled": true,
+  "plateau_density": 0.7,
+  "plateau_cluster_scale": 0.01,
+  "plateau_min_size": 16,
+  "plateau_max_size": 32,
+  "plateau_height_boost_chance": 0.5,
+  "plateau_height_boost_min": 0,
+  "plateau_height_boost_max": 5
+}

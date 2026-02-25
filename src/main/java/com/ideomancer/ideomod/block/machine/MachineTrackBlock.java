@@ -57,7 +57,16 @@ public class MachineTrackBlock extends Block {
 
     private static final int EVENT_PUSH = 0;
 
-    private static boolean isUpdating = false;
+    /**
+     * Re-entrancy guard for neighborChanged. Prevents infinite update loops
+     * when this Track's power change triggers neighbor updates that bounce
+     * back. ThreadLocal so each thread has its own flag — safe if Minecraft
+     * ever processes ticks on multiple threads.
+     *
+     * Previously a plain static boolean, which works in practice (server tick
+     * is single-threaded) but is not formally thread-safe.
+     */
+    private static final ThreadLocal<Boolean> isUpdating = ThreadLocal.withInitial(() -> false);
 
     public MachineTrackBlock(Properties properties) {
         super(properties);
@@ -111,18 +120,18 @@ public class MachineTrackBlock extends Block {
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         if (level.isClientSide) return;
-        if (isUpdating) return;
+        if (isUpdating.get()) return;
 
         int oldPower = state.getValue(POWER);
         int newPower = calculatePower(level, pos);
 
         if (newPower != oldPower) {
-            isUpdating = true;
+            isUpdating.set(true);
             try {
                 level.setBlock(pos, state.setValue(POWER, newPower), 2);
                 level.updateNeighborsAt(pos, this);
             } finally {
-                isUpdating = false;
+                isUpdating.set(false);
             }
 
             if (oldPower == 0 && newPower > 0) {

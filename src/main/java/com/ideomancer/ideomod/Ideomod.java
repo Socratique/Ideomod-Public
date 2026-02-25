@@ -23,9 +23,8 @@ import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderers;
 import net.minecraft.client.resources.model.BakedModel;
 import net.minecraft.client.resources.model.ModelResourceLocation;
-import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
-import net.minecraft.world.level.block.DirectionalBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraftforge.client.event.ModelEvent;
@@ -83,15 +82,24 @@ public class Ideomod {
      * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock.
      * Frame Family = IronFrame, CopperFrame, IronFramedBlock, CopperFramedBlock.
      *
-     * INNER STICKY CARVE-OUT (rules 9-11):
-     * =====================================
-     * Frame Family blocks normally can't grab slime/honey/odd slime (rules 9-11).
-     * BUT when a FramedBlock's inner block IS that same sticky type, the grab
-     * immunity is lifted — a Framed Slime Block should grab normal blocks just
-     * like real slime does. The carve-out checks INNER_STICKY on the grabber:
-     *   - Rule 9 (frame -> slime): exempted when grabber INNER_STICKY == SLIME
-     *   - Rule 10 (frame -> honey): exempted when grabber INNER_STICKY == HONEY
-     *   - Rule 11 (frame -> odd slime): exempted when grabber INNER_STICKY == ODD_SLIME
+     * CONSOLIDATED RULES (was 11, now 4 grab immunity + 1 directional):
+     * ==================================================================
+     * Rule 1: Non-Oddstone can't grab Oddstone.
+     *         Consolidates old rules 1-3 (slime/honey/odd_slime + framed variants).
+     *         Broader check: any non-Oddstone grabber is blocked. Safe because
+     *         canStickTo already limits which blocks attempt grabs on Oddstone,
+     *         and Machine Family / Frame Family have their own rules (2, 4).
+     *
+     * Rule 2: Machine Family can't grab sticky blocks (slime/honey/odd_slime).
+     *         Consolidates old rules 4-6.
+     *
+     * Rule 3: Slime/honey can't grab Odd Slime (mutual exclusion enforcement).
+     *         Consolidates old rules 7-8.
+     *
+     * Rule 4: Frame Family can't grab sticky blocks (slime/honey/odd_slime).
+     *         Consolidates old rules 9-11.
+     *         CARVE-OUT preserved: FramedBlock whose INNER_STICKY matches the
+     *         target type IS allowed (Framed Slime grabs like real slime).
      *
      * FRAMED ODD SLIME DIRECTIONAL BEHAVIOR:
      * =======================================
@@ -111,102 +119,77 @@ public class Ideomod {
         // GRAB IMMUNITY RULES (type-based)
         // ================================================================
 
-        // --- ODDSTONE rules (1-3) ---
-        // Slime/honey/odd slime can't grab Oddstone.
-        // Also applies to framed blocks with those inner types.
+        // --- Rule 1 (was 1-3): Non-Oddstone can't grab Oddstone ---
+        // Nothing except another Oddstone can grab Oddstone. This covers
+        // slime, honey, odd slime, and all framed variants in one check.
+        // Safe because canStickTo on other blocks already limits which
+        // types even attempt to grab Oddstone, and Machine Family / Frame
+        // Family have their own dedicated rules below.
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> target.getBlock() instanceof OddstoneBlock
+                                  && !(grabber.getBlock() instanceof OddstoneBlock)
+        );
 
+        // --- Rule 2 (was 4-6): Machine Family can't grab sticky blocks ---
+        // Machine Frames, Tracks, and Trolleys don't pull slime/honey/odd
+        // slime along. The reverse (slime grabs Machine Family) IS allowed.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
-                    if (target.getBlock() instanceof OddstoneBlock) {
-                        if (grabber.getBlock() instanceof SlimeBlock) return true;
-                        if (grabber.getBlock() instanceof FramedBlock
-                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_SLIME) return true;
-                    }
-                    return false;
+                    if (!MachineFrameBlock.isMachineFamily(grabber.getBlock())) return false;
+                    Block targetBlock = target.getBlock();
+                    return targetBlock instanceof SlimeBlock
+                        || targetBlock instanceof HoneyBlock
+                        || targetBlock instanceof OddSlimeBlock;
                 }
         );
 
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> {
-                    if (target.getBlock() instanceof OddstoneBlock) {
-                        if (grabber.getBlock() instanceof HoneyBlock) return true;
-                        if (grabber.getBlock() instanceof FramedBlock
-                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_HONEY) return true;
-                    }
-                    return false;
-                }
-        );
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> {
-                    if (target.getBlock() instanceof OddstoneBlock) {
-                        if (grabber.getBlock() instanceof OddSlimeBlock) return true;
-                        if (grabber.getBlock() instanceof FramedBlock
-                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) return true;
-                    }
-                    return false;
-                }
-        );
-
-        // --- MACHINE FAMILY rules (4-6) ---
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof SlimeBlock
-        );
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof HoneyBlock
-        );
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> MachineFrameBlock.isMachineFamily(grabber.getBlock())
-                                  && target.getBlock() instanceof OddSlimeBlock
-        );
-
-        // --- ODD SLIME mutual exclusion rules (7-8) ---
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof SlimeBlock
-                                  && target.getBlock() instanceof OddSlimeBlock
-        );
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> grabber.getBlock() instanceof HoneyBlock
-                                  && target.getBlock() instanceof OddSlimeBlock
-        );
-
-        // --- FRAME FAMILY rules (9-11) ---
-        // CARVE-OUT: FramedBlock whose inner IS the target type is exempted.
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> {
-                    if (!(target.getBlock() instanceof SlimeBlock)) return false;
-                    if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
-                    if (grabber.getBlock() instanceof FramedBlock
-                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_SLIME) return false;
-                    return true;
-                }
-        );
-
-        StickinessRules.registerGrabImmunity(
-                (grabber, target) -> {
-                    if (!(target.getBlock() instanceof HoneyBlock)) return false;
-                    if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
-                    if (grabber.getBlock() instanceof FramedBlock
-                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_HONEY) return false;
-                    return true;
-                }
-        );
-
+        // --- Rule 3 (was 7-8): Slime/honey can't grab Odd Slime ---
+        // Mutual exclusion enforcement. The reverse (Odd Slime can't grab
+        // slime/honey) is handled by OddSlimeBlock.canStickTo() returning
+        // false for those types at Layer 1.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
                     if (!(target.getBlock() instanceof OddSlimeBlock)) return false;
+                    Block grabberBlock = grabber.getBlock();
+                    return grabberBlock instanceof SlimeBlock
+                        || grabberBlock instanceof HoneyBlock;
+                }
+        );
+
+        // --- Rule 4 (was 9-11): Frame Family can't grab sticky blocks ---
+        // Frames and framed blocks don't pull slime/honey/odd slime.
+        // CARVE-OUT: A FramedBlock whose INNER_STICKY matches the target
+        // type IS allowed — Framed Slime can grab like real slime.
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> {
                     if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
-                    if (grabber.getBlock() instanceof FramedBlock
-                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) return false;
-                    return true;
+                    Block targetBlock = target.getBlock();
+
+                    if (targetBlock instanceof SlimeBlock) {
+                        // Carve-out: Framed Slime is exempt
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_SLIME) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    if (targetBlock instanceof HoneyBlock) {
+                        // Carve-out: Framed Honey is exempt
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_HONEY) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    if (targetBlock instanceof OddSlimeBlock) {
+                        // Carve-out: Framed Odd Slime is exempt
+                        if (grabber.getBlock() instanceof FramedBlock
+                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) {
+                            return false;
+                        }
+                        return true;
+                    }
+                    return false;
                 }
         );
 
@@ -219,15 +202,14 @@ public class Ideomod {
         StickinessRules.registerDirectionalRule(
                 (state, pushDirection) -> {
                     if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
-                    Direction facing = state.getValue(DirectionalBlock.FACING);
-                    return !pushDirection.equals(facing);
+                    return pushDirection != state.getValue(OddSlimeBlock.FACING);
                 }
         );
 
         // NOTE: Framed Odd Slime does NOT register a directional rule here.
         // See class javadoc for explanation. Handled in mixin instead.
 
-        LOGGER.info("Registered stickiness rules: 11 grab immunity + 1 directional");
+        LOGGER.info("Registered stickiness rules: 4 grab immunity + 1 directional (consolidated from 11 + 1)");
     }
 
     private void registerStructureDefinitions() {

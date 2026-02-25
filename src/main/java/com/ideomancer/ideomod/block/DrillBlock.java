@@ -25,6 +25,8 @@ import java.util.List;
  * A drill block that mines a 3x3 grid when given a redstone signal.
  * Placement behaves like pistons - faces toward the player's look direction.
  * Can be pushed/pulled by pistons.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class DrillBlock extends DirectionalBlock {
     
@@ -49,8 +51,6 @@ public class DrillBlock extends DirectionalBlock {
      */
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        // getNearestLookingDirection gives us the direction the player is looking
-        // We use this directly so the drill points where you're looking
         return this.defaultBlockState()
                 .setValue(FACING, context.getNearestLookingDirection().getOpposite())
                 .setValue(POWERED, context.getLevel().hasNeighborSignal(context.getClickedPos()));
@@ -78,15 +78,12 @@ public class DrillBlock extends DirectionalBlock {
     }
     
     /**
-     * Mines a 3x3 grid of blocks in front of the drill
+     * Mines a 3x3 grid of blocks in front of the drill.
+     * Gets perpendicular directions directly from the facing axis —
+     * no intermediate axis variable needed.
      */
     private void mineBlocks(ServerLevel level, BlockPos drillPos, Direction facing) {
-        // Get the position directly in front of the drill
         BlockPos frontPos = drillPos.relative(facing);
-        
-        // Determine the two axes perpendicular to the facing direction
-        // These define the 3x3 plane we'll mine
-        Direction.Axis facingAxis = facing.getAxis();
         
         // Get perpendicular directions for the 3x3 grid
         Direction[] perpDirs = getPerpendicularDirections(facing);
@@ -106,7 +103,7 @@ public class DrillBlock extends DirectionalBlock {
     }
     
     /**
-     * Gets two perpendicular directions for a given facing direction
+     * Gets two perpendicular directions for a given facing direction.
      */
     private Direction[] getPerpendicularDirections(Direction facing) {
         return switch (facing.getAxis()) {

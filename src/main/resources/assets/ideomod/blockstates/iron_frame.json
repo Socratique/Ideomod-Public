@@ -4,7 +4,7 @@
       "model": "ideomod:block/iron_frame"
     },
     "active=true": {
-      "model": "ideomod:block/iron_frame"
+      "model": "ideomod:block/iron_frame_active"
     }
   }
 }

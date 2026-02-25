@@ -4,7 +4,6 @@ import com.google.gson.JsonObject;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModItems;
 import net.minecraft.core.RegistryAccess;
-import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.inventory.CraftingContainer;
@@ -33,7 +32,7 @@ import com.ideomancer.ideomod.registry.ModRecipeSerializers;
  * This is a CustomRecipe (special recipe) — registered as a recipe type with
  * a simple JSON trigger file. No per-combination recipe JSONs needed.
  *
- * Written by Claude, directed and guided by The Ideomancer.
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class FramedBlockRecipe extends CustomRecipe {
 
@@ -43,48 +42,17 @@ public class FramedBlockRecipe extends CustomRecipe {
 
     @Override
     public boolean matches(CraftingContainer container, Level level) {
-        ItemStack frameStack = ItemStack.EMPTY;
-        ItemStack blockStack = ItemStack.EMPTY;
-        int nonEmptyCount = 0;
-
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (stack.isEmpty()) continue;
-            nonEmptyCount++;
-
-            if (isFrameItem(stack)) {
-                if (!frameStack.isEmpty()) return false; // Two frames
-                frameStack = stack;
-            } else if (isFrameableBlockItem(stack)) {
-                if (!blockStack.isEmpty()) return false; // Two blocks
-                blockStack = stack;
-            } else {
-                return false; // Unknown item
-            }
-        }
-
-        return nonEmptyCount == 2 && !frameStack.isEmpty() && !blockStack.isEmpty();
+        MatchResult result = scanContainer(container);
+        return result != null;
     }
 
     @Override
     public ItemStack assemble(CraftingContainer container, RegistryAccess registryAccess) {
-        ItemStack frameStack = ItemStack.EMPTY;
-        ItemStack blockStack = ItemStack.EMPTY;
-
-        for (int i = 0; i < container.getContainerSize(); i++) {
-            ItemStack stack = container.getItem(i);
-            if (stack.isEmpty()) continue;
-            if (isFrameItem(stack)) {
-                frameStack = stack;
-            } else if (isFrameableBlockItem(stack)) {
-                blockStack = stack;
-            }
-        }
-
-        if (frameStack.isEmpty() || blockStack.isEmpty()) return ItemStack.EMPTY;
+        MatchResult result = scanContainer(container);
+        if (result == null) return ItemStack.EMPTY;
 
         // Determine which frame material
-        Block frameBlock = ((BlockItem) frameStack.getItem()).getBlock();
+        Block frameBlock = ((BlockItem) result.frameStack.getItem()).getBlock();
         Item framedBlockItem;
         if (frameBlock == ModBlocks.IRON_FRAME.get()) {
             framedBlockItem = ModItems.IRON_FRAMED_BLOCK.get();
@@ -93,7 +61,7 @@ public class FramedBlockRecipe extends CustomRecipe {
         }
 
         // Get the inner block
-        Block innerBlock = ((BlockItem) blockStack.getItem()).getBlock();
+        Block innerBlock = ((BlockItem) result.blockStack.getItem()).getBlock();
 
         return FramedBlockItem.createStack(framedBlockItem, innerBlock);
     }
@@ -107,6 +75,50 @@ public class FramedBlockRecipe extends CustomRecipe {
     public RecipeSerializer<?> getSerializer() {
         return ModRecipeSerializers.FRAMED_BLOCK.get();
     }
+
+    // ========================================================================
+    // SHARED CONTAINER SCAN
+    // ========================================================================
+
+    /**
+     * Scans the crafting container for exactly one frame item and one
+     * frameable block item. Returns null if the grid doesn't match.
+     *
+     * Shared by matches() and assemble() to avoid duplicating the
+     * same iteration logic.
+     */
+    @Nullable
+    private static MatchResult scanContainer(CraftingContainer container) {
+        ItemStack frameStack = ItemStack.EMPTY;
+        ItemStack blockStack = ItemStack.EMPTY;
+        int nonEmptyCount = 0;
+
+        for (int i = 0; i < container.getContainerSize(); i++) {
+            ItemStack stack = container.getItem(i);
+            if (stack.isEmpty()) continue;
+            nonEmptyCount++;
+
+            if (isFrameItem(stack)) {
+                if (!frameStack.isEmpty()) return null; // Two frames
+                frameStack = stack;
+            } else if (isFrameableBlockItem(stack)) {
+                if (!blockStack.isEmpty()) return null; // Two blocks
+                blockStack = stack;
+            } else {
+                return null; // Unknown item
+            }
+        }
+
+        if (nonEmptyCount == 2 && !frameStack.isEmpty() && !blockStack.isEmpty()) {
+            return new MatchResult(frameStack, blockStack);
+        }
+        return null;
+    }
+
+    /**
+     * Holds the two matched stacks from a successful container scan.
+     */
+    private record MatchResult(ItemStack frameStack, ItemStack blockStack) {}
 
     // ========================================================================
     // ITEM TYPE CHECKS

@@ -34,6 +34,31 @@ public class ModBlocks {
     
     public static final DeferredRegister<Block> BLOCKS = 
             DeferredRegister.create(ForgeRegistries.BLOCKS, Ideomod.MOD_ID);
+
+    // ========================================================================
+    // SHARED PROPERTY HELPERS
+    // ========================================================================
+
+    /**
+     * Shared isRedstoneConductor delegate for framed blocks.
+     * Checks the inner block's redstone conductor status via block entity.
+     * Falls back to true (conduct, like most solid blocks) if no inner block.
+     *
+     * Used by both IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK to avoid
+     * duplicating the same lambda.
+     */
+    private static final BlockBehaviour.StatePredicate FRAMED_REDSTONE_CONDUCTOR =
+            (state, level, pos) -> {
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+                    return fbe.getInnerDefaultState().isRedstoneConductor(level, pos);
+                }
+                return true;
+            };
+
+    // ========================================================================
+    // BASIC BLOCKS
+    // ========================================================================
     
     public static final RegistryObject<Block> IDEOBLOCK = BLOCKS.register("ideoblock",
             () -> new Block(BlockBehaviour.Properties.of()
@@ -163,14 +188,7 @@ public class ModBlocks {
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()
-                    .isRedstoneConductor((state, level, pos) -> {
-                        // Delegate to inner block
-                        BlockEntity be = level.getBlockEntity(pos);
-                        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
-                            return fbe.getInnerDefaultState().isRedstoneConductor(level, pos);
-                        }
-                        return true; // Default: conduct (like most solid blocks)
-                    })
+                    .isRedstoneConductor(FRAMED_REDSTONE_CONDUCTOR)
             ));
 
     /**
@@ -184,12 +202,6 @@ public class ModBlocks {
                     .sound(SoundType.COPPER)
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()
-                    .isRedstoneConductor((state, level, pos) -> {
-                        BlockEntity be = level.getBlockEntity(pos);
-                        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
-                            return fbe.getInnerDefaultState().isRedstoneConductor(level, pos);
-                        }
-                        return true;
-                    })
+                    .isRedstoneConductor(FRAMED_REDSTONE_CONDUCTOR)
             ));
 }

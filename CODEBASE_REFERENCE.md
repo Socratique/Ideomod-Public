@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-25b (priority 2 performance fixes)*
+*Last updated: 2026-02-25c (priority 3 code quality + issue cleanup)*
 
 ---
 
@@ -123,7 +123,7 @@ Three-layer architecture for asymmetric and directional stickiness:
 
 **Layer 3 -- Directional Rules** (StickinessRules + mixin): Blocks ALL grabs by a block when push direction doesn't match (Odd Slime only sticky when pushed in FACING dir).
 
-Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStructureResolverMixin`.
+Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin`.
 
 **Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock):
 
@@ -156,7 +156,7 @@ Rules registered in `Ideomod.registerStickinessRules()`. Enforced by `PistonStru
 
 **RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Set before `new PistonStructureResolver()`, cleared in finally block.
 
-**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()` to avoid weak power misfires. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing.
+**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()` to avoid weak power misfires. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
@@ -233,7 +233,7 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 
 1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source.
 2. **Material exclusivity**: canStickTo returns true only for same-material IFrameBlock. Iron<->iron, copper<->copper. Cross-material is mutual exclusion (canStickTo returns false both sides).
-3. **Grab immunity**: Rules 9-11 prevent frames from grabbing slime/honey/odd slime. canStickTo is permissive (lets those types grab frames one-way).
+3. **Grab immunity**: Rules 1-4 (consolidated) prevent specific grabber→target pairs. Rule 4 has carve-outs for matching inner types.
 
 **FrameActivation algorithm** (redstone-style wipe-and-rebuild):
 1. DISCOVER: BFS from change point through all connected frames (any material, active or inactive)
@@ -255,7 +255,7 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
 4. **INNER_STICKY property** (IntegerProperty 0-3): 0=none, 1=slime, 2=honey, 3=odd_slime. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
 5. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
-6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rules 9-11 have carve-outs for matching inner types.
+6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rule 4 has carve-outs for matching inner types.
 7. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance check in PistonStructureResolverMixin. No blanket directional rule registered.
 8. **noOcclusion()**: Block properties include noOcclusion() to prevent neighbor face culling (required for translucent inner blocks).
 9. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
@@ -323,15 +323,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## KNOWN ISSUES & TECHNICAL DEBT
 
-1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
-2. ~~**OddstoneConfig lazy-load not thread-safe**~~ -- RESOLVED: Fixed with double-checked locking + volatile flag (2026-02-25).
-3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
-4. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
-5. ~~**MovingBlockEntityData.java uses INFO-level logging**~~ -- RESOLVED: Changed to DEBUG level (2026-02-25b).
-6. **OddstonePortalBlock.getShape() axis mapping** -- Returns Z_AXIS_AABB for AXIS=X and vice versa. May be inverted relative to vanilla NetherPortalBlock pattern. Needs in-game verification.
-7. ~~**FramedBlockRenderer.java missing null check**~~ -- RESOLVED: Already guarded — sampleBestLight() has null check. Struck (2026-02-25).
-8. ~~**ModCreativeTabs iterates entire block registry**~~ -- RESOLVED: Cached frameable blocks list on first tab open (2026-02-25b).
-9. ~~**OddstonePortalBlock.linkedTeleport() division-by-zero**~~ -- RESOLVED: Added zero-span guard defaulting to portal center (2026-02-25).
-10. ~~**OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()**~~ -- RESOLVED: Added null check on ResourceLocation before .toString() (2026-02-25).
+1. **OddstoneConfig.reloadConfig() not wired to command** -- config can be reloaded programmatically but there's no in-game command to trigger it. Low priority.
+2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
 
 Written by Claude, directed and guided by The Ideomancer.

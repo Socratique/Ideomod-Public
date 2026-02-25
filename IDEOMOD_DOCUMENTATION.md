@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-25b (priority 2 performance fixes)*
+*Last updated: 2026-02-25c (priority 3 code quality + issue cleanup)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -158,8 +158,8 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. |
-| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, delegated `isRedstoneConductor`. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
-| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, delegated `isRedstoneConductor`. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
+| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
+| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
 
 ### ModItems (DeferredRegister<Item>)
 
@@ -241,24 +241,17 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 ### Currently Registered Rules
 
-**Grab immunity rules** (registered in `Ideomod.registerStickinessRules()`):
+**Grab immunity rules** (registered in `Ideomod.registerStickinessRules()`, consolidated):
 
 | # | Grabber | Target | Effect |
 |---|---------|--------|--------|
-| 1 | SlimeBlock or Framed Slime | OddstoneBlock | Slime can't grab Oddstone |
-| 2 | HoneyBlock or Framed Honey | OddstoneBlock | Honey can't grab Oddstone |
-| 3 | OddSlimeBlock or Framed Odd Slime | OddstoneBlock | Odd Slime can't grab Oddstone |
-| 4 | Machine Family* | SlimeBlock | Machine Family can't grab Slime |
-| 5 | Machine Family* | HoneyBlock | Machine Family can't grab Honey |
-| 6 | Machine Family* | OddSlimeBlock | Machine Family can't grab Odd Slime |
-| 7 | SlimeBlock | OddSlimeBlock | Slime can't grab Odd Slime |
-| 8 | HoneyBlock | OddSlimeBlock | Honey can't grab Odd Slime |
-| 9 | Frame Family** | SlimeBlock | Frames can't grab Slime (exempted when grabber INNER_STICKY == SLIME) |
-| 10 | Frame Family** | HoneyBlock | Frames can't grab Honey (exempted when grabber INNER_STICKY == HONEY) |
-| 11 | Frame Family** | OddSlimeBlock | Frames can't grab Odd Slime (exempted when grabber INNER_STICKY == ODD_SLIME) |
+| 1 | Any non-Oddstone block | OddstoneBlock | Nothing except Oddstone can grab Oddstone |
+| 2 | Machine Family* | SlimeBlock, HoneyBlock, OddSlimeBlock | Machine Family can't grab sticky blocks |
+| 3 | SlimeBlock, HoneyBlock | OddSlimeBlock | Slime/honey can't grab Odd Slime (mutual exclusion enforcement) |
+| 4 | Frame Family** | SlimeBlock, HoneyBlock, OddSlimeBlock | Frames can't grab sticky blocks (exempted when grabber INNER_STICKY matches target type) |
 
-*Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock. Rules 4-6 use `MachineFrameBlock.isMachineFamily()`.
-**Frame Family = Any IFrameBlock (FrameBlock and FramedBlock). Rules 9-11 use `StickinessRules.isFrameFamily()`. Rules 9-11 have carve-outs: when the grabbing FramedBlock has INNER_STICKY matching the target sticky type, the immunity is lifted (e.g., Framed Slime CAN grab normal blocks like real slime).
+*Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock. Rule 2 uses `MachineFrameBlock.isMachineFamily()`.
+**Frame Family = Any IFrameBlock (FrameBlock and FramedBlock). Rule 4 uses `StickinessRules.isFrameFamily()`. Rule 4 has carve-outs: when the grabbing FramedBlock has INNER_STICKY matching the target sticky type, the immunity is lifted (e.g., Framed Slime CAN grab normal blocks like real slime).
 
 **Directional rules:**
 
@@ -274,7 +267,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime one-way, with carve-outs for matching inner types.
+**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity rule 4 prevents frames from grabbing slime/honey/odd slime one-way, with carve-outs for matching inner types.
 
 ---
 
@@ -1197,20 +1190,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 
 | # | Issue | Severity | Location |
 |---|-------|----------|----------|
-| 1 | Grab immunity rules could be consolidated | Debt | Ideomod.registerStickinessRules() |
-| ~~2~~ | ~~5 portal files in flat block/ package~~ | ~~RESOLVED~~ | ~~Reorganized into block/portal/, block/frame/, block/machine/, block/movement/, block/piston/ subpackages (2026-02-23)~~ |
-| 3 | MachineFrameBlock.isUpdating is static (not ThreadLocal) | Low risk | block/machine/MachineFrameBlock.java |
-| 4 | MachineTrackBlock.isUpdating is static (not ThreadLocal) | Low risk | block/machine/MachineTrackBlock.java |
-| 5 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
-| 6 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. |
-| ~~7~~ | ~~OddstoneConfig lazy-load not thread-safe~~ | ~~RESOLVED~~ | ~~Fixed with double-checked locking + volatile flag (2026-02-25)~~ |
-| ~~8~~ | ~~MovingBlockEntityData uses INFO-level logging~~ | ~~RESOLVED~~ | ~~Changed to DEBUG level (2026-02-25b)~~ |
-| 9 | OddstonePortalBlock.getShape() axis mapping | Verify | block/portal/OddstonePortalBlock.java -- returns Z_AXIS_AABB for AXIS=X, may be inverted vs vanilla |
-| ~~10~~ | ~~FramedBlockRenderer missing null check on level~~ | ~~RESOLVED~~ | ~~Already guarded: sampleBestLight() has null check. Struck (2026-02-25)~~ |
-| ~~11~~ | ~~ModCreativeTabs iterates entire block registry~~ | ~~RESOLVED~~ | ~~Cached frameable blocks list on first tab open (2026-02-25b)~~ |
-| 12 | DrillBlock.java unused variable | Cleanup | block/DrillBlock.java -- facingAxis computed but never used |
-| ~~13~~ | ~~OddstonePortalBlock.linkedTeleport() division-by-zero~~ | ~~RESOLVED~~ | ~~Added zero-span guard defaulting to portal center (2026-02-25)~~ |
-| ~~14~~ | ~~OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()~~ | ~~RESOLVED~~ | ~~Added null check on ResourceLocation before .toString() (2026-02-25)~~ |
+| 1 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
+| 2 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. In-world rendering is correct. |
 
 
 ## 15. CONVENTIONS & PATTERNS

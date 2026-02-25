@@ -18,7 +18,7 @@ import com.ideomancer.ideomod.block.frame.FrameActivation;
  * pushed by a piston, slime grabs Oddstone because slime sticks to
  * everything except honey. There's no vanilla way to prevent this.
  * 
- * But we want Oddstone and Machine Block to have asymmetric stickiness
+ * But we want Oddstone and Machine Frame to have asymmetric stickiness
  * with slime - one direction works, the other doesn't.
  * 
  * Additionally, Odd Slime needs DIRECTIONAL stickiness — it only grabs
@@ -38,11 +38,11 @@ import com.ideomancer.ideomod.block.frame.FrameActivation;
  * 
  * Our mixin in PistonStructureResolver checks both rule types.
  * 
- * NOTE: This class lives in the block package, NOT the mixin package.
- * The mixin system locks down its package - no regular classes allowed
- * in there, and normal code can't reference classes in the mixin package.
- * This class needs to be called by both Ideomod.java (to register rules)
- * and the mixin (to check rules), so it must be in a normal package.
+ * NOTE: This class lives in the block.movement package, NOT the mixin
+ * package. The mixin system locks down its package - no regular classes
+ * allowed in there, and normal code can't reference classes in the mixin
+ * package. This class needs to be called by both Ideomod.java (to register
+ * rules) and the mixin (to check rules), so it must be in a normal package.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
