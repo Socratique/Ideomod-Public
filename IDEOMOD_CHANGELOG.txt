@@ -1,5 +1,74 @@
 # Ideomod Changelog
 
+## [2026-02-25] Priority 1 Bug Fixes — Defensive Guards
+
+Resolved three Priority 1 potential crash bugs identified during the 2026-02-23a
+codebase review. One previously-listed item (FramedBlockRenderer NPE) was found
+to already be guarded.
+
+### Bug fix 1: Portal division-by-zero in linkedTeleport [FIXED]
+
+File: block/portal/OddstonePortalBlock.java
+
+Issue: linkedTeleport() computed horizontal and vertical fractions by dividing
+player offset by portal span (maxH - minH, maxV - minV). If a corrupted
+SavedData entry produced a portal with zero span, this would divide by zero,
+producing NaN coordinates and breaking teleportation.
+
+Fix: Pre-compute hSpan and vSpan. If either is <= 0, default the fraction to
+0.5 (center of portal) instead of dividing. Player lands at the center of the
+destination portal rather than crashing.
+
+### Bug fix 2: OddstoneConfig lazy-load race condition [FIXED]
+
+File: config/OddstoneConfig.java
+
+Issue: loaded flag was checked without synchronization in getSympatheticRadius()
+and isMobAffected(). Two threads could both see loaded == false simultaneously
+and trigger concurrent loadConfig() calls, corrupting the affectedMobs set.
+
+Fix: Double-checked locking pattern. Added private static final Object LOCK.
+Made loaded volatile. Both accessor methods now use:
+if (!loaded) { synchronized (LOCK) { if (!loaded) loadConfig(); } }
+reloadConfig() also synchronized on LOCK. Outer check is the fast path -- once
+config is loaded, zero synchronization overhead.
+
+### Bug fix 3: FramedBlockRenderer sampleBestLight NPE [ALREADY FIXED]
+
+File: client/render/FramedBlockRenderer.java
+
+Issue was listed as: be.getLevel() used before null guard in sampleBestLight().
+Finding: The null guard already exists (if (level == null) return fallbackLight).
+No code change needed. Struck from the issues list.
+
+### Bug fix 4: OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey() [FIXED]
+
+File: block/OddstoneBlock.java
+
+Issue: Both getBlockPathType() and getAdjacentBlockPathType() called
+ForgeRegistries.ENTITY_TYPES.getKey(mob.getType()).toString() without checking
+if getKey() returned null. Unregistered entity types (from other mods) could
+trigger an NPE.
+
+Fix: Extract ResourceLocation into a local variable, null-check it, fall back
+to DAMAGE_OTHER / DANGER_OTHER if null. Unknown entity types are repelled by
+Oddstone rather than crashing.
+
+### Files changed:
+- block/portal/OddstonePortalBlock.java — division-by-zero guard in linkedTeleport
+- config/OddstoneConfig.java — double-checked locking on lazy load
+- block/OddstoneBlock.java — null-safe entity type key lookup
+
+### Documentation updates:
+- IDEOMOD_DOCUMENTATION.md: updated last-updated stamp, updated config section
+  to note thread-safe lazy loading, struck resolved issues from Known Issues
+  table, renumbered remaining issues
+- CODEBASE_REFERENCE.md: updated last-updated stamp, struck resolved issues
+  from Known Issues section, renumbered remaining issues
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-23a] Package Reorganization + Full Codebase Review
 
 Major package reorganization of the flat block/, client/, and structure/

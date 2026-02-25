@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-23a (package reorganization + codebase review)*
+*Last updated: 2026-02-25 (priority 1 bug fixes)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -987,7 +987,7 @@ A rare atmospheric event. When a player kills a non-hostile mob (Animal or Abstr
 
 ### Oddstone Config (`config/ideomod/oddstone.json`)
 
-Auto-generated on first launch. Loaded lazily on first access.
+Auto-generated on first launch. Loaded lazily on first access via double-checked locking (thread-safe).
 
 **JSON structure:**
 ```json
@@ -1203,12 +1203,14 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 4 | MachineTrackBlock.isUpdating is static (not ThreadLocal) | Low risk | block/machine/MachineTrackBlock.java |
 | 5 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
 | 6 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. |
-| 7 | OddstoneConfig lazy-load not thread-safe | Low risk | config/OddstoneConfig.java -- getSympatheticRadius/isMobAffected check loaded flag without synchronization |
+| ~~7~~ | ~~OddstoneConfig lazy-load not thread-safe~~ | ~~RESOLVED~~ | ~~Fixed with double-checked locking + volatile flag (2026-02-25)~~ |
 | 8 | MovingBlockEntityData uses INFO-level logging | Annoyance | block/movement/MovingBlockEntityData.java -- store/retrieve log at INFO, causes spam |
 | 9 | OddstonePortalBlock.getShape() axis mapping | Verify | block/portal/OddstonePortalBlock.java -- returns Z_AXIS_AABB for AXIS=X, may be inverted vs vanilla |
-| 10 | FramedBlockRenderer missing null check on level | Low risk | client/render/FramedBlockRenderer.java -- be.getLevel() used before null guard |
+| ~~10~~ | ~~FramedBlockRenderer missing null check on level~~ | ~~RESOLVED~~ | ~~Already guarded: sampleBestLight() has null check. Struck (2026-02-25)~~ |
 | 11 | ModCreativeTabs iterates entire block registry | Performance | registry/ModCreativeTabs.java -- should cache frameable blocks list |
 | 12 | DrillBlock.java unused variable | Cleanup | block/DrillBlock.java -- facingAxis computed but never used |
+| ~~13~~ | ~~OddstonePortalBlock.linkedTeleport() division-by-zero~~ | ~~RESOLVED~~ | ~~Added zero-span guard defaulting to portal center (2026-02-25)~~ |
+| ~~14~~ | ~~OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()~~ | ~~RESOLVED~~ | ~~Added null check on ResourceLocation before .toString() (2026-02-25)~~ |
 
 
 ## 15. CONVENTIONS & PATTERNS

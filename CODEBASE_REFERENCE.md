@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-23a (package reorganization + codebase review)*
+*Last updated: 2026-02-25 (priority 1 bug fixes)*
 
 ---
 
@@ -324,12 +324,14 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 ## KNOWN ISSUES & TECHNICAL DEBT
 
 1. **MachineBlock.isUpdating is static boolean** -- works for single-threaded server ticks but is not thread-safe. Same for MachineTrackBlock.isUpdating. Consider ThreadLocal if concurrency ever matters.
-2. **OddstoneConfig lazy-load not thread-safe** -- `getSympatheticRadius()` and `isMobAffected()` check a `loaded` flag without synchronization. Multiple threads could trigger concurrent loads. Consider `synchronized` or `volatile` + double-checked locking.
+2. ~~**OddstoneConfig lazy-load not thread-safe**~~ -- RESOLVED: Fixed with double-checked locking + volatile flag (2026-02-25).
 3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
 4. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
 5. **MovingBlockEntityData.java uses INFO-level logging** -- store/retrieve operations log at INFO level, causing spam during heavy piston activity. Should be DEBUG.
 6. **OddstonePortalBlock.getShape() axis mapping** -- Returns Z_AXIS_AABB for AXIS=X and vice versa. May be inverted relative to vanilla NetherPortalBlock pattern. Needs in-game verification.
-7. **FramedBlockRenderer.java missing null check** -- `be.getLevel()` can return null; used before the null-guarded `sampleBestLight()` method. Should add early null check.
+7. ~~**FramedBlockRenderer.java missing null check**~~ -- RESOLVED: Already guarded — sampleBestLight() has null check. Struck (2026-02-25).
 8. **ModCreativeTabs iterates entire block registry** -- `BuiltInRegistries.BLOCK` is iterated every time the framed blocks tab opens. Should cache the frameable blocks list.
+9. ~~**OddstonePortalBlock.linkedTeleport() division-by-zero**~~ -- RESOLVED: Added zero-span guard defaulting to portal center (2026-02-25).
+10. ~~**OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()**~~ -- RESOLVED: Added null check on ResourceLocation before .toString() (2026-02-25).
 
 Written by Claude, directed and guided by The Ideomancer.

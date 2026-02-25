@@ -105,9 +105,10 @@ public class OddstoneBlock extends Block {
     public @Nullable BlockPathTypes getBlockPathType(BlockState state, BlockGetter level,
                                                       BlockPos pos, @Nullable Mob mob) {
         if (mob == null) return BlockPathTypes.DAMAGE_OTHER;
-        String mobId = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES
-                .getKey(mob.getType()).toString();
-        if (OddstoneConfig.isMobAffected(mobId)) return BlockPathTypes.DAMAGE_OTHER;
+        net.minecraft.resources.ResourceLocation mobKey = net.minecraftforge.registries.ForgeRegistries
+                .ENTITY_TYPES.getKey(mob.getType());
+        if (mobKey == null) return BlockPathTypes.DAMAGE_OTHER;
+        if (OddstoneConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DAMAGE_OTHER;
         return null;
     }
 
@@ -116,9 +117,10 @@ public class OddstoneBlock extends Block {
                                                               BlockPos pos, @Nullable Mob mob,
                                                               BlockPathTypes originalType) {
         if (mob == null) return BlockPathTypes.DANGER_OTHER;
-        String mobId = net.minecraftforge.registries.ForgeRegistries.ENTITY_TYPES
-                .getKey(mob.getType()).toString();
-        if (OddstoneConfig.isMobAffected(mobId)) return BlockPathTypes.DANGER_OTHER;
+        net.minecraft.resources.ResourceLocation mobKey = net.minecraftforge.registries.ForgeRegistries
+                .ENTITY_TYPES.getKey(mob.getType());
+        if (mobKey == null) return BlockPathTypes.DANGER_OTHER;
+        if (OddstoneConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DANGER_OTHER;
         return null;
     }
 }

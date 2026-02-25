@@ -31,11 +31,12 @@ import java.util.Set;
 public class OddstoneConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    private static final Object LOCK = new Object();
     
     // Runtime values (loaded from JSON)
     private static int sympatheticRadius = 5;
     private static Set<String> affectedMobs = new HashSet<>();
-    private static boolean loaded = false;
+    private static volatile boolean loaded = false;
 
     /**
      * Gets the sympathetic movement radius (in blocks).
@@ -43,7 +44,11 @@ public class OddstoneConfig {
      * will also be moved in the same direction.
      */
     public static int getSympatheticRadius() {
-        if (!loaded) loadConfig();
+        if (!loaded) {
+            synchronized (LOCK) {
+                if (!loaded) loadConfig();
+            }
+        }
         return sympatheticRadius;
     }
 
@@ -53,7 +58,11 @@ public class OddstoneConfig {
      * @return true if the mob avoids Oddstone, false if it can walk on it
      */
     public static boolean isMobAffected(String mobId) {
-        if (!loaded) loadConfig();
+        if (!loaded) {
+            synchronized (LOCK) {
+                if (!loaded) loadConfig();
+            }
+        }
         return affectedMobs.contains(mobId);
     }
 
@@ -227,8 +236,10 @@ public class OddstoneConfig {
      * Force a reload of the config (useful for a future /reload command).
      */
     public static void reloadConfig() {
-        loaded = false;
-        affectedMobs.clear();
-        loadConfig();
+        synchronized (LOCK) {
+            loaded = false;
+            affectedMobs.clear();
+            loadConfig();
+        }
     }
 }

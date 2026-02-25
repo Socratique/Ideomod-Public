@@ -183,17 +183,24 @@ public class OddstonePortalBlock extends Block {
         double playerZ = player.getZ();
 
         // Horizontal fraction along the portal
+        // Guard: if portal has zero span (corrupted SavedData), default to center (0.5)
+        double hSpan = thisBounds.maxH - thisBounds.minH;
+        double vSpan = thisBounds.maxV - thisBounds.minV;
+
         double hFraction;
-        if (thisAxis == Direction.Axis.X) {
+        if (hSpan <= 0.0) {
+            hFraction = 0.5;
+        } else if (thisAxis == Direction.Axis.X) {
             // Portal extends along Z
-            hFraction = (playerZ - thisBounds.minH) / (thisBounds.maxH - thisBounds.minH);
+            hFraction = (playerZ - thisBounds.minH) / hSpan;
         } else {
             // Portal extends along X
-            hFraction = (playerX - thisBounds.minH) / (thisBounds.maxH - thisBounds.minH);
+            hFraction = (playerX - thisBounds.minH) / hSpan;
         }
 
         // Vertical fraction
-        double vFraction = (playerY - thisBounds.minV) / (thisBounds.maxV - thisBounds.minV);
+        double vFraction = (vSpan <= 0.0) ? 0.5
+                : (playerY - thisBounds.minV) / vSpan;
 
         // Clamp to 0-1
         hFraction = Math.max(0.0, Math.min(1.0, hFraction));
