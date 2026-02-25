@@ -38,6 +38,8 @@ import org.jetbrains.annotations.Nullable;
  * 
  * DEACTIVATION: portal blocks break (via updateShape) when any adjacent
  * frame or corner block is removed. onRemove unregisters the portal address.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class OddstonePortalBlock extends Block {
 
@@ -287,20 +289,40 @@ public class OddstonePortalBlock extends Block {
     }
 
     /**
-     * Finds any portal block in the partner portal by scanning from the
-     * frame's registered corner position (bottom-left of frame).
+     * Finds any portal block in the partner portal by checking the expected
+     * interior position first (1 block in + 1 block up from frame corner),
+     * then falling back to a small scan if the expected position isn't valid.
+     *
+     * The frame corner is always the bottom-left of the frame, so position
+     * (hDir+1, above+1) is the bottom-left of the interior. For any valid
+     * portal, this MUST be a portal block. The fallback scan handles edge
+     * cases like misaligned SavedData.
+     *
+     * Previously used a 20x20 brute-force scan (400 block checks).
+     * Now checks 1 block in the common case, up to ~25 in the fallback.
      */
     @Nullable
     private BlockPos findAnyPortalBlock(ServerLevel level, BlockPos frameCorner, Direction hDir) {
-        // Interior starts 1 block in and 1 block up from the frame corner
-        for (int h = 1; h <= 20; h++) {
-            for (int v = 1; v <= 20; v++) {
+        // Fast path: interior always starts 1 in and 1 up from the frame corner
+        BlockPos expected = frameCorner.relative(hDir, 1).above(1);
+        if (level.getBlockState(expected).is(ModBlocks.ODDSTONE_PORTAL.get())) {
+            return expected;
+        }
+
+        // Fallback: small scan for edge cases (misaligned SavedData, unusual geometry).
+        // Oddstone portals have a max interior of ~5x5 (frame limits), so scanning
+        // a small area around the expected position covers all realistic cases.
+        for (int h = 1; h <= 5; h++) {
+            for (int v = 1; v <= 5; v++) {
+                // Skip (1,1) — already checked above
+                if (h == 1 && v == 1) continue;
                 BlockPos check = frameCorner.relative(hDir, h).above(v);
                 if (level.getBlockState(check).is(ModBlocks.ODDSTONE_PORTAL.get())) {
                     return check;
                 }
             }
         }
+
         return null;
     }
 

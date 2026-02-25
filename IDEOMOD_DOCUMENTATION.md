@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-25 (priority 1 bug fixes)*
+*Last updated: 2026-02-25b (priority 2 performance fixes)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -173,7 +173,7 @@ Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `sta
 
 Two tabs:
 - `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Iron Frame, Copper Frame, Structure Debug Stick).
-- `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- iterates ALL registered blocks, checks `FrameabilityHelper.isFrameable()`, creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
+- `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
 
@@ -690,7 +690,7 @@ RENDER (client-only, runs each frame during 2-tick animation):
 
 ### Creative Tab
 
-FRAMED_BLOCKS_TAB dynamically iterates ALL registered blocks at tab population time, checks FrameabilityHelper.isFrameable(), creates iron + copper ItemStack with NBT for each valid block. Automatically includes modded blocks.
+FRAMED_BLOCKS_TAB caches the frameable blocks list on first tab open (via FrameabilityHelper.isFrameable()), creates iron + copper ItemStack with NBT for each valid block. Automatically includes modded blocks. Registry iteration happens once, not per tab open.
 
 ### F3 Debug Overlay
 
@@ -1204,10 +1204,10 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 5 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
 | 6 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. |
 | ~~7~~ | ~~OddstoneConfig lazy-load not thread-safe~~ | ~~RESOLVED~~ | ~~Fixed with double-checked locking + volatile flag (2026-02-25)~~ |
-| 8 | MovingBlockEntityData uses INFO-level logging | Annoyance | block/movement/MovingBlockEntityData.java -- store/retrieve log at INFO, causes spam |
+| ~~8~~ | ~~MovingBlockEntityData uses INFO-level logging~~ | ~~RESOLVED~~ | ~~Changed to DEBUG level (2026-02-25b)~~ |
 | 9 | OddstonePortalBlock.getShape() axis mapping | Verify | block/portal/OddstonePortalBlock.java -- returns Z_AXIS_AABB for AXIS=X, may be inverted vs vanilla |
 | ~~10~~ | ~~FramedBlockRenderer missing null check on level~~ | ~~RESOLVED~~ | ~~Already guarded: sampleBestLight() has null check. Struck (2026-02-25)~~ |
-| 11 | ModCreativeTabs iterates entire block registry | Performance | registry/ModCreativeTabs.java -- should cache frameable blocks list |
+| ~~11~~ | ~~ModCreativeTabs iterates entire block registry~~ | ~~RESOLVED~~ | ~~Cached frameable blocks list on first tab open (2026-02-25b)~~ |
 | 12 | DrillBlock.java unused variable | Cleanup | block/DrillBlock.java -- facingAxis computed but never used |
 | ~~13~~ | ~~OddstonePortalBlock.linkedTeleport() division-by-zero~~ | ~~RESOLVED~~ | ~~Added zero-span guard defaulting to portal center (2026-02-25)~~ |
 | ~~14~~ | ~~OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()~~ | ~~RESOLVED~~ | ~~Added null check on ResourceLocation before .toString() (2026-02-25)~~ |

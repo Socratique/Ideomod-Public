@@ -35,7 +35,7 @@ public class MovingBlockEntityData {
     public static void store(String dimensionKey, BlockPos destPos, CompoundTag data) {
         String key = makeKey(dimensionKey, destPos);
         pendingData.put(key, data);
-        Ideomod.LOGGER.info("[MovingBEData] STORE key={} dataSize={} mapSize={}",
+        Ideomod.LOGGER.debug("[MovingBEData] STORE key={} dataSize={} mapSize={}",
                 key, data.size(), pendingData.size());
     }
 
@@ -43,7 +43,7 @@ public class MovingBlockEntityData {
         String key = makeKey(dimensionKey, pos);
         CompoundTag result = pendingData.remove(key);
         if (result != null) {
-            Ideomod.LOGGER.info("[MovingBEData] RETRIEVE SUCCESS key={} dataSize={}",
+            Ideomod.LOGGER.debug("[MovingBEData] RETRIEVE SUCCESS key={} dataSize={}",
                     key, result.size());
         }
         return result;

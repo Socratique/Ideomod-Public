@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-25 (priority 1 bug fixes)*
+*Last updated: 2026-02-25b (priority 2 performance fixes)*
 
 ---
 
@@ -295,7 +295,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks).
 
-**ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from ALL registered blocks via FrameabilityHelper).
+**ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 
 ---
 
@@ -327,10 +327,10 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 2. ~~**OddstoneConfig lazy-load not thread-safe**~~ -- RESOLVED: Fixed with double-checked locking + volatile flag (2026-02-25).
 3. **Stickiness rules could be consolidated** -- multiple rules checking "X cannot grab Oddstone" could be one rule: `if (target instanceof OddstoneBlock && !(grabber instanceof OddstoneBlock))`.
 4. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic.
-5. **MovingBlockEntityData.java uses INFO-level logging** -- store/retrieve operations log at INFO level, causing spam during heavy piston activity. Should be DEBUG.
+5. ~~**MovingBlockEntityData.java uses INFO-level logging**~~ -- RESOLVED: Changed to DEBUG level (2026-02-25b).
 6. **OddstonePortalBlock.getShape() axis mapping** -- Returns Z_AXIS_AABB for AXIS=X and vice versa. May be inverted relative to vanilla NetherPortalBlock pattern. Needs in-game verification.
 7. ~~**FramedBlockRenderer.java missing null check**~~ -- RESOLVED: Already guarded — sampleBestLight() has null check. Struck (2026-02-25).
-8. **ModCreativeTabs iterates entire block registry** -- `BuiltInRegistries.BLOCK` is iterated every time the framed blocks tab opens. Should cache the frameable blocks list.
+8. ~~**ModCreativeTabs iterates entire block registry**~~ -- RESOLVED: Cached frameable blocks list on first tab open (2026-02-25b).
 9. ~~**OddstonePortalBlock.linkedTeleport() division-by-zero**~~ -- RESOLVED: Added zero-span guard defaulting to portal center (2026-02-25).
 10. ~~**OddstoneBlock unsafe ForgeRegistries.ENTITY_TYPES.getKey()**~~ -- RESOLVED: Added null check on ResourceLocation before .toString() (2026-02-25).
 

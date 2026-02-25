@@ -12,12 +12,40 @@ import net.minecraft.world.level.block.Block;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.RegistryObject;
 
+import java.util.ArrayList;
+import java.util.List;
+
 /**
  * Registry for creative mode tabs.
+ *
+ * The framed blocks tab caches the list of frameable blocks on first open
+ * rather than iterating the entire block registry every time. The cache
+ * is built once (after all mods have registered their blocks) and reused
+ * for all subsequent tab opens.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class ModCreativeTabs {
+
+    /** Cached list of blocks that pass FrameabilityHelper.isFrameable(). Built on first tab open. */
+    private static List<Block> cachedFrameableBlocks = null;
+
+    /**
+     * Returns the cached list of frameable blocks, building it on first call.
+     * Thread-safe: displayItems runs on the main thread, so no synchronization needed.
+     */
+    private static List<Block> getFrameableBlocks() {
+        if (cachedFrameableBlocks == null) {
+            cachedFrameableBlocks = new ArrayList<>();
+            for (Block block : BuiltInRegistries.BLOCK) {
+                if (FrameabilityHelper.isFrameable(block)) {
+                    cachedFrameableBlocks.add(block);
+                }
+            }
+            Ideomod.LOGGER.debug("[ModCreativeTabs] Cached {} frameable blocks", cachedFrameableBlocks.size());
+        }
+        return cachedFrameableBlocks;
+    }
     
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = 
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, Ideomod.MOD_ID);
@@ -50,9 +78,10 @@ public class ModCreativeTabs {
     /**
      * Dynamic creative tab for Framed Blocks.
      *
-     * Iterates ALL registered blocks at tab population time, checks each
-     * against FrameabilityHelper, and creates an iron + copper framed
-     * variant for every valid block. Works with modded blocks automatically.
+     * Uses a cached list of frameable blocks (built on first open) instead
+     * of iterating the entire block registry every time the tab is opened.
+     * Works with modded blocks automatically — the cache is built after all
+     * mods have registered their blocks.
      */
     public static final RegistryObject<CreativeModeTab> FRAMED_BLOCKS_TAB = CREATIVE_TABS.register("framed_blocks_tab",
             () -> CreativeModeTab.builder()
@@ -64,16 +93,13 @@ public class ModCreativeTabs {
                     })
                     .title(Component.translatable("itemGroup." + Ideomod.MOD_ID + ".framed_blocks_tab"))
                     .displayItems((parameters, output) -> {
-                        // Iterate all registered blocks and add frameable variants
-                        for (Block block : BuiltInRegistries.BLOCK) {
-                            if (FrameabilityHelper.isFrameable(block)) {
-                                // Iron variant
-                                output.accept(FramedBlockItem.createStack(
-                                        ModItems.IRON_FRAMED_BLOCK.get(), block));
-                                // Copper variant
-                                output.accept(FramedBlockItem.createStack(
-                                        ModItems.COPPER_FRAMED_BLOCK.get(), block));
-                            }
+                        for (Block block : getFrameableBlocks()) {
+                            // Iron variant
+                            output.accept(FramedBlockItem.createStack(
+                                    ModItems.IRON_FRAMED_BLOCK.get(), block));
+                            // Copper variant
+                            output.accept(FramedBlockItem.createStack(
+                                    ModItems.COPPER_FRAMED_BLOCK.get(), block));
                         }
                     })
                     .build()

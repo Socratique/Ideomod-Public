@@ -666,9 +666,7 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 
 *This list is a brainstorm -- not all of these will necessarily be implemented. The system is designed to grow organically as new specializations prove useful.*
 
-**Known issues (current implementation):**
-- Current Machine Block is a simple block, not a block entity -- needs refactor to block entity with GUI
-- Redstone conduction currently baked into the base block -- needs extraction to Machine Conductor specialization
+**Known issues:** None currently. Machine Frame block entity with GUI is implemented. Redstone conduction separated from base block.
 
 ---
 

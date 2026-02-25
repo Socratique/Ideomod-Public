@@ -1,5 +1,56 @@
 # Ideomod Changelog
 
+## [2026-02-25b] Priority 2 Performance Fixes
+
+Resolved three Priority 2 performance issues identified during the 2026-02-23a
+codebase review. Also removed stale known issues from IDEOMOD_DESIGN.md.
+
+### Fix 1: MovingBlockEntityData log spam [FIXED]
+
+File: block/movement/MovingBlockEntityData.java
+
+Issue: store() and retrieve() logged at INFO level, causing console spam during
+heavy piston activity (every block entity moved = two INFO messages).
+
+Fix: Changed both LOGGER.info() calls to LOGGER.debug(). Messages still available
+when log level is set to DEBUG, but no longer spam the console during normal play.
+
+### Fix 2: ModCreativeTabs registry iteration [FIXED]
+
+File: registry/ModCreativeTabs.java
+
+Issue: The framed blocks creative tab iterated BuiltInRegistries.BLOCK (the entire
+block registry — hundreds of blocks) every time the tab was opened. Each open
+re-checked every block against FrameabilityHelper.isFrameable().
+
+Fix: Added a static cachedFrameableBlocks list populated lazily on first tab open.
+Subsequent tab opens read the cached list directly. Registry iteration happens once
+per session, not per tab open.
+
+### Fix 3: OddstonePortalBlock.findAnyPortalBlock() brute-force scan [FIXED]
+
+File: block/portal/OddstonePortalBlock.java
+
+Issue: findAnyPortalBlock() used a nested 20×20 loop (400 block checks) to find
+any portal block in a partner portal. This ran during every linked teleportation.
+
+Fix: Check the expected interior position first — (hDir+1, above+1) from the frame
+corner, which is always the bottom-left of the interior for any valid portal. This
+is a single block check in the common case. Falls back to a 5×5 scan (24 checks)
+for edge cases instead of 20×20 (400 checks).
+
+### Documentation updates:
+
+- IDEOMOD_DOCUMENTATION.md: updated timestamp, struck issues #8 and #11, updated
+  framed blocks tab descriptions to reflect caching
+- CODEBASE_REFERENCE.md: updated timestamp, struck issues #5 and #8, updated
+  ModCreativeTabs description to reflect caching
+- IDEOMOD_DESIGN.md: removed stale Machine Block known issues (block entity with
+  GUI already implemented as Machine Frame; redstone conduction already separated)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-25] Priority 1 Bug Fixes — Defensive Guards
 
 Resolved three Priority 1 potential crash bugs identified during the 2026-02-23a
