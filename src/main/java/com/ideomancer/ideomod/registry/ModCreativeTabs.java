@@ -23,6 +23,10 @@ import java.util.List;
  * is built once (after all mods have registered their blocks) and reused
  * for all subsequent tab opens.
  *
+ * Since frameability now depends on the ideomod:frameable_blocks tag,
+ * the cache is invalidated on datapack reload so changes take effect
+ * without restarting.
+ *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class ModCreativeTabs {
@@ -46,7 +50,16 @@ public class ModCreativeTabs {
         }
         return cachedFrameableBlocks;
     }
-    
+
+    /**
+     * Invalidate the frameable blocks cache. Call this on datapack reload
+     * so tag changes take effect without restarting.
+     */
+    public static void invalidateCache() {
+        cachedFrameableBlocks = null;
+        Ideomod.LOGGER.debug("[ModCreativeTabs] Frameable blocks cache invalidated");
+    }
+
     public static final DeferredRegister<CreativeModeTab> CREATIVE_TABS = 
             DeferredRegister.create(Registries.CREATIVE_MODE_TAB, Ideomod.MOD_ID);
     
@@ -80,8 +93,8 @@ public class ModCreativeTabs {
      *
      * Uses a cached list of frameable blocks (built on first open) instead
      * of iterating the entire block registry every time the tab is opened.
-     * Works with modded blocks automatically — the cache is built after all
-     * mods have registered their blocks.
+     * Since frameability is now tag-based (ideomod:frameable_blocks),
+     * the cache is invalidated on datapack reload via invalidateCache().
      */
     public static final RegistryObject<CreativeModeTab> FRAMED_BLOCKS_TAB = CREATIVE_TABS.register("framed_blocks_tab",
             () -> CreativeModeTab.builder()

@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block.frame;
 
+import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
@@ -29,8 +30,8 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  *
  * INNER STICKY TYPE:
  * ==================
- * When the inner block is a sticky type (slime, honey, odd slime), the
- * block entity computes the sticky type value and syncs it to the
+ * When the inner block is a sticky type (slime, honey, odd slime, oddstone),
+ * the block entity computes the sticky type value and syncs it to the
  * blockstate's INNER_STICKY property via updateBlockstateFromInner().
  * This is needed because isStickyBlock() and canStickTo() only receive
  * a BlockState (no position context) and cannot look up the block entity.
@@ -130,12 +131,13 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     /**
      * Compute the sticky type for the current inner block.
      *
-     * @return 0 (none), 1 (slime), 2 (honey), 3 (odd slime)
+     * @return 0 (none), 1 (slime), 2 (honey), 3 (odd slime), 4 (oddstone)
      */
     public static int computeStickyType(Block innerBlock) {
         if (innerBlock instanceof SlimeBlock) return FramedBlock.STICKY_SLIME;
         if (innerBlock instanceof HoneyBlock) return FramedBlock.STICKY_HONEY;
         if (innerBlock instanceof OddSlimeBlock) return FramedBlock.STICKY_ODD_SLIME;
+        if (innerBlock instanceof OddstoneBlock) return FramedBlock.STICKY_ODDSTONE;
         return FramedBlock.STICKY_NONE;
     }
 

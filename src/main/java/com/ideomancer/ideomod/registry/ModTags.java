@@ -18,6 +18,8 @@ import net.minecraft.world.level.block.Block;
  * 
  * The actual block lists live in:
  *   data/ideomod/tags/blocks/<tag_name>.json
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class ModTags {
 
@@ -39,4 +41,19 @@ public class ModTags {
      */
     public static final TagKey<Block> REDSTONE_COMPONENTS =
             BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "redstone_components"));
+
+    /**
+     * Blocks that can be wrapped in iron/copper frames via the framing recipe.
+     * This is a WHITELIST -- only blocks in this tag are frameable.
+     * Other mods or datapacks can add their blocks to this tag.
+     *
+     * Safety checks in FrameabilityHelper still apply on top of the tag:
+     * blocks must not be air, liquid, already framed, or a frame block.
+     * The tag replaces the old heuristic-based system (full-cube check,
+     * no-block-entity check, etc.) with an explicit opt-in list.
+     *
+     * Tag file: data/ideomod/tags/blocks/frameable_blocks.json
+     */
+    public static final TagKey<Block> FRAMEABLE_BLOCKS =
+            BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "frameable_blocks"));
 }

@@ -66,7 +66,7 @@ If you want A to grab B but not B to grab A:
 
 ### Stickiness Matrix
 
-Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Block variants). Frame Family shown as one row since both materials share the same grab immunity rules -- material exclusivity is handled by canStickTo (Layer 1).
+Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Block variants). Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules -- material exclusivity is handled by canStickTo (Layer 1).
 
 |              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
@@ -78,6 +78,8 @@ Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame
 | **Framed Slime (active)**| YES | no* | no* | YES | YES (m) | no | YES |
 | **Framed Honey (active)**| no* | YES | no* | YES | YES (m) | no | YES |
 | **Framed Odd Slime (active)**| no* | no* | YES (d) | YES | YES (m) | no | YES (d) |
+| **Framed Oddstone (active)**| YES | YES | YES | YES | YES (m) | YES | no |
+| **Framed Oddstone (inactive)**| YES | YES | YES | no | no | YES | no |
 | **Framed Sticky (inactive)**| (i) | (i) | (i) | no | no | no | (i) |
 | **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
@@ -89,15 +91,25 @@ Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame
 - Frame Fam (active) = only sticky when BooleanProperty ACTIVE=true (driven by FrameActivation)
 - Framed Sticky (active) = has BOTH inner stickiness + frame stickiness simultaneously
 - Framed Sticky (inactive) = inner stickiness only, no frame stickiness
+- Framed Oddstone (active) = oddstone inner stickiness (grabs all slime types + oddstone) + frame stickiness (machine fam + same-material frames)
+- Framed Oddstone (inactive) = oddstone inner stickiness only (grabs slime/honey/odd_slime/oddstone real+framed, NOT machine fam or frames)
 - When inactive and INNER_STICKY=0, isStickyBlock()=false — behaves as normal non-sticky block
 - Normal = any non-sticky block (stone, dirt, etc.)
 
-### Inner Sticky Carve-Out (rules 9-11)
+### Inner Sticky Carve-Out (Rule 4)
 
-Frame Family normally can't grab slime/honey/odd slime (rules 9-11). But when a FramedBlock's INNER_STICKY matches the target type, the immunity is lifted:
-- Rule 9 exempted when grabber INNER_STICKY == SLIME (Framed Slime CAN grab normal blocks like real slime)
-- Rule 10 exempted when grabber INNER_STICKY == HONEY
-- Rule 11 exempted when grabber INNER_STICKY == ODD_SLIME
+Frame Family normally can't grab slime/honey/odd slime/oddstone (Rule 4). But carve-outs lift the immunity:
+- Matching inner type: grabber INNER_STICKY == SLIME exempts slime branch, HONEY exempts honey, ODD_SLIME exempts odd slime
+- Universal grabber: grabber INNER_STICKY == ODDSTONE exempts slime, honey, AND odd slime branches (mirrors real oddstone's universal grab behavior)
+- Framed Oddstone target: ACTIVE same-material IFrameBlock grabber is exempt (frame network connection)
+
+### Oddstone Grab Immunity (Rule 1)
+
+Rule 1 protects both real OddstoneBlock and FramedBlock with INNER_STICKY=ODDSTONE from being grabbed by non-oddstone blocks.
+- Carve-out A: Oddstone-type grabbers (real or framed) are exempt
+- Carve-out B (framed oddstone targets only, NOT bare oddstone): Machine Family and ACTIVE same-material IFrameBlock are exempt
+
+Design principle: "Framing is the only way other blocks can grab oddstone." Bare oddstone NEVER grabbed by frames/machines. Framed oddstone CAN be grabbed by frame network + Machine Family.
 
 ### Framed Odd Slime Directional Behavior
 
@@ -157,7 +169,21 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 
 **Frame Family -> Frame Family (cross-material)**: BLOCKED at Layer 1. canStickTo returns false for different-material IFrameBlock. Mutual exclusion.
 
-**Frame Family <-> Oddstone**: NOT POSSIBLE. Both canStickTo return false for each other. No interaction.
+**Frame Family <-> Oddstone (bare)**: NOT POSSIBLE. Both canStickTo return false for each other. No interaction. Bare oddstone cannot be grabbed by frames.
+
+**Framed Oddstone -> Slime/Honey/Odd Slime**: ALLOWED. canStickTo ODDSTONE case returns true for all slime types. Rule 4 carve-out for INNER_STICKY=ODDSTONE lifts frame family grab immunity.
+
+**Framed Oddstone -> Oddstone (real/framed)**: ALLOWED. canStickTo ODDSTONE case returns true for OddstoneBlock and FramedBlock(ODDSTONE). Rule 1 carve-out A for oddstone-type grabbers.
+
+**Framed Oddstone -> Machine Fam**: ALLOWED when ACTIVE. Frame stickiness (ACTIVE-gated) connects to machine family. NOT via inner oddstone stickiness (oddstone doesn't grab machine family).
+
+**Framed Oddstone -> Frame Fam (same material)**: ALLOWED when ACTIVE. Frame stickiness connects same-material frames.
+
+**Framed Oddstone -> Normal blocks**: NOT POSSIBLE. Oddstone inner stickiness doesn't grab normal blocks. Frame stickiness doesn't grab normal blocks. Same as real oddstone.
+
+**Anything -> Framed Oddstone**: Protected by Rule 1. Only oddstone-type blocks can grab. Carve-out B: for framed oddstone targets, Machine Family and ACTIVE same-material IFrameBlock are also exempt. Bare oddstone targets have NO carve-out B.
+
+**Oddstone -> Framed Slime/Honey/Odd Slime/Oddstone**: ALLOWED. OddstoneBlock.canStickTo now recognizes FramedBlock targets via INNER_STICKY check. Returns true for all sticky inner types.
 
 ---
 
@@ -166,12 +192,12 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 | Component | File | Role |
 |-----------|------|------|
 | `canStickTo` overrides | Each block class | Layer 1: type compatibility (permissive) |
-| Grab immunity rules | `block/movement/StickinessRules.java` | Layer 2: blocks specific grabber->target pairs |
-| Directional rules | `block/movement/StickinessRules.java` | Layer 3: blocks grabs based on push direction |
+| Grab immunity rules | `StickinessRules.java` | Layer 2: blocks specific grabber->target pairs |
+| Directional rules | `StickinessRules.java` | Layer 3: blocks grabs based on push direction |
 | Rule registration | `Ideomod.java -> registerStickinessRules()` | Registers all rules at startup |
-| Rule enforcement | `mixin/PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
-| Frame activation | `block/frame/FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
-| Frame type checks | `block/movement/StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
+| Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
+| Frame activation | `FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
+| Frame type checks | `StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
 
 ### Mixin Injection Points
 

@@ -61,10 +61,10 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *   - Inner block stickiness rules — gated by INNER_STICKY value
  *   - Permissive entries for vanilla stickies
  *
- * StickinessRules grab immunity (rules 9-11) prevents frames from actively
- * grabbing slime/honey/odd slime, BUT a carve-out in Ideomod.java exempts
- * framed blocks whose inner IS the same sticky type. E.g. a Framed Slime
- * Block IS allowed to grab normal blocks like real slime would.
+ * StickinessRules grab immunity prevents frames from actively grabbing
+ * slime/honey/odd slime, BUT a carve-out in Ideomod.java exempts framed
+ * blocks whose inner IS the same sticky type. E.g. a Framed Slime Block
+ * IS allowed to grab normal blocks like real slime would.
  *
  * INNER_STICKY values:
  *   0 = not sticky (default)
@@ -72,6 +72,8 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *   2 = honey-type (grabs everything except slime, odd slime, oddstone)
  *   3 = odd-slime-type (grabs everything except slime, honey, oddstone;
  *       directional — only when pushed in FACING direction)
+ *   4 = oddstone-type (grabs other oddstone/framed-oddstone + all slime
+ *       types; mirrors real Oddstone's canStickTo behavior)
  *
  * FACING:
  * =======
@@ -102,17 +104,19 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      * 1 = slime-type inner
      * 2 = honey-type inner
      * 3 = odd-slime-type inner
+     * 4 = oddstone-type inner
      *
      * Set by FramedBlockEntity when the inner block is loaded or changed,
      * via updateBlockstateFromInner().
      */
-    public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 3);
+    public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 4);
 
     /** Constants for INNER_STICKY values */
     public static final int STICKY_NONE = 0;
     public static final int STICKY_SLIME = 1;
     public static final int STICKY_HONEY = 2;
     public static final int STICKY_ODD_SLIME = 3;
+    public static final int STICKY_ODDSTONE = 4;
 
     private final FrameMaterial frameMaterial;
 
@@ -356,12 +360,13 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      *   - Slime (1): sticks to everything EXCEPT honey and odd slime
      *   - Honey (2): sticks to everything EXCEPT slime and odd slime
      *   - Odd Slime (3): sticks to everything EXCEPT slime and honey
+     *   - Oddstone (4): sticks to oddstone (real+framed) + slime types
      *   Note: oddstone grab immunity is handled by StickinessRules.
      *   Directional gating for odd slime is handled by a StickinessRules
      *   directional rule registered in Ideomod.java.
      *
      * PERMISSIVE ENTRIES (always):
-     *   Allow vanilla stickies to grab us if THEY initiate.
+     *   Allow vanilla stickies and oddstone to grab us if THEY initiate.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
@@ -378,9 +383,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
         // --- Inner block stickiness rules ---
         if (innerSticky > 0) {
-            // Each sticky type excludes the other two sticky types.
-            // Everything else is allowed (permissive), with oddstone grab
-            // immunity handled by StickinessRules at the mixin level.
             switch (innerSticky) {
                 case STICKY_SLIME:
                     // Slime excludes honey and odd slime (mutual exclusion)
@@ -411,6 +413,24 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                         if (otherSticky == STICKY_SLIME || otherSticky == STICKY_HONEY) return false;
                     }
                     return true;
+
+                case STICKY_ODDSTONE:
+                    // Oddstone sticks to: other oddstone (real + framed),
+                    // and all slime types (real + framed).
+                    // Mirrors OddstoneBlock.canStickTo() behavior.
+                    // Does NOT stick to machine family or normal blocks via inner.
+                    if (otherBlock instanceof OddstoneBlock) return true;
+                    if (otherBlock instanceof SlimeBlock) return true;
+                    if (otherBlock instanceof HoneyBlock) return true;
+                    if (otherBlock instanceof OddSlimeBlock) return true;
+                    if (otherBlock instanceof FramedBlock) {
+                        int otherSticky = other.getValue(INNER_STICKY);
+                        if (otherSticky == STICKY_ODDSTONE) return true;
+                        if (otherSticky == STICKY_SLIME) return true;
+                        if (otherSticky == STICKY_HONEY) return true;
+                        if (otherSticky == STICKY_ODD_SLIME) return true;
+                    }
+                    return false;
             }
         }
 

@@ -1,17 +1,25 @@
 package com.ideomancer.ideomod.mixin;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.block.OddstoneBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
+import com.ideomancer.ideomod.config.OddstoneConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.registries.ForgeRegistries;
 import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
@@ -19,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.List;
 
 /**
- * Mixin into PistonBaseBlock for two Ideomod features:
+ * Mixin into PistonBaseBlock for three Ideomod features:
  *
  * FEATURE 1: ALLOW MOVABLE BLOCK ENTITIES (isPushable)
  * =====================================================
@@ -48,13 +56,49 @@ import java.util.List;
  * have synced inventory data, so saving on the client would overwrite the
  * server's good data with empty data in the shared static map.
  *
+ * FEATURE 3: ODDSTONE STICKY PISTON IMMUNITY (isPushable + triggerEvent)
+ * =======================================================================
+ * Oddstone cannot be DIRECTLY pulled by sticky pistons. When a sticky
+ * piston retracts, if the block at the pull position (pistonPos + dir*2)
+ * is Oddstone or Framed Oddstone, the piston retracts without pulling.
+ *
+ * IMPORTANT: This only blocks oddstone from being the DIRECTLY PULLED
+ * block — the one the sticky piston grabs. If oddstone is part of a
+ * group (e.g., pulled along by slime via its own stickiness), the group
+ * moves normally. The immunity is about the piston's adhesion, not about
+ * oddstone being immovable.
+ *
+ * This is thematic: Oddstone is "ungrabable" -- it decides what it
+ * connects to, nothing else can claim it. The piston can't grab it,
+ * but another sticky block CAN drag it if oddstone sticks to that block.
+ *
+ * Implementation: triggerEvent stores the SPECIFIC pull position in a
+ * ThreadLocal. isPushable only blocks oddstone at that exact position.
+ * This prevents the old bug where ANY oddstone in a retraction group
+ * would cancel the entire retraction.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 @Mixin(PistonBaseBlock.class)
 public abstract class PistonBaseBlockMixin {
 
     // ========================================================================
-    // FEATURE 1: ALLOW MOVABLE BLOCK ENTITIES
+    // FEATURE 3: ThreadLocal for the specific pull position
+    // ========================================================================
+
+    /**
+     * Stores the exact BlockPos that the sticky piston is trying to pull
+     * during retraction. Set before triggerEvent runs, cleared after.
+     * Only blocks oddstone at this EXACT position — not elsewhere in group.
+     *
+     * Null means "not in retraction context" (same as the old boolean flag,
+     * but with position specificity).
+     */
+    @Unique
+    private static final ThreadLocal<BlockPos> ideomod$pullTargetPos = ThreadLocal.withInitial(() -> null);
+
+    // ========================================================================
+    // FEATURE 1 + 3: isPushable overrides
     // ========================================================================
 
     @Inject(method = "isPushable", at = @At("HEAD"), cancellable = true)
@@ -63,12 +107,100 @@ public abstract class PistonBaseBlockMixin {
             Direction pushDirection, boolean allowDestroy, Direction pistonFacing,
             CallbackInfoReturnable<Boolean> cir) {
 
+        // --- Feature 3: Oddstone pull immunity during sticky piston retraction ---
+        // Only blocks the DIRECTLY PULLED block (pullTargetPos), not every
+        // oddstone in the group. If oddstone is dragged by group stickiness
+        // (e.g., slime stuck to oddstone), the group moves normally.
+        BlockPos pullTarget = ideomod$pullTargetPos.get();
+        if (pullTarget != null && pullTarget.equals(pos)) {
+            if (ideomod$isOddstoneOrFramedOddstone(blockState, level, pos)) {
+                Ideomod.LOGGER.debug("[PistonBaseMixin] Oddstone pull immunity: " +
+                        "blocking direct sticky piston pull at {}", pos);
+                cir.setReturnValue(false);
+                return;
+            }
+        }
+
+        // --- Feature 1: Allow IPistonMovable block entities ---
         if (!blockState.hasBlockEntity()) return;
 
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof IPistonMovable) {
             cir.setReturnValue(true);
         }
+    }
+
+    // ========================================================================
+    // FEATURE 3: Set pull target position during triggerEvent
+    // ========================================================================
+
+    /**
+     * Intercept triggerEvent to calculate and store the specific pull position.
+     *
+     * In vanilla's triggerEvent, when a sticky piston retracts (type 1),
+     * the block it tries to pull is at pistonPos + pushDirection * 2.
+     * We store that exact position so isPushable can check it.
+     *
+     * We need the push direction from the blockstate, which is the FACING
+     * property of the piston. The 'data' parameter of triggerEvent encodes
+     * the direction as direction.get3DDataValue().
+     */
+    @Inject(method = "triggerEvent", at = @At("HEAD"))
+    private void ideomod$setPullTargetPos(
+            BlockState state, Level level, BlockPos pos, int type, int data,
+            CallbackInfoReturnable<Boolean> cir) {
+        // type 0 = extend, type 1 = retract, type 2 = retract (1-tick pulse)
+        if (type == 1 || type == 2) {
+            Direction direction = Direction.from3DDataValue(data);
+            BlockPos pullPos = pos.relative(direction, 2);
+            ideomod$pullTargetPos.set(pullPos);
+        }
+    }
+
+    /**
+     * Clear the pull target after triggerEvent completes.
+     */
+    @Inject(method = "triggerEvent", at = @At("RETURN"))
+    private void ideomod$clearPullTargetPos(
+            BlockState state, Level level, BlockPos pos, int type, int data,
+            CallbackInfoReturnable<Boolean> cir) {
+        if (type == 1 || type == 2) {
+            ideomod$pullTargetPos.set(null);
+        }
+    }
+
+    // ========================================================================
+    // FEATURE 3 HELPER: Check if a block is Oddstone or Framed Oddstone
+    // ========================================================================
+
+    /**
+     * Returns true if the block is:
+     *   - A direct OddstoneBlock
+     *   - A FramedBlock whose inner block is Oddstone
+     *
+     * Static because isPushable is static.
+     */
+    @Unique
+    private static boolean ideomod$isOddstoneOrFramedOddstone(
+            BlockState state, Level level, BlockPos pos) {
+        Block block = state.getBlock();
+
+        // Direct Oddstone
+        if (block instanceof OddstoneBlock) return true;
+
+        // Framed Oddstone -- check the block entity for inner block type
+        if (block instanceof FramedBlock) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof FramedBlockEntity fbe) {
+                ResourceLocation innerBlockId = fbe.getInnerBlockId();
+                if (innerBlockId != null) {
+                    Block innerBlock = ForgeRegistries.BLOCKS.getValue(innerBlockId);
+                    return innerBlock instanceof OddstoneBlock;
+                }
+            }
+        }
+
+        return false;
     }
 
     // ========================================================================
@@ -141,12 +273,21 @@ public abstract class PistonBaseBlockMixin {
         BlockPos destPos = pullPos.relative(moveDir);
         saveBlockEntityAt(level, pullPos, destPos, dimensionKey);
 
+        // Track all saved positions for sympathetic scan
+        java.util.Set<BlockPos> savedPositions = new java.util.HashSet<>();
+        savedPositions.add(pullPos);
+
         // If the pulled block is sticky, scan its group for more blocks
         if (pullState.isStickyBlock()) {
-            scanStickyGroup(level, pullPos, moveDir, dimensionKey);
+            scanStickyGroup(level, pullPos, moveDir, dimensionKey, savedPositions);
         }
 
-        Ideomod.LOGGER.info("[PistonBaseMixin] Retraction save complete for pull pos {}", pullPos);
+        // Sympathetic scan: find oddstone/framed oddstone at range
+        // that the resolver's sympathetic search would have added.
+        // Without this, sympathetically linked blocks lose their BE data.
+        scanSympathetic(level, moveDir, dimensionKey, savedPositions);
+
+        Ideomod.LOGGER.debug("[PistonBaseMixin] Retraction save complete for pull pos {}", pullPos);
     }
 
     /**
@@ -158,7 +299,8 @@ public abstract class PistonBaseBlockMixin {
      * Any IPistonMovable block entity found in the group gets its data saved.
      */
     private void scanStickyGroup(Level level, BlockPos startPos,
-                                  Direction moveDir, String dimensionKey) {
+                                  Direction moveDir, String dimensionKey,
+                                  java.util.Set<BlockPos> savedPositions) {
         java.util.Set<BlockPos> visited = new java.util.HashSet<>();
         java.util.LinkedList<BlockPos> queue = new java.util.LinkedList<>();
         visited.add(startPos); // start block already saved by caller
@@ -200,6 +342,7 @@ public abstract class PistonBaseBlockMixin {
             // Save this block's data if it's IPistonMovable
             BlockPos destPos = pos.relative(moveDir);
             saveBlockEntityAt(level, pos, destPos, dimensionKey);
+            savedPositions.add(pos);
 
             // If this block is also sticky, scan its neighbors too
             if (state.isStickyBlock()) {
@@ -214,6 +357,62 @@ public abstract class PistonBaseBlockMixin {
     }
 
     /**
+     * Scan for sympathetically linked Oddstone/Framed Oddstone blocks
+     * that the PistonStructureResolverMixin's sympathetic search would
+     * have added to the push list. These blocks are at range (not adjacent)
+     * so the BFS in scanStickyGroup won't find them.
+     *
+     * Mirrors the logic in PistonStructureResolverMixin.ideomod$sympatheticSearch:
+     * for each oddstone in savedPositions, scan outward along each axis
+     * up to the sympathetic radius for another oddstone block.
+     */
+    private void scanSympathetic(Level level, Direction moveDir,
+                                  String dimensionKey,
+                                  java.util.Set<BlockPos> savedPositions) {
+        int radius = OddstoneConfig.getSympatheticRadius();
+        if (radius <= 1) return;
+
+        // Snapshot to avoid concurrent modification
+        java.util.List<BlockPos> snapshot = new java.util.ArrayList<>(savedPositions);
+        boolean foundNew = true;
+
+        // Iterate until no new blocks found (chain sympathetic links)
+        while (foundNew) {
+            foundNew = false;
+            java.util.List<BlockPos> newFound = new java.util.ArrayList<>();
+
+            for (BlockPos oddPos : snapshot) {
+                if (!ideomod$isOddstoneOrFramedOddstone(
+                        level.getBlockState(oddPos), level, oddPos)) continue;
+
+                for (Direction face : Direction.values()) {
+                    for (int dist = 2; dist <= radius; dist++) {
+                        BlockPos checkPos = oddPos.relative(face, dist);
+                        BlockState checkState = level.getBlockState(checkPos);
+
+                        if (ideomod$isOddstoneOrFramedOddstone(checkState, level, checkPos)) {
+                            if (!savedPositions.contains(checkPos)) {
+                                BlockPos destPos = checkPos.relative(moveDir);
+                                saveBlockEntityAt(level, checkPos, destPos, dimensionKey);
+                                savedPositions.add(checkPos);
+                                newFound.add(checkPos);
+                                foundNew = true;
+                            }
+                            break; // Stop scanning further — first hit only
+                        }
+
+                        // If non-air non-oddstone block in the way, stop
+                        if (!checkState.isAir()) break;
+                    }
+                }
+            }
+
+            // Add newly found positions for next iteration
+            snapshot = newFound;
+        }
+    }
+
+    /**
      * Save a single block entity's IPistonMovable data if applicable.
      */
     private void saveBlockEntityAt(Level level, BlockPos sourcePos,
@@ -223,7 +422,7 @@ public abstract class PistonBaseBlockMixin {
             CompoundTag data = movable.saveMovementData();
             if (data != null) {
                 MovingBlockEntityData.store(dimensionKey, destPos, data);
-                Ideomod.LOGGER.info("[PistonBaseMixin] SAVED IPistonMovable data from {} -> dest {} (tags: {})",
+                Ideomod.LOGGER.debug("[PistonBaseMixin] SAVED IPistonMovable data from {} -> dest {} (tags: {})",
                         sourcePos, destPos, data.getAllKeys());
             }
         }

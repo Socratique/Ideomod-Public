@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-25c (priority 3 code quality + issue cleanup)*
+*Last updated: 2026-02-28 (oddstone pull immunity, frameability whitelist, INNER_STICKY=4 oddstone)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -184,6 +184,7 @@ Three custom TagKeys, all for blocks:
 | `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
 | `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | `data/ideomod/tags/blocks/redstone_components.json` |
 | `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | `data/ideomod/tags/blocks/furnace_array_frame.json` |
+| `FRAMEABLE_BLOCKS` | Whitelist of blocks that can be wrapped in frames (~290 vanilla blocks) | `data/ideomod/tags/blocks/frameable_blocks.json` |
 
 See section 13 for the full contents of each tag.
 
@@ -234,10 +235,12 @@ Rows = grabber, columns = target. "Machine Fam" = Machine Frame, Machine Track, 
 | **Framed Slime (active)**| YES | no* | no* | YES | YES (m) | no | YES |
 | **Framed Honey (active)**| no* | YES | no* | YES | YES (m) | no | YES |
 | **Framed Odd Slime (active)**| no* | no* | YES (d) | YES | YES (m) | no | YES (d) |
+| **Framed Oddstone (active)**| YES | YES | YES | YES | YES (m) | YES | no |
+| **Framed Oddstone (inactive)**| YES | YES | YES | no | no | YES | no |
 | **Framed Sticky (inactive)**| (i) | (i) | (i) | no | no | no | (i) |
 | **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
 
-Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rule (Layer 2) | `(d)` = only when pushed in FACING direction (Layer 3) | `(m)` = material-matched (iron<->iron, copper<->copper via canStickTo) | `(i)` = inner sticky behavior only (Framed Slime grabs like slime, Framed Honey like honey, Framed Odd Slime like odd slime directional) | Frame Fam only sticky when ACTIVE=true | Framed Sticky (active) has BOTH inner stickiness + frame stickiness | Framed Sticky (inactive) has inner stickiness only | "Normal" = any non-sticky block
+Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rule (Layer 2) | `(d)` = only when pushed in FACING direction (Layer 3) | `(m)` = material-matched (iron<->iron, copper<->copper via canStickTo) | `(i)` = inner sticky behavior only (Framed Slime grabs like slime, Framed Honey like honey, Framed Odd Slime like odd slime directional) | Frame Fam only sticky when ACTIVE=true | Framed Sticky (active) has BOTH inner stickiness + frame stickiness | Framed Sticky (inactive) has inner stickiness only | Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness | Framed Oddstone (inactive) has oddstone inner stickiness only (grabs slime/honey/odd_slime/oddstone but NOT machine fam or frame fam) | "Normal" = any non-sticky block
 
 ### Currently Registered Rules
 
@@ -245,13 +248,13 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 | # | Grabber | Target | Effect |
 |---|---------|--------|--------|
-| 1 | Any non-Oddstone block | OddstoneBlock | Nothing except Oddstone can grab Oddstone |
+| 1 | Any non-Oddstone block | OddstoneBlock, FramedBlock(ODDSTONE) | Nothing except Oddstone can grab Oddstone (real or framed). Carve-out A: oddstone-type grabbers (real or framed) exempt. Carve-out B (framed oddstone targets only): Machine Family and ACTIVE same-material IFrameBlock exempt. |
 | 2 | Machine Family* | SlimeBlock, HoneyBlock, OddSlimeBlock | Machine Family can't grab sticky blocks |
 | 3 | SlimeBlock, HoneyBlock | OddSlimeBlock | Slime/honey can't grab Odd Slime (mutual exclusion enforcement) |
-| 4 | Frame Family** | SlimeBlock, HoneyBlock, OddSlimeBlock | Frames can't grab sticky blocks (exempted when grabber INNER_STICKY matches target type) |
+| 4 | Frame Family** | SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock, FramedBlock(ODDSTONE) | Frames can't grab sticky blocks. Carve-outs: (a) grabber INNER_STICKY matches target type, (b) grabber INNER_STICKY=ODDSTONE (universal grabber for slime/honey/odd_slime targets), (c) ACTIVE same-material IFrameBlock for framed oddstone targets. |
 
 *Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock. Rule 2 uses `MachineFrameBlock.isMachineFamily()`.
-**Frame Family = Any IFrameBlock (FrameBlock and FramedBlock). Rule 4 uses `StickinessRules.isFrameFamily()`. Rule 4 has carve-outs: when the grabbing FramedBlock has INNER_STICKY matching the target sticky type, the immunity is lifted (e.g., Framed Slime CAN grab normal blocks like real slime).
+**Frame Family = Any IFrameBlock (FrameBlock and FramedBlock). Rule 4 uses `StickinessRules.isFrameFamily()`. Rule 4 carve-outs: matching inner type, ODDSTONE universal grabber, and active same-material frame connection for framed oddstone targets.
 
 **Directional rules:**
 
@@ -261,13 +264,13 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 ### canStickTo Implementations (Layer 1)
 
-**OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. False for everything else (including MachineBlock, Frame Family).
+**OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock, and FramedBlock with INNER_STICKY matching any of SLIME/HONEY/ODD_SLIME/ODDSTONE. False for everything else (including MachineBlock, Frame Family without sticky inner).
 
 **Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All delegate to `MachineFrameBlock.canMachineFamilyStickTo(other)`. Returns true for any Machine Family block, Frame Family block (via `FrameActivation.isFrameFamily()`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity rule 4 prevents frames from grabbing slime/honey/odd slime one-way, with carve-outs for matching inner types.
+**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). INNER_STICKY=ODDSTONE mirrors OddstoneBlock behavior: grabs all slime types (real+framed), oddstone (real+framed), but NOT normal blocks or machine family via inner. Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity Rules 1 and 4 enforce one-way behavior with carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
 
 ---
 
@@ -514,7 +517,7 @@ RESTORE (server-only):
 Target: `net.minecraft.world.level.block.piston.PistonBaseBlock`
 
 Feature 1 -- isPushable override (HEAD inject, cancellable):
-Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons.
+Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
 
 Feature 2 -- moveBlocks data save (HEAD inject):
 Saves IPistonMovable block entity data before vanilla destroys the block entities during the move. Server-only (critical -- see Bug 2 below).
@@ -522,9 +525,11 @@ Saves IPistonMovable block entity data before vanilla destroys the block entitie
 | Mode | Method | Notes |
 |------|--------|-------|
 | Extension | PistonStructureResolver | Standard resolver finds toPush list, save each IPistonMovable |
-| Retraction | Direct position scan + BFS | Resolver fails for IPistonMovable blocks (Bug 3). Scans pistonPos+dir*2 directly, then BFS for sticky group |
+| Retraction | Direct position scan + BFS + sympathetic | Resolver fails for IPistonMovable blocks (Bug 3). Scans pistonPos+dir*2 directly, then BFS for sticky group, then sympathetic scan for distant oddstone |
 
-Retraction sticky group BFS: Starting from the pulled block, scans all 6 neighbors. For each neighbor: checks if any visited block is sticky to it (both directions via canStickTo). If stuck, saves its data and (if itself sticky) queues its neighbors. Limit: 12 blocks (vanilla push limit).
+Retraction sticky group BFS: Starting from the pulled block, scans all 6 neighbors. For each neighbor: checks if any visited block is sticky to it (both directions via canStickTo). If stuck, saves its data and (if itself sticky) queues its neighbors. Limit: 12 blocks (vanilla push limit). Shares savedPositions set with sympathetic scanner.
+
+Retraction sympathetic scan (scanSympathetic): After BFS, scans from each oddstone/framed oddstone in savedPositions along all 6 axes up to OddstoneConfig.getSympatheticRadius(). Finds distant oddstone blocks (separated by air) and saves their BE data. Chains iteratively — newly found blocks become seeds for next pass. Mirrors PistonStructureResolverMixin's sympathetic search logic.
 
 **PistonMovingBlockEntityMixin** (`com.ideomancer.ideomod.mixin.PistonMovingBlockEntityMixin`):
 
@@ -602,15 +607,15 @@ FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrid
 |----------|------|--------|---------|
 | ACTIVE | BooleanProperty | false (default), true | Frame-family stickiness activation (Machine Block driven) |
 | FACING | DirectionProperty | 6 directions (default NORTH) | Inner block orientation + Framed Odd Slime directional stickiness |
-| INNER_STICKY | IntegerProperty | 0-3 (default 0) | Inner sticky type: 0=none, 1=slime, 2=honey, 3=odd_slime |
+| INNER_STICKY | IntegerProperty | 0-4 (default 0) | Inner sticky type: 0=none, 1=slime, 2=honey, 3=odd_slime, 4=oddstone |
 
-Total blockstate count: 2 x 6 x 4 = 48 states per framed block type.
+Total blockstate count: 2 x 6 x 5 = 60 states per framed block type.
 
-FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY computed by FramedBlockEntity.updateBlockstateFromInner() which calls computeStickyType() to classify the inner block, then updates the blockstate. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace().
+FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY computed by FramedBlockEntity.updateBlockstateFromInner() which calls computeStickyType() to classify the inner block, then updates the blockstate. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace(). INNER_STICKY values: 0=none, 1=slime (SlimeBlock), 2=honey (HoneyBlock), 3=odd_slime (OddSlimeBlock), 4=oddstone (OddstoneBlock).
 
 ### FrameabilityHelper
 
-Static utility determining whether a block can be framed. Criteria: (1) Full cube collision shape -- uses try-catch on getCollisionShape(null, null) for blocks like MovingPistonBlock that NPE without world context. (2) NOT a block entity holder. (3) NOT already a FramedBlock. (4) NOT a Frame Block (IFrameBlock). (5) NOT indestructible (destroySpeed < 0). (6) NOT air or liquid.
+Static utility determining whether a block can be framed. Tag-driven whitelist: checks (1) block is in `#ideomod:frameable_blocks` tag (~290 vanilla blocks enumerated), (2) NOT already a FramedBlock, (3) NOT an IFrameBlock. Infested block variants excluded (framing would bypass silverfish emergence mechanic). Extensible by datapacks or other mods via the tag.
 
 ### Behavioral Delegation
 
@@ -636,13 +641,14 @@ FramedBlock has two independent stickiness systems that combine:
 
 **Frame stickiness** (same as Frame Blocks): Requires ACTIVE=true (driven by FrameActivation system). Sticks to same-material IFrameBlock and Machine Family. Grab immunity rules 9-11 prevent grabbing slime/honey/odd slime.
 
-**Inner stickiness** (based on INNER_STICKY property): Requires INNER_STICKY > 0. Applies the vanilla stickiness behavior of the inner block type. Framed Slime grabs normal blocks like real slime. Framed Honey grabs like real honey. Framed Odd Slime grabs like real odd slime (directional). Vanilla mutual exclusions apply (slime vs honey, slime vs odd slime, honey vs odd slime).
+**Inner stickiness** (based on INNER_STICKY property): Requires INNER_STICKY > 0. Applies the vanilla stickiness behavior of the inner block type. Framed Slime grabs normal blocks like real slime. Framed Honey grabs like real honey. Framed Odd Slime grabs like real odd slime (directional). Framed Oddstone grabs all slime types and other oddstone like real oddstone (universal grabber). Vanilla mutual exclusions apply (slime vs honey, slime vs odd slime, honey vs odd slime).
 
 **Combined behavior**:
 - `isStickyBlock()`: returns true when ACTIVE || INNER_STICKY > 0
 - `canStickTo()`: frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated)
-- Grab immunity carve-outs: rules 9-11 exempted when grabber INNER_STICKY matches target type
+- Grab immunity carve-outs: Rule 4 exempted when grabber INNER_STICKY matches target type OR when INNER_STICKY=ODDSTONE (universal grabber). Rule 1 expanded to protect framed oddstone with carve-outs for machine family and active same-material frames.
 - Framed Odd Slime directional: inner stickiness blocked in non-FACING directions, frame stickiness still works via second-chance mixin check
+- Framed Oddstone: grabs all slime types (real+framed) and oddstone. Cannot be grabbed by non-oddstone except via frame network (ACTIVE same-material) and Machine Family.
 
 ### Rendering (Three-Layer System)
 
@@ -1192,6 +1198,9 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 |---|-------|----------|----------|
 | 1 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
 | 2 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. In-world rendering is correct. |
+| 3 | Framed block transit rendering (Trolley/Repulser/Attractor) | Visual bug | Inner block doesn't render during non-piston moves (Track/Repulser/Attractor use BlockMoveHelper, client mixin only covers vanilla pistons) |
+| 4 | Framed blocks not grabbed by slime during Repulser/Attractor moves | Movement bug | Slime stickiness may not propagate correctly through BlockMoveHelper path |
+| 5 | Frame inside-face rendering | Cosmetic | Frame JSON models need inverted cuboid for visible inner faces |
 
 
 ## 15. CONVENTIONS & PATTERNS

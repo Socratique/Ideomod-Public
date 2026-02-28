@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-25c (priority 3 code quality + issue cleanup)*
+*Last updated: 2026-02-28 (oddstone pull immunity, frameability whitelist, INNER_STICKY=4 oddstone)*
 
 ---
 
@@ -35,7 +35,7 @@ com.ideomancer.ideomod
   |     |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
   |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
   |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
-  |     |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
+  |     |     |-- FrameabilityHelper.java      Tag-driven whitelist for frameable blocks (#ideomod:frameable_blocks)
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
   |     |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
   |     |     |-- FramedBlockItem.java         Dynamic getName(), NBT stack creation
@@ -80,7 +80,7 @@ com.ideomancer.ideomod
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
-  |     |-- PistonBaseBlockMixin.java          Allows IPistonMovable BE movement + saves data
+  |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull immunity + sympathetic retraction save
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
   |     \-- client/
@@ -148,7 +148,7 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 **IPistonMovable pipeline**: Opt-in block entity data preservation during piston moves. Implementing blocks: MachineFrameBlockEntity, FramedBlockEntity. Save phase: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5 (our systems). Both server-only. Transit: MovingBlockEntityData static ConcurrentHashMap. Restore: PistonMovingBlockEntityMixin via TWO paths -- tick() TAIL (normal 2-tick animation) and finalTick() TAIL (1-tick pulses). Single consumer pattern -- retrieve() is destructive.
 
-**PistonBaseBlockMixin**: Two features. (1) isPushable HEAD inject returns true for IPistonMovable block entities. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group.
+**PistonBaseBlockMixin**: Three features. (1) isPushable HEAD inject returns true for IPistonMovable block entities; also handles Oddstone pull immunity via position-specific ThreadLocal<BlockPos> — during retraction, only the directly pulled oddstone is immune, not oddstone elsewhere in group. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group + sympathetic scan for distant oddstone via scanSympathetic().
 
 **RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to 12 blocks. Delegates movement to BlockMoveHelper.
 
@@ -207,13 +207,14 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 - Effects: GUI rename ("Enhanced Furnace" etc.) + 50% cooking speed boost
 - Speed boost: +1 extra progress on even ticks via AbstractFurnaceBlockEntityMixin, clamped to totalTime - 1
 
-### 5. Oddstone (5 features in one block)
+### 5. Oddstone (6 features in one block)
 
 1. **Mob avoidance**: `isPathfindable=false` + `BlockPathTypes.DAMAGE_OTHER`. JSON config per-mob whitelist.
 2. **Redstone insulation**: `isRedstoneConductor=false` in properties.
 3. **Sympathetic movement**: Handled by PistonStructureResolverMixin. BFS within configurable radius (default 5). Chains count toward 12-block limit.
-4. **One-way stickiness**: Grabs all slime types + other Oddstone. Cannot be grabbed back (grab immunity rules).
+4. **One-way stickiness**: Grabs all slime types (real+framed) + other Oddstone (real+framed). Cannot be grabbed back (grab immunity rules). canStickTo recognizes FramedBlock targets via INNER_STICKY check.
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
+6. **Pull immunity**: Cannot be directly pulled by sticky pistons. PistonBaseBlockMixin position-specific check. Oddstone dragged by own stickiness (e.g., stuck to slime being pulled) still moves correctly.
 
 ### 6. Machine Frame (3 features + Machine Family base)
 
@@ -253,9 +254,9 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~15 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding all preserved.
 2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
-4. **INNER_STICKY property** (IntegerProperty 0-3): 0=none, 1=slime, 2=honey, 3=odd_slime. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
+4. **INNER_STICKY property** (IntegerProperty 0-4): 0=none, 1=slime, 2=honey, 3=odd_slime, 4=oddstone. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
 5. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
-6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rule 4 has carve-outs for matching inner types.
+6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). STICKY_ODDSTONE mirrors real oddstone: grabs all slime types + oddstone, not normal blocks. Grab immunity Rules 1 and 4 have carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
 7. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance check in PistonStructureResolverMixin. No blanket directional rule registered.
 8. **noOcclusion()**: Block properties include noOcclusion() to prevent neighbor face culling (required for translucent inner blocks).
 9. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
@@ -263,7 +264,7 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 11. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
 12. **Middle-click**: getCloneItemStack() returns proper NBT ItemStack.
 
-**FrameabilityHelper**: Static utility. Checks: full cube collision, no BE, not already framed, not IFrameBlock, not indestructible, not air/liquid. Try-catch on getCollisionShape for NPE-prone blocks.
+**FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~290 vanilla blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
 
 **FramedBlockItem**: Custom BlockItem. Dynamic getName() composing "Iron Framed Stone" etc. Static createStack() for NBT setup.
 
@@ -293,7 +294,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks).
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks), FRAMEABLE_BLOCKS (~290 vanilla blocks whitelist for framing).
 
 **ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 
@@ -325,5 +326,8 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 1. **OddstoneConfig.reloadConfig() not wired to command** -- config can be reloaded programmatically but there's no in-game command to trigger it. Low priority.
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
+3. **Framed block transit rendering (Trolley/Repulser/Attractor)** -- Inner block doesn't render during non-piston moves. Client mixin only covers vanilla pistons; BlockMoveHelper path needs equivalent capture.
+4. **Framed blocks not grabbed by slime during Repulser/Attractor moves** -- Slime stickiness may not propagate correctly through BlockMoveHelper path.
+5. **Frame inside-face rendering** -- Frame JSON models need inverted cuboid for visible inner faces.
 
 Written by Claude, directed and guided by The Ideomancer.

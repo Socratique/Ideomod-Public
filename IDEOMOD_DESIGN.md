@@ -759,11 +759,11 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | Outer frame (static) | [DONE] | Normal JSON model. Frame texture has opaque edge pixels only -- transparent interior so inner texture shows through. 2 frame textures total (iron, copper). noOcclusion() prevents neighbor face culling. |
 | Inner texture (dynamic) | [DONE] | BESR uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. |
 | FACING property | [DONE] | DirectionProperty set from player look direction. Transferred to inner block orientation during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). |
-| INNER_STICKY property | [DONE] | IntegerProperty 0-3 (none/slime/honey/odd_slime). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). |
+| INNER_STICKY property | [DONE] | IntegerProperty 0-4 (none/slime/honey/odd_slime/oddstone). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). |
 | Piston transit rendering | [DONE] | Client-side mixin renders inner block during 2-tick piston animation. Brightest-of-neighbors light sampling blended by progress. FrameTransitInfo carries facing + innerSticky. |
 | Item/inventory rendering | [DONE] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. Translucent inners render opaque (cosmetic limitation). |
 | Machine-activated stickiness | [DONE] | Uses Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. isStickyBlock() ACTIVE-gated for frame stickiness. |
-| Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional). Grab immunity rules 9-11 carve-outs for matching inner types. |
+| Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional), Framed Oddstone grabs all slime types + oddstone (universal grabber). Grab immunity Rules 1 and 4 have carve-outs for matching inner types and oddstone universal grabber. |
 | Material exclusivity | [DONE] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
 | Base behavior preservation | [DONE] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
@@ -787,7 +787,7 @@ Framed Blocks use the same FrameActivation system as Frame Blocks. When anything
 **Completed improvements (2026-02-22f):**
 
 *[DONE] Inner block stickiness override:*
-Implemented via INNER_STICKY blockstate property (IntegerProperty 0-3: none/slime/honey/odd_slime). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). Grab immunity rules 9-11 have carve-outs: when grabber's INNER_STICKY matches target type, immunity is lifted. Framed Slime now grabs normal blocks like real slime.
+Implemented via INNER_STICKY blockstate property (IntegerProperty 0-4: none/slime/honey/odd_slime/oddstone). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). ODDSTONE case mirrors real oddstone: grabs all slime types + oddstone. Grab immunity Rules 1 and 4 have carve-outs: matching inner type, oddstone universal grabber, and active same-material frame connections for framed oddstone targets.
 
 *[DONE] Facing/orientation properties:*
 FACING (DirectionProperty) set from player look direction on placement. Transferred to inner block's orientation property during rendering via buildInnerState() -- handles DirectionalBlock.FACING (6-way), HorizontalDirectionalBlock.FACING (4-way, vertical clamped to NORTH), RotatedPillarBlock.AXIS (mapped from FACING). Also controls Framed Odd Slime directional stickiness.
@@ -800,13 +800,8 @@ Added noOcclusion() to framed block properties in ModBlocks.java. Prevents neigh
 
 **Planned improvements:**
 
-*[TODO] Frameability exclusion list:*
-FrameabilityHelper.isFrameable() currently accepts any full-cube non-BE block. Several block categories should be excluded:
-- Interactive blocks: crafting_table, smithing_table, cartography_table, loom, stonecutter, grindstone, enchanting_table, anvil, brewing_stand, etc. (blocks with right-click GUI behavior that FramedBlock cannot delegate)
-- Mechanical blocks: piston, sticky_piston, observer, dispenser, dropper, hopper (blocks with active tick/neighbor behavior too complex to delegate)
-- Mod blocks with complex behavior: oddstone_repulser, oddstone_attractor, machine_block, machine_track, machine_trolley, drill (our own blocks that have specialized mechanics)
-- Redstone machinery: repeater, comparator, daylight_detector (non-full-cube but worth explicitly excluding)
-Implementation: add a blacklist Set<Block> in FrameabilityHelper populated during mod init. Could also be a block tag for datapack extensibility.
+*[DONE] Frameability whitelist tag system:*
+Replaced heuristic-based frameability checks with a tag-driven whitelist (`#ideomod:frameable_blocks`). ~290 vanilla blocks explicitly enumerated. Infested block variants excluded (framing would bypass silverfish emergence). Interactive blocks, mechanical blocks, and other complex behavior blocks excluded by omission from the tag. Extensible by datapacks or other mods.
 
 **Future ideas:**
 - *[IDEA] Copper frames oxidize over time? Waxable?*

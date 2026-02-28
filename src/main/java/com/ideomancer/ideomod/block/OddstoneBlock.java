@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block;
 
+import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -25,9 +26,12 @@ import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
  *    (Handled by PistonStructureResolver mixin)
  * 4. ONE-WAY STICKINESS: Oddstone grabs ALL slime types (slime, honey, odd slime).
  *    No slime type can grab Oddstone back. Oddstone also sticks to other Oddstone.
+ *    Also sticks to Framed versions of all the above (via INNER_STICKY check).
  * 5. PORTAL FRAME: When ALL Oddstone blocks in a valid frame are powered,
  *    the portal activates. If ANY Oddstone loses power, it deactivates.
  *    (Handled by OddstonePortalHandler)
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class OddstoneBlock extends Block {
 
@@ -69,13 +73,15 @@ public class OddstoneBlock extends Block {
     }
 
     /**
-     * Oddstone sticks to ALL slime-type blocks and other Oddstone.
+     * Oddstone sticks to ALL slime-type blocks and other Oddstone,
+     * including their Framed variants.
      * It's the universal grabber — the "parent" of all sticky systems.
      * 
      * - Oddstone + Slime: YES (Oddstone grabs slime)
      * - Oddstone + Honey: YES (Oddstone grabs honey)
      * - Oddstone + Odd Slime: YES (Oddstone grabs odd slime)
      * - Oddstone + Oddstone: YES (for sympathetic movement)
+     * - Oddstone + Framed Slime/Honey/OddSlime/Oddstone: YES (via INNER_STICKY)
      * - Oddstone + Machine Block: NO (Machine Block is its own exclusive family)
      * - Oddstone + anything else: NO (Oddstone only grabs sticky things + itself)
      * 
@@ -88,6 +94,16 @@ public class OddstoneBlock extends Block {
         if (other.getBlock() instanceof HoneyBlock) return true;
         if (other.getBlock() instanceof OddSlimeBlock) return true;
         if (other.getBlock() instanceof OddstoneBlock) return true;
+
+        // Framed versions: check INNER_STICKY for matching types
+        if (other.getBlock() instanceof FramedBlock) {
+            int otherSticky = other.getValue(FramedBlock.INNER_STICKY);
+            if (otherSticky == FramedBlock.STICKY_SLIME) return true;
+            if (otherSticky == FramedBlock.STICKY_HONEY) return true;
+            if (otherSticky == FramedBlock.STICKY_ODD_SLIME) return true;
+            if (otherSticky == FramedBlock.STICKY_ODDSTONE) return true;
+        }
+
         return false;
     }
 

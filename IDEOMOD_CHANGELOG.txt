@@ -1,5 +1,205 @@
 # Ideomod Changelog
 
+## [2026-02-28] Oddstone Pull Immunity, Frameability Whitelist, INNER_STICKY=4 (Oddstone)
+
+Major session implementing Oddstone piston pull immunity, frameability whitelist
+tag system, and full Framed Oddstone stickiness (INNER_STICKY=4). Five bugs
+discovered and fixed during integration testing.
+
+### Feature 1: Oddstone Piston Pull Immunity [IMPLEMENTED]
+
+File: mixin/PistonBaseBlockMixin.java
+
+Oddstone blocks cannot be pulled by sticky pistons. When a sticky piston
+retracts, if the directly pulled block is Oddstone (real or framed with
+INNER_STICKY=ODDSTONE), the piston retracts freely without pulling anything.
+
+Implementation: ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact
+pull position (pistonPos + direction * 2) during retraction. isPushable HEAD
+inject checks: if block at pos is oddstone AND pos matches pullTargetPos,
+return false. This is position-specific — only the DIRECTLY pulled block is
+immune, not oddstone elsewhere in a sticky group.
+
+Key design: if slime is stuck to oddstone and the piston pulls the slime, the
+whole group moves (oddstone dragged by its own stickiness to slime, not grabbed
+by piston). Only direct piston-on-oddstone retraction is blocked.
+
+v1 had ghost piston head bug (check in moveBlocks left phantom heads). v2 used
+boolean flag (too broad — blocked ALL oddstone during retraction). v3 (final)
+uses position-specific BlockPos check.
+
+### Feature 2: Frameability Whitelist Tag System [IMPLEMENTED]
+
+File: block/frame/FrameabilityHelper.java
+Tag: data/ideomod/tags/blocks/frameable_blocks.json
+
+Replaced heuristic-based frameability checks with a tag-driven whitelist.
+~290 vanilla blocks explicitly enumerated in the tag. Infested block variants
+excluded (framing infested blocks would bypass the silverfish emergence
+mechanic). Tag-based approach is deterministic, predictable, and easily
+extensible by datapacks or other mods.
+
+FrameabilityHelper.isFrameable() now checks: (1) block is in #ideomod:frameable_blocks
+tag, (2) NOT already a FramedBlock, (3) NOT an IFrameBlock. Removed all prior
+heuristic checks (full cube collision, no BE, not indestructible, etc.).
+
+### Feature 3: INNER_STICKY=4 — Framed Oddstone [IMPLEMENTED]
+
+Files: block/frame/FramedBlock.java, block/frame/FramedBlockEntity.java
+
+Extended INNER_STICKY IntegerProperty range from 0-3 to 0-4. Added constant
+STICKY_ODDSTONE=4. FramedBlockEntity.computeStickyType() returns STICKY_ODDSTONE
+for OddstoneBlock instances.
+
+FramedBlock.canStickTo() STICKY_ODDSTONE case mirrors OddstoneBlock behavior:
+sticks to real+framed oddstone, all slime types (real+framed), NOT normal blocks
+or machine family via inner stickiness. Frame stickiness (ACTIVE-gated) still
+works independently for machine family and same-material connections.
+
+Total blockstate count: 2 x 6 x 5 = 60 states per framed block type (was 48).
+
+### Feature 4: Framed Oddstone Stickiness Rules [IMPLEMENTED]
+
+File: Ideomod.java (registerStickinessRules)
+
+Rule 1 expanded: Protects both real OddstoneBlock AND FramedBlock with
+INNER_STICKY=ODDSTONE from being grabbed by non-oddstone blocks.
+  Carve-out A: Oddstone-type grabbers (real or framed) can grab oddstone targets.
+  Carve-out B (framed oddstone targets only, not bare):
+    - Machine Family (activation source, must connect to network)
+    - ACTIVE same-material IFrameBlock (core frame connection)
+
+Rule 4 expanded: Each slime/honey/odd_slime branch now exempts INNER_STICKY=
+ODDSTONE in addition to the matching type, since real Oddstone is a universal
+grabber of all slime types. Oddstone target branch + framed oddstone target
+branch added with same carve-outs as Rule 1.
+
+Design principle: "Framing is the only way other blocks can grab oddstone."
+Bare oddstone NEVER grabbed by frames/machines. Framed oddstone CAN be grabbed
+by frame network (ACTIVE same-material) and Machine Family.
+
+### Feature 5: OddstoneBlock Bidirectional Framed Recognition [IMPLEMENTED]
+
+File: block/OddstoneBlock.java
+
+OddstoneBlock.canStickTo() now recognizes FramedBlock targets. Checks
+INNER_STICKY for SLIME, HONEY, ODD_SLIME, and ODDSTONE — returns true for all.
+Previously only returned true for raw SlimeBlock/HoneyBlock/OddSlimeBlock/
+OddstoneBlock instances. Without this, oddstone ↔ framed sticky block pairs
+failed at Layer 1.
+
+### Bug Fix 1: Active Framed Oddstone Not Grabbed by Frame Network [FIXED]
+
+File: Ideomod.java
+
+Symptom: Active iron framed stone → active iron framed oddstone = no stick.
+Framed oddstone → framed slime worked (inner stickiness), but frame-to-frame
+connection failed.
+
+Root cause: Rule 1 blocked ALL non-oddstone grabbers from grabbing framed
+oddstone, including same-material ACTIVE frames and Machine Family.
+
+Fix: Rule 1 carve-out B exempts framed oddstone targets when grabber is:
+(a) Machine Family (isMachineFamily), or (b) ACTIVE same-material IFrameBlock.
+Covers both FrameBlock (empty frames) and FramedBlock via IFrameBlock interface.
+Same expansion applied to Rule 4's framed oddstone branch.
+
+### Bug Fix 2: Retraction Immunity Too Broad [FIXED]
+
+File: mixin/PistonBaseBlockMixin.java
+
+Symptom: Sticky piston retraction of any group containing oddstone = piston
+retracts alone, pulling nothing. Also: only upward pushes worked, not retractions.
+
+Root cause: PistonBaseBlockMixin v2 used boolean ThreadLocal. When set, isPushable
+returned false for ANY oddstone block encountered during resolver scan. If sticky
+piston pulled slime stuck to oddstone deeper in group, resolver hit oddstone,
+got isPushable=false, failed entire resolution.
+
+Fix: v3 replaced boolean with position-specific ThreadLocal<BlockPos>. isPushable
+only blocks oddstone when pos matches the exact pull position. Oddstone elsewhere
+in group is unaffected.
+
+### Bug Fix 3: Framed Oddstone Can't Grab Unframed Slime [FIXED]
+
+File: Ideomod.java
+
+Symptom: Framed oddstone → slime/honey/odd_slime = no stick.
+
+Root cause: Rule 4 blocked frame family from grabbing slime, and the carve-out
+only exempted matching INNER_STICKY types (framed slime for slime branch, etc.).
+INNER_STICKY=ODDSTONE didn't match STICKY_SLIME=1, so it was blocked.
+
+Fix: Each slime/honey/odd_slime branch in Rule 4 now also exempts
+INNER_STICKY=STICKY_ODDSTONE, since real oddstone is the universal grabber of
+all slime types.
+
+### Bug Fix 4: Sympathetically Moved Framed Oddstone Loses Inner Block [FIXED]
+
+File: mixin/PistonBaseBlockMixin.java
+
+Symptom: During sticky piston retraction, sympathetically linked framed oddstone
+blocks lost their inner block data — became empty framed blocks.
+
+Root cause: saveForRetraction BFS only scanned adjacent sticky connections.
+Sympathetically linked blocks are at range (2+ blocks apart), so the BFS never
+reached them. Their IPistonMovable data wasn't saved, and vanilla destroyed the
+block entity during the move.
+
+Fix: Added scanSympathetic() method that runs after the BFS. Mirrors
+PistonStructureResolverMixin's sympathetic search — scans from each oddstone in
+the saved set along all 6 axes up to the configured radius, finding distant
+oddstone blocks and saving their BE data. Chains iteratively (A finds B, next
+pass B finds C). Also updated scanStickyGroup to share savedPositions set with
+the sympathetic scanner.
+
+### Files changed:
+- mixin/PistonBaseBlockMixin.java — v3 position-specific pull immunity,
+  sympathetic retraction save, scanStickyGroup shared savedPositions
+- block/frame/FrameabilityHelper.java — tag-based whitelist
+- block/frame/FramedBlock.java — INNER_STICKY range 0-4, STICKY_ODDSTONE=4,
+  canStickTo ODDSTONE case
+- block/frame/FramedBlockEntity.java — computeStickyType returns ODDSTONE for
+  OddstoneBlock
+- block/OddstoneBlock.java — canStickTo recognizes FramedBlock targets
+- Ideomod.java — Rule 1 expanded (oddstone + framed oddstone targets, carve-outs
+  A+B), Rule 4 expanded (oddstone universal grabber carve-out, oddstone target
+  branches)
+
+### Files added:
+- data/ideomod/tags/blocks/frameable_blocks.json — ~290 vanilla block whitelist
+
+### Documentation updates:
+- IDEOMOD_CHANGELOG.txt: this entry
+- IDEOMOD_DOCUMENTATION.md: INNER_STICKY range 0-4, stickiness matrix updated
+  with Framed Oddstone rows, Rule 1/4 descriptions expanded, canStickTo
+  descriptions updated, PistonBaseBlockMixin description updated, frameability
+  description updated
+- CODEBASE_REFERENCE.md: updated FramedBlock, PistonBaseBlockMixin, OddstoneBlock,
+  FrameabilityHelper descriptions, added frameable_blocks tag to ModTags
+- STICKINESS_SYSTEM.md: matrix updated with Framed Oddstone rows, Rule 4
+  carve-out expanded, new pair implementations documented
+- IDEOMOD_DESIGN.md: INNER_STICKY updated to 0-4, Framed Oddstone marked done,
+  frameability whitelist marked done, oddstone pull immunity noted
+
+### Remaining work (Framed Block system):
+- Behavioral delegation (stepOn, getSpeedFactor, getJumpFactor, fallOn,
+  entityInside, getPistonPushReaction, bubble columns)
+- Waterloggable empty frames + ice melt
+- Framed obsidian immovable (free with behavioral delegation)
+- Copper/iron framing restrictions (recipe level)
+- Copper/iron blocks as frame family members (FrameActivation expansion)
+- Cross-frame mediation (copper-framed iron bridges families)
+- Framed block transit rendering bug — inner block doesn't render during
+  Trolley/Repulser/Attractor moves
+- Framed blocks not grabbed by slime during Repulser/Attractor moves
+- Frame inside-face rendering — inverted cuboid in JSON models
+- Portal activation — ender pearl
+- Copper oxidation (deferred)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-25c] Priority 3 Code Quality + Remaining Issue Cleanup
 
 Resolved all remaining Priority 3 code quality issues from the 2026-02-23a
