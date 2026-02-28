@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-28 (oddstone pull immunity, frameability whitelist, INNER_STICKY=4 oddstone)*
+*Last updated: 2026-02-28 (behavioral delegation, immovable inner blocks, EntityMovementMixin)*
 
 ---
 
@@ -79,9 +79,10 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
-  |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect
-  |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull immunity + sympathetic retraction save
+  |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner
+  |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull immunity + immovable inner + sympathetic retraction save
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
+  |     |-- EntityMovementMixin.java           Entity speed/jump factor for framed blocks (soul sand, honey)
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
   |     \-- client/
   |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
@@ -251,7 +252,7 @@ Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlac
 
 Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (implements IFrameBlock + EntityBlock).
 
-1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~15 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding all preserved.
+1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~19 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding, stepOn, fallOn, updateEntityAfterFallOn, entityInside all preserved. Speed/jump factor via EntityMovementMixin. Push reaction (immovable inners) via PistonBaseBlockMixin Feature 4 + Resolver Feature 5.
 2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
 4. **INNER_STICKY property** (IntegerProperty 0-4): 0=none, 1=slime, 2=honey, 3=odd_slime, 4=oddstone. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
@@ -329,5 +330,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 3. **Framed block transit rendering (Trolley/Repulser/Attractor)** -- Inner block doesn't render during non-piston moves. Client mixin only covers vanilla pistons; BlockMoveHelper path needs equivalent capture.
 4. **Framed blocks not grabbed by slime during Repulser/Attractor moves** -- Slime stickiness may not propagate correctly through BlockMoveHelper path.
 5. **Frame inside-face rendering** -- Frame JSON models need inverted cuboid for visible inner faces.
+6. **Sympathetic framed oddstone transit rendering** -- Inner oddstone doesn't render during piston transit for sympathetically moved framed oddstone. Client MovingFrameData may not capture sympathetically linked blocks.
+7. **Sympathetic retraction with machine-activated framed blocks** -- When sympathetically moved framed oddstone group includes machine-activated framed blocks, retraction causes inner block data loss. Same class as 2026-02-28 Bug Fix 4 but with machine activation across sympathetic links.
 
 Written by Claude, directed and guided by The Ideomancer.

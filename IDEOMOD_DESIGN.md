@@ -803,6 +803,15 @@ Added noOcclusion() to framed block properties in ModBlocks.java. Prevents neigh
 *[DONE] Frameability whitelist tag system:*
 Replaced heuristic-based frameability checks with a tag-driven whitelist (`#ideomod:frameable_blocks`). ~290 vanilla blocks explicitly enumerated. Infested block variants excluded (framing would bypass silverfish emergence). Interactive blocks, mechanical blocks, and other complex behavior blocks excluded by omission from the tag. Extensible by datapacks or other mods.
 
+*[DONE] Behavioral delegation (entity interaction):*
+stepOn, fallOn, updateEntityAfterFallOn, entityInside overrides in FramedBlock. Framed magma burns, framed hay reduces fall damage, framed slime bounces. SlimeBlock bounce requires BOTH fallOn (damage cancel) AND updateEntityAfterFallOn (velocity reversal). Known limitation: honey wall-sliding requires inset collision shape that framed blocks don't replicate.
+
+*[DONE] Behavioral delegation (speed/jump factor):*
+EntityMovementMixin intercepts Entity.getBlockSpeedFactor() and getBlockJumpFactor() at RETURN. Block-level methods have no position param; mixin intercepts at Entity level where position IS available. Framed soul sand: speed 0.4. Framed honey: speed 0.4, jump 0.5.
+
+*[DONE] Framed obsidian immovable:*
+PistonBaseBlockMixin Feature 4: isPushable returns false when inner block is obsidian, crying obsidian, reinforced deepslate, or destroySpeed -1. Mirrors vanilla's hardcoded checks (NOT PushReaction.BLOCK, which obsidian doesn't use). PistonStructureResolverMixin Feature 5: fails entire resolve when addBlockLine encounters FramedBlock with immovable inner, preventing "left behind" behavior. Framed obsidian anchors sticky groups.
+
 **Future ideas:**
 - *[IDEA] Copper frames oxidize over time? Waxable?*
 - *[IDEA] Different blast resistance per frame material?*

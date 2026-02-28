@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-02-28 (oddstone pull immunity, frameability whitelist, INNER_STICKY=4 oddstone)*
+*Last updated: 2026-02-28 (behavioral delegation, immovable inner blocks, EntityMovementMixin)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -41,7 +41,7 @@
 
 Build config files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
-Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array — Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
+Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `EntityMovementMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array — Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
 
 gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.0`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
 
@@ -107,9 +107,10 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event (Forge event bus)
   |-- mixin/
-  |     |-- PistonStructureResolverMixin.java    4-feature mixin (see section 5)
-  |     |-- PistonBaseBlockMixin.java            Allows IPistonMovable BE movement + saves data
+  |     |-- PistonStructureResolverMixin.java    5-feature mixin (see section 5)
+  |     |-- PistonBaseBlockMixin.java            Allows IPistonMovable BE movement + saves data + immovable inner
   |     |-- PistonMovingBlockEntityMixin.java    Restores IPistonMovable data after animation
+  |     |-- EntityMovementMixin.java             Entity speed/jump factor for framed blocks
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (section 8)
   |     \-- client/
   |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
@@ -383,8 +384,16 @@ This is needed because ranged pistons pass the device's own position as `pistonP
 | `addBranchingBlocks` | HEAD | @Inject | Phase detection | Set `inBranching = true` |
 | `addBranchingBlocks` | TAIL | @Inject | Feature 3 | Sympathetic Oddstone search |
 | `addBranchingBlocks` | TAIL | @Inject | Phase detection | Set `inBranching = false` |
-| `addBlockLine` | HEAD | @Inject (cancellable) | Features 1A+2A | Block sideways grabs |
+| `addBlockLine` | HEAD | @Inject (cancellable) | Feature 5 + 1A + 2A | Immovable inner check (all phases) + block sideways grabs (branching only) |
 | `addBlockLine` | canStickTo INVOKE | @Redirect | Features 1B+2B | Block backward walk grabs |
+
+### Feature 5: Framed Block Immovable Inner (HEAD of addBlockLine)
+
+When `addBlockLine` encounters a FramedBlock whose inner block would be immovable (obsidian, crying obsidian, reinforced deepslate, or destroySpeed -1), returns false to fail the entire resolve. This fires BEFORE the `inBranching` guard so it applies in ALL phases (line-building + branching).
+
+Needed because vanilla's `addBlockLine` returns TRUE (skip) when `isPushable` returns false. For blocks that ARE part of a sticky group via frame activation, skipping is wrong — the immovable block should anchor the group and prevent movement.
+
+Helper: `ideomod$isFramedBlockWithImmovableInner(BlockState, BlockPos)` — checks FramedBlock BE for inner block identity (hardcoded Blocks.OBSIDIAN/CRYING_OBSIDIAN/REINFORCED_DEEPSLATE) and destroySpeed == -1.
 
 ---
 
@@ -519,6 +528,9 @@ Target: `net.minecraft.world.level.block.piston.PistonBaseBlock`
 Feature 1 -- isPushable override (HEAD inject, cancellable):
 Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
 
+Feature 4 -- Framed block immovable inner (in same HEAD inject):
+When a FramedBlock wraps an immovable inner block, isPushable returns false. Mirrors vanilla's hardcoded checks: `Blocks.OBSIDIAN`, `Blocks.CRYING_OBSIDIAN`, `Blocks.REINFORCED_DEEPSLATE` (via BlockState.is() for registry-safe comparison), plus `getDestroySpeed == -1.0f` for bedrock-type blocks. Runs BEFORE Feature 1's IPistonMovable check so framed obsidian is blocked despite having an IPistonMovable block entity. Includes diagnostic logging for both success and BE-lookup-failure cases. Key discovery: vanilla does NOT use PushReaction.BLOCK for obsidian — the initial implementation using PushReaction silently failed.
+
 Feature 2 -- moveBlocks data save (HEAD inject):
 Saves IPistonMovable block entity data before vanilla destroys the block entities during the move. Server-only (critical -- see Bug 2 below).
 
@@ -599,7 +611,7 @@ Framed Blocks wrap any valid block with a metal frame, preserving inner block be
 
 ### Architecture
 
-FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrides ~15 behavioral methods, each querying the inner block's defaultBlockState() for delegation. Implements IFrameBlock (same interface as FrameBlock) and EntityBlock. IPistonMovable for piston data preservation. Block properties include `noOcclusion()` to prevent neighbor face culling (required for translucent inner blocks like glass, slime, odd slime).
+FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrides ~19 behavioral methods, each querying the inner block's defaultBlockState() for delegation. Implements IFrameBlock (same interface as FrameBlock) and EntityBlock. IPistonMovable for piston data preservation. Block properties include `noOcclusion()` to prevent neighbor face culling (required for translucent inner blocks like glass, slime, odd slime).
 
 ### Blockstate Properties
 
@@ -634,6 +646,25 @@ Static utility determining whether a block can be framed. Tag-driven whitelist: 
 | getBlockPathType | Per-position | Mob AI pathfinding preserved |
 | getAdjacentBlockPathType | Per-position | Adjacent pathfinding preserved |
 | getCloneItemStack | Per-position | Middle-click returns proper NBT stack |
+| stepOn | Per-position | Magma burn, surface effects |
+| fallOn | Per-position | Hay bale damage reduction, slime damage cancel |
+| updateEntityAfterFallOn | Per-position (below) | Slime bounce (reverses Y velocity). Uses entity.blockPosition().below() for lookup. |
+| entityInside | Per-position | Future: bubble columns, cobweb slowdown |
+| getSpeedFactor | Via EntityMovementMixin | Soul sand 0.4, honey 0.4. Block method has no position param; mixin intercepts at Entity level. |
+| getJumpFactor | Via EntityMovementMixin | Honey 0.5. Same mixin approach as speed factor. |
+| getPistonPushReaction | Via PistonBaseBlockMixin | Obsidian/crying obsidian/reinforced deepslate/destroySpeed -1 = immovable. Checked in isPushable, not via PushReaction enum. |
+
+**EntityMovementMixin** (`com.ideomancer.ideomod.mixin.EntityMovementMixin`):
+
+Target: `net.minecraft.world.entity.Entity`
+
+Intercepts Entity-level speed and jump factor resolution to support Framed Blocks. Block.getSpeedFactor() and Block.getJumpFactor() take no position parameter, so FramedBlock can't delegate per-position through those methods. This mixin intercepts at the Entity level where position IS available.
+
+Two injects at RETURN:
+1. `getBlockSpeedFactor()` -- checks entity.blockPosition() and belowPos for FramedBlock, returns inner block's speed factor
+2. `getBlockJumpFactor()` -- same pattern for jump factor
+
+Both use early-exit: if vanilla already returned a non-default value (not 1.0f), the block at the entity's feet already has a custom factor. Helper methods `ideomod$getFramedSpeedFactor()` and `ideomod$getFramedJumpFactor()` encapsulate the block entity lookup. belowPos calculated as entity Y - 0.5000001 (matches vanilla's below-position calculation).
 
 ### Stickiness (Combined Frame + Inner)
 
@@ -1201,6 +1232,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 3 | Framed block transit rendering (Trolley/Repulser/Attractor) | Visual bug | Inner block doesn't render during non-piston moves (Track/Repulser/Attractor use BlockMoveHelper, client mixin only covers vanilla pistons) |
 | 4 | Framed blocks not grabbed by slime during Repulser/Attractor moves | Movement bug | Slime stickiness may not propagate correctly through BlockMoveHelper path |
 | 5 | Frame inside-face rendering | Cosmetic | Frame JSON models need inverted cuboid for visible inner faces |
+| 6 | Sympathetic framed oddstone transit rendering | Visual bug | Inner oddstone doesn't render during piston transit for sympathetically moved framed oddstone. Client MovingFrameData may not capture sympathetically linked blocks. |
+| 7 | Sympathetic retraction with machine-activated framed blocks | Data loss bug | When sympathetically moved framed oddstone group includes machine-activated framed blocks, retraction causes inner block data loss. Same class as 2026-02-28 Bug Fix 4 but with machine activation across sympathetic links. |
 
 
 ## 15. CONVENTIONS & PATTERNS

@@ -1,5 +1,154 @@
 # Ideomod Changelog
 
+## [2026-02-28b] Framed Blocks — Behavioral Delegation + Immovable Inner Blocks
+
+Implemented entity interaction delegation for framed blocks and framed obsidian
+immovability. Framed blocks now emulate the physical behavior of their inner
+block: walking, falling, entity contact, movement speed, jump height, and piston
+movability.
+
+### Feature: Behavioral Delegation [IMPLEMENTED]
+
+Files: block/frame/FramedBlock.java, mixin/EntityMovementMixin.java
+
+New overrides in FramedBlock.java:
+- stepOn() — delegates to inner block (framed magma burns entities)
+- fallOn() — delegates to inner block (framed hay bale reduces fall damage)
+- updateEntityAfterFallOn() — delegates to inner block (framed slime bounces)
+- entityInside() — delegates to inner block (future: bubble columns, cobweb)
+
+EntityMovementMixin (NEW mixin targeting Entity):
+- Intercepts getBlockSpeedFactor() at RETURN — when block at entity's feet is
+  FramedBlock, returns inner block's speed factor (soul sand 0.4, honey 0.4)
+- Intercepts getBlockJumpFactor() at RETURN — same pattern (honey 0.5)
+- Needed because Block.getSpeedFactor()/getJumpFactor() take no position param
+
+Total delegated methods: ~15 -> ~19. Registered in ideomod.mixins.json.
+
+### Feature: Framed Block Immovable Inner (PistonBaseBlockMixin Feature 4) [IMPLEMENTED]
+
+File: mixin/PistonBaseBlockMixin.java
+
+Framed blocks wrapping immovable inner blocks (obsidian, crying obsidian,
+reinforced deepslate, or destroySpeed -1 blocks) are now immovable by pistons.
+Mirrors vanilla's hardcoded isPushable checks on the inner block's default state.
+Uses BlockState.is() for registry-safe comparison. Runs before Feature 1
+(IPistonMovable) so framed obsidian is blocked despite having IPistonMovable BE.
+
+Key discovery: Vanilla isPushable does NOT use PushReaction.BLOCK for obsidian.
+It hardcodes block identity checks and destroySpeed == -1. Initial implementation
+using PushReaction.BLOCK silently failed because obsidian returns NORMAL.
+
+### Feature: Framed Obsidian Anchors Sticky Groups (Resolver Feature 5) [IMPLEMENTED]
+
+File: mixin/PistonStructureResolverMixin.java
+
+When a sticky group (e.g. active frame chain) contains framed obsidian, the
+entire push fails — framed obsidian anchors the group.
+
+Key discovery: Vanilla's addBlockLine returns TRUE (skip) when isPushable
+returns false, not FALSE (fail). This is correct for vanilla — an unrelated
+immovable block shouldn't fail the push — but wrong for framed obsidian that
+IS part of the sticky group via frame activation. The fix checks for immovable
+inner blocks at HEAD of addBlockLine (before the branching guard), returning
+false to fail the entire resolve. Fires in ALL phases (line-building + branching).
+
+Helper: ideomod$isFramedBlockWithImmovableInner(BlockState, BlockPos).
+
+### Bug Fix 1: Framed Slime No Bounce [FIXED]
+
+File: block/frame/FramedBlock.java
+
+Symptom: Framed slime cancelled fall damage but entities didn't bounce.
+
+Root cause: SlimeBlock's bounce is split across two methods. fallOn() cancels
+fall damage (calls super with 0 distance). updateEntityAfterFallOn() reverses
+Y velocity (the actual bounce). Only fallOn was delegated.
+
+Fix: Added updateEntityAfterFallOn() override. Uses entity.blockPosition().below()
+to find the framed block (method receives BlockGetter + Entity, no BlockPos).
+
+### Bug Fix 2: Framed Obsidian Still Movable [FIXED]
+
+File: mixin/PistonBaseBlockMixin.java
+
+Symptom: Framed obsidian could be pushed by pistons.
+
+Root cause: Initial implementation checked PushReaction.BLOCK on the inner
+block's default state. But vanilla doesn't use PushReaction for obsidian —
+isPushable hardcodes specific block identity checks. Obsidian's
+getPistonPushReaction() actually returns NORMAL.
+
+Fix: Replaced PushReaction check with vanilla-mirroring approach: BlockState.is()
+checks for Blocks.OBSIDIAN/CRYING_OBSIDIAN/REINFORCED_DEEPSLATE, plus
+getDestroySpeed == -1 for bedrock-type blocks.
+
+### Bug Fix 3: Framed Obsidian Left Behind by Sticky Group [FIXED]
+
+File: mixin/PistonStructureResolverMixin.java
+
+Symptom: When an active frame group contained framed obsidian, the group moved
+and left the framed obsidian behind instead of failing the entire push.
+
+Root cause: Vanilla's addBlockLine returns TRUE when isPushable returns false.
+This means "skip this block, everything's fine" — not "fail the push." For
+blocks that aren't part of the sticky group this is correct. But framed obsidian
+IS part of the group via frame activation stickiness. The resolver skipped it
+instead of treating it as an anchor.
+
+Fix: Added Feature 5 check at HEAD of addBlockLine (before branching guard).
+When the target is a FramedBlock with immovable inner, returns false to fail
+the entire resolve. This fires in ALL phases, not just branching.
+
+### Known limitation: Honey Block Wall-Sliding
+
+Honey block's wall-sliding mechanic depends on its inset collision shape (14/16
+wide). Framed blocks have full-cube collision, so entities never enter the
+block's space to trigger sliding entityInside logic. Speed factor and jump
+factor delegation work correctly. Deferred — would require per-inner-block
+collision shape delegation which is complex and potentially breaking.
+
+### Known issues discovered:
+
+1. Sympathetic framed oddstone transit rendering: inner oddstone doesn't render
+   during piston transit for sympathetically moved framed oddstone. Client
+   MovingFrameData may not capture sympathetically linked blocks.
+
+2. Sympathetic retraction with machine-activated framed blocks: when
+   sympathetically moved framed oddstone is attached to a machine block which
+   activates other framed blocks, retraction causes those framed blocks to lose
+   their inner block data. Same class of bug as Bug Fix 4 (2026-02-28) but in
+   more complex topology with machine activation across sympathetic links.
+
+### Files changed:
+- block/frame/FramedBlock.java — added stepOn, fallOn, updateEntityAfterFallOn,
+  entityInside. Updated javadoc (~19 delegated methods).
+- mixin/PistonBaseBlockMixin.java — Feature 4: immovable inner check in
+  isPushable. Hardcoded block checks + destroySpeed -1. Diagnostic logging.
+- mixin/PistonStructureResolverMixin.java — Feature 5: immovable inner check
+  at HEAD of addBlockLine. Fires all phases. Returns false to fail resolve.
+  Helper: ideomod$isFramedBlockWithImmovableInner().
+
+### Files added:
+- mixin/EntityMovementMixin.java — getBlockSpeedFactor/getBlockJumpFactor
+  interception for framed soul sand and honey block.
+
+### Config changed:
+- ideomod.mixins.json — added EntityMovementMixin to mixins array.
+
+### Documentation updates:
+- IDEOMOD_CHANGELOG.txt: this entry
+- IDEOMOD_DOCUMENTATION.md: behavioral delegation table expanded, EntityMovementMixin
+  documented, PistonBaseBlockMixin Feature 4 + PistonStructureResolverMixin Feature 5
+  documented, known issues #6 and #7 added
+- CODEBASE_REFERENCE.md: EntityMovementMixin added, framed blocks description
+  updated (~19 methods), known issues #6 and #7 added
+- IDEOMOD_DESIGN.md: behavioral delegation marked DONE, framed obsidian immovable
+  marked DONE, remaining work list updated
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-02-28] Oddstone Pull Immunity, Frameability Whitelist, INNER_STICKY=4 (Oddstone)
 
 Major session implementing Oddstone piston pull immunity, frameability whitelist

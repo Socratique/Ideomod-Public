@@ -1,6 +1,6 @@
 {
   "required": true,
-  "minVersion": "0.8",
+  "minVersion": "0.7",
   "package": "com.ideomancer.ideomod.mixin",
   "compatibilityLevel": "JAVA_17",
   "refmap": "ideomod.refmap.json",
@@ -9,6 +9,7 @@
     "AbstractFurnaceBlockEntityMixin",
     "PistonBaseBlockMixin",
     "PistonMovingBlockEntityMixin",
+    "EntityMovementMixin",
     "client.PistonBaseBlockClientMixin",
     "client.PistonMovingBlockEntityRendererMixin"
   ],

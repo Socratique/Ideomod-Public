@@ -74,6 +74,18 @@ import java.util.List;
  * When a ranged piston creates the resolver, it sets pistonPos far away.
  * This mixin overrides startPos to point at the real target block.
  *
+ * FEATURE 5: FRAMED BLOCK IMMOVABLE INNER (BRANCHING)
+ * ====================================================
+ * When a sticky group tries to include a framed block whose inner is
+ * immovable (obsidian, crying obsidian, reinforced deepslate, or any
+ * block with destroySpeed -1), the entire push fails. This mirrors
+ * vanilla behavior where obsidian in a slime group blocks the push.
+ *
+ * This check is needed in the resolver because vanilla's addBlockLine
+ * returns TRUE (skip) when isPushable returns false, rather than FALSE
+ * (fail). For blocks that ARE part of a sticky group, skipping is wrong —
+ * the immovable block should anchor the group and prevent movement.
+ *
  * HISTORY / KNOWN PITFALLS:
  * =========================
  * - The @Redirect on canStickTo was added to fix slime pulling Oddstone
@@ -133,6 +145,25 @@ public abstract class PistonStructureResolverMixin {
     @Inject(method = "addBlockLine", at = @At("HEAD"), cancellable = true)
     private void ideomod$blockOneWayGrabs(BlockPos pos, Direction dir,
                                            CallbackInfoReturnable<Boolean> cir) {
+
+        // --- Feature 5: Framed block immovable inner check (ALL phases) ---
+        // When any code path tries to add a framed block with an immovable
+        // inner (e.g. framed obsidian), the ENTIRE push must fail.
+        //
+        // This fires before the branching guard because it applies to BOTH
+        // line-building and branching. Vanilla's addBlockLine returns TRUE
+        // when isPushable returns false (silently skipping the block), but
+        // for framed blocks that are part of the sticky group, the immovable
+        // inner should anchor the group and prevent all movement.
+        {
+            BlockState targetState = this.level.getBlockState(pos);
+            if (!targetState.isAir() && ideomod$isFramedBlockWithImmovableInner(targetState, pos)) {
+                cir.setReturnValue(false); // false = fail the entire resolve
+                return;
+            }
+        }
+
+        // --- One-way stickiness checks only apply during branching ---
         if (!ideomod$inBranching.get()) return;
 
         BlockPos grabberPos = pos.relative(dir.getOpposite());
@@ -348,6 +379,41 @@ public abstract class PistonStructureResolverMixin {
                 return fbe.getInnerBlock() instanceof OddstoneBlock;
             }
         }
+
+        return false;
+    }
+
+    // ====================================================================
+    // FEATURE 5: FRAMED BLOCK IMMOVABLE INNER CHECK
+    // ====================================================================
+
+    /**
+     * Check if a block is a FramedBlock whose inner block would be immovable.
+     * Mirrors vanilla's isPushable hardcoded checks (obsidian, crying obsidian,
+     * reinforced deepslate, destroy speed -1).
+     *
+     * Used during branching to fail the entire resolve when an active frame
+     * group contains an immovable framed block. Without this, vanilla's
+     * addBlockLine silently skips the block (returns true) instead of failing
+     * the push, because isPushable returning false for non-air blocks causes
+     * addBlockLine to return true (skip) rather than false (fail).
+     */
+    @Unique
+    private boolean ideomod$isFramedBlockWithImmovableInner(BlockState state, BlockPos pos) {
+        if (!(state.getBlock() instanceof FramedBlock)) return false;
+
+        BlockEntity be = this.level.getBlockEntity(pos);
+        if (!(be instanceof FramedBlockEntity fbe) || !fbe.hasInnerBlock()) return false;
+
+        BlockState innerState = fbe.getInnerDefaultState();
+
+        // Hardcoded immovable blocks (mirrors vanilla isPushable)
+        if (innerState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)) return true;
+        if (innerState.is(net.minecraft.world.level.block.Blocks.CRYING_OBSIDIAN)) return true;
+        if (innerState.is(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE)) return true;
+
+        // Indestructible blocks (bedrock, etc.)
+        if (innerState.getDestroySpeed(this.level, pos) == -1.0f) return true;
 
         return false;
     }

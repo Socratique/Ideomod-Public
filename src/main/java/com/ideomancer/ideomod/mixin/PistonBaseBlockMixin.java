@@ -27,7 +27,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 import java.util.List;
 
 /**
- * Mixin into PistonBaseBlock for three Ideomod features:
+ * Mixin into PistonBaseBlock for four Ideomod features:
  *
  * FEATURE 1: ALLOW MOVABLE BLOCK ENTITIES (isPushable)
  * =====================================================
@@ -77,6 +77,18 @@ import java.util.List;
  * This prevents the old bug where ANY oddstone in a retraction group
  * would cancel the entire retraction.
  *
+ * FEATURE 4: FRAMED BLOCK INNER PUSH REACTION (isPushable)
+ * =========================================================
+ * When a FramedBlock wraps an immovable inner block (e.g., obsidian),
+ * the framed version should also be immovable. Vanilla doesn't use
+ * PushReaction for this — it hardcodes specific blocks (obsidian,
+ * crying obsidian, reinforced deepslate) and checks getDestroySpeed
+ * == -1 for bedrock-type blocks. We mirror those exact checks on the
+ * inner block.
+ *
+ * This makes framed obsidian behave like real obsidian for piston purposes,
+ * and automatically handles any future whitelisted block with -1 destroy speed.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 @Mixin(PistonBaseBlock.class)
@@ -98,7 +110,7 @@ public abstract class PistonBaseBlockMixin {
     private static final ThreadLocal<BlockPos> ideomod$pullTargetPos = ThreadLocal.withInitial(() -> null);
 
     // ========================================================================
-    // FEATURE 1 + 3: isPushable overrides
+    // FEATURE 1 + 3 + 4: isPushable overrides
     // ========================================================================
 
     @Inject(method = "isPushable", at = @At("HEAD"), cancellable = true)
@@ -118,6 +130,48 @@ public abstract class PistonBaseBlockMixin {
                         "blocking direct sticky piston pull at {}", pos);
                 cir.setReturnValue(false);
                 return;
+            }
+        }
+
+        // --- Feature 4: Framed block inner push reaction ---
+        // If the block is a FramedBlock, check if the inner block would be
+        // immovable. Vanilla doesn't use PushReaction.BLOCK for this — it
+        // hardcodes specific blocks (obsidian, crying_obsidian, reinforced
+        // deepslate) and checks getDestroySpeed == -1 (bedrock etc.).
+        // We mirror that logic: check if the inner block's default state
+        // would fail vanilla's own isPushable checks.
+        //
+        // This runs BEFORE the Feature 1 IPistonMovable check so that
+        // framed obsidian is correctly blocked even though FramedBlockEntity
+        // implements IPistonMovable.
+        if (blockState.getBlock() instanceof FramedBlock) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+                BlockState innerState = fbe.getInnerDefaultState();
+                // Mirror vanilla isPushable: hardcoded immovable blocks
+                // Using is() for registry-safe comparison
+                if (innerState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
+                        || innerState.is(net.minecraft.world.level.block.Blocks.CRYING_OBSIDIAN)
+                        || innerState.is(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE)) {
+                    Ideomod.LOGGER.debug("[PistonBaseMixin] Framed block immovable: " +
+                            "inner block {} is hardcoded immovable at {}",
+                            fbe.getInnerBlockId(), pos);
+                    cir.setReturnValue(false);
+                    return;
+                }
+                // Mirror vanilla isPushable: indestructible blocks (bedrock, etc.)
+                if (innerState.getDestroySpeed(level, pos) == -1.0f) {
+                    Ideomod.LOGGER.debug("[PistonBaseMixin] Framed block immovable: " +
+                            "inner block {} has destroy speed -1 at {}",
+                            fbe.getInnerBlockId(), pos);
+                    cir.setReturnValue(false);
+                    return;
+                }
+            } else {
+                Ideomod.LOGGER.debug("[PistonBaseMixin] Feature 4: FramedBlock at {} " +
+                        "but BE check failed: be={}, hasInner={}",
+                        pos, be != null ? be.getClass().getSimpleName() : "null",
+                        be instanceof FramedBlockEntity fbe2 ? fbe2.hasInnerBlock() : "N/A");
             }
         }
 

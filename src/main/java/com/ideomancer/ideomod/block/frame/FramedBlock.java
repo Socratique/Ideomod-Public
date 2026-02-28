@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.block.frame;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -41,7 +42,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *
  * BEHAVIORAL DELEGATION:
  * ======================
- * ~15 methods are overridden to delegate to the inner block's default state.
+ * ~22 methods are overridden to delegate to the inner block's default state.
  * This means a Framed Redstone Block emits redstone signal, a Framed Slime
  * Block has slime friction/bounce, a Framed Oddstone repels mobs, etc.
  * The delegation is GENERIC — we ask the inner block instance directly,
@@ -50,6 +51,26 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * Methods that receive a BlockPos can look up the block entity and delegate.
  * Methods that only receive a BlockState (no position) cannot delegate
  * per-position and use conservative defaults.
+ *
+ * ENTITY INTERACTION DELEGATION:
+ * ==============================
+ * stepOn, fallOn, updateEntityAfterFallOn, entityInside all delegate to
+ * the inner block. These give framed blocks the physical feel of their
+ * inner block — framed magma burns, framed slime bounces on fall, etc.
+ *
+ * Note: slime bounce requires BOTH fallOn (cancels damage) AND
+ * updateEntityAfterFallOn (reverses Y velocity). Missing either one
+ * gives incomplete behavior.
+ *
+ * getSpeedFactor and getJumpFactor are position-less Block methods that can't
+ * delegate per-position. These are handled by EntityMovementMixin which
+ * intercepts the Entity-side call where position IS available.
+ *
+ * getPistonPushReaction is also position-less. Framed obsidian immovability
+ * is handled by PistonBaseBlockMixin's isPushable intercept where position
+ * IS available. Note: vanilla uses hardcoded block identity checks (not
+ * PushReaction.BLOCK) for obsidian immovability, so the mixin mirrors
+ * those exact checks on the inner block.
  *
  * STICKINESS MODEL:
  * =================
@@ -213,7 +234,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public SoundType getSoundType(BlockState state, net.minecraft.world.level.LevelReader level,
-                                   BlockPos pos, @Nullable net.minecraft.world.entity.Entity entity) {
+                                   BlockPos pos, @Nullable Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null) {
             return fbe.getInnerDefaultState().getSoundType();
@@ -229,7 +250,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public float getFriction(BlockState state, net.minecraft.world.level.LevelReader level,
-                              BlockPos pos, @Nullable net.minecraft.world.entity.Entity entity) {
+                              BlockPos pos, @Nullable Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null) {
             return fbe.getInnerBlock().getFriction(fbe.getInnerDefaultState(), level, pos, entity);
@@ -237,14 +258,106 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         return super.getFriction(state, level, pos, entity);
     }
 
+    /**
+     * Speed factor (soul sand = 0.4, honey = 0.4, default = 1.0).
+     *
+     * This Block method takes no position parameter, so we can't delegate
+     * per-position here. Delegation is handled by EntityMovementMixin which
+     * intercepts Entity.getBlockSpeedFactor() where position IS available.
+     *
+     * We return the default (1.0) here so the mixin's value takes precedence.
+     */
     @Override
     public float getSpeedFactor() {
         return super.getSpeedFactor();
     }
 
+    /**
+     * Jump factor (honey = 0.5, default = 1.0).
+     *
+     * Same situation as getSpeedFactor() — no position, can't delegate.
+     * Handled by EntityMovementMixin at the Entity level.
+     */
     @Override
     public float getJumpFactor() {
         return super.getJumpFactor();
+    }
+
+    // ========================================================================
+    // DELEGATED BEHAVIORS — Entity Interaction
+    // ========================================================================
+
+    /**
+     * Called when an entity steps on this block. Delegates to the inner block
+     * so framed magma burns, framed slime applies surface effects, etc.
+     */
+    @Override
+    public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
+        FramedBlockEntity fbe = getFramedBE(level, pos);
+        if (fbe != null) {
+            // Call the inner block's stepOn with the inner block's default state
+            fbe.getInnerBlock().stepOn(level, pos, fbe.getInnerDefaultState(), entity);
+            return;
+        }
+        super.stepOn(level, pos, state, entity);
+    }
+
+    /**
+     * Called when an entity falls onto this block. Delegates to the inner block
+     * so framed slime bounces, framed hay bale reduces fall damage, etc.
+     */
+    @Override
+    public void fallOn(Level level, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
+        FramedBlockEntity fbe = getFramedBE(level, pos);
+        if (fbe != null) {
+            fbe.getInnerBlock().fallOn(level, fbe.getInnerDefaultState(), pos, entity, fallDistance);
+            return;
+        }
+        super.fallOn(level, state, pos, entity, fallDistance);
+    }
+
+    /**
+     * Called after an entity lands on this block to modify its vertical velocity.
+     * This is where slime's BOUNCE actually happens (not in fallOn).
+     *
+     * Vanilla call chain for slime:
+     *   Entity.checkFallDamage() → Block.fallOn() → Block.updateEntityAfterFallOn()
+     *   - SlimeBlock.fallOn() cancels fall damage (calls super with 0 distance)
+     *   - SlimeBlock.updateEntityAfterFallOn() reverses Y velocity (the bounce)
+     *
+     * Without delegating this method, framed slime would cancel fall damage
+     * (via fallOn delegation) but NOT bounce (this method defaults to just
+     * zeroing Y velocity).
+     */
+    @Override
+    public void updateEntityAfterFallOn(BlockGetter level, Entity entity) {
+        FramedBlockEntity fbe = getFramedBE(level, entity.blockPosition().below());
+        if (fbe != null) {
+            fbe.getInnerBlock().updateEntityAfterFallOn(level, entity);
+            return;
+        }
+        super.updateEntityAfterFallOn(level, entity);
+    }
+
+    /**
+     * Called every tick an entity is inside this block's collision box.
+     * Delegates to the inner block so framed cobweb slows, framed sweet
+     * berry damages, framed powder snow freezes, etc.
+     *
+     * Note: most blocks that use entityInside have non-full collision boxes
+     * (cobweb, sweet berry, powder snow) and may not be in the frameable
+     * whitelist. But this delegation is here for future-proofing and for
+     * any full-cube blocks that DO use entityInside (like bubble columns
+     * once waterlogging is implemented).
+     */
+    @Override
+    public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
+        FramedBlockEntity fbe = getFramedBE(level, pos);
+        if (fbe != null) {
+            fbe.getInnerBlock().entityInside(fbe.getInnerDefaultState(), level, pos, entity);
+            return;
+        }
+        super.entityInside(state, level, pos, entity);
     }
 
     // ========================================================================

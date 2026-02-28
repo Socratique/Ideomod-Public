@@ -63,6 +63,7 @@
 |  |           |  |  +-- PistonBaseBlockClientMixin.java
 |  |           |  |  \\-- PistonMovingBlockEntityRendererMixin.java
 |  |           |  +-- AbstractFurnaceBlockEntityMixin.java
+|  |           |  +-- EntityMovementMixin.java
 |  |           |  +-- PistonBaseBlockMixin.java
 |  |           |  +-- PistonMovingBlockEntityMixin.java
 |  |           |  \\-- PistonStructureResolverMixin.java
@@ -110,12 +111,14 @@
 |     |     +-- models
 |     |     |  +-- block
 |     |     |  |  +-- copper_frame.json
+|     |     |  |  +-- copper_frame_active.json
 |     |     |  |  +-- copper_framed_block.json
 |     |     |  |  +-- copper_framed_block_active.json
 |     |     |  |  +-- drill.json
 |     |     |  |  +-- drill_on.json
 |     |     |  |  +-- ideoblock.json
 |     |     |  |  +-- iron_frame.json
+|     |     |  |  +-- iron_frame_active.json
 |     |     |  |  +-- iron_framed_block.json
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
@@ -197,11 +200,13 @@
 |     |  |  |  \\-- oddstone.json
 |     |  |  +-- tags
 |     |  |  |  \\-- blocks
+|     |  |  |     +-- frameable_blocks.json
 |     |  |  |     +-- furnace_array_frame.json
 |     |  |  |     +-- portal_corner_blocks.json
 |     |  |  |     \\-- redstone_components.json
 |     |  |  \\-- worldgen
-|     |  |     \\-- world_preset
+|     |  |     +-- world_preset
+|     |  |     \\-- chunky_geology_settings.json
 |     |  \\-- minecraft
 |     |     \\-- tags
 |     |        +-- blocks
