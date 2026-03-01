@@ -36,7 +36,12 @@ com.ideomancer.ideomod
   |     |     |-- FrameMaterial.java           Data-carrying enum: IRON, COPPER. displayName,
   |     |     |                                registryPrefix, item registry. Single source for
   |     |     |                                material-specific lookups.
-  |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
+  |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE + WATERLOGGED.
+  |     |     |                                Implements IFrameBlock + SimpleWaterloggedBlock.
+  |     |     |                                Passive conductor. canStickTo: same-material IFrameBlock,
+  |     |     |                                Machine Family, slime/honey/odd_slime permissive,
+  |     |     |                                FramedBlock(INNER_STICKY>0) permissive. Cross-material
+  |     |     |                                IFrameBlock falls through (no short-circuit).
   |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
   |     |     |-- FrameabilityHelper.java      Tag-driven whitelist for frameable blocks (#ideomod:frameable_blocks)
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
@@ -256,11 +261,12 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 ### 7. Frame Blocks (activation-based stickiness)
 
-Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrameBlock).
+Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrameBlock, SimpleWaterloggedBlock).
 
 1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source.
-2. **Material exclusivity**: canStickTo returns true only for same-material IFrameBlock. Iron<->iron, copper<->copper. Cross-material is mutual exclusion (canStickTo returns false both sides).
-3. **Grab immunity**: Rules 1-4 (consolidated) prevent specific grabber→target pairs. Rule 4 has carve-outs for matching inner types.
+2. **Material exclusivity**: canStickTo returns true for same-material IFrameBlock. Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. Also permissive to: Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, FramedBlock with INNER_STICKY>0.
+3. **Waterlogging**: BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. updateShape() schedules fluid ticks. Standard full-cube waterlogged behavior (water contained).
+4. **Grab immunity**: Rules 1-4 (consolidated) prevent specific grabber→target pairs. Rule 4 has carve-outs for matching inner types.
 
 **FrameActivation algorithm** (redstone-style wipe-and-rebuild):
 1. DISCOVER: BFS from change point through all connected frames (any material, active or inactive)

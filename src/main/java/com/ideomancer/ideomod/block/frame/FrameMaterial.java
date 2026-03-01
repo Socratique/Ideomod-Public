@@ -12,18 +12,34 @@ import java.util.function.Supplier;
  * copper through copper only) and canStickTo compatibility (cross-material
  * frames are mutually exclusive).
  *
+ * Also stores the mining time modifier -- the additive bonus to destroy time
+ * that this frame material contributes on top of the inner block's base
+ * destroy time. Iron frames are slightly tougher than copper.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public enum FrameMaterial {
-    IRON("Iron", "iron"),
-    COPPER("Copper", "copper");
+    IRON("Iron", "iron", 0.75f),
+    COPPER("Copper", "copper", 0.5f);
 
     private final String displayName;
     private final String registryPrefix;
 
-    FrameMaterial(String displayName, String registryPrefix) {
+    /**
+     * Additive modifier to the inner block's destroy speed when framed.
+     * Higher = takes longer to mine. Applied on top of the inner block's
+     * base hardness in FramedBlock.getDestroyProgress().
+     *
+     * For reference: stone hardness = 1.5, iron ore = 3.0, obsidian = 50.
+     * A modifier of 0.75 (iron) means framing stone adds ~50% extra time.
+     * A modifier of 0.5 (copper) means framing stone adds ~33% extra time.
+     */
+    private final float miningTimeModifier;
+
+    FrameMaterial(String displayName, String registryPrefix, float miningTimeModifier) {
         this.displayName = displayName;
         this.registryPrefix = registryPrefix;
+        this.miningTimeModifier = miningTimeModifier;
     }
 
     public String getDisplayName() {
@@ -32,6 +48,14 @@ public enum FrameMaterial {
 
     public String getRegistryPrefix() {
         return registryPrefix;
+    }
+
+    /**
+     * Get the additive mining time modifier for this frame material.
+     * This is added to the inner block's hardness when computing destroy progress.
+     */
+    public float getMiningTimeModifier() {
+        return miningTimeModifier;
     }
 
     // ========================================================================

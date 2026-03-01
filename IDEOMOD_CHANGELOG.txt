@@ -1,5 +1,126 @@
 # Ideomod Changelog
 
+## [2026-03-01b] Frame System Polish — Waterlogging, Mining, Rendering, Bug #10
+
+Four features and one bug fix for the Frame/Framed Block system.
+
+### Feature 1: Waterloggable Empty Frames
+
+FrameBlock now implements SimpleWaterloggedBlock. Empty frames (iron_frame,
+copper_frame) auto-waterlog when placed in water. Standard bucket interaction
+for adding/removing water. updateShape() schedules fluid ticks for natural
+water flow to neighbors.
+
+New blockstate property: WATERLOGGED (BooleanProperty, default false).
+Blockstate JSONs updated with 4 variants each (active × waterlogged).
+Waterlogged state doesn't change model — uses standard water overlay.
+
+Note: water is contained within the frame (standard waterlogged behavior).
+Water does not flow through because the frame is a full-cube solid block.
+
+Files: FrameBlock.java, iron_frame.json (blockstate), copper_frame.json (blockstate)
+
+### Feature 2: Frame Inside-Face Rendering
+
+All 8 frame/framed block models updated with a second cuboid element using
+inverted from/to coordinates (from [16,16,16] to [0,0,0]). This flips face
+normals inward, making frame interior visible through transparent pixels
+when the inner block is glass, ice, etc.
+
+Pure JSON change — no Java code. Applied to all iron/copper × frame/framed ×
+inactive/active model files.
+
+Files: 8 model JSONs in assets/ideomod/models/block/
+
+### Feature 3: Framed Block Mining Overhaul
+
+Dynamic mining system replaces static block properties on FramedBlock:
+
+**Mining speed** (getDestroyProgress override):
+- Effective hardness = inner block hardness + frame material modifier
+- Iron modifier: 0.75 (adds ~50% time to stone)
+- Copper modifier: 0.5 (adds ~33% time to stone)
+- Formula: digSpeed / (effectiveHardness × multiplier)
+- Multiplier: 30 if correct tier, 100 if wrong tier (matches vanilla)
+
+**Harvest tier** (canHarvestBlock override):
+- Always requires pickaxe (targeting the frame)
+- Tier determined by inner block's tags (needs_diamond_tool, etc.)
+- Uses tool.isCorrectToolForDrops(innerState) for Forge tier system
+- Framed obsidian needs diamond, framed stone needs wood, etc.
+
+**Drops** (getDrops override):
+- Returns framed block item with inner block NBT preserved
+- Uses FramedBlockLoot.createDrop(fbe) helper
+- No decrafting — framing is permanent
+
+**Ice melt** (randomTick override):
+- Fires when inner block is Blocks.ICE
+- Vanilla melt condition: block light > 11 - ice emission
+- Converts to waterlogged empty frame of same material
+- Preserves ACTIVE state during conversion
+- Schedules water tick for natural flow
+
+New field: FrameMaterial.miningTimeModifier (IRON=0.75f, COPPER=0.5f).
+Removed requiresCorrectToolForDrops() from framed block registrations in
+ModBlocks.java (now handled dynamically).
+
+Files: FramedBlock.java, FrameMaterial.java, ModBlocks.java
+
+### Bug #10 Fix: Cross-Material Frame Stickiness
+
+Active framed slime (or any framed block with inner stickiness) could not
+grab opposite-material empty frame blocks. For example, active iron-framed
+slime would not grab a copper frame.
+
+**Root cause:** FrameBlock.canStickTo() had a hard return inside the
+IFrameBlock instanceof check:
+
+    if (otherBlock instanceof IFrameBlock otherFrame) {
+        return otherFrame.getFrameMaterial() == this.frameMaterial;
+    }
+
+When a cross-material FramedBlock was checked, it matched IFrameBlock,
+failed the material check, and returned false immediately — never reaching
+the permissive entries for SlimeBlock, HoneyBlock, etc. below.
+
+This is a Layer 1 (canStickTo) bug. Forge checks canStickTo bidirectionally.
+The FramedBlock's canStickTo correctly allowed the grab via inner stickiness,
+but the FrameBlock's canStickTo rejected it before any grab immunity rules
+could even run.
+
+**Fix:** Two changes to FrameBlock.canStickTo():
+1. IFrameBlock check no longer short-circuits on material mismatch — returns
+   true on match, falls through on mismatch instead of returning false.
+2. Added permissive entry: `FramedBlock with INNER_STICKY > 0` returns true.
+   This lets cross-material framed sticky blocks grab empty frames, matching
+   FramedBlock.canStickTo()'s existing permissive entry.
+
+**Debug process:** Added BUG10 logging to FramedBlock.canStickTo() and
+PistonStructureResolverMixin. Logs confirmed FramedBlock side passed
+(Inner sticky ALLOWS) but FrameBlock side was never logged — canStickTo
+failed at Layer 1 before reaching mixin enforcement. Traced to the
+short-circuit return in FrameBlock.canStickTo().
+
+Files: FrameBlock.java
+
+### Files changed:
+- block/frame/FrameBlock.java (waterlogging + canStickTo fix)
+- block/frame/FramedBlock.java (mining overhaul + ice melt + debug logging)
+- block/frame/FrameMaterial.java (miningTimeModifier field)
+- registry/ModBlocks.java (removed requiresCorrectToolForDrops from framed blocks)
+- mixin/PistonStructureResolverMixin.java (debug logging — temporary)
+- assets/ideomod/blockstates/iron_frame.json (waterlogged variants)
+- assets/ideomod/blockstates/copper_frame.json (waterlogged variants)
+- assets/ideomod/models/block/*.json (8 models — inside-face rendering)
+
+### Debug logging note:
+FramedBlock.java and PistonStructureResolverMixin.java contain temporary
+BUG10 debug logging (LOGGER.info with [BUG10] prefix). Remove once all
+frame stickiness interactions are verified stable.
+
+Written by Claude, directed and guided by The Ideomancer.
+
 ## [2026-03-01] Backward Walk Grab Immunity Fix — Call-Pair Toggle
 
 Fixed a bug where sticky blocks could not grab blocks behind them in the push

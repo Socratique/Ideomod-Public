@@ -1,10 +1,8 @@
 {
   "variants": {
-    "active=false": {
-      "model": "ideomod:block/iron_frame"
-    },
-    "active=true": {
-      "model": "ideomod:block/iron_frame_active"
-    }
+    "active=false,waterlogged=false": { "model": "ideomod:block/iron_frame" },
+    "active=false,waterlogged=true":  { "model": "ideomod:block/iron_frame" },
+    "active=true,waterlogged=false":  { "model": "ideomod:block/iron_frame_active" },
+    "active=true,waterlogged=true":   { "model": "ideomod:block/iron_frame_active" }
   }
 }

@@ -738,9 +738,9 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 |----------|-------|
 | ID | `iron_framed_block`, `copper_framed_block` |
 | Type | Block Entity (stores inner block ID as ResourceLocation) |
-| Hardness | Inherits inner block + frame bonus? TBD |
-| Tool | Pickaxe |
-| Drops | Normal: original block + frame block. Silk Touch: framed block item (preserves combo). |
+| Hardness | Dynamic: inner block hardness + frame material modifier (iron: +0.75, copper: +0.5) |
+| Tool | Pickaxe (always). Harvest tier from inner block's tier tags. |
+| Drops | Framed block item with inner block NBT preserved. No decrafting. |
 
 **Model approach:**
 Two overlapping 16x16x16 cuboids in the same block space:
@@ -812,6 +812,15 @@ EntityMovementMixin intercepts Entity.getBlockSpeedFactor() and getBlockJumpFact
 *[DONE] Framed obsidian immovable:*
 PistonBaseBlockMixin Feature 4: isPushable returns false when inner block is obsidian, crying obsidian, reinforced deepslate, or destroySpeed -1. Mirrors vanilla's hardcoded checks (NOT PushReaction.BLOCK, which obsidian doesn't use). PistonStructureResolverMixin Feature 5: fails entire resolve when addBlockLine encounters FramedBlock with immovable inner, preventing "left behind" behavior. Framed obsidian anchors sticky groups.
 
+*[DONE] Mining overhaul:*
+Dynamic mining system: getDestroyProgress() combines inner block hardness + frame material modifier (iron: 0.75, copper: 0.5). canHarvestBlock() checks inner block's tier tags (needs_diamond_tool, etc.) via tool.isCorrectToolForDrops(). getDrops() returns framed block item with inner block NBT preserved. FrameMaterial gains miningTimeModifier field. Removed requiresCorrectToolForDrops() from framed block registrations (now dynamic).
+
+*[DONE] Ice melt to waterlogged frame:*
+isRandomlyTicking() returns true. randomTick() checks if inner block is Blocks.ICE with vanilla melt condition (block light > 11 - ice emission). Melts to waterlogged empty frame of same material, preserving ACTIVE state. Schedules water tick for natural flow.
+
+*[DONE] Inside-face rendering:*
+All 8 frame/framed block JSON models updated with inverted cuboid element (from [16,16,16] to [0,0,0]) for inward-facing normals. Frame interior visible through transparent inner blocks (glass, ice, etc.). Pure JSON change.
+
 **Future ideas:**
 - *[IDEA] Copper frames oxidize over time? Waxable?*
 - *[IDEA] Different blast resistance per frame material?*
@@ -824,21 +833,22 @@ PistonBaseBlockMixin Feature 4: isPushable returns false when inner block is obs
 | Property | Value |
 |----------|-------|
 | ID | `iron_frame`, `copper_frame` |
-| Class | FrameBlock (extends Block, implements IFrameBlock) |
+| Class | FrameBlock (extends Block, implements IFrameBlock, SimpleWaterloggedBlock) |
 | Hardness | Iron: 3.0 / Copper: 2.5 (blast 6.0) |
 | Tool | Pickaxe |
-| Transparency | Non-solid, see-through. Uses RenderType.cutout() and noOcclusion(). |
+| Transparency | Non-solid, see-through. Uses RenderType.cutout() and noOcclusion(). Inside-face rendering via inverted cuboid in JSON models. |
 | Recipe | 4 iron/copper ingots in diamond pattern -> 4 frames |
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Decorative transparency | [DONE] | Renders with transparent interior. RenderType.cutout() registered in clientSetup(). noOcclusion() in block properties. |
+| Decorative transparency | [DONE] | Renders with transparent interior. RenderType.cutout() registered in clientSetup(). noOcclusion() in block properties. Inside-face rendering via inverted cuboid element in JSON models. |
 | Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.recalculate() -- redstone-style wipe-and-rebuild from Machine Block sources. |
-| Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material canStickTo returns false (mutual exclusion). Both materials stick to Machine Family when active. |
-| Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Grab immunity rules 9-11 prevent frames from grabbing slime/honey/odd slime. |
+| Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
+| Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
 | Activation chaining | [DONE] | Chains through same-material frames up to 12 blocks from Machine Block source. Cross-material stops propagation. |
+| Waterlogging | [DONE] | Implements SimpleWaterloggedBlock. BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. Bucket interaction. updateShape() schedules fluid ticks. Water contained within frame (standard full-cube waterlogged behavior). |
 
 **Activation model (redstone-style wipe-and-rebuild):**
 Frames are passive like redstone dust. They never decide their own activation state.

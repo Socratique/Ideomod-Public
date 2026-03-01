@@ -185,7 +185,7 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 
 **Frame Family -> Frame Family (same material)**: ALLOWED when active. canStickTo returns true for same-material IFrameBlock. No immunity rule.
 
-**Frame Family -> Frame Family (cross-material)**: BLOCKED at Layer 1. canStickTo returns false for different-material IFrameBlock. Mutual exclusion.
+**Frame Family -> Frame Family (cross-material)**: BLOCKED at Layer 1 for frame-to-frame. canStickTo falls through on material mismatch (does NOT short-circuit to false). For plain frames/framed blocks with INNER_STICKY=0, no permissive entry matches — returns false. For FramedBlock with INNER_STICKY>0 grabbing a cross-material frame, the FrameBlock's permissive entry for `FramedBlock with INNER_STICKY>0` allows the passive side. Net: cross-material frame stickiness is blocked, but cross-material inner stickiness can still grab frames.
 
 **Frame Family <-> Oddstone (bare)**: NOT POSSIBLE. Both canStickTo return false for each other. No interaction. Bare oddstone cannot be grabbed by frames.
 

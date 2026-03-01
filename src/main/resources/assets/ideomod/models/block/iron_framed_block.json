@@ -6,7 +6,7 @@
   },
   "elements": [
     {
-      "__comment": "Full cube with frame texture — transparent interior pixels in the texture let the BESR inner block show through",
+      "__comment": "Outer cube — frame texture faces outward, transparent interior pixels let BESR inner block show through",
       "from": [0, 0, 0],
       "to": [16, 16, 16],
       "faces": {
@@ -16,6 +16,19 @@
         "down":  { "uv": [0, 0, 16, 16], "texture": "#frame", "cullface": "down" },
         "east":  { "uv": [0, 0, 16, 16], "texture": "#frame", "cullface": "east" },
         "west":  { "uv": [0, 0, 16, 16], "texture": "#frame", "cullface": "west" }
+      }
+    },
+    {
+      "__comment": "Inner cube — inverted normals so frame interior is visible behind transparent inner blocks (glass, ice, etc.)",
+      "from": [16, 16, 16],
+      "to": [0, 0, 0],
+      "faces": {
+        "north": { "uv": [0, 0, 16, 16], "texture": "#frame" },
+        "south": { "uv": [0, 0, 16, 16], "texture": "#frame" },
+        "up":    { "uv": [0, 0, 16, 16], "texture": "#frame" },
+        "down":  { "uv": [0, 0, 16, 16], "texture": "#frame" },
+        "east":  { "uv": [0, 0, 16, 16], "texture": "#frame" },
+        "west":  { "uv": [0, 0, 16, 16], "texture": "#frame" }
       }
     }
   ]

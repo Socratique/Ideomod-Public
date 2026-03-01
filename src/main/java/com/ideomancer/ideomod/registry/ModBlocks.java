@@ -174,8 +174,12 @@ public class ModBlocks {
     // ========================================================================
 
     /**
-     * Iron Framed Block. Generic placeholder properties — actual behavior is
-     * delegated to the inner block at runtime via FramedBlockEntity.
+     * Iron Framed Block. Base strength is a fallback for empty/corrupt frames.
+     * Actual mining speed is computed dynamically in FramedBlock.getDestroyProgress()
+     * from the inner block's hardness + iron frame modifier (0.75).
+     *
+     * No requiresCorrectToolForDrops() -- harvest tier is dynamic via
+     * FramedBlock.canHarvestBlock() based on the inner block's tier tags.
      *
      * isRedstoneConductor delegates to the inner block via block entity lookup.
      * pushReaction NORMAL so pistons can move it (IPistonMovable preserves data).
@@ -184,7 +188,6 @@ public class ModBlocks {
             () -> new FramedBlock(FrameMaterial.IRON, BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(2.0f, 6.0f)
-                    .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()
@@ -192,13 +195,13 @@ public class ModBlocks {
             ));
 
     /**
-     * Copper Framed Block. Same pattern as Iron Framed Block with copper material.
+     * Copper Framed Block. Same dynamic mining pattern as Iron Framed Block.
+     * Copper frame modifier is 0.5 (slightly less than iron's 0.75).
      */
     public static final RegistryObject<Block> COPPER_FRAMED_BLOCK = BLOCKS.register("copper_framed_block",
             () -> new FramedBlock(FrameMaterial.COPPER, BlockBehaviour.Properties.of()
                     .mapColor(MapColor.COLOR_ORANGE)
                     .strength(2.0f, 6.0f)
-                    .requiresCorrectToolForDrops()
                     .sound(SoundType.COPPER)
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()

@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-01 (backward walk grab immunity fix: call-pair toggle in PistonStructureResolverMixin)*
+*Last updated: 2026-03-01b (waterlogging, mining overhaul, inside-face rendering, FrameBlock canStickTo cross-material fix)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -61,7 +61,8 @@ com.ideomancer.ideomod
   |     |-- frame/
   |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker. Static isActive(BlockState) helper.
   |     |     |-- FrameMaterial.java           Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry.
-  |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
+  |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE + WATERLOGGED.
+  |     |     |                                Implements SimpleWaterloggedBlock. Passive conductor.
   |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
   |     |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
@@ -163,8 +164,8 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. Extends AbstractRangedPistonBlock. |
 | `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
-| `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. |
-| `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. |
+| `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
+| `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
 | `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
 
@@ -281,7 +282,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
-**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock (permissive). FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). Now simplified via StickyType: INNER_STICKY=ODDSTONE mirrors OddstoneBlock behavior: grabs all slime types (real+framed), oddstone (real+framed), but NOT normal blocks or machine family via inner. Returns false for cross-material IFrameBlock (mutual exclusion). Grab immunity Rules 1 and 4 enforce one-way behavior with carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
+**Frame Family (FrameBlock, FramedBlock)**: Both implement IFrameBlock. FrameBlock.canStickTo() returns true for same-material IFrameBlock, Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, and FramedBlock with INNER_STICKY>0 (permissive — allows cross-material framed sticky blocks to grab empty frames). Cross-material IFrameBlock falls through (does NOT short-circuit to false) so inner stickiness permissive entries can still match. FramedBlock.canStickTo() combines two stickiness systems: (1) Frame rules (ACTIVE-gated): same-material IFrameBlock + Machine Family. Cross-material IFrameBlock falls through to inner sticky checks. (2) Inner sticky rules (INNER_STICKY-gated): applies the vanilla stickiness of the inner block type with mutual exclusions (e.g., INNER_STICKY=SLIME excludes honey and odd slime). Now simplified via StickyType: INNER_STICKY=ODDSTONE mirrors OddstoneBlock behavior: grabs all slime types (real+framed), oddstone (real+framed), but NOT normal blocks or machine family via inner. Permissive entries: SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock, and FramedBlock with INNER_STICKY>0. Grab immunity Rules 1 and 4 enforce one-way behavior with carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
 
 ---
 
@@ -998,15 +999,16 @@ Non-directional block. Part of Machine Family. No active behavior -- just sticki
 
 ### Frame Blocks (Iron Frame, Copper Frame)
 
-Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock`. `BooleanProperty ACTIVE` (default false). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.recalculate()`. See section 6b for the activation algorithm.
+Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock` and `SimpleWaterloggedBlock`. `BooleanProperty ACTIVE` (default false). `BooleanProperty WATERLOGGED` (default false, auto-set when placed in water). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.recalculate()`. See section 6b for the activation algorithm.
 
 | Feature | Implementation |
 |---------|---------------|
 | **Activation-based stickiness** | ACTIVE property driven by FrameActivation. Passive -- frames never decide their own state. Machine Blocks are signal sources. |
-| **Material exclusivity** | canStickTo returns true for same-material IFrameBlock only. Iron<->iron, copper<->copper. Cross-material returns false (mutual exclusion at Layer 1). |
+| **Material exclusivity** | canStickTo returns true for same-material IFrameBlock. Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. |
 | **Machine Family interaction** | canStickTo returns true for Machine Family. Bidirectional -- Machine Family's canMachineFamilyStickTo also includes Frame Family. |
-| **Slime/honey interaction** | canStickTo returns true for slime/honey/odd slime (permissive). Grab immunity rules 9-11 block frames from grabbing them. Net: slime can grab active frames, frames cannot grab slime. |
-| **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. |
+| **Slime/honey interaction** | canStickTo returns true for slime/honey/odd slime (permissive). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules block frames from grabbing slime/honey/odd slime. Net: slime can grab active frames, frames cannot grab slime. |
+| **Waterlogging** | Implements SimpleWaterloggedBlock. Auto-waterlogs when placed in water. Bucket interaction for add/remove. updateShape() schedules fluid ticks for natural water flow. Water is contained (standard full-cube waterlogged behavior). |
+| **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. Inside-face rendering via inverted cuboid in JSON models. |
 
 
 

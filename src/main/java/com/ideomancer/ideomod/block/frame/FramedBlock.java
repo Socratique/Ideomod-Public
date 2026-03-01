@@ -2,6 +2,9 @@ package com.ideomancer.ideomod.block.frame;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.tags.BlockTags;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.player.Player;
@@ -10,6 +13,7 @@ import net.minecraft.world.item.context.BlockPlaceContext;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.EntityBlock;
 import net.minecraft.world.level.block.HoneyBlock;
@@ -26,6 +30,8 @@ import net.minecraft.world.level.block.state.properties.DirectionProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.PathComputationType;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
@@ -34,82 +40,18 @@ import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.movement.StickyType;
 
+import java.util.Collections;
+import java.util.List;
+
 /**
- * Framed Block — a block that wraps any valid "inner block" with a metal frame.
+ * Framed Block -- a block that wraps any valid "inner block" with a metal frame.
  *
  * Two instances exist: iron_framed_block and copper_framed_block.
  * Each behaves as a transparent proxy for its inner block (stored in the
  * block entity) while adding frame-family stickiness on top.
  *
- * BEHAVIORAL DELEGATION:
- * ======================
- * ~22 methods are overridden to delegate to the inner block's default state.
- * This means a Framed Redstone Block emits redstone signal, a Framed Slime
- * Block has slime friction/bounce, a Framed Oddstone repels mobs, etc.
- * The delegation is GENERIC — we ask the inner block instance directly,
- * no hardcoded per-block-type logic.
- *
- * Methods that receive a BlockPos can look up the block entity and delegate.
- * Methods that only receive a BlockState (no position) cannot delegate
- * per-position and use conservative defaults.
- *
- * ENTITY INTERACTION DELEGATION:
- * ==============================
- * stepOn, fallOn, updateEntityAfterFallOn, entityInside all delegate to
- * the inner block. These give framed blocks the physical feel of their
- * inner block — framed magma burns, framed slime bounces on fall, etc.
- *
- * Note: slime bounce requires BOTH fallOn (cancels damage) AND
- * updateEntityAfterFallOn (reverses Y velocity). Missing either one
- * gives incomplete behavior.
- *
- * getSpeedFactor and getJumpFactor are position-less Block methods that can't
- * delegate per-position. These are handled by EntityMovementMixin which
- * intercepts the Entity-side call where position IS available.
- *
- * getPistonPushReaction is also position-less. Framed obsidian immovability
- * is handled by PistonBaseBlockMixin's isPushable intercept where position
- * IS available. Note: vanilla uses hardcoded block identity checks (not
- * PushReaction.BLOCK) for obsidian immovability, so the mixin mirrors
- * those exact checks on the inner block.
- *
- * STICKINESS MODEL:
- * =================
- * isStickyBlock() returns true when ACTIVE (frame stickiness) OR when
- * INNER_STICKY > 0 (inner block is natively sticky).
- *
- * canStickTo() combines:
- *   - Frame family rules (same-material frames, machine blocks) — gated by ACTIVE
- *   - Inner block stickiness rules — gated by INNER_STICKY value
- *   - Permissive entries for vanilla stickies
- *
- * StickinessRules grab immunity prevents frames from actively grabbing
- * slime/honey/odd slime, BUT a carve-out in Ideomod.java exempts framed
- * blocks whose inner IS the same sticky type. E.g. a Framed Slime Block
- * IS allowed to grab normal blocks like real slime would.
- *
- * INNER_STICKY values:
- *   0 = not sticky (default)
- *   1 = slime-type (grabs everything except honey, odd slime, oddstone)
- *   2 = honey-type (grabs everything except slime, odd slime, oddstone)
- *   3 = odd-slime-type (grabs everything except slime, honey, oddstone;
- *       directional — only when pushed in FACING direction)
- *   4 = oddstone-type (grabs other oddstone/framed-oddstone + all slime
- *       types; mirrors real Oddstone's canStickTo behavior)
- *
- * FACING:
- * =======
- * All framed blocks have a FACING property set from player look direction
- * at placement. For most inner blocks this is cosmetic/unused. For Framed
- * Odd Slime (INNER_STICKY=3) it controls directional stickiness — the
- * block is only sticky when pushed in its FACING direction, matching
- * real Odd Slime behavior.
- *
- * FRAME ACTIVATION:
- * =================
- * Implements IFrameBlock. Has ACTIVE BooleanProperty. Participates in
- * FrameActivation wipe-and-rebuild from Machine Block sources. Chains
- * through same-material frames (iron->iron, copper->copper).
+ * DEBUG: Temporary logging in canStickTo() for bug #10 investigation.
+ * Remove debug logging once bug is resolved.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -117,23 +59,8 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
     public static final DirectionProperty FACING = DirectionalBlock.FACING;
-
-    /**
-     * Inner block sticky type. Encoded on the blockstate so isStickyBlock()
-     * and canStickTo() can read it without position context.
-     *
-     * 0 = not sticky (default)
-     * 1 = slime-type inner
-     * 2 = honey-type inner
-     * 3 = odd-slime-type inner
-     * 4 = oddstone-type inner
-     *
-     * Set by FramedBlockEntity when the inner block is loaded or changed,
-     * via updateBlockstateFromInner().
-     */
     public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 4);
 
-    /** Constants for INNER_STICKY values. See also StickyType enum. */
     public static final int STICKY_NONE = 0;
     public static final int STICKY_SLIME = 1;
     public static final int STICKY_HONEY = 2;
@@ -162,7 +89,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // PLACEMENT — set FACING from player look direction
+    // PLACEMENT
     // ========================================================================
 
     @Override
@@ -172,7 +99,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // ROTATION / MIRROR SUPPORT
+    // ROTATION / MIRROR
     // ========================================================================
 
     @Override
@@ -197,19 +124,13 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public RenderShape getRenderShape(BlockState state) {
-        // MODEL for the frame overlay; inner block texture drawn by BESR
         return RenderShape.MODEL;
     }
 
     // ========================================================================
-    // INNER BLOCK HELPER — safe delegation lookup
+    // INNER BLOCK HELPER
     // ========================================================================
 
-    /**
-     * Get the inner block at a world position. Returns null if the block
-     * entity is missing or has no inner block set. All delegation methods
-     * must null-check the result and fall back to default behavior.
-     */
     @Nullable
     private FramedBlockEntity getFramedBE(BlockGetter level, BlockPos pos) {
         if (level == null || pos == null) return null;
@@ -220,38 +141,125 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         return null;
     }
 
-    /**
-     * Check if a FramedBlock at the given position has an immovable inner block.
-     * Mirrors vanilla's isPushable hardcoded checks.
-     * Used by PistonBaseBlockMixin and PistonStructureResolverMixin.
-     *
-     * @param level The block getter
-     * @param pos   The position of the framed block
-     * @return true if the inner block is immovable (obsidian, bedrock, reinforced deepslate, etc.)
-     */
     public static boolean hasImmovableInner(BlockGetter level, BlockPos pos) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof FramedBlockEntity fbe) || !fbe.hasInnerBlock()) return false;
         BlockState innerState = fbe.getInnerDefaultState();
-        if (innerState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)) return true;
-        if (innerState.is(net.minecraft.world.level.block.Blocks.CRYING_OBSIDIAN)) return true;
-        if (innerState.is(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE)) return true;
+        if (innerState.is(Blocks.OBSIDIAN)) return true;
+        if (innerState.is(Blocks.CRYING_OBSIDIAN)) return true;
+        if (innerState.is(Blocks.REINFORCED_DEEPSLATE)) return true;
         if (innerState.getDestroySpeed(level, pos) == -1.0f) return true;
         return false;
     }
 
     // ========================================================================
-    // DELEGATED BEHAVIORS — Physical Properties
+    // MINING DYNAMICS
     // ========================================================================
 
     @Override
     public float getDestroyProgress(BlockState state, Player player, BlockGetter level, BlockPos pos) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null) {
-            return fbe.getInnerDefaultState().getDestroyProgress(player, level, pos);
+            BlockState innerState = fbe.getInnerDefaultState();
+            float innerHardness = innerState.getDestroySpeed(level, pos);
+            if (innerHardness < 0) return 0.0f;
+
+            float effectiveHardness = innerHardness + frameMaterial.getMiningTimeModifier();
+            boolean correctTier = hasCorrectTierForInner(player, innerState);
+            float digSpeed = player.getDestroySpeed(state);
+            float multiplier = correctTier ? 30.0f : 100.0f;
+
+            return digSpeed / (effectiveHardness * multiplier);
         }
         return super.getDestroyProgress(state, player, level, pos);
     }
+
+    private boolean hasCorrectTierForInner(Player player, BlockState innerState) {
+        ItemStack tool = player.getMainHandItem();
+        if (!tool.isCorrectToolForDrops(Blocks.STONE.defaultBlockState())) {
+            return false;
+        }
+        if (innerState.is(BlockTags.NEEDS_DIAMOND_TOOL)) {
+            return tool.isCorrectToolForDrops(innerState);
+        }
+        if (innerState.is(BlockTags.NEEDS_IRON_TOOL)) {
+            return tool.isCorrectToolForDrops(innerState);
+        }
+        if (innerState.is(BlockTags.NEEDS_STONE_TOOL)) {
+            return tool.isCorrectToolForDrops(innerState);
+        }
+        return true;
+    }
+
+    @Override
+    public boolean canHarvestBlock(BlockState state, BlockGetter level, BlockPos pos, Player player) {
+        FramedBlockEntity fbe = getFramedBE(level, pos);
+        if (fbe != null) {
+            return hasCorrectTierForInner(player, fbe.getInnerDefaultState());
+        }
+        ItemStack tool = player.getMainHandItem();
+        return tool.isCorrectToolForDrops(Blocks.STONE.defaultBlockState());
+    }
+
+    // ========================================================================
+    // DROPS
+    // ========================================================================
+
+    @Override
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
+        BlockEntity be = builder.getOptionalParameter(LootContextParams.BLOCK_ENTITY);
+        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
+            ItemStack drop = FramedBlockLoot.createDrop(fbe);
+            return Collections.singletonList(drop);
+        }
+        return Collections.singletonList(new ItemStack(frameMaterial.getFramedBlockItem()));
+    }
+
+    // ========================================================================
+    // ICE MELT
+    // ========================================================================
+
+    @Override
+    public boolean isRandomlyTicking(BlockState state) {
+        return true;
+    }
+
+    @Override
+    public void randomTick(BlockState state, net.minecraft.server.level.ServerLevel level,
+                            BlockPos pos, net.minecraft.util.RandomSource random) {
+        FramedBlockEntity fbe = getFramedBE(level, pos);
+        if (fbe == null) return;
+
+        Block innerBlock = fbe.getInnerBlock();
+        if (innerBlock == Blocks.ICE) {
+            if (level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, pos) > 11 - innerBlock.defaultBlockState().getLightEmission()) {
+                meltIceToWaterloggedFrame(state, level, pos);
+            }
+        }
+    }
+
+    private void meltIceToWaterloggedFrame(BlockState state, net.minecraft.server.level.ServerLevel level,
+                                            BlockPos pos) {
+        Block frameBlock;
+        if (frameMaterial == FrameMaterial.IRON) {
+            frameBlock = com.ideomancer.ideomod.registry.ModBlocks.IRON_FRAME.get();
+        } else {
+            frameBlock = com.ideomancer.ideomod.registry.ModBlocks.COPPER_FRAME.get();
+        }
+
+        boolean wasActive = state.getValue(ACTIVE);
+        BlockState frameState = frameBlock.defaultBlockState()
+                .setValue(FrameBlock.ACTIVE, wasActive)
+                .setValue(FrameBlock.WATERLOGGED, true);
+
+        level.setBlock(pos, frameState, Block.UPDATE_ALL);
+        level.scheduleTick(pos, net.minecraft.world.level.material.Fluids.WATER,
+                net.minecraft.world.level.material.Fluids.WATER.getTickDelay(level));
+    }
+
+    // ========================================================================
+    // DELEGATED BEHAVIORS -- Physical Properties
+    // ========================================================================
 
     @Override
     public SoundType getSoundType(BlockState state, net.minecraft.world.level.LevelReader level,
@@ -265,7 +273,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     public float getExplosionResistance() {
-        // Can't delegate without position — use our own default.
         return super.getExplosionResistance();
     }
 
@@ -279,54 +286,30 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         return super.getFriction(state, level, pos, entity);
     }
 
-    /**
-     * Speed factor (soul sand = 0.4, honey = 0.4, default = 1.0).
-     *
-     * This Block method takes no position parameter, so we can't delegate
-     * per-position here. Delegation is handled by EntityMovementMixin which
-     * intercepts Entity.getBlockSpeedFactor() where position IS available.
-     *
-     * We return the default (1.0) here so the mixin's value takes precedence.
-     */
     @Override
     public float getSpeedFactor() {
         return super.getSpeedFactor();
     }
 
-    /**
-     * Jump factor (honey = 0.5, default = 1.0).
-     *
-     * Same situation as getSpeedFactor() — no position, can't delegate.
-     * Handled by EntityMovementMixin at the Entity level.
-     */
     @Override
     public float getJumpFactor() {
         return super.getJumpFactor();
     }
 
     // ========================================================================
-    // DELEGATED BEHAVIORS — Entity Interaction
+    // DELEGATED BEHAVIORS -- Entity Interaction
     // ========================================================================
 
-    /**
-     * Called when an entity steps on this block. Delegates to the inner block
-     * so framed magma burns, framed slime applies surface effects, etc.
-     */
     @Override
     public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null) {
-            // Call the inner block's stepOn with the inner block's default state
             fbe.getInnerBlock().stepOn(level, pos, fbe.getInnerDefaultState(), entity);
             return;
         }
         super.stepOn(level, pos, state, entity);
     }
 
-    /**
-     * Called when an entity falls onto this block. Delegates to the inner block
-     * so framed slime bounces, framed hay bale reduces fall damage, etc.
-     */
     @Override
     public void fallOn(Level level, BlockState state, BlockPos pos, Entity entity, float fallDistance) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
@@ -337,19 +320,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         super.fallOn(level, state, pos, entity, fallDistance);
     }
 
-    /**
-     * Called after an entity lands on this block to modify its vertical velocity.
-     * This is where slime's BOUNCE actually happens (not in fallOn).
-     *
-     * Vanilla call chain for slime:
-     *   Entity.checkFallDamage() → Block.fallOn() → Block.updateEntityAfterFallOn()
-     *   - SlimeBlock.fallOn() cancels fall damage (calls super with 0 distance)
-     *   - SlimeBlock.updateEntityAfterFallOn() reverses Y velocity (the bounce)
-     *
-     * Without delegating this method, framed slime would cancel fall damage
-     * (via fallOn delegation) but NOT bounce (this method defaults to just
-     * zeroing Y velocity).
-     */
     @Override
     public void updateEntityAfterFallOn(BlockGetter level, Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, entity.blockPosition().below());
@@ -360,17 +330,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         super.updateEntityAfterFallOn(level, entity);
     }
 
-    /**
-     * Called every tick an entity is inside this block's collision box.
-     * Delegates to the inner block so framed cobweb slows, framed sweet
-     * berry damages, framed powder snow freezes, etc.
-     *
-     * Note: most blocks that use entityInside have non-full collision boxes
-     * (cobweb, sweet berry, powder snow) and may not be in the frameable
-     * whitelist. But this delegation is here for future-proofing and for
-     * any full-cube blocks that DO use entityInside (like bubble columns
-     * once waterlogging is implemented).
-     */
     @Override
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
@@ -382,7 +341,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // DELEGATED BEHAVIORS — Visual Properties
+    // DELEGATED BEHAVIORS -- Visual Properties
     // ========================================================================
 
     @Override
@@ -405,7 +364,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // DELEGATED BEHAVIORS — Redstone
+    // DELEGATED BEHAVIORS -- Redstone
     // ========================================================================
 
     @Override
@@ -432,7 +391,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // DELEGATED BEHAVIORS — Mob Pathfinding
+    // DELEGATED BEHAVIORS -- Mob Pathfinding
     // ========================================================================
 
     @Override
@@ -468,14 +427,9 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // STICKINESS — Active-gated frame stickiness + inner block stickiness
+    // STICKINESS
     // ========================================================================
 
-    /**
-     * Framed blocks are sticky when:
-     *   - ACTIVE (powered by Machine Block) — frame stickiness
-     *   - INNER_STICKY > 0 — inner block is natively sticky
-     */
     @Override
     public boolean isStickyBlock(BlockState state) {
         return state.getValue(ACTIVE) || state.getValue(INNER_STICKY) > 0;
@@ -485,32 +439,24 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      * Combined stickiness: frame rules (gated by ACTIVE) + inner block
      * rules (gated by INNER_STICKY) + permissive entries.
      *
-     * FRAME RULES (ONLY when ACTIVE):
-     *   - Same-material IFrameBlock: YES
-     *   - Machine Family: YES
-     *
-     * INNER BLOCK RULES (when INNER_STICKY > 0):
-     *   Mirrors the canStickTo behavior of the actual inner block type.
-     *   - Slime (1): sticks to everything EXCEPT honey and odd slime
-     *   - Honey (2): sticks to everything EXCEPT slime and odd slime
-     *   - Odd Slime (3): sticks to everything EXCEPT slime and honey
-     *   - Oddstone (4): sticks to oddstone (real+framed) + slime types
-     *   Note: oddstone grab immunity is handled by StickinessRules.
-     *   Directional gating for odd slime is handled by a StickinessRules
-     *   directional rule registered in Ideomod.java.
-     *
-     * PERMISSIVE ENTRIES (always):
-     *   Allow vanilla stickies and oddstone to grab us if THEY initiate.
+     * DEBUG LOGGING: Temporary logging for bug #10 investigation.
+     * Search for "BUG10" to find all debug lines. Remove once resolved.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
         Block otherBlock = other.getBlock();
         int innerSticky = state.getValue(INNER_STICKY);
 
-        // --- Frame family rules — ONLY when activated by Machine Block ---
+        // --- Frame family rules -- ONLY when activated by Machine Block ---
         if (state.getValue(ACTIVE)) {
             if (otherBlock instanceof IFrameBlock otherFrame) {
-                return otherFrame.getFrameMaterial() == this.frameMaterial;
+                boolean materialMatch = otherFrame.getFrameMaterial() == this.frameMaterial;
+                if (materialMatch) return true;
+                // BUG10: Cross-material frame — don't return false, fall through
+                // to inner sticky / permissive checks
+                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    "[BUG10 canStickTo] Cross-material frame fall-through. self={} ({}), other={} ({})",
+                    this.frameMaterial, state, otherFrame.getFrameMaterial(), other);
             }
             if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
         }
@@ -521,31 +467,44 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
             StickyType otherType = StickyType.of(other);
 
             if (myType == StickyType.ODDSTONE) {
-                // Oddstone inner: only sticks to oddstone-type and slime-family blocks
-                return myType.canGrab(otherType) && otherType != StickyType.NONE;
+                boolean result = myType.canGrab(otherType) && otherType != StickyType.NONE;
+                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    "[BUG10 canStickTo] ODDSTONE inner: otherType={}, result={}", otherType, result);
+                return result;
             }
 
             // Slime-family inner: sticks to everything EXCEPT excluded types
-            if (myType.isExcludedFrom(otherType)) return false;
+            if (myType.isExcludedFrom(otherType)) {
+                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    "[BUG10 canStickTo] Inner sticky EXCLUDED: myType={}, otherType={}", myType, otherType);
+                return false;
+            }
+            com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                "[BUG10 canStickTo] Inner sticky ALLOWS: myType={}, otherType={}, other={}",
+                myType, otherType, other);
             return true;
         }
 
         // --- Permissive entries (always) ---
-        // Allow vanilla stickies and oddstone to grab us if THEY initiate.
         if (otherBlock instanceof SlimeBlock) return true;
         if (otherBlock instanceof HoneyBlock) return true;
         if (otherBlock instanceof OddSlimeBlock) return true;
         if (otherBlock instanceof OddstoneBlock) return true;
 
-        // Also be permissive to other framed blocks that are inner-sticky,
-        // so their inner stickiness can reach us
         if (otherBlock instanceof FramedBlock && other.getValue(INNER_STICKY) > 0) return true;
+
+        // BUG10: Final failure
+        com.ideomancer.ideomod.Ideomod.LOGGER.info(
+            "[BUG10 canStickTo] FAILED — no rule matched. self={} [active={}, inner_sticky={}, material={}], other={} [{}]",
+            this.getClass().getSimpleName(),
+            state.getValue(ACTIVE), innerSticky, this.frameMaterial,
+            otherBlock.getClass().getSimpleName(), other);
 
         return false;
     }
 
     // ========================================================================
-    // LIFECYCLE — Frame activation triggers + inner sticky sync
+    // LIFECYCLE
     // ========================================================================
 
     @Override
@@ -553,12 +512,10 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                          BlockState oldState, boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
         if (!level.isClientSide()) {
-            // Sync INNER_STICKY from block entity data (item NBT loaded by now)
             FramedBlockEntity fbe = getFramedBE(level, pos);
             if (fbe != null) {
                 fbe.updateBlockstateFromInner();
             }
-
             if (!state.is(oldState.getBlock())) {
                 FrameActivation.recalculate(level, pos);
             }
@@ -599,7 +556,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     }
 
     // ========================================================================
-    // MIDDLE-CLICK (Pick Block) — return item with inner block NBT
+    // MIDDLE-CLICK
     // ========================================================================
 
     @Override
