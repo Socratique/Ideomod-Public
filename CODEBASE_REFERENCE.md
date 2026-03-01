@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-02-28 (behavioral delegation, immovable inner blocks, EntityMovementMixin)*
+*Last updated: 2026-03-01 (backward walk grab immunity fix: call-pair toggle)*
 
 ---
 
@@ -32,7 +32,10 @@ com.ideomancer.ideomod
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- frame/
   |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
-  |     |     |-- FrameMaterial.java           Enum: IRON, COPPER. Material type for frame matching.
+  |     |     |                                Static isActive(BlockState) helper.
+  |     |     |-- FrameMaterial.java           Data-carrying enum: IRON, COPPER. displayName,
+  |     |     |                                registryPrefix, item registry. Single source for
+  |     |     |                                material-specific lookups.
   |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE. Passive conductor.
   |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
   |     |     |-- FrameabilityHelper.java      Tag-driven whitelist for frameable blocks (#ideomod:frameable_blocks)
@@ -42,27 +45,41 @@ com.ideomancer.ideomod
   |     |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
   |     |     \-- FramedBlockLoot.java         Helper for manual drop creation
   |     |-- machine/
-  |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI
+  |     |     |-- IMachineFamily.java          Interface: Machine Family marker. Static helpers
+  |     |     |                                isMachineFamily(Block), canMachineFamilyStickTo().
+  |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI. Implements IMachineFamily.
   |     |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
   |     |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
-  |     |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal
-  |     |     \-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier
+  |     |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys. Implements IMachineFamily.
+  |     |     \-- MachineTrolleyBlock.java     Passive Machine Family carrier. Implements IMachineFamily.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
-  |     |     |-- BlockMoveHelper.java         General-purpose piston-style block movement
-  |     |     \-- StickinessRules.java         Rule registry (grab immunity + directional)
+  |     |     |-- BlockMoveHelper.java         General-purpose piston-style block movement.
+  |     |     |                                updateAllNeighbors() utility.
+  |     |     |-- StickinessRules.java         Rule registry (grab immunity + directional).
+  |     |     |                                Helper methods: isOddstoneType(), isFramedOddstone(),
+  |     |     |                                isActiveFrameConnection(), hasMatchingInnerSticky().
+  |     |     |-- StickyType.java              Enum: NONE, SLIME, HONEY, ODD_SLIME, ODDSTONE.
+  |     |     |                                Single source of truth for sticky classification.
+  |     |     |                                fromBlock(), of(), isExcludedFrom(), canGrab().
+  |     |     \-- MovementScanHelper.java      Shared algorithms: isOddstoneOrFramedOddstone(),
+  |     |                                      scanSympathetic(), scanStickyGroup(). Eliminates
+  |     |                                      3x duplication across mixin files.
   |     |-- piston/
   |     |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
   |     |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
   |     |     |-- OddstoneAttractorBlock.java  Pulls Oddstone at range (extends Abstract)
-  |     |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor
+  |     |     |-- RangedPistonUtil.java        Scanning + dispatch for Repulser/Attractor.
+  |     |     |                                Unified tryMove() internal method.
   |     |     \-- RangedPistonFlags.java       ThreadLocal for resolver startPos redirect
   |     \-- portal/
   |           |-- OddstonePortalBlock.java     Portal interior fill block + teleportation
   |           |-- OddstonePortalHandler.java   Activation/deactivation lifecycle (static util)
   |           |-- OddstonePortalFrameDetector.java  Frame scanning + address reading
   |           |-- OddstonePortalSavedData.java      Per-dimension portal registry (SavedData)
+  |           |-- PortalGeometry.java          Java record: portal dimensions + frame iteration.
+  |           |                                detect(), forEachOddstonePosition(), parseAxis().
   |           \-- PortalUtils.java             Corner validation, interior nav, clearing
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
@@ -79,19 +96,25 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
-  |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner
-  |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull immunity + immovable inner + sympathetic retraction save
+  |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner.
+  |     |                                      Call-pair toggle for backward walk grab immunity.
+  |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull
+  |     |                                      immunity + immovable inner. Uses MovementScanHelper.
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
-  |     |-- EntityMovementMixin.java           Entity speed/jump factor for framed blocks (soul sand, honey)
+  |     |-- EntityMovementMixin.java           Entity speed/jump factor for framed blocks.
+  |     |                                      Generic ideomod$getFramedFactor() helper.
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
   |     \-- client/
   |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
   |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
   |-- multiblock/
   |     |-- StructureDefinition.java     Abstract base for structure type rulesets
-  |     |-- StructureScanner.java        Directional pattern scanner (cluster + frame)
+  |     |-- StructureScanner.java        Strategy-based dispatcher. Map<ScanMode, ScanStrategy>.
+  |     |-- ScanStrategy.java            @FunctionalInterface for scan mode implementations.
+  |     |-- PatternScanStrategy.java     PATTERN scan mode (extracted from StructureScanner).
   |     |-- StructureResult.java         Immutable scan output (builder pattern)
-  |     |-- StructureRegistration.java   Persistent registration entry (UUID, NBT)
+  |     |-- StructureRegistration.java   Persistent registration entry (UUID, NBT).
+  |     |                                isWithinBounds() helper.
   |     |-- StructureManager.java        Per-dimension SavedData + event handling + queries
   |     |-- StructureEffectHandler.java  Interface for per-type effects
   |     |-- definitions/
@@ -116,15 +139,15 @@ com.ideomancer.ideomod
 
 ### 1. Stickiness System (see STICKINESS_SYSTEM.md for full details)
 
-Three-layer architecture for asymmetric and directional stickiness:
+Three-layer architecture for asymmetric and directional stickiness. **StickyType enum** (`block/movement/StickyType.java`) is the single source of truth for sticky block classification -- values NONE(0), SLIME(1), HONEY(2), ODD_SLIME(3), ODDSTONE(4). Provides `fromBlock()`, `of()`, `isExcludedFrom()`, `canGrab()` replacing scattered instanceof chains and magic int constants.
 
-**Layer 1 -- canStickTo()** (in each block class): Permissive type-compatibility check. Must return true for ANY pair where either direction of interaction is wanted, because Forge checks bidirectionally (both A->B AND B->A must agree).
+**Layer 1 -- canStickTo()** (in each block class): Permissive type-compatibility check. Now uses `StickyType.of()` and `StickyType.isExcludedFrom()` for mutual exclusion logic. Must return true for ANY pair where either direction of interaction is wanted, because Forge checks bidirectionally (both A->B AND B->A must agree).
 
-**Layer 2 -- Grab Immunity** (StickinessRules + mixin): Blocks specific grabber->target pairs. E.g. "Slime cannot grab Oddstone." Runs after canStickTo passes.
+**Layer 2 -- Grab Immunity** (StickinessRules + mixin): Blocks specific grabber->target pairs. E.g. "Slime cannot grab Oddstone." Runs after canStickTo passes. Rules consolidated using `StickinessRules` helper methods (`isOddstoneType()`, `isFramedOddstone()`, `isActiveFrameConnection()`, `hasMatchingInnerSticky()`).
 
 **Layer 3 -- Directional Rules** (StickinessRules + mixin): Blocks ALL grabs by a block when push direction doesn't match (Odd Slime only sticky when pushed in FACING dir).
 
-Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin`.
+Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin` at two points: (A) HEAD of addBlockLine during branching — full grab immunity + directional checks; (B) @Redirect on canStickTo in backward walk — directional checks on both calls, grab immunity on Call 1 only (front block reaching back) via call-pair toggle.
 
 **Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock):
 
@@ -141,9 +164,9 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 ### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
-**Architecture**: Three-layer system. BlockMoveHelper provides general-purpose piston-style movement. RangedPistonUtil adds scanning. AbstractRangedPistonBlock adds shared block logic. All use vanilla's block event system for client-server sync (see BLOCK_EVENT_LESSON.md).
+**Architecture**: Three-layer system. BlockMoveHelper provides general-purpose piston-style movement. RangedPistonUtil adds scanning. AbstractRangedPistonBlock adds shared block logic. All use vanilla's block event system for client-server sync (see BLOCK_EVENT_LESSON.md). **MovementScanHelper** (`block/movement/MovementScanHelper.java`) provides shared scanning algorithms used by all three mixin files -- `isOddstoneOrFramedOddstone()`, `scanSympathetic()`, `scanStickyGroup()` -- eliminating 3x code duplication.
 
-**BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)**: Single entry point for any system needing piston-style block movement. Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: set ThreadLocal target -> create resolver -> resolve -> safety checks -> snapshot states -> save IPistonMovable data (server-only, step 2.5) -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
+**BlockMoveHelper.moveBlockAt(level, initiatorPos, targetPos, pushDir)**: Single entry point for any system needing piston-style block movement. Mirrors vanilla `PistonBaseBlock.moveBlocks()` exactly. Steps: set ThreadLocal target -> create resolver -> resolve -> safety checks -> snapshot states -> save IPistonMovable data (server-only, step 2.5) -> capture MovingFrameData for transit rendering (client-only, step 2.6) -> destroy breakables -> place MovingPistonBlock at destinations (flag 68) -> clear vacated sources (flag 82) -> neighbor updates -> sound.
 
 **Safety checks**: (1) toPush non-empty and contains target, (2) toPush doesn't contain initiator, (3) no destination equals initiator position.
 
@@ -165,7 +188,7 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 ### 3. Portal System
 
-**Components**: OddstonePortalHandler (lifecycle) -> OddstonePortalFrameDetector (scanning) -> OddstonePortalSavedData (persistence) -> OddstonePortalBlock (teleportation).
+**Components**: OddstonePortalHandler (lifecycle) -> OddstonePortalFrameDetector (scanning) -> OddstonePortalSavedData (persistence) -> OddstonePortalBlock (teleportation). **PortalGeometry** record (`block/portal/PortalGeometry.java`) consolidates portal dimension scanning and frame iteration that was previously duplicated across 3+ files. Provides `detect()`, `forEachOddstonePosition()`, `parseAxis()`, `getFrameCorners()`.
 
 **Frame rules**: Rectangular frame of Oddstone blocks with corner blocks (crafted mineral blocks from PORTAL_CORNER_BLOCKS tag). Interior 3-19 blocks wide/tall. ALL Oddstone in frame must be redstone-powered.
 
@@ -183,9 +206,9 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 ### 4. Multiblock Structure Framework [WIP]
 
-**Architecture**: Registration-based system. Structures are world data managed by StructureManager (per-dimension SavedData). Individual blocks don't know they're part of a structure.
+**Architecture**: Registration-based system. Structures are world data managed by StructureManager (per-dimension SavedData). Individual blocks don't know they're part of a structure. Uses **Strategy Pattern** for scan modes -- each scan algorithm is a `ScanStrategy` implementation registered with StructureScanner.
 
-**Components**: StructureDefinition (abstract ruleset) -> StructureScanner (pattern matching) -> StructureResult (scan output) -> StructureManager (registration + events) -> StructureRegistration (persistent entry) -> StructureEffectHandler (per-type effects).
+**Components**: StructureDefinition (abstract ruleset) -> StructureScanner (strategy dispatcher) -> ScanStrategy (interface) -> PatternScanStrategy (PATTERN mode impl) -> StructureResult (scan output) -> StructureManager (registration + events) -> StructureRegistration (persistent entry) -> StructureEffectHandler (per-type effects).
 
 **StructureManager data structures**:
 - `structures`: UUID -> StructureRegistration (all registered structures)
@@ -198,7 +221,7 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 **Core detection**: Two complementary approaches: (1) block entity map iteration from nearby chunks (cheap, catches furnaces), (2) event-populated trackedCores set (catches future non-block-entity cores). No chunk scanning on load.
 
-**Scanner**: Directional pattern scanner. Phase 1: flood-fill cluster of adjacent same-type cores. Phase 2: compute frame bounds from cluster + facing. Phase 3: validate frame layers (back wall, sides, top, bottom) + front face air openings. Normalizes bounds and core position to clusterMin.
+**Scanner**: Strategy-based dispatch via `Map<ScanMode, ScanStrategy>`. Current implementation: `PatternScanStrategy` (extracted from old monolithic scanner). Phase 1: flood-fill cluster of adjacent same-type cores. Phase 2: compute frame bounds from cluster + facing. Phase 3: validate frame layers (back wall, sides, top, bottom) + front face air openings. Normalizes bounds and core position to clusterMin. Adding new scan modes (PROXIMITY, PROXIMITY_WALLED) requires only a new ScanStrategy implementation -- no modification to StructureScanner.
 
 **Current structure type -- Furnace Array**:
 - Cores: furnace, blast_furnace, smoker (all vanilla furnace types)
@@ -219,13 +242,15 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 
 ### 6. Machine Frame (3 features + Machine Family base)
 
-Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock.
+Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock. Implements **IMachineFamily** interface (as do MachineTrackBlock and MachineTrolleyBlock).
 
-1. **Selective stickiness**: Only actively grabs other Machine Family blocks and Frame Family blocks. Permissive canStickTo via `canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
+1. **Selective stickiness**: Only actively grabs other Machine Family blocks and Frame Family blocks. Permissive canStickTo via `IMachineFamily.canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
 2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
 3. **Block entity with GUI**: MachineFrameBlockEntity with single item slot. IPistonMovable implementation preserves inventory through all piston move types. onRemove() drops contents only when broken (movedByPiston guard).
 
-**Static helpers**: `isMachineFamily(Block)`, `isRedstoneConduit(Block)`, `canMachineFamilyStickTo(BlockState)` -- used by all Machine Family blocks. canMachineFamilyStickTo includes Frame Family via `FrameActivation.isFrameFamily()`.
+**IMachineFamily interface** (`block/machine/IMachineFamily.java`): Marker interface for Machine Family blocks. Provides static helpers `isMachineFamily(Block)` (checks `instanceof IMachineFamily`) and `canMachineFamilyStickTo(BlockState)`. All three machine blocks implement this interface, eliminating copy-pasted stickiness logic. Adding a new machine family block: implement the interface, stickiness comes free.
+
+**Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- blocks that conduct POWER (MachineFrameBlock, MachineTrackBlock).
 
 **Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.recalculate(level, pos)` to trigger frame network wipe-and-rebuild.
 
@@ -255,7 +280,7 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~19 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding, stepOn, fallOn, updateEntityAfterFallOn, entityInside all preserved. Speed/jump factor via EntityMovementMixin. Push reaction (immovable inners) via PistonBaseBlockMixin Feature 4 + Resolver Feature 5.
 2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
-4. **INNER_STICKY property** (IntegerProperty 0-4): 0=none, 1=slime, 2=honey, 3=odd_slime, 4=oddstone. Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). Enables inner sticky behavior at blockstate level.
+4. **INNER_STICKY property** (IntegerProperty 0-4): Maps to `StickyType` enum values (NONE=0, SLIME=1, HONEY=2, ODD_SLIME=3, ODDSTONE=4). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner() which delegates to `StickyType.fromBlock()`. Enables inner sticky behavior at blockstate level.
 5. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
 6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). STICKY_ODDSTONE mirrors real oddstone: grabs all slime types + oddstone, not normal blocks. Grab immunity Rules 1 and 4 have carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
 7. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance check in PistonStructureResolverMixin. No blanket directional rule registered.
@@ -263,11 +288,11 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 9. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
 10. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
 11. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
-12. **Middle-click**: getCloneItemStack() returns proper NBT ItemStack.
+12. **Middle-click**: getCloneItemStack() uses `frameMaterial.getFramedBlockItem()` for proper item lookup.
 
 **FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~290 vanilla blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
 
-**FramedBlockItem**: Custom BlockItem. Dynamic getName() composing "Iron Framed Stone" etc. Static createStack() for NBT setup.
+**FramedBlockItem**: Custom BlockItem. Dynamic getName() using `frameMaterial.getDisplayName()`. Static createStack() delegates to `FramedBlockEntity.setInnerBlockIdOnStack()` for NBT setup. `getInnerBlockId()` delegates to `FramedBlockEntity.getInnerBlockIdFromStack()`.
 
 **MovingFrameData**: Client-side ConcurrentHashMap<BlockPos, FrameTransitInfo>. FrameTransitInfo record contains innerBlockId, facing, innerSticky. Populated by PistonBaseBlockClientMixin before vanilla destroys block entities. Read by transit renderer mixin.
 
@@ -327,10 +352,10 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 1. **OddstoneConfig.reloadConfig() not wired to command** -- config can be reloaded programmatically but there's no in-game command to trigger it. Low priority.
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
-3. **Framed block transit rendering (Trolley/Repulser/Attractor)** -- Inner block doesn't render during non-piston moves. Client mixin only covers vanilla pistons; BlockMoveHelper path needs equivalent capture.
+3. ~~**Framed block transit rendering (Trolley/Repulser/Attractor)**~~ -- FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.
 4. **Framed blocks not grabbed by slime during Repulser/Attractor moves** -- Slime stickiness may not propagate correctly through BlockMoveHelper path.
 5. **Frame inside-face rendering** -- Frame JSON models need inverted cuboid for visible inner faces.
-6. **Sympathetic framed oddstone transit rendering** -- Inner oddstone doesn't render during piston transit for sympathetically moved framed oddstone. Client MovingFrameData may not capture sympathetically linked blocks.
-7. **Sympathetic retraction with machine-activated framed blocks** -- When sympathetically moved framed oddstone group includes machine-activated framed blocks, retraction causes inner block data loss. Same class as 2026-02-28 Bug Fix 4 but with machine activation across sympathetic links.
+6. ~~**Sympathetic framed oddstone transit rendering**~~ -- FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.
+7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
 
 Written by Claude, directed and guided by The Ideomancer.

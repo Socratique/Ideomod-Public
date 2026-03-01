@@ -48,7 +48,7 @@ public class FramedBlockItem extends BlockItem {
         if (innerBlockId != null) {
             Block innerBlock = BuiltInRegistries.BLOCK.get(innerBlockId);
             if (innerBlock != Blocks.AIR) {
-                String frameName = frameMaterial == FrameMaterial.IRON ? "Iron" : "Copper";
+                String frameName = frameMaterial.getDisplayName();
                 Component innerName = innerBlock.getName();
                 return Component.literal(frameName + " Framed " + innerName.getString());
             }
@@ -64,44 +64,34 @@ public class FramedBlockItem extends BlockItem {
     /**
      * Get the inner block's ResourceLocation from an item stack's NBT.
      *
-     * The data lives at: stack -> tag -> BlockEntityTag -> InnerBlock
+     * Delegates to FramedBlockEntity.getInnerBlockIdFromStack() to centralize
+     * the NBT path handling.
      *
      * @return inner block ID, or null if not set
      */
     @Nullable
     public static ResourceLocation getInnerBlockId(ItemStack stack) {
-        CompoundTag tag = stack.getTag();
-        if (tag != null && tag.contains("BlockEntityTag")) {
-            CompoundTag beTag = tag.getCompound("BlockEntityTag");
-            if (beTag.contains(FramedBlockEntity.TAG_INNER_BLOCK)) {
-                return new ResourceLocation(beTag.getString(FramedBlockEntity.TAG_INNER_BLOCK));
-            }
-        }
-        return null;
+        return FramedBlockEntity.getInnerBlockIdFromStack(stack);
     }
 
     /**
      * Create an ItemStack for this framed block item with the given inner block.
+     * Converts the Block to a ResourceLocation and delegates to the ResourceLocation overload.
      *
      * @param framedBlockItem The FramedBlockItem (iron or copper)
      * @param innerBlock      The block to wrap
      * @return Configured ItemStack with proper NBT
      */
     public static ItemStack createStack(Item framedBlockItem, Block innerBlock) {
-        ItemStack stack = new ItemStack(framedBlockItem);
         ResourceLocation blockId = BuiltInRegistries.BLOCK.getKey(innerBlock);
-
-        CompoundTag beTag = new CompoundTag();
-        beTag.putString(FramedBlockEntity.TAG_INNER_BLOCK, blockId.toString());
-
-        CompoundTag itemTag = stack.getOrCreateTag();
-        itemTag.put("BlockEntityTag", beTag);
-
-        return stack;
+        return createStack(framedBlockItem, blockId);
     }
 
     /**
      * Create an ItemStack for this framed block item with the given inner block ID.
+     *
+     * Delegates to FramedBlockEntity.setInnerBlockIdOnStack() to centralize
+     * the NBT path handling.
      *
      * @param framedBlockItem The FramedBlockItem (iron or copper)
      * @param innerBlockId    The inner block's registry name
@@ -109,13 +99,7 @@ public class FramedBlockItem extends BlockItem {
      */
     public static ItemStack createStack(Item framedBlockItem, ResourceLocation innerBlockId) {
         ItemStack stack = new ItemStack(framedBlockItem);
-
-        CompoundTag beTag = new CompoundTag();
-        beTag.putString(FramedBlockEntity.TAG_INNER_BLOCK, innerBlockId.toString());
-
-        CompoundTag itemTag = stack.getOrCreateTag();
-        itemTag.put("BlockEntityTag", beTag);
-
+        FramedBlockEntity.setInnerBlockIdOnStack(stack, innerBlockId);
         return stack;
     }
 }

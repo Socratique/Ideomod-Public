@@ -1,5 +1,279 @@
 # Ideomod Changelog
 
+## [2026-03-01] Backward Walk Grab Immunity Fix — Call-Pair Toggle
+
+Fixed a bug where sticky blocks could not grab blocks behind them in the push
+axis during piston, Repulser, and Attractor moves. Oddstone couldn't hold slime
+behind it, and slime couldn't hold framed blocks behind it. Sideways grabs
+(branching) worked correctly — only the backward walk (chain cohesion along the
+push axis) was affected.
+
+### Root cause
+
+Vanilla's backward walk in addBlockLine checks canStickTo in BOTH directions:
+  oldState.canStickTo(blockstate) && blockstate.canStickTo(oldState)
+
+Our @Redirect intercepted BOTH calls and applied grab immunity to each one.
+When oddstone (front) walked backward to slime (behind):
+  Call 1: oddstone.canStickTo(slime) -> passed
+  Call 2: slime.canStickTo(oddstone) -> passed canStickTo, but then
+          isGrabBlocked(slime, oddstone) hit Rule 1 (non-oddstone can't grab
+          oddstone) -> BLOCKED
+Since vanilla ANDs both results, the chain broke.
+
+### The fix: call-pair toggle
+
+Added ThreadLocal<Boolean> ideomod$firstCanStickToCall that tracks which call
+in the pair we're on:
+
+  Call 1 (first=true):  self=front block (oldState), other=behind block
+    -> Grab immunity IS checked. The front block is the active grabber
+       reaching backward. Example: slime reaching back to oddstone -> blocked.
+
+  Call 2 (first=false): self=behind block, other=front block (oldState)
+    -> Grab immunity is NOT checked. This is the behind block's passive
+       compatibility response. Only canStickTo + directional rules apply.
+
+The toggle flips on each call and resets to true after the pair completes
+(or when Call 1 returns false, since vanilla short-circuits the &&).
+
+### Debugging journey
+
+First attempt removed grab immunity from the backward walk entirely.
+This overcorrected — slime could then chain backward to oddstone because
+Call 1 (slime->oddstone) went unchecked. The toggle approach is the correct
+granularity: check grab immunity on the front block reaching back, skip it
+on the behind block responding.
+
+### Removed: isActivePuller exemption
+
+The isActivePuller() helper method and its special-case logic in the backward
+walk redirect were removed. This was a workaround for the original bug —
+it exempted Odd Slime from grab immunity in the backward walk so it could
+pull blocks behind it. With the toggle fix, this exemption is unnecessary:
+Odd Slime's Call 1 (reaching back) passes normally, and Call 2 (behind block
+responding) skips grab immunity entirely.
+
+Removed imports: OddSlimeBlock, DirectionalBlock, ModBlocks, OddstoneBlock
+(all were only used by the removed isActivePuller helper or were already unused).
+
+### Files changed:
+- mixin/PistonStructureResolverMixin.java
+  - Added ideomod$firstCanStickToCall ThreadLocal toggle
+  - Rewrote ideomod$checkCanStickToWithRules to use toggle
+  - Removed ideomod$isActivePuller helper
+  - Removed 4 unused imports
+  - Updated class javadoc (Features 1B description, history section)
+
+### Documentation updates:
+- IDEOMOD_CHANGELOG.txt: this entry
+- IDEOMOD_DOCUMENTATION.md: updated section 5 (PistonStructureResolverMixin)
+  with call-pair toggle description, updated Custom Fields, updated Feature 1B
+  section, updated injection point summary, struck Known Issue #4, updated
+  timestamp
+- CODEBASE_REFERENCE.md: updated PistonStructureResolverMixin description,
+  updated timestamp
+- STICKINESS_SYSTEM.md: updated backward walk enforcement description
+- ROADMAP_STATUS.md: marked session item #3 as DONE
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
+## [2026-02-28d] Codebase Refactoring — 9 Proposals Implemented
+
+Implemented all 9 refactoring proposals from REFACTORING_PROPOSALS.md across 3 phases.
+Pure structural improvements — no behavioral changes. All existing stickiness matrix
+interactions, portal behavior, movement systems, and multiblock detection remain identical.
+
+### Phase 1: Low-Risk Foundations
+
+**Proposal 5 — FrameMaterial Data-Driven Expansion**
+Enriched FrameMaterial enum with displayName, registryPrefix, and item registry.
+FramedBlockItem.getName() now uses frameMaterial.getDisplayName() instead of ternary.
+FramedBlock.getCloneItemStack() uses frameMaterial.getFramedBlockItem() instead of
+hardcoded material checks. Adding a third material now requires only the enum value
++ block/item registration — all lookups use the enum automatically.
+Files: FrameMaterial.java, FramedBlockItem.java, FramedBlock.java, FramedBlockRecipe.java, Ideomod.java
+
+**Proposal 2 — IMachineFamily Interface**
+New interface block/machine/IMachineFamily.java. All three machine blocks (MachineFrameBlock,
+MachineTrackBlock, MachineTrolleyBlock) implement it. Static isMachineFamily(Block) now
+checks instanceof IMachineFamily instead of listing concrete classes. Shared
+canMachineFamilyStickTo() eliminates copy-pasted stickiness logic.
+Files: IMachineFamily.java (new), MachineFrameBlock.java, MachineTrackBlock.java, MachineTrolleyBlock.java
+
+**Proposal 8 — Mixin Helper Extraction**
+8a: FramedBlock.hasImmovableInner() static method centralizes the immovable inner block check.
+8b: IFrameBlock.isActive(BlockState) static helper handles both FrameBlock and FramedBlock
+ACTIVE properties, replacing duplicated 5-line blocks in stickiness rules.
+8c: EntityMovementMixin generic ideomod$getFramedFactor() unifies speed/jump factor retrieval.
+Files: FramedBlock.java, IFrameBlock.java, EntityMovementMixin.java, Ideomod.java
+
+**Proposal 9 — Minor Cleanups**
+9a: ModColorHandlers.java — added TODO comment for Machine Conductor specialization tracking.
+9b: FramedBlockEntity — centralized NBT helpers (getInnerBlockIdFromStack, setInnerBlockIdOnStack).
+9c: FramedBlockItem.createStack() — Block overload delegates to ResourceLocation overload.
+9d: StructureRegistration — extracted isWithinBounds() helper from duplicated bounds checks.
+9e: RangedPistonUtil — unified tryRepulse/tryAttract into private tryMove() method.
+9f: (deferred — registry ID constants low priority)
+9g: BlockMoveHelper — added updateAllNeighbors() utility. MachineTrackBlock uses it.
+Files: Multiple (see individual items)
+
+### Phase 2: Structural Improvements
+
+**Proposal 3 — Shared MovementScanHelper**
+New utility block/movement/MovementScanHelper.java. Three static methods replacing
+3x-duplicated algorithms across mixin files:
+- isOddstoneOrFramedOddstone(Level, BlockPos) — single implementation for all mixins
+- scanSympathetic(Level, Set<BlockPos>, int radius) — returns Set<BlockPos> of linked oddstone
+- scanStickyGroup(Level, BlockPos, int maxSize) — BFS sticky group detection
+PistonBaseBlockMixin, PistonBaseBlockClientMixin, PistonStructureResolverMixin all delegate here.
+Files: MovementScanHelper.java (new), PistonBaseBlockMixin.java, PistonBaseBlockClientMixin.java, PistonStructureResolverMixin.java
+
+**Proposal 6 — Portal Geometry Consolidation**
+New Java record block/portal/PortalGeometry.java. Consolidates portal dimension scanning
+and frame iteration duplicated across OddstonePortalBlock, OddstonePortalHandler, and
+PortalUtils. Provides detect(), getFrameCorners(), forEachOddstonePosition(), parseAxis().
+OddstonePortalSavedData.PortalEntry gains getAxisAsEnum() convenience method.
+Files: PortalGeometry.java (new), OddstonePortalBlock.java, OddstonePortalHandler.java, OddstonePortalSavedData.java
+
+**Proposal 7 — Multiblock Scan Strategy Pattern**
+New interface multiblock/ScanStrategy.java (@FunctionalInterface). New class
+PatternScanStrategy.java extracted from StructureScanner's monolithic scanPattern().
+StructureScanner now holds Map<ScanMode, ScanStrategy> and dispatches via strategy lookup.
+Adding new scan modes (PROXIMITY, PROXIMITY_WALLED) requires only a new ScanStrategy
+implementation — no modification to StructureScanner core.
+Files: ScanStrategy.java (new), PatternScanStrategy.java (new), StructureScanner.java
+
+### Phase 3: Core Refactors
+
+**Proposal 1 — StickyType Enum Registry**
+New enum block/movement/StickyType.java. Values: NONE(0), SLIME(1), HONEY(2),
+ODD_SLIME(3), ODDSTONE(4). Single source of truth replacing magic int constants and
+instanceof chains across 8+ files. Key methods: fromBlock(), of(), isExcludedFrom(),
+canGrab(), isVanillaSticky(). FramedBlock.canStickTo() simplified from 48-line switch/case
+to ~10 lines. OddstoneBlock.canStickTo() simplified to 2 lines.
+Files: StickyType.java (new), FramedBlock.java, FramedBlockEntity.java, OddstoneBlock.java
+
+**Proposal 4 — Stickiness Rule Consolidation**
+Grab immunity rules in Ideomod.registerStickinessRules() restructured using StickyType enum
+and StickinessRules helper methods. New helpers: isOddstoneType(), isFramedOddstone(),
+isActiveFrameConnection(), hasMatchingInnerSticky(). Rule 1 (oddstone protection) and Rule 4
+(frame family immunity) significantly simplified. IFrameBlock.isActive() replaces duplicated
+active-frame resolution blocks.
+Files: Ideomod.java, StickinessRules.java
+
+### New files created (6):
+- block/machine/IMachineFamily.java
+- block/movement/StickyType.java
+- block/movement/MovementScanHelper.java
+- block/portal/PortalGeometry.java
+- multiblock/ScanStrategy.java
+- multiblock/PatternScanStrategy.java
+
+### Files modified (20+):
+FrameMaterial, FramedBlock, FramedBlockEntity, FramedBlockItem, FramedBlockRecipe,
+IFrameBlock, MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock, OddstoneBlock,
+StickinessRules, BlockMoveHelper, RangedPistonUtil, Ideomod, PistonBaseBlockMixin,
+PistonBaseBlockClientMixin, PistonStructureResolverMixin, EntityMovementMixin,
+StructureScanner, StructureRegistration, OddstonePortalBlock, OddstonePortalHandler,
+OddstonePortalSavedData, ModColorHandlers
+
+Written by Claude, directed and guided by The Ideomancer.
+
+## [2026-02-28c] Framed Blocks — Transit Rendering + Sympathetic Data Fixes
+
+Resolved three framed block bugs: sympathetic retraction data loss (Priority 1),
+transit rendering during BlockMoveHelper moves (visual), and sympathetic transit
+rendering during piston retraction (visual). All three shared a common pattern:
+code paths that handled the directly-moved blocks but missed blocks added via
+sympathetic links or the BlockMoveHelper path.
+
+### Bug Fix 1: Sympathetic retraction with machine-activated framed blocks [FIXED]
+
+File: mixin/PistonBaseBlockMixin.java (scanSympathetic method)
+
+Issue: When a sticky piston retracts a group containing sympathetically linked
+oddstone, any framed blocks attached to the REMOTE sympathetic oddstone via
+machine activation lost their inner block data. scanSympathetic() saved the
+remote oddstone itself but never scanned its sticky group for additional
+IPistonMovable blocks (machine frames, activated framed blocks, etc.).
+
+Root cause: scanSympathetic() called saveBlockEntityAt() on each sympathetically
+found oddstone but did NOT call scanStickyGroup() on it. The blocks attached
+to the remote oddstone via stickiness were never saved, so vanilla's block
+entity destruction during the move wiped their data permanently.
+
+Fix: After saving each sympathetically found oddstone, check if it's sticky
+(isStickyBlock()) and if so call scanStickyGroup() to walk and save all
+attached blocks. savedPositions is shared between both methods, preventing
+duplicates.
+
+### Bug Fix 2: Framed block transit rendering — BlockMoveHelper path [FIXED]
+
+File: block/movement/BlockMoveHelper.java (new step 2.6)
+
+Issue: Framed blocks moved by Repulser, Attractor, or Machine Track/Trolley
+had invisible inner blocks during the 2-tick sliding animation. The client-side
+transit renderer (PistonMovingBlockEntityRendererMixin) reads from MovingFrameData,
+but MovingFrameData was only populated by PistonBaseBlockClientMixin which hooks
+into vanilla's PistonBaseBlock.moveBlocks(). BlockMoveHelper has its own movement
+pipeline and never calls moveBlocks().
+
+Fix: Added step 2.6 in BlockMoveHelper — on the client side, iterates the same
+toPush list (which already includes sympathetic blocks from the resolver mixin)
+and stores FrameTransitInfo in MovingFrameData for any framed blocks found.
+Mirrors the capture pattern from PistonBaseBlockClientMixin.
+
+New imports added to BlockMoveHelper: FramedBlock, FramedBlockEntity,
+MovingFrameData, ResourceLocation.
+
+### Bug Fix 3: Sympathetic transit rendering during piston retraction [FIXED]
+
+File: mixin/client/PistonBaseBlockClientMixin.java
+
+Issue: When a vanilla sticky piston retracts a group containing sympathetically
+linked oddstone, framed blocks on the remote sympathetic group had invisible
+inner blocks during transit. The client capture (ideomod$captureRetraction)
+used a BFS to find the sticky group but did not scan for sympathetic links,
+so remote framed blocks were never captured into MovingFrameData.
+
+Fix: Added three helper methods:
+- ideomod$captureSympathetic() — mirrors server-side scanSympathetic(). Scans
+  from each oddstone in allBlocks along all 6 axes for sympathetically linked
+  oddstone. When found, also scans the remote oddstone's sticky group.
+- ideomod$scanStickyGroupInto() — BFS sticky group scan that adds found blocks
+  to the shared allBlocks set for subsequent capture.
+- ideomod$isOddstoneOrFramedOddstone() — checks block identity for sympathetic
+  eligibility.
+
+New imports: OddstoneBlock, OddstoneConfig.
+
+### Pattern note:
+
+All three bugs shared the same structural gap: code that handled direct/adjacent
+blocks but missed blocks added via sympathetic links at range. The fixes follow
+the same pattern — after finding a sympathetic target, also scan its sticky
+group. This pattern now applies consistently across:
+- Server-side BE data save (PistonBaseBlockMixin.scanSympathetic)
+- Client-side render data capture (PistonBaseBlockClientMixin.ideomod$captureSympathetic)
+- BlockMoveHelper gets sympathetic coverage for free via the resolver
+
+### Files changed:
+- mixin/PistonBaseBlockMixin.java — scanSympathetic() calls scanStickyGroup()
+  on each found sympathetic oddstone
+- block/movement/BlockMoveHelper.java — added step 2.6 client-side
+  MovingFrameData capture; new imports
+- mixin/client/PistonBaseBlockClientMixin.java — added sympathetic scanning
+  to retraction capture; three new helper methods; new imports
+
+### Files unchanged:
+- client/render/MovingFrameData.java (works as-is)
+- mixin/client/PistonMovingBlockEntityRendererMixin.java (works as-is)
+- mixin/PistonStructureResolverMixin.java (no changes needed)
+
+Written by Claude, directed and guided by The Ideomancer.
+
 ## [2026-02-28b] Framed Blocks — Behavioral Delegation + Immovable Inner Blocks
 
 Implemented entity interaction delegation for framed blocks and framed obsidian

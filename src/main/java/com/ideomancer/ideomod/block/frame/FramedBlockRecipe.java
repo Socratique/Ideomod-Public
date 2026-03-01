@@ -53,12 +53,10 @@ public class FramedBlockRecipe extends CustomRecipe {
 
         // Determine which frame material
         Block frameBlock = ((BlockItem) result.frameStack.getItem()).getBlock();
-        Item framedBlockItem;
-        if (frameBlock == ModBlocks.IRON_FRAME.get()) {
-            framedBlockItem = ModItems.IRON_FRAMED_BLOCK.get();
-        } else {
-            framedBlockItem = ModItems.COPPER_FRAMED_BLOCK.get();
+        if (!(frameBlock instanceof com.ideomancer.ideomod.block.frame.IFrameBlock frameBlockTyped)) {
+            return ItemStack.EMPTY;
         }
+        Item framedBlockItem = frameBlockTyped.getFrameMaterial().getFramedBlockItem();
 
         // Get the inner block
         Block innerBlock = ((BlockItem) result.blockStack.getItem()).getBlock();

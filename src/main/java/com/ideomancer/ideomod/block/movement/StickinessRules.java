@@ -8,6 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.function.BiPredicate;
 import com.ideomancer.ideomod.block.frame.FrameActivation;
+import com.ideomancer.ideomod.block.OddstoneBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.IFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 
 /**
  * Registry for one-way (asymmetric) and directional stickiness rules.
@@ -140,5 +144,57 @@ public class StickinessRules {
      */
     public static boolean isFrameFamily(Block block) {
         return FrameActivation.isFrameFamily(block);
+    }
+
+    // ========================================================================
+    // STICKINESS HELPER METHODS
+    // ========================================================================
+
+    /**
+     * Check if a BlockState is an oddstone-type block (real OddstoneBlock
+     * or FramedBlock with INNER_STICKY=ODDSTONE).
+     */
+    public static boolean isOddstoneType(BlockState state) {
+        if (state.getBlock() instanceof OddstoneBlock) return true;
+        if (state.getBlock() instanceof FramedBlock) {
+            return state.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE;
+        }
+        return false;
+    }
+
+    /**
+     * Check if a BlockState is a framed oddstone (FramedBlock with INNER_STICKY=ODDSTONE).
+     * Does NOT match bare OddstoneBlock.
+     */
+    public static boolean isFramedOddstone(BlockState state) {
+        return state.getBlock() instanceof FramedBlock
+            && state.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE;
+    }
+
+    /**
+     * Check if a grabber is an ACTIVE same-material IFrameBlock that can connect
+     * to a framed oddstone target. This is the shared carve-out logic used in
+     * Rules 1 and 4 for allowing frame network connections to framed oddstone.
+     */
+    public static boolean isActiveFrameConnection(BlockState grabber, BlockState target) {
+        if (!(grabber.getBlock() instanceof IFrameBlock grabberFrame)) return false;
+        if (!(target.getBlock() instanceof FramedBlock targetFramed)) return false;
+        if (!IFrameBlock.isActive(grabber)) return false;
+        return grabberFrame.getFrameMaterial() == targetFramed.getFrameMaterial();
+    }
+
+    /**
+     * Check if a FramedBlock grabber's INNER_STICKY matches or covers the target type.
+     * "Covers" means: Framed Oddstone (INNER_STICKY=ODDSTONE) covers all sticky types
+     * (since real Oddstone is the universal grabber).
+     */
+    public static boolean hasMatchingInnerSticky(BlockState grabber, StickyType targetType) {
+        if (!(grabber.getBlock() instanceof FramedBlock)) return false;
+        StickyType grabberType = StickyType.fromInnerStickyValue(
+            grabber.getValue(FramedBlock.INNER_STICKY));
+        if (grabberType == targetType) return true;
+        // Framed Oddstone covers all sticky types (universal grabber)
+        if (grabberType == StickyType.ODDSTONE && targetType != StickyType.NONE) return true;
+        return false;
     }
 }

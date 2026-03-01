@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
@@ -90,21 +91,8 @@ public class OddstoneBlock extends Block {
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        if (other.getBlock() instanceof SlimeBlock) return true;
-        if (other.getBlock() instanceof HoneyBlock) return true;
-        if (other.getBlock() instanceof OddSlimeBlock) return true;
-        if (other.getBlock() instanceof OddstoneBlock) return true;
-
-        // Framed versions: check INNER_STICKY for matching types
-        if (other.getBlock() instanceof FramedBlock) {
-            int otherSticky = other.getValue(FramedBlock.INNER_STICKY);
-            if (otherSticky == FramedBlock.STICKY_SLIME) return true;
-            if (otherSticky == FramedBlock.STICKY_HONEY) return true;
-            if (otherSticky == FramedBlock.STICKY_ODD_SLIME) return true;
-            if (otherSticky == FramedBlock.STICKY_ODDSTONE) return true;
-        }
-
-        return false;
+        StickyType otherType = StickyType.of(other);
+        return StickyType.ODDSTONE.canGrab(otherType) && otherType != StickyType.NONE;
     }
 
     // ========================================================================

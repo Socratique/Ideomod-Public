@@ -67,6 +67,14 @@ public class OddstonePortalSavedData extends SavedData {
         public BlockPos getPartnerPos() {
             return partnerPos;
         }
+
+        /**
+         * Parse the axis string ("X" or "Z") to Direction.Axis enum.
+         * Replaces the scattered inline checks across portal code.
+         */
+        public net.minecraft.core.Direction.Axis getAxisAsEnum() {
+            return PortalGeometry.parseAxis(this.axis);
+        }
     }
 
     // All registered portals, keyed by their position (bottom-left corner)

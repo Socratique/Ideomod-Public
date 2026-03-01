@@ -209,8 +209,7 @@ public class OddstonePortalBlock extends Block {
         vFraction = Math.max(0.0, Math.min(1.0, vFraction));
 
         // -- Step 3: Find PARTNER portal's interior bounds --
-        Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
-                ? Direction.Axis.X : Direction.Axis.Z;
+        Direction.Axis partnerAxis = partnerEntry.getAxisAsEnum();
         Direction partnerHDir = PortalUtils.getHorizontalDir(partnerAxis);
 
         // Find a portal block in the partner
@@ -356,29 +355,15 @@ public class OddstonePortalBlock extends Block {
      */
     @Nullable
     private PortalBounds findPortalBounds(Level level, BlockPos portalBlock, Direction hDir) {
-        // Find bottom-left of interior
-        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlock, hDir);
+        // Use PortalGeometry to detect the portal dimensions
+        PortalGeometry geom = PortalGeometry.detect(level, portalBlock);
+        if (geom == null) return null;
 
-        // Measure width
-        int width = 0;
-        while (level.getBlockState(bottomLeft.relative(hDir, width))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            width++;
-        }
-
-        // Measure height
-        int height = 0;
-        while (level.getBlockState(bottomLeft.above(height))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            height++;
-        }
-
-        if (width == 0 || height == 0) return null;
-
-        // Get the axis this portal uses
-        BlockState blState = level.getBlockState(bottomLeft);
-        if (!blState.is(ModBlocks.ODDSTONE_PORTAL.get())) return null;
-        Direction.Axis axis = blState.getValue(AXIS);
+        // Get the axis and dimensions
+        Direction.Axis axis = geom.axis();
+        BlockPos bottomLeft = geom.interiorBottomLeft();
+        int width = geom.interiorWidth();
+        int height = geom.interiorHeight();
 
         // Calculate world-coordinate bounds
         // The interior of a portal block at (x,y,z) occupies the full block space
@@ -437,8 +422,7 @@ public class OddstonePortalBlock extends Block {
     private void simpleTeleport(ServerLevel level, ServerPlayer player,
                                  BlockPos frameCorner,
                                  OddstonePortalSavedData.PortalEntry partnerEntry) {
-        Direction.Axis partnerAxis = partnerEntry.axis.equals("X")
-                ? Direction.Axis.X : Direction.Axis.Z;
+        Direction.Axis partnerAxis = partnerEntry.getAxisAsEnum();
         Direction hDir = PortalUtils.getHorizontalDir(partnerAxis);
 
         BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);

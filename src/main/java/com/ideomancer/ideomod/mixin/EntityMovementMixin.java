@@ -116,19 +116,33 @@ public abstract class EntityMovementMixin {
     }
 
     /**
-     * Check if the block at the given position is a FramedBlock, and if so,
-     * return the inner block's speed factor. Returns 1.0f if not a framed
-     * block or if the block entity is missing.
+     * Generic helper for speed and jump factor extraction from FramedBlocks.
+     * Reduces duplication between ideomod$getFramedSpeedFactor and
+     * ideomod$getFramedJumpFactor.
+     *
+     * @param level The level
+     * @param pos The position to check
+     * @param factorGetter Function to extract the factor from a Block
+     * @return The factor value, or 1.0f if not a framed block or missing entity
      */
-    private float ideomod$getFramedSpeedFactor(Level level, BlockPos pos) {
+    private float ideomod$getFramedFactor(Level level, BlockPos pos, java.util.function.Function<Block, Float> factorGetter) {
         BlockState state = level.getBlockState(pos);
         if (!(state.getBlock() instanceof FramedBlock)) return 1.0f;
 
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
-            return fbe.getInnerBlock().getSpeedFactor();
+            return factorGetter.apply(fbe.getInnerBlock());
         }
         return 1.0f;
+    }
+
+    /**
+     * Check if the block at the given position is a FramedBlock, and if so,
+     * return the inner block's speed factor. Returns 1.0f if not a framed
+     * block or if the block entity is missing.
+     */
+    private float ideomod$getFramedSpeedFactor(Level level, BlockPos pos) {
+        return ideomod$getFramedFactor(level, pos, Block::getSpeedFactor);
     }
 
     /**
@@ -137,13 +151,6 @@ public abstract class EntityMovementMixin {
      * block or if the block entity is missing.
      */
     private float ideomod$getFramedJumpFactor(Level level, BlockPos pos) {
-        BlockState state = level.getBlockState(pos);
-        if (!(state.getBlock() instanceof FramedBlock)) return 1.0f;
-
-        BlockEntity be = level.getBlockEntity(pos);
-        if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
-            return fbe.getInnerBlock().getJumpFactor();
-        }
-        return 1.0f;
+        return ideomod$getFramedFactor(level, pos, Block::getJumpFactor);
     }
 }

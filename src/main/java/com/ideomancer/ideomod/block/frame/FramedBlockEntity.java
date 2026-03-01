@@ -9,6 +9,7 @@ import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HoneyBlock;
@@ -134,11 +135,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
      * @return 0 (none), 1 (slime), 2 (honey), 3 (odd slime), 4 (oddstone)
      */
     public static int computeStickyType(Block innerBlock) {
-        if (innerBlock instanceof SlimeBlock) return FramedBlock.STICKY_SLIME;
-        if (innerBlock instanceof HoneyBlock) return FramedBlock.STICKY_HONEY;
-        if (innerBlock instanceof OddSlimeBlock) return FramedBlock.STICKY_ODD_SLIME;
-        if (innerBlock instanceof OddstoneBlock) return FramedBlock.STICKY_ODDSTONE;
-        return FramedBlock.STICKY_NONE;
+        return com.ideomancer.ideomod.block.movement.StickyType.fromBlock(innerBlock).getInnerStickyValue();
     }
 
     /**
@@ -239,5 +236,42 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             // Sync INNER_STICKY to blockstate after piston restore
             updateBlockstateFromInner();
         }
+    }
+
+    // ========================================================================
+    // NBT PATH CENTRALIZATION
+    // ========================================================================
+
+    /**
+     * Get the inner block ID from a framed block ItemStack's NBT.
+     * Centralizes the stack -> tag -> BlockEntityTag -> InnerBlock path.
+     *
+     * @param stack The ItemStack to read from
+     * @return The inner block's ResourceLocation, or null if not set
+     */
+    @Nullable
+    public static ResourceLocation getInnerBlockIdFromStack(ItemStack stack) {
+        CompoundTag tag = stack.getTag();
+        if (tag != null && tag.contains("BlockEntityTag")) {
+            CompoundTag beTag = tag.getCompound("BlockEntityTag");
+            if (beTag.contains(TAG_INNER_BLOCK)) {
+                return new ResourceLocation(beTag.getString(TAG_INNER_BLOCK));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Set the inner block ID on a framed block ItemStack's NBT.
+     * Centralizes the stack -> tag -> BlockEntityTag -> InnerBlock path.
+     *
+     * @param stack         The ItemStack to modify
+     * @param innerBlockId  The inner block's ResourceLocation
+     */
+    public static void setInnerBlockIdOnStack(ItemStack stack, ResourceLocation innerBlockId) {
+        CompoundTag beTag = new CompoundTag();
+        beTag.putString(TAG_INNER_BLOCK, innerBlockId.toString());
+        CompoundTag itemTag = stack.getOrCreateTag();
+        itemTag.put("BlockEntityTag", beTag);
     }
 }

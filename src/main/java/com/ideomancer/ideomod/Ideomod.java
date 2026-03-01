@@ -1,12 +1,14 @@
 package com.ideomancer.ideomod;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.registry.ModRecipeSerializers;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.movement.StickinessRules;
+import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.client.render.FramedBlockItemModel;
 import com.ideomancer.ideomod.client.render.FramedBlockRenderer;
 import com.ideomancer.ideomod.client.gui.MachineFrameScreen;
@@ -70,6 +72,10 @@ public class Ideomod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
+        // Register framed block items for each material before stickiness rules
+        FrameMaterial.registerFramedBlockItem(FrameMaterial.IRON, ModItems.IRON_FRAMED_BLOCK::get);
+        FrameMaterial.registerFramedBlockItem(FrameMaterial.COPPER, ModItems.COPPER_FRAMED_BLOCK::get);
+
         registerStickinessRules();
         registerStructureDefinitions();
         registerStructureEventHandlers();
@@ -141,41 +147,19 @@ public class Ideomod {
                 (grabber, target) -> {
                     // Is the target an oddstone-type block?
                     boolean targetIsOddstone = target.getBlock() instanceof OddstoneBlock;
-                    boolean targetIsFramedOddstone = false;
-                    if (!targetIsOddstone && target.getBlock() instanceof FramedBlock) {
-                        targetIsFramedOddstone = target.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE;
-                    }
+                    boolean targetIsFramedOddstone = StickinessRules.isFramedOddstone(target);
                     if (!targetIsOddstone && !targetIsFramedOddstone) return false;
 
                     // Carve-out A: oddstone-type grabber can grab oddstone target
-                    if (grabber.getBlock() instanceof OddstoneBlock) return false;
-                    if (grabber.getBlock() instanceof FramedBlock
-                            && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE) {
-                        return false;
-                    }
+                    if (StickinessRules.isOddstoneType(grabber)) return false;
 
                     // Carve-out B: frame network can reach FRAMED oddstone
                     // (bare oddstone is never grabbed by the frame network)
                     if (targetIsFramedOddstone && target.getValue(FramedBlock.ACTIVE)) {
                         // Machine Family always connects to its network members
-                        if (MachineFrameBlock.isMachineFamily(grabber.getBlock())) {
-                            return false;
-                        }
-                        // ACTIVE same-material frame family (FrameBlock or FramedBlock)
-                        if (grabber.getBlock() instanceof IFrameBlock grabberFrame) {
-                            FramedBlock targetFramed = (FramedBlock) target.getBlock();
-                            // IFrameBlock: check ACTIVE via the block's own mechanism
-                            // FramedBlock has ACTIVE property, FrameBlock also has ACTIVE
-                            boolean grabberActive = false;
-                            if (grabber.getBlock() instanceof FramedBlock) {
-                                grabberActive = grabber.getValue(FramedBlock.ACTIVE);
-                            } else if (grabber.getBlock() instanceof com.ideomancer.ideomod.block.frame.FrameBlock) {
-                                grabberActive = grabber.getValue(com.ideomancer.ideomod.block.frame.FrameBlock.ACTIVE);
-                            }
-                            if (grabberActive && grabberFrame.getFrameMaterial() == targetFramed.getFrameMaterial()) {
-                                return false;
-                            }
-                        }
+                        if (MachineFrameBlock.isMachineFamily(grabber.getBlock())) return false;
+                        // ACTIVE same-material frame connection
+                        if (StickinessRules.isActiveFrameConnection(grabber, target)) return false;
                     }
 
                     // Non-oddstone grabber trying to grab oddstone target: BLOCKED
@@ -220,67 +204,27 @@ public class Ideomod {
                 (grabber, target) -> {
                     if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
                     Block targetBlock = target.getBlock();
+                    StickyType targetType = StickyType.of(target);
 
-                    if (targetBlock instanceof SlimeBlock) {
-                        if (grabber.getBlock() instanceof FramedBlock) {
-                            int gs = grabber.getValue(FramedBlock.INNER_STICKY);
-                            // Framed Slime grabs slime (matching type)
-                            if (gs == FramedBlock.STICKY_SLIME) return false;
-                            // Framed Oddstone grabs slime (oddstone is universal grabber)
-                            if (gs == FramedBlock.STICKY_ODDSTONE) return false;
+                    // Only protect actual sticky targets
+                    if (targetBlock instanceof SlimeBlock || targetBlock instanceof HoneyBlock
+                            || targetBlock instanceof OddSlimeBlock) {
+                        // Carve-out: matching inner sticky or framed oddstone (universal grabber)
+                        if (StickinessRules.hasMatchingInnerSticky(grabber, targetType)) return false;
+                        return true;
+                    }
+
+                    // Oddstone targets
+                    if (StickinessRules.isOddstoneType(target)) {
+                        // Carve-out: Framed Oddstone inner type
+                        if (StickinessRules.hasMatchingInnerSticky(grabber, StickyType.ODDSTONE)) return false;
+                        // Carve-out: ACTIVE same-material frame connection (framed oddstone targets only)
+                        if (StickinessRules.isFramedOddstone(target) && target.getValue(FramedBlock.ACTIVE)) {
+                            if (StickinessRules.isActiveFrameConnection(grabber, target)) return false;
                         }
                         return true;
                     }
-                    if (targetBlock instanceof HoneyBlock) {
-                        if (grabber.getBlock() instanceof FramedBlock) {
-                            int gs = grabber.getValue(FramedBlock.INNER_STICKY);
-                            if (gs == FramedBlock.STICKY_HONEY) return false;
-                            if (gs == FramedBlock.STICKY_ODDSTONE) return false;
-                        }
-                        return true;
-                    }
-                    if (targetBlock instanceof OddSlimeBlock) {
-                        if (grabber.getBlock() instanceof FramedBlock) {
-                            int gs = grabber.getValue(FramedBlock.INNER_STICKY);
-                            if (gs == FramedBlock.STICKY_ODD_SLIME) return false;
-                            if (gs == FramedBlock.STICKY_ODDSTONE) return false;
-                        }
-                        return true;
-                    }
-                    // Oddstone targets: protect from frame family grabbing
-                    if (targetBlock instanceof OddstoneBlock) {
-                        // Carve-out: Framed Oddstone is exempt
-                        if (grabber.getBlock() instanceof FramedBlock
-                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE) {
-                            return false;
-                        }
-                        return true;
-                    }
-                    // Framed oddstone targets too
-                    if (targetBlock instanceof FramedBlock
-                            && target.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE) {
-                        // Carve-out: Framed Oddstone inner type grabbing framed oddstone
-                        if (grabber.getBlock() instanceof FramedBlock
-                                && grabber.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE) {
-                            return false;
-                        }
-                        // Carve-out: ACTIVE same-material frame connection
-                        if (target.getValue(FramedBlock.ACTIVE)) {
-                            if (grabber.getBlock() instanceof IFrameBlock grabberFrame) {
-                                FramedBlock targetFramed = (FramedBlock) targetBlock;
-                                boolean grabberActive = false;
-                                if (grabber.getBlock() instanceof FramedBlock) {
-                                    grabberActive = grabber.getValue(FramedBlock.ACTIVE);
-                                } else if (grabber.getBlock() instanceof com.ideomancer.ideomod.block.frame.FrameBlock) {
-                                    grabberActive = grabber.getValue(com.ideomancer.ideomod.block.frame.FrameBlock.ACTIVE);
-                                }
-                                if (grabberActive && grabberFrame.getFrameMaterial() == targetFramed.getFrameMaterial()) {
-                                    return false;
-                                }
-                            }
-                        }
-                        return true;
-                    }
+
                     return false;
                 }
         );

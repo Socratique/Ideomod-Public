@@ -21,6 +21,10 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.client.render.MovingFrameData;
+import net.minecraft.resources.ResourceLocation;
 
 /**
  * General-purpose utility for moving blocks using vanilla piston mechanics.
@@ -149,6 +153,33 @@ public class BlockMoveHelper {
             }
         }
 
+        // ---- STEP 2.6: Capture framed block render data on client (Ideomod addition) ----
+        // BlockMoveHelper is called from triggerEvent (runs on both sides).
+        // On the client, vanilla's PistonBaseBlock.moveBlocks() mixin won't fire
+        // because BlockMoveHelper doesn't call moveBlocks(). We must populate
+        // MovingFrameData here so the transit renderer can draw inner blocks.
+        // The toPush list already includes sympathetic blocks (resolver mixin
+        // adds them during addBranchingBlocks), so no separate sympathetic
+        // scan is needed.
+        if (level.isClientSide()) {
+            MovingFrameData.clearAll();
+            for (BlockPos sourcePos : toPush) {
+                BlockState srcState = level.getBlockState(sourcePos);
+                if (srcState.getBlock() instanceof FramedBlock) {
+                    BlockEntity srcBe = level.getBlockEntity(sourcePos);
+                    if (srcBe instanceof FramedBlockEntity framedBE && framedBE.hasInnerBlock()) {
+                        ResourceLocation innerBlockId = framedBE.getInnerBlockId();
+                        if (innerBlockId != null) {
+                            Direction facing = srcState.getValue(FramedBlock.FACING);
+                            int innerSticky = srcState.getValue(FramedBlock.INNER_STICKY);
+                            BlockPos destPos = sourcePos.relative(pushDir);
+                            MovingFrameData.store(destPos, innerBlockId, facing, innerSticky);
+                        }
+                    }
+                }
+            }
+        }
+
         BlockState[] allOriginalStates = new BlockState[toPush.size() + toDestroy.size()];
         int stateIdx = 0;
 
@@ -224,5 +255,23 @@ public class BlockMoveHelper {
                 initiatorPos, toPush.size(), pushDir, savedBlockEntityData.size());
 
         return true;
+    }
+
+    // ========================================================================
+    // NEIGHBOR UPDATE UTILITY
+    // ========================================================================
+
+    /**
+     * Notifies all 6 neighbors of a position about a block change.
+     * Replaces the repeated for(Direction) { level.updateNeighborsAt(...) } pattern.
+     *
+     * @param level The world
+     * @param pos   The block position
+     * @param block The block that changed
+     */
+    public static void updateAllNeighbors(Level level, BlockPos pos, Block block) {
+        for (Direction dir : Direction.values()) {
+            level.updateNeighborsAt(pos.relative(dir), block);
+        }
     }
 }

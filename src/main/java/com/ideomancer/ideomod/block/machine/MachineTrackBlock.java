@@ -51,7 +51,7 @@ import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
-public class MachineTrackBlock extends Block {
+public class MachineTrackBlock extends Block implements IMachineFamily {
 
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
 
@@ -144,18 +144,14 @@ public class MachineTrackBlock extends Block {
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
         if (!level.isClientSide() && !oldState.is(this)) {
             updatePowerState(level, pos, state);
-            for (Direction dir : Direction.values()) {
-                level.updateNeighborsAt(pos.relative(dir), this);
-            }
+            BlockMoveHelper.updateAllNeighbors(level, pos, this);
         }
     }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!level.isClientSide() && !newState.is(this)) {
-            for (Direction dir : Direction.values()) {
-                level.updateNeighborsAt(pos.relative(dir), this);
-            }
+            BlockMoveHelper.updateAllNeighbors(level, pos, this);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }

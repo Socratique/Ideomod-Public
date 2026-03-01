@@ -9,6 +9,10 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * Registers block and item color handlers for tintIndex-based coloring.
  *
+ * TODO(machine-conductor): Restore block/item color handlers when Machine Conductor
+ * specialization is implemented. This file is intentionally kept as a registration
+ * skeleton. See ROADMAP_STATUS.md for Machine Conductor tracking.
+ *
  * Previously handled Machine Block power color gradient (steel grey to red).
  * Machine Frame rework removed conduction from the base block, so that
  * color handler is removed. It will return when the Machine Conductor

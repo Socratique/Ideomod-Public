@@ -31,7 +31,7 @@ import com.ideomancer.ideomod.block.frame.FrameActivation;
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
-public class MachineFrameBlock extends Block implements EntityBlock {
+public class MachineFrameBlock extends Block implements EntityBlock, IMachineFamily {
 
     public MachineFrameBlock(Properties properties) {
         super(properties);
@@ -96,24 +96,24 @@ public class MachineFrameBlock extends Block implements EntityBlock {
     // MACHINE FAMILY HELPERS
     // ========================================================================
 
+    /**
+     * Check if a block is part of the Machine Family.
+     * Delegates to IMachineFamily.isMachineFamily() for consistency.
+     */
     public static boolean isMachineFamily(Block block) {
-        return block instanceof MachineFrameBlock
-            || block instanceof MachineTrackBlock
-            || block instanceof MachineTrolleyBlock;
+        return IMachineFamily.isMachineFamily(block);
     }
 
     public static boolean isRedstoneConduit(Block block) {
         return block instanceof MachineTrackBlock;
     }
 
+    /**
+     * Check if this block can stick to another block.
+     * Delegates to IMachineFamily.canMachineFamilyStickTo() for consistency.
+     */
     public static boolean canMachineFamilyStickTo(BlockState other) {
-        Block otherBlock = other.getBlock();
-        if (isMachineFamily(otherBlock)) return true;
-        if (FrameActivation.isFrameFamily(otherBlock)) return true;
-        if (otherBlock instanceof SlimeBlock) return true;
-        if (otherBlock instanceof HoneyBlock) return true;
-        if (otherBlock instanceof OddSlimeBlock) return true;
-        return false;
+        return IMachineFamily.canMachineFamilyStickTo(other);
     }
 
     @Override

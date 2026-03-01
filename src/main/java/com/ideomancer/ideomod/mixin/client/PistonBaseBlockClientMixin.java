@@ -2,7 +2,10 @@ package com.ideomancer.ideomod.mixin.client;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.OddstoneBlock;
+import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.client.render.MovingFrameData;
+import com.ideomancer.ideomod.config.OddstoneConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -134,6 +137,11 @@ public abstract class PistonBaseBlockClientMixin {
             }
         }
 
+        // Sympathetic scan: find oddstone/framed oddstone at range and
+        // scan their sticky groups too. Mirrors the server-side logic in
+        // PistonBaseBlockMixin.scanSympathetic().
+        ideomod$captureSympathetic(level, allBlocks);
+
         int captured = 0;
         for (BlockPos sourcePos : allBlocks) {
             if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(moveDir))) {
@@ -142,6 +150,54 @@ public abstract class PistonBaseBlockClientMixin {
         }
         return captured;
     }
+
+    /**
+     * Scan for sympathetically linked Oddstone/Framed Oddstone blocks
+     * and add them (plus their sticky groups) to allBlocks.
+     * Client-side mirror of PistonBaseBlockMixin.scanSympathetic().
+     *
+     * Uses MovementScanHelper to find all sympathetic oddstone blocks,
+     * then iterates to scan their sticky groups for capture.
+     *
+     * This ensures framed blocks attached to remote sympathetic oddstone
+     * via machine activation are captured for transit rendering.
+     */
+    @Unique
+    private static void ideomod$captureSympathetic(Level level, Set<BlockPos> allBlocks) {
+        int radius = OddstoneConfig.getSympatheticRadius();
+
+        // Use helper to find all sympathetic oddstone blocks
+        Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, allBlocks, radius);
+
+        // Add newly found oddstone blocks
+        for (BlockPos checkPos : allFound) {
+            if (!allBlocks.contains(checkPos)) {
+                BlockState checkState = level.getBlockState(checkPos);
+                allBlocks.add(checkPos);
+
+                // Scan sticky group attached to this sympathetic oddstone
+                // (machine frames, activated framed blocks, etc.)
+                if (checkState.isStickyBlock()) {
+                    ideomod$scanStickyGroupInto(level, checkPos, allBlocks);
+                }
+            }
+        }
+    }
+
+    /**
+     * BFS scan of a sticky group starting from startPos, adding all
+     * connected blocks to allBlocks. Used by sympathetic scanning to
+     * find blocks attached to remote oddstone.
+     *
+     * Uses MovementScanHelper.scanStickyGroup to find the group.
+     */
+    @Unique
+    private static void ideomod$scanStickyGroupInto(Level level, BlockPos startPos,
+                                                     Set<BlockPos> allBlocks) {
+        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(level, startPos, MAX_PUSH_BLOCKS);
+        allBlocks.addAll(groupBlocks);
+    }
+
 
     /**
      * If the block at sourcePos is a FramedBlock with an inner block,

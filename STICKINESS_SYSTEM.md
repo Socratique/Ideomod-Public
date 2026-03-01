@@ -62,6 +62,24 @@ If you want A to grab B but not B to grab A:
 
 ---
 
+## StickyType Enum (Single Source of Truth)
+
+The `StickyType` enum (`block/movement/StickyType.java`) centralizes all sticky block classification that was previously scattered as instanceof chains and magic int constants across 8+ files.
+
+**Values:** NONE(0), SLIME(1), HONEY(2), ODD_SLIME(3), ODDSTONE(4). Integer values map directly to FramedBlock's INNER_STICKY blockstate property.
+
+**Key methods:**
+- `fromBlock(Block)` -- classifies any block into its StickyType (replaces FramedBlockEntity.computeStickyType() instanceof chain)
+- `fromInnerStickyValue(int)` -- reverse mapping from INNER_STICKY blockstate value
+- `of(BlockState)` -- resolves StickyType from a blockstate (handles both direct blocks and FramedBlock via INNER_STICKY)
+- `isExcludedFrom(StickyType other)` -- true if this type and other are mutually exclusive (slime vs honey, slime vs odd_slime, honey vs odd_slime)
+- `canGrab(StickyType target)` -- true if this type can grab the target (used by OddstoneBlock.canStickTo, FramedBlock.canStickTo)
+- `isVanillaSticky(Block)` -- replaces scattered `instanceof SlimeBlock || instanceof HoneyBlock` checks
+
+**Adding a new sticky type:** Add an enum value, define its exclusions in isExcludedFrom() and grab rules in canGrab(). Every canStickTo automatically picks it up.
+
+---
+
 ## Current Block Relationships
 
 ### Stickiness Matrix
@@ -129,7 +147,7 @@ Framed Odd Slime does NOT use a blanket directional rule. A blanket rule would d
 
 **Slime -> Machine Family**: ALLOWED. Both `canStickTo` return `true`. No grab immunity rule.
 
-**Machine Family -> Slime**: BLOCKED. Both `canStickTo` return `true` (permissive). Grab immunity rule: machine family grabber + slime target = blocked. Uses `MachineFrameBlock.isMachineFamily()` to cover MachineFrameBlock, MachineTrackBlock, and MachineTrolleyBlock with one rule.
+**Machine Family -> Slime**: BLOCKED. Both `canStickTo` return `true` (permissive). Grab immunity rule: machine family grabber + slime target = blocked. Uses `IMachineFamily.isMachineFamily()` to cover MachineFrameBlock, MachineTrackBlock, and MachineTrolleyBlock with one rule.
 
 **Machine Family -> Machine Family**: ALLOWED. `canMachineFamilyStickTo()` returns true for all Machine Family types. No grab immunity rule. Machine Block, Track, and Trolley all stick to each other.
 
@@ -198,18 +216,28 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 | Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
 | Frame activation | `FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
 | Frame type checks | `StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
+| `StickyType enum` | `StickyType.java` | Single source of truth for sticky block classification |
+| `IMachineFamily` | `IMachineFamily.java` | Machine Family marker interface with shared stickiness |
+| Rule helpers | `StickinessRules.java` | `isOddstoneType(), isFramedOddstone(), isActiveFrameConnection(), hasMatchingInnerSticky()` |
+| MovementScanHelper | `MovementScanHelper.java` | Shared oddstone detection and scanning algorithms |
 
 ### Mixin Injection Points
 
 The mixin enforces rules at **two** points in `PistonStructureResolver`:
 
-1. **HEAD of `addBlockLine`** (during branching only): Catches sideways grabs when `addBranchingBlocks` iterates sticky blocks and checks their neighbors. Checks both directional rules and grab immunity.
+1. **HEAD of `addBlockLine`** (during branching only): Catches sideways grabs when `addBranchingBlocks` iterates sticky blocks and checks their neighbors. Checks both directional rules and grab immunity. This is the primary enforcement point for one-way stickiness.
 
-2. **@Redirect on `canStickTo`** (inside `addBlockLine`): Catches the backward walk where the resolver checks if blocks behind should be pulled along. Intercepts the `canStickTo` call, runs the original, then applies our rules on top.
+2. **@Redirect on `canStickTo`** (inside `addBlockLine`): Catches the backward walk where the resolver checks if blocks behind should be pulled along. Vanilla calls canStickTo twice per iteration: `oldState.canStickTo(blockstate) && blockstate.canStickTo(oldState)`. A call-pair toggle (`ideomod$firstCanStickToCall`) tracks which call we're in:
+   - **Call 1** (front block reaching back): Directional rules + grab immunity checked. The front block is the active grabber.
+   - **Call 2** (behind block responding): Directional rules checked, grab immunity SKIPPED. The behind block is passively responding — its inability to actively grab the front block doesn't matter.
+   
+   This distinction prevents chains from breaking when a block legitimately holds another block that can't reciprocally grab it (e.g. oddstone holding slime — slime can't grab oddstone per Rule 1, but oddstone's grip is sufficient).
 
 ---
 
 ## Adding a New Sticky Block -- Checklist
+
+0. **Add to StickyType enum**: Add a new enum value in `StickyType.java`. Define its exclusion rules in `isExcludedFrom()` and grab behavior in `canGrab()`.
 
 1. **Decide the relationships**: For each existing sticky type, determine: mutual grab? one-way? excluded?
 

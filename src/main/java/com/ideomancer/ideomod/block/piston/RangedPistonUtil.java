@@ -37,13 +37,32 @@ public class RangedPistonUtil {
     // ========================================================================
 
     /**
+     * Unified block movement handler for both Repulser (push) and Attractor (pull).
+     *
+     * @param level The level
+     * @param devicePos The position of the device
+     * @param facing The direction the device faces
+     * @param filter The predicate to match target blocks
+     * @param repulse true for Repulser (push in facing direction),
+     *                false for Attractor (pull in opposite direction)
+     * @return true if a target was found and moved, false otherwise
+     */
+    private static boolean tryMove(Level level, BlockPos devicePos, Direction facing,
+                                    Predicate<BlockState> filter, boolean repulse) {
+        BlockPos targetPos = repulse
+                ? scanForNearest(level, devicePos, facing, filter)
+                : scanForFarthest(level, devicePos, facing, filter);
+        if (targetPos == null) return false;
+        Direction pushDir = repulse ? facing : facing.getOpposite();
+        return BlockMoveHelper.moveBlockAt(level, devicePos, targetPos, pushDir);
+    }
+
+    /**
      * Repulser: find nearest target, push away from device.
      */
     public static boolean tryRepulse(Level level, BlockPos devicePos,
                                       Direction facing, Predicate<BlockState> filter) {
-        BlockPos targetPos = scanForNearest(level, devicePos, facing, filter);
-        if (targetPos == null) return false;
-        return BlockMoveHelper.moveBlockAt(level, devicePos, targetPos, facing);
+        return tryMove(level, devicePos, facing, filter, true);
     }
 
     /**
@@ -52,9 +71,7 @@ public class RangedPistonUtil {
      */
     public static boolean tryAttract(Level level, BlockPos devicePos,
                                       Direction facing, Predicate<BlockState> filter) {
-        BlockPos targetPos = scanForFarthest(level, devicePos, facing, filter);
-        if (targetPos == null) return false;
-        return BlockMoveHelper.moveBlockAt(level, devicePos, targetPos, facing.getOpposite());
+        return tryMove(level, devicePos, facing, filter, false);
     }
 
     // ========================================================================

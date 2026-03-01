@@ -32,6 +32,7 @@ import org.jetbrains.annotations.Nullable;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
+import com.ideomancer.ideomod.block.movement.StickyType;
 
 /**
  * Framed Block — a block that wraps any valid "inner block" with a metal frame.
@@ -132,7 +133,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      */
     public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 4);
 
-    /** Constants for INNER_STICKY values */
+    /** Constants for INNER_STICKY values. See also StickyType enum. */
     public static final int STICKY_NONE = 0;
     public static final int STICKY_SLIME = 1;
     public static final int STICKY_HONEY = 2;
@@ -217,6 +218,26 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
             return fbe;
         }
         return null;
+    }
+
+    /**
+     * Check if a FramedBlock at the given position has an immovable inner block.
+     * Mirrors vanilla's isPushable hardcoded checks.
+     * Used by PistonBaseBlockMixin and PistonStructureResolverMixin.
+     *
+     * @param level The block getter
+     * @param pos   The position of the framed block
+     * @return true if the inner block is immovable (obsidian, bedrock, reinforced deepslate, etc.)
+     */
+    public static boolean hasImmovableInner(BlockGetter level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (!(be instanceof FramedBlockEntity fbe) || !fbe.hasInnerBlock()) return false;
+        BlockState innerState = fbe.getInnerDefaultState();
+        if (innerState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)) return true;
+        if (innerState.is(net.minecraft.world.level.block.Blocks.CRYING_OBSIDIAN)) return true;
+        if (innerState.is(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE)) return true;
+        if (innerState.getDestroySpeed(level, pos) == -1.0f) return true;
+        return false;
     }
 
     // ========================================================================
@@ -496,55 +517,17 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
         // --- Inner block stickiness rules ---
         if (innerSticky > 0) {
-            switch (innerSticky) {
-                case STICKY_SLIME:
-                    // Slime excludes honey and odd slime (mutual exclusion)
-                    if (otherBlock instanceof HoneyBlock) return false;
-                    if (otherBlock instanceof OddSlimeBlock) return false;
-                    if (otherBlock instanceof FramedBlock) {
-                        int otherSticky = other.getValue(INNER_STICKY);
-                        if (otherSticky == STICKY_HONEY || otherSticky == STICKY_ODD_SLIME) return false;
-                    }
-                    return true;
+            StickyType myType = StickyType.fromInnerStickyValue(innerSticky);
+            StickyType otherType = StickyType.of(other);
 
-                case STICKY_HONEY:
-                    // Honey excludes slime and odd slime
-                    if (otherBlock instanceof SlimeBlock) return false;
-                    if (otherBlock instanceof OddSlimeBlock) return false;
-                    if (otherBlock instanceof FramedBlock) {
-                        int otherSticky = other.getValue(INNER_STICKY);
-                        if (otherSticky == STICKY_SLIME || otherSticky == STICKY_ODD_SLIME) return false;
-                    }
-                    return true;
-
-                case STICKY_ODD_SLIME:
-                    // Odd slime excludes slime and honey
-                    if (otherBlock instanceof SlimeBlock) return false;
-                    if (otherBlock instanceof HoneyBlock) return false;
-                    if (otherBlock instanceof FramedBlock) {
-                        int otherSticky = other.getValue(INNER_STICKY);
-                        if (otherSticky == STICKY_SLIME || otherSticky == STICKY_HONEY) return false;
-                    }
-                    return true;
-
-                case STICKY_ODDSTONE:
-                    // Oddstone sticks to: other oddstone (real + framed),
-                    // and all slime types (real + framed).
-                    // Mirrors OddstoneBlock.canStickTo() behavior.
-                    // Does NOT stick to machine family or normal blocks via inner.
-                    if (otherBlock instanceof OddstoneBlock) return true;
-                    if (otherBlock instanceof SlimeBlock) return true;
-                    if (otherBlock instanceof HoneyBlock) return true;
-                    if (otherBlock instanceof OddSlimeBlock) return true;
-                    if (otherBlock instanceof FramedBlock) {
-                        int otherSticky = other.getValue(INNER_STICKY);
-                        if (otherSticky == STICKY_ODDSTONE) return true;
-                        if (otherSticky == STICKY_SLIME) return true;
-                        if (otherSticky == STICKY_HONEY) return true;
-                        if (otherSticky == STICKY_ODD_SLIME) return true;
-                    }
-                    return false;
+            if (myType == StickyType.ODDSTONE) {
+                // Oddstone inner: only sticks to oddstone-type and slime-family blocks
+                return myType.canGrab(otherType) && otherType != StickyType.NONE;
             }
+
+            // Slime-family inner: sticks to everything EXCEPT excluded types
+            if (myType.isExcludedFrom(otherType)) return false;
+            return true;
         }
 
         // --- Permissive entries (always) ---
@@ -623,9 +606,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public ItemStack getCloneItemStack(BlockGetter level, BlockPos pos, BlockState state) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null && fbe.getInnerBlockId() != null) {
-            net.minecraft.world.item.Item item = (this.frameMaterial == FrameMaterial.IRON)
-                    ? com.ideomancer.ideomod.registry.ModItems.IRON_FRAMED_BLOCK.get()
-                    : com.ideomancer.ideomod.registry.ModItems.COPPER_FRAMED_BLOCK.get();
+            net.minecraft.world.item.Item item = this.frameMaterial.getFramedBlockItem();
             return FramedBlockItem.createStack(item, fbe.getInnerBlockId());
         }
         return super.getCloneItemStack(level, pos, state);

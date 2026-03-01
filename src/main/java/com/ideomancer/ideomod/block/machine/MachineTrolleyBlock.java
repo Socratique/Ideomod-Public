@@ -20,7 +20,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
-public class MachineTrolleyBlock extends Block {
+public class MachineTrolleyBlock extends Block implements IMachineFamily {
 
     public MachineTrolleyBlock(Properties properties) {
         super(properties);

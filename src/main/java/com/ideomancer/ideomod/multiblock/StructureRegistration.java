@@ -89,6 +89,16 @@ public class StructureRegistration {
     }
 
     /**
+     * Checks if a position falls within the given bounds.
+     * Extracted helper to reduce duplication in isInBounds and isInExpandedBounds.
+     */
+    private static boolean isWithinBounds(BlockPos pos, BlockPos min, BlockPos max) {
+        return pos.getX() >= min.getX() && pos.getX() <= max.getX()
+            && pos.getY() >= min.getY() && pos.getY() <= max.getY()
+            && pos.getZ() >= min.getZ() && pos.getZ() <= max.getZ();
+    }
+
+    /**
      * Checks if a world position falls inside this structure's expanded
      * bounding box (the watch zone). Used by the Manager to decide whether
      * a block change should trigger a rescan.
@@ -96,9 +106,7 @@ public class StructureRegistration {
      * This is 6 integer comparisons — extremely cheap.
      */
     public boolean isInExpandedBounds(BlockPos pos) {
-        return pos.getX() >= expandedMin.getX() && pos.getX() <= expandedMax.getX()
-            && pos.getY() >= expandedMin.getY() && pos.getY() <= expandedMax.getY()
-            && pos.getZ() >= expandedMin.getZ() && pos.getZ() <= expandedMax.getZ();
+        return isWithinBounds(pos, expandedMin, expandedMax);
     }
 
     /**
@@ -106,9 +114,7 @@ public class StructureRegistration {
      * bounding box (not expanded). Used by query API.
      */
     public boolean isInBounds(BlockPos pos) {
-        return pos.getX() >= boundsMin.getX() && pos.getX() <= boundsMax.getX()
-            && pos.getY() >= boundsMin.getY() && pos.getY() <= boundsMax.getY()
-            && pos.getZ() >= boundsMin.getZ() && pos.getZ() <= boundsMax.getZ();
+        return isWithinBounds(pos, boundsMin, boundsMax);
     }
 
     // ========================================================================

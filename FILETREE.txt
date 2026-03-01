@@ -18,6 +18,7 @@
 |  |           |  |  +-- FrameMaterial.java
 |  |           |  |  \\-- IFrameBlock.java
 |  |           |  +-- machine
+|  |           |  |  +-- IMachineFamily.java
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
@@ -26,8 +27,10 @@
 |  |           |  +-- movement
 |  |           |  |  +-- BlockMoveHelper.java
 |  |           |  |  +-- IPistonMovable.java
+|  |           |  |  +-- MovementScanHelper.java
 |  |           |  |  +-- MovingBlockEntityData.java
-|  |           |  |  \\-- StickinessRules.java
+|  |           |  |  +-- StickinessRules.java
+|  |           |  |  \\-- StickyType.java
 |  |           |  +-- piston
 |  |           |  |  +-- AbstractRangedPistonBlock.java
 |  |           |  |  +-- OddstoneAttractorBlock.java
@@ -39,6 +42,7 @@
 |  |           |  |  +-- OddstonePortalFrameDetector.java
 |  |           |  |  +-- OddstonePortalHandler.java
 |  |           |  |  +-- OddstonePortalSavedData.java
+|  |           |  |  +-- PortalGeometry.java
 |  |           |  |  \\-- PortalUtils.java
 |  |           |  +-- DrillBlock.java
 |  |           |  +-- OddSlimeBlock.java
@@ -72,6 +76,8 @@
 |  |           |  |  \\-- FurnaceArrayDefinition.java
 |  |           |  +-- effects
 |  |           |  |  \\-- FurnaceArrayEffect.java
+|  |           |  +-- PatternScanStrategy.java
+|  |           |  +-- ScanStrategy.java
 |  |           |  +-- StructureDefinition.java
 |  |           |  +-- StructureEffectHandler.java
 |  |           |  +-- StructureManager.java
@@ -169,7 +175,8 @@
 |     |        |  +-- oddstone_attractor_side.png
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
-|     |        |  \\-- oddstone_repulser_side.png
+|     |        |  +-- oddstone_repulser_side.png
+|     |        |  \\-- oddstone1.png
 |     |        \\-- gui
 |     |           \\-- machine_frame.png
 |     +-- data

@@ -4,16 +4,13 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
-import com.ideomancer.ideomod.block.OddSlimeBlock;
-import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
+import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.block.movement.StickinessRules;
 import com.ideomancer.ideomod.config.OddstoneConfig;
-import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
-import net.minecraft.world.level.block.DirectionalBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
@@ -43,13 +40,22 @@ import java.util.List;
  *
  *   A) HEAD of addBlockLine (during branching only) -- ACTIVE GRABBING
  *      Checks directional rules, grab immunity, and framed odd slime
- *      second-chance logic.
+ *      second-chance logic. This is the primary enforcement point.
  *
  *   B) @Redirect on canStickTo (inside addBlockLine) -- CHAIN COHESION
- *      Checks grab immunity AND directional rules.
- *      EXCEPTION: Active pullers (OddSlimeBlock or Framed Odd Slime
- *      with FACING matching pushDirection) skip grab immunity for the
- *      behind block — they're pulling it along.
+ *      Checks directional rules on both calls. Checks grab immunity on
+ *      the FIRST call only (front block reaching backward).
+ *
+ *      Vanilla's backward walk calls canStickTo twice per iteration:
+ *        Call 1: oldState.canStickTo(blockstate) — front reaching back
+ *        Call 2: blockstate.canStickTo(oldState) — behind responding
+ *      Vanilla ANDs them together. A toggle tracks which call we're in.
+ *
+ *      Grab immunity only applies on Call 1 because the front block is
+ *      the active grabber. Call 2 is the behind block's passive response.
+ *      Without this distinction, chains like oddstone-slime would break:
+ *      oddstone reaching back to slime passes, but slime responding to
+ *      oddstone would hit Rule 1 (non-oddstone can't grab oddstone).
  *
  * FEATURE 2: DIRECTIONAL STICKINESS (Odd Slime + Framed Odd Slime)
  * =================================================================
@@ -88,11 +94,19 @@ import java.util.List;
  *
  * HISTORY / KNOWN PITFALLS:
  * =========================
- * - The @Redirect on canStickTo was added to fix slime pulling Oddstone
- *   in the backward walk. Weakening grab immunity there WILL re-break this.
- * - Any exemption in the backward walk must be NARROWLY targeted.
- * - Active puller exemption only matches OddSlimeBlock or FramedBlock
- *   with INNER_STICKY=ODD_SLIME + FACING matching pushDirection.
+ * - Grab immunity was originally checked on BOTH canStickTo calls in the
+ *   backward walk. This broke oddstone-slime chains in the push axis:
+ *   Call 1 (oddstone->slime) passed, Call 2 (slime->oddstone) hit Rule 1.
+ *   Vanilla ANDs both results, so the chain broke.
+ * - Removing grab immunity entirely overcorrected: slime could then chain
+ *   backward to oddstone (Call 1 slime->oddstone went unchecked).
+ * - The fix uses a call-pair toggle: grab immunity applies only on Call 1
+ *   (front block reaching back = active grabber). Call 2 (behind block
+ *   responding) skips grab immunity.
+ * - Directional rules remain on both calls because they represent genuine
+ *   physical constraints (odd slime direction), not one-way grab rules.
+ * - The isActivePuller exemption was removed — it was a workaround for
+ *   the original bug where grab immunity fired on both calls.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -111,6 +125,26 @@ public abstract class PistonStructureResolverMixin {
 
     @Unique
     private static final ThreadLocal<Boolean> ideomod$inBranching = ThreadLocal.withInitial(() -> false);
+
+    /**
+     * Tracks which canStickTo call we're in within the backward walk.
+     * 
+     * Vanilla's backward walk evaluates:
+     *   oldState.canStickTo(blockstate) && blockstate.canStickTo(oldState)
+     * 
+     * Call 1 (firstCanStickToCall=true):  self=front(oldState), other=behind(blockstate)
+     *   -> This is the FRONT block reaching back. Grab immunity applies here
+     *      because the front block is the one initiating the chain extension.
+     * 
+     * Call 2 (firstCanStickToCall=false): self=behind(blockstate), other=front(oldState)
+     *   -> This is the BEHIND block's compatibility check. Grab immunity is
+     *      NOT checked here -- if the front block is allowed to grab, the
+     *      behind block's canStickTo is sufficient.
+     * 
+     * The toggle flips on each call and resets to true when the pair completes.
+     */
+    @Unique
+    private static final ThreadLocal<Boolean> ideomod$firstCanStickToCall = ThreadLocal.withInitial(() -> true);
 
     // ====================================================================
     // FEATURE 4: RANGED PISTON START POSITION REDIRECT
@@ -207,60 +241,109 @@ public abstract class PistonStructureResolverMixin {
     }
 
     // ====================================================================
-    // FEATURE 1B + 2B: ONE-WAY & DIRECTIONAL STICKINESS -- BACKWARD WALK
+    // FEATURE 1B + 2B: STICKINESS RULES -- CHAIN COHESION (BACKWARD WALK)
     // ====================================================================
 
     /**
-     * Intercepts the canStickTo check in the backward walk of addBlockLine.
+     * Intercepts ALL canStickTo calls inside addBlockLine.
      *
-     * "self" = the block behind (being considered as a chain member)
-     * "other" = the block in front (already in the push list)
+     * IMPORTANT CONTEXT:
+     * ==================
+     * Vanilla's backward walk checks:
+     *   oldState.canStickTo(blockstate) && blockstate.canStickTo(oldState)
      *
-     * Active puller exemption: when an Odd Slime (or Framed Odd Slime) is
-     * at the front being pushed in its FACING direction, it pulls blocks
-     * behind it — grab immunity is skipped for the behind block.
+     * This redirect fires for BOTH calls. We use a toggle to distinguish them:
+     *
+     *   Call 1 (first=true):  self=oldState (FRONT), other=blockstate (BEHIND)
+     *     The front block is reaching backward to grab the candidate.
+     *     Grab immunity IS checked — the front block is the active grabber.
+     *     Example: slime reaching back to oddstone -> blocked by Rule 1.
+     *
+     *   Call 2 (first=false): self=blockstate (BEHIND), other=oldState (FRONT)
+     *     The behind block's compatibility response to the front block.
+     *     Grab immunity is NOT checked — this is passive agreement, not active grab.
+     *     Example: oddstone responding to slime's reach -> just canStickTo.
+     *
+     * WHY THIS MATTERS:
+     * =================
+     * Without the toggle, grab immunity fired on BOTH calls. This broke
+     * chains like [slime]--[oddstone]-->push where oddstone should hold
+     * slime behind it: Call 1 (oddstone->slime) passed, but Call 2
+     * (slime->oddstone) hit Rule 1 (non-oddstone can't grab oddstone).
+     * Since vanilla ANDs both results, the chain broke even though oddstone
+     * legitimately wanted to hold slime.
+     *
+     * Removing grab immunity entirely overcorrected — slime could then
+     * chain backward to oddstone (Call 1 slime->oddstone unchecked).
+     *
+     * The fix: only Call 1 (the front block reaching back) is subject to
+     * grab immunity. Call 2 (behind block responding) only needs canStickTo
+     * + directional checks.
+     *
+     * Directional rules apply on BOTH calls because they represent genuine
+     * physical constraints (odd slime direction), not one-way social rules.
      */
     @Redirect(method = "addBlockLine",
               at = @At(value = "INVOKE",
                        target = "Lnet/minecraft/world/level/block/state/BlockState;canStickTo(Lnet/minecraft/world/level/block/state/BlockState;)Z"))
     private boolean ideomod$checkCanStickToWithRules(BlockState self, BlockState other) {
+        // Track which call in the pair we're on.
+        // Call 1: oldState.canStickTo(blockstate) — front reaching back
+        // Call 2: blockstate.canStickTo(oldState) — behind responding
+        boolean isFirstCall = ideomod$firstCanStickToCall.get();
+        ideomod$firstCanStickToCall.set(!isFirstCall);
+
+        // First: respect the original canStickTo result
         if (!self.canStickTo(other)) {
+            // If first call fails, vanilla short-circuits the &&, so the
+            // second call never fires. Reset toggle for next iteration.
+            if (isFirstCall) {
+                ideomod$firstCanStickToCall.set(true);
+            }
             return false;
         }
 
-        // --- Directional checks on both sides ---
-
-        // Check "self" (behind block) directional rules
+        // --- Directional checks (apply on BOTH calls) ---
         if (StickinessRules.isDirectionalGrabBlocked(self, this.pushDirection)) {
             if (!ideomod$wouldFrameStickinessAllow(self, other)) {
+                if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
             }
         }
         if (ideomod$isFramedOddSlimeDirectionallyBlocked(self)) {
             if (!ideomod$wouldFrameStickinessAllow(self, other)) {
+                if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
             }
         }
-
-        // Check "other" (front block) directional rules
         if (StickinessRules.isDirectionalGrabBlocked(other, this.pushDirection)) {
             if (!ideomod$wouldFrameStickinessAllow(other, self)) {
+                if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
             }
         }
         if (ideomod$isFramedOddSlimeDirectionallyBlocked(other)) {
             if (!ideomod$wouldFrameStickinessAllow(other, self)) {
+                if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
             }
         }
 
-        // --- Active puller exemption ---
-        boolean targetIsActivePuller = ideomod$isActivePuller(other);
-
-        if (!targetIsActivePuller) {
+        // --- Grab immunity (FIRST CALL ONLY) ---
+        // Call 1: self=front block (oldState), other=behind block (blockstate).
+        // The front block is the one whose isStickyBlock() started the backward
+        // walk. It's actively reaching back. Grab immunity applies here.
+        if (isFirstCall) {
             if (StickinessRules.isGrabBlocked(self, other)) {
+                // Reset toggle — vanilla will short-circuit, skip Call 2
+                ideomod$firstCanStickToCall.set(true);
                 return false;
             }
+        }
+
+        // Call 2 (or Call 1 that passed): reset toggle for next loop iteration
+        if (!isFirstCall) {
+            ideomod$firstCanStickToCall.set(true);
         }
 
         return true;
@@ -311,25 +394,6 @@ public abstract class PistonStructureResolverMixin {
         return false;
     }
 
-    /**
-     * Check if a block is an active puller — an Odd Slime or Framed Odd Slime
-     * being pushed in its FACING direction. Active pullers pull blocks behind
-     * them in the chain, so grab immunity is skipped for those behind blocks.
-     */
-    @Unique
-    private boolean ideomod$isActivePuller(BlockState state) {
-        if (state.getBlock() instanceof OddSlimeBlock) {
-            Direction facing = state.getValue(DirectionalBlock.FACING);
-            return this.pushDirection.equals(facing);
-        }
-        if (state.getBlock() instanceof FramedBlock
-                && state.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODD_SLIME) {
-            Direction facing = state.getValue(FramedBlock.FACING);
-            return this.pushDirection.equals(facing);
-        }
-        return false;
-    }
-
     // ====================================================================
     // FEATURE 3: ODDSTONE SYMPATHETIC MOVEMENT
     // ====================================================================
@@ -337,27 +401,30 @@ public abstract class PistonStructureResolverMixin {
     @Inject(method = "addBranchingBlocks", at = @At("TAIL"), cancellable = true)
     private void ideomod$sympatheticSearch(CallbackInfoReturnable<Boolean> cir) {
         int radius = OddstoneConfig.getSympatheticRadius();
-        if (radius <= 1) return;
 
-        List<BlockPos> snapshot = new ArrayList<>(this.toPush);
+        // Use helper to find all sympathetic oddstone blocks
+        java.util.Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, new java.util.HashSet<>(this.toPush), radius);
+
         boolean addedAny = false;
 
-        for (BlockPos oddPos : snapshot) {
-            if (!ideomod$isOddstoneOrFramedOddstone(oddPos)) continue;
+        // Try to add newly found blocks via addBlockLine (resolver's normal flow)
+        for (BlockPos checkPos : allFound) {
+            if (!this.toPush.contains(checkPos)) {
+                List<BlockPos> snapshot = new ArrayList<>(this.toPush);
+                for (BlockPos oddPos : snapshot) {
+                    if (!MovementScanHelper.isOddstoneOrFramedOddstone(level, oddPos)) continue;
 
-            for (Direction face : Direction.values()) {
-                for (int dist = 2; dist <= radius; dist++) {
-                    BlockPos checkPos = oddPos.relative(face, dist);
-
-                    if (ideomod$isOddstoneOrFramedOddstone(checkPos)) {
-                        if (!this.toPush.contains(checkPos)) {
+                    for (Direction face : Direction.values()) {
+                        if (checkPos.equals(oddPos.relative(face, radius)) ||
+                            checkPos.equals(oddPos.relative(face, 2))) { // Match both near and far
                             boolean result = this.addBlockLine(checkPos, face);
                             if (this.toPush.contains(checkPos)) {
                                 addedAny = true;
+                                break;
                             }
                         }
-                        break;
                     }
+                    if (this.toPush.contains(checkPos)) break;
                 }
             }
         }
@@ -367,21 +434,6 @@ public abstract class PistonStructureResolverMixin {
         }
     }
 
-    @Unique
-    private boolean ideomod$isOddstoneOrFramedOddstone(BlockPos pos) {
-        BlockState state = this.level.getBlockState(pos);
-
-        if (state.is(ModBlocks.ODDSTONE.get())) return true;
-
-        if (state.getBlock() instanceof FramedBlock) {
-            BlockEntity be = this.level.getBlockEntity(pos);
-            if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
-                return fbe.getInnerBlock() instanceof OddstoneBlock;
-            }
-        }
-
-        return false;
-    }
 
     // ====================================================================
     // FEATURE 5: FRAMED BLOCK IMMOVABLE INNER CHECK

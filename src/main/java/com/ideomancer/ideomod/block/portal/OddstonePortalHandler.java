@@ -164,7 +164,7 @@ public class OddstonePortalHandler {
      * Re-validates the portal frame that this Oddstone is part of.
      * If the frame is no longer valid (power lost or corner missing),
      * deactivates the portal. If the frame is still valid, does nothing.
-     * 
+     *
      * This is the key fix for false deactivation: instead of assuming
      * the portal is broken because ONE Oddstone got a neighborChanged,
      * we walk the entire frame and check everything.
@@ -184,80 +184,35 @@ public class OddstonePortalHandler {
         }
         if (portalBlockPos == null) return;
 
-        Direction.Axis axis = portalState.getValue(OddstonePortalBlock.AXIS);
-        Direction hDir = PortalUtils.getHorizontalDir(axis);
-
-        // Navigate to bottom-left of interior
-        BlockPos bottomLeft = PortalUtils.findBottomLeft(level, portalBlockPos, hDir);
-
-        // Measure portal interior dimensions
-        int width = 0;
-        while (level.getBlockState(bottomLeft.relative(hDir, width))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            width++;
-        }
-        int height = 0;
-        while (level.getBlockState(bottomLeft.above(height))
-                .is(ModBlocks.ODDSTONE_PORTAL.get())) {
-            height++;
-        }
-        if (width == 0 || height == 0) {
+        // Detect geometry from the portal block
+        PortalGeometry geom = PortalGeometry.detect(level, portalBlockPos);
+        if (geom == null) {
             unregisterAndClear(level, portalBlockPos, portalState);
             return;
         }
 
-        // Derive the four frame corners from the interior
-        Direction hDirNeg = hDir.getOpposite();
-        BlockPos frameBL = bottomLeft.relative(hDirNeg).below();
-        BlockPos frameBR = frameBL.relative(hDir, width + 1);
-        BlockPos frameTL = frameBL.above(height + 1);
-        BlockPos frameTR = frameTL.relative(hDir, width + 1);
-
-        int outerWidth = width + 2;
-        int outerHeight = height + 2;
-
         // Check all four corners are still valid corner blocks
-        if (!PortalUtils.isCornerBlock(level, frameBL)
-            || !PortalUtils.isCornerBlock(level, frameBR)
-            || !PortalUtils.isCornerBlock(level, frameTL)
-            || !PortalUtils.isCornerBlock(level, frameTR)) {
+        BlockPos[] corners = geom.getFrameCorners();
+        if (!PortalUtils.isCornerBlock(level, corners[0])
+            || !PortalUtils.isCornerBlock(level, corners[1])
+            || !PortalUtils.isCornerBlock(level, corners[2])
+            || !PortalUtils.isCornerBlock(level, corners[3])) {
             Ideomod.LOGGER.debug("Portal frame invalid - corner block missing");
             unregisterAndClear(level, portalBlockPos, portalState);
             return;
         }
 
         // Check all Oddstone in the frame are still Oddstone AND powered
-        // Bottom row (excluding corners)
-        for (int h = 1; h < outerWidth - 1; h++) {
-            BlockPos pos = frameBL.relative(hDir, h);
+        final boolean[] frameValid = {true};
+        geom.forEachOddstonePosition(pos -> {
             if (!isValidFrameOddstone(level, pos)) {
-                unregisterAndClear(level, portalBlockPos, portalState);
-                return;
+                frameValid[0] = false;
             }
-        }
-        // Top row (excluding corners)
-        for (int h = 1; h < outerWidth - 1; h++) {
-            BlockPos pos = frameTL.relative(hDir, h);
-            if (!isValidFrameOddstone(level, pos)) {
-                unregisterAndClear(level, portalBlockPos, portalState);
-                return;
-            }
-        }
-        // Left column (excluding corners)
-        for (int v = 1; v < outerHeight - 1; v++) {
-            BlockPos pos = frameBL.above(v);
-            if (!isValidFrameOddstone(level, pos)) {
-                unregisterAndClear(level, portalBlockPos, portalState);
-                return;
-            }
-        }
-        // Right column (excluding corners)
-        for (int v = 1; v < outerHeight - 1; v++) {
-            BlockPos pos = frameBR.above(v);
-            if (!isValidFrameOddstone(level, pos)) {
-                unregisterAndClear(level, portalBlockPos, portalState);
-                return;
-            }
+        });
+
+        if (!frameValid[0]) {
+            unregisterAndClear(level, portalBlockPos, portalState);
+            return;
         }
 
         // Frame is still valid — do nothing

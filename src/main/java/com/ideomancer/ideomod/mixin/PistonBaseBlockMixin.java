@@ -6,6 +6,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
+import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.config.OddstoneConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -25,6 +26,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.List;
+import java.util.Set;
 
 /**
  * Mixin into PistonBaseBlock for four Ideomod features:
@@ -125,7 +127,7 @@ public abstract class PistonBaseBlockMixin {
         // (e.g., slime stuck to oddstone), the group moves normally.
         BlockPos pullTarget = ideomod$pullTargetPos.get();
         if (pullTarget != null && pullTarget.equals(pos)) {
-            if (ideomod$isOddstoneOrFramedOddstone(blockState, level, pos)) {
+            if (MovementScanHelper.isOddstoneOrFramedOddstone(level, pos)) {
                 Ideomod.LOGGER.debug("[PistonBaseMixin] Oddstone pull immunity: " +
                         "blocking direct sticky piston pull at {}", pos);
                 cir.setReturnValue(false);
@@ -223,39 +225,6 @@ public abstract class PistonBaseBlockMixin {
         }
     }
 
-    // ========================================================================
-    // FEATURE 3 HELPER: Check if a block is Oddstone or Framed Oddstone
-    // ========================================================================
-
-    /**
-     * Returns true if the block is:
-     *   - A direct OddstoneBlock
-     *   - A FramedBlock whose inner block is Oddstone
-     *
-     * Static because isPushable is static.
-     */
-    @Unique
-    private static boolean ideomod$isOddstoneOrFramedOddstone(
-            BlockState state, Level level, BlockPos pos) {
-        Block block = state.getBlock();
-
-        // Direct Oddstone
-        if (block instanceof OddstoneBlock) return true;
-
-        // Framed Oddstone -- check the block entity for inner block type
-        if (block instanceof FramedBlock) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof FramedBlockEntity fbe) {
-                ResourceLocation innerBlockId = fbe.getInnerBlockId();
-                if (innerBlockId != null) {
-                    Block innerBlock = ForgeRegistries.BLOCKS.getValue(innerBlockId);
-                    return innerBlock instanceof OddstoneBlock;
-                }
-            }
-        }
-
-        return false;
-    }
 
     // ========================================================================
     // FEATURE 2: SAVE BLOCK ENTITY DATA BEFORE VANILLA PISTON MOVES
@@ -349,63 +318,21 @@ public abstract class PistonBaseBlockMixin {
      * via stickiness. This handles cases where a sticky Machine Frame drags
      * other Machine Frames during retraction.
      *
-     * Uses breadth-first scan checking stickiness relationships.
-     * Any IPistonMovable block entity found in the group gets its data saved.
+     * Uses MovementScanHelper.scanStickyGroup to find the group, then
+     * iterates to save block entity data for each block.
      */
     private void scanStickyGroup(Level level, BlockPos startPos,
                                   Direction moveDir, String dimensionKey,
                                   java.util.Set<BlockPos> savedPositions) {
-        java.util.Set<BlockPos> visited = new java.util.HashSet<>();
-        java.util.LinkedList<BlockPos> queue = new java.util.LinkedList<>();
-        visited.add(startPos); // start block already saved by caller
+        // Use helper to find all blocks in the sticky group
+        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(level, startPos, 12);
 
-        // Seed with neighbors of the start block
-        for (Direction dir : Direction.values()) {
-            queue.add(startPos.relative(dir));
-        }
-
-        int limit = 12; // vanilla piston push limit
-        int count = 0;
-
-        while (!queue.isEmpty() && count < limit) {
-            BlockPos pos = queue.poll();
-            if (visited.contains(pos)) continue;
-            visited.add(pos);
-
-            BlockState state = level.getBlockState(pos);
-            if (state.isAir()) continue;
-
-            // Check if this block is stuck to any block already in the group
-            boolean stuckToGroup = false;
-            for (Direction dir : Direction.values()) {
-                BlockPos adjacentInGroup = pos.relative(dir);
-                if (visited.contains(adjacentInGroup) && !adjacentInGroup.equals(pos)) {
-                    BlockState adjacentState = level.getBlockState(adjacentInGroup);
-                    if (adjacentState.isStickyBlock()
-                            && adjacentState.canStickTo(state)
-                            && state.canStickTo(adjacentState)) {
-                        stuckToGroup = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!stuckToGroup) continue;
-            count++;
-
-            // Save this block's data if it's IPistonMovable
-            BlockPos destPos = pos.relative(moveDir);
-            saveBlockEntityAt(level, pos, destPos, dimensionKey);
-            savedPositions.add(pos);
-
-            // If this block is also sticky, scan its neighbors too
-            if (state.isStickyBlock()) {
-                for (Direction dir : Direction.values()) {
-                    BlockPos neighbor = pos.relative(dir);
-                    if (!visited.contains(neighbor)) {
-                        queue.add(neighbor);
-                    }
-                }
+        // Iterate newly found positions and save their data
+        for (BlockPos pos : groupBlocks) {
+            if (!savedPositions.contains(pos)) {
+                BlockPos destPos = pos.relative(moveDir);
+                saveBlockEntityAt(level, pos, destPos, dimensionKey);
+                savedPositions.add(pos);
             }
         }
     }
@@ -416,53 +343,40 @@ public abstract class PistonBaseBlockMixin {
      * have added to the push list. These blocks are at range (not adjacent)
      * so the BFS in scanStickyGroup won't find them.
      *
-     * Mirrors the logic in PistonStructureResolverMixin.ideomod$sympatheticSearch:
-     * for each oddstone in savedPositions, scan outward along each axis
-     * up to the sympathetic radius for another oddstone block.
+     * Uses MovementScanHelper.scanSympathetic to find all sympathetic oddstone
+     * positions, then iterates them to save block entity data and scan their
+     * sticky groups.
+     *
+     * CRITICAL: After finding a sympathetic oddstone, also scans its sticky
+     * group. Without this, blocks attached to the remote oddstone via stickiness
+     * (e.g. machine-activated framed blocks) would not have their block entity
+     * data saved, causing data loss on retraction. This was the root cause of
+     * the "sympathetic retraction with machine-activated framed blocks" bug.
      */
     private void scanSympathetic(Level level, Direction moveDir,
                                   String dimensionKey,
                                   java.util.Set<BlockPos> savedPositions) {
         int radius = OddstoneConfig.getSympatheticRadius();
-        if (radius <= 1) return;
 
-        // Snapshot to avoid concurrent modification
-        java.util.List<BlockPos> snapshot = new java.util.ArrayList<>(savedPositions);
-        boolean foundNew = true;
+        // Use helper to find all sympathetic oddstone blocks
+        Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, savedPositions, radius);
 
-        // Iterate until no new blocks found (chain sympathetic links)
-        while (foundNew) {
-            foundNew = false;
-            java.util.List<BlockPos> newFound = new java.util.ArrayList<>();
+        // Iterate newly found positions (those not in savedPositions)
+        for (BlockPos checkPos : allFound) {
+            if (!savedPositions.contains(checkPos)) {
+                BlockState checkState = level.getBlockState(checkPos);
 
-            for (BlockPos oddPos : snapshot) {
-                if (!ideomod$isOddstoneOrFramedOddstone(
-                        level.getBlockState(oddPos), level, oddPos)) continue;
+                // Save the oddstone's block entity data
+                BlockPos destPos = checkPos.relative(moveDir);
+                saveBlockEntityAt(level, checkPos, destPos, dimensionKey);
+                savedPositions.add(checkPos);
 
-                for (Direction face : Direction.values()) {
-                    for (int dist = 2; dist <= radius; dist++) {
-                        BlockPos checkPos = oddPos.relative(face, dist);
-                        BlockState checkState = level.getBlockState(checkPos);
-
-                        if (ideomod$isOddstoneOrFramedOddstone(checkState, level, checkPos)) {
-                            if (!savedPositions.contains(checkPos)) {
-                                BlockPos destPos = checkPos.relative(moveDir);
-                                saveBlockEntityAt(level, checkPos, destPos, dimensionKey);
-                                savedPositions.add(checkPos);
-                                newFound.add(checkPos);
-                                foundNew = true;
-                            }
-                            break; // Stop scanning further — first hit only
-                        }
-
-                        // If non-air non-oddstone block in the way, stop
-                        if (!checkState.isAir()) break;
-                    }
+                // Scan its sticky group too (resolver's addBlockLine behavior)
+                if (checkState.isStickyBlock()) {
+                    scanStickyGroup(level, checkPos, moveDir,
+                            dimensionKey, savedPositions);
                 }
             }
-
-            // Add newly found positions for next iteration
-            snapshot = newFound;
         }
     }
 
