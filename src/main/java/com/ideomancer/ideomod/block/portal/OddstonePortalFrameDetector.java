@@ -15,15 +15,22 @@ import java.util.List;
 
 /**
  * Detects valid Oddstone portal frames and reads their corner addresses.
- * 
+ *
  * Scans from interior air blocks outward (nether portal style).
- * 
- * VALIDATION includes checking that ALL Oddstone blocks in the frame
- * are receiving a redstone signal. The portal only lights when every
- * frame block is powered.
- * 
+ *
+ * Frame validation checks structural integrity only:
+ * - Oddstone blocks form the frame edges
+ * - Corner blocks are valid mineral blocks
+ * - Interior is clear (air or existing portal blocks)
+ * - Dimensions within min/max bounds
+ *
+ * No redstone power checks — portals are activated by ender pearl,
+ * not by redstone signal.
+ *
  * Corner blocks are crafted mineral blocks (iron_block, diamond_block, etc.)
  * 14 types = 14^4 = 38,416 unique addresses per dimension.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class OddstonePortalFrameDetector {
 
@@ -128,13 +135,7 @@ public class OddstonePortalFrameDetector {
             return null;
         }
 
-        // CHECK: All Oddstone blocks in the frame must be receiving redstone
-        for (BlockPos oddPos : oddstonePositions) {
-            if (!level.hasNeighborSignal(oddPos)) {
-                Ideomod.LOGGER.debug("Portal frame invalid - Oddstone at {} has no redstone signal", oddPos);
-                return null;
-            }
-        }
+        // No redstone power check — portals are activated by ender pearl
 
         String address = readAddress(level, frameTL, frameTR, frameBR, frameBL);
 

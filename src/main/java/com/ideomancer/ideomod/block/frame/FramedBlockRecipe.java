@@ -26,6 +26,12 @@ import com.ideomancer.ideomod.registry.ModRecipeSerializers;
  *   - 1 BlockItem whose block passes FrameabilityHelper.isFrameable()
  *   - Nothing else
  *
+ * MATERIAL RESTRICTION: You cannot frame a block with a matching material.
+ * Iron frame + iron block = rejected. Copper frame + copper block = rejected.
+ * This prevents redundant combinations (iron-framed iron looks like... iron)
+ * and avoids mechanical overlap with vanilla metal blocks being native frame
+ * family conductors.
+ *
  * The output is the corresponding Framed Block item (iron or copper) with
  * BlockEntityTag.InnerBlock set to the frameable block's registry name.
  *
@@ -82,6 +88,9 @@ public class FramedBlockRecipe extends CustomRecipe {
      * Scans the crafting container for exactly one frame item and one
      * frameable block item. Returns null if the grid doesn't match.
      *
+     * Also rejects same-material combinations: iron frame + iron block
+     * and copper frame + copper block are not allowed.
+     *
      * Shared by matches() and assemble() to avoid duplicating the
      * same iteration logic.
      */
@@ -107,10 +116,25 @@ public class FramedBlockRecipe extends CustomRecipe {
             }
         }
 
-        if (nonEmptyCount == 2 && !frameStack.isEmpty() && !blockStack.isEmpty()) {
-            return new MatchResult(frameStack, blockStack);
+        if (nonEmptyCount != 2 || frameStack.isEmpty() || blockStack.isEmpty()) {
+            return null;
         }
-        return null;
+
+        // MATERIAL RESTRICTION: reject same-material combinations.
+        // Iron frame + iron block = no. Copper frame + copper block = no.
+        // This prevents redundant framing since vanilla metal blocks are
+        // native frame family conductors.
+        Block frameBlock = ((BlockItem) frameStack.getItem()).getBlock();
+        Block innerBlock = ((BlockItem) blockStack.getItem()).getBlock();
+        if (frameBlock instanceof IFrameBlock frameTyped) {
+            FrameMaterial frameMat = frameTyped.getFrameMaterial();
+            FrameMaterial innerMat = FrameMaterial.fromVanillaBlock(innerBlock);
+            if (innerMat != null && innerMat == frameMat) {
+                return null; // Same material — rejected
+            }
+        }
+
+        return new MatchResult(frameStack, blockStack);
     }
 
     /**

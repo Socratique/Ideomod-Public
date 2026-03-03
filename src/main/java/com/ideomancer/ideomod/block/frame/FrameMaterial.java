@@ -1,6 +1,10 @@
 package com.ideomancer.ideomod.block.frame;
 
 import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import org.jetbrains.annotations.Nullable;
+
 import java.util.EnumMap;
 import java.util.Map;
 import java.util.function.Supplier;
@@ -16,7 +20,7 @@ import java.util.function.Supplier;
  * that this frame material contributes on top of the inner block's base
  * destroy time. Iron frames are slightly tougher than copper.
  *
- * Written by Claude, directed and guided by The Ideomancer.
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public enum FrameMaterial {
     IRON("Iron", "iron", 0.75f),
@@ -56,6 +60,63 @@ public enum FrameMaterial {
      */
     public float getMiningTimeModifier() {
         return miningTimeModifier;
+    }
+
+    // ========================================================================
+    // VANILLA BLOCK MAPPING
+    // ========================================================================
+
+    /**
+     * Returns the FrameMaterial that a vanilla block naturally belongs to,
+     * or null if it's not a natural frame conductor.
+     *
+     * This allows vanilla iron blocks and copper blocks to participate in
+     * the FrameActivation network as native conductors for their material.
+     * They don't need an ACTIVE property -- they're always conductive.
+     *
+     * @param block The block to check
+     * @return IRON for iron_block, COPPER for copper_block, null otherwise
+     */
+    @Nullable
+    public static FrameMaterial fromVanillaBlock(Block block) {
+        if (block == Blocks.IRON_BLOCK) return IRON;
+        if (block == Blocks.COPPER_BLOCK) return COPPER;
+        return null;
+    }
+
+    /**
+     * Checks whether a block is a vanilla conductor for this specific material.
+     * Convenience method for activation chain checks.
+     */
+    public boolean isVanillaConductor(Block block) {
+        return fromVanillaBlock(block) == this;
+    }
+
+    // ========================================================================
+    // BLOCKSTATE CONDUCTOR VALUE
+    // ========================================================================
+
+    /**
+     * Returns the integer value for storing this material in the
+     * FramedBlock.INNER_CONDUCTOR blockstate property.
+     * IRON=1, COPPER=2.
+     */
+    public int toConductorValue() {
+        return this == IRON ? 1 : 2;
+    }
+
+    /**
+     * Returns the FrameMaterial for a given INNER_CONDUCTOR blockstate value.
+     * @param value 0=no conductor, 1=IRON, 2=COPPER
+     * @return the FrameMaterial, or null if value is 0 or invalid
+     */
+    @Nullable
+    public static FrameMaterial fromConductorValue(int value) {
+        return switch (value) {
+            case 1 -> IRON;
+            case 2 -> COPPER;
+            default -> null;
+        };
     }
 
     // ========================================================================

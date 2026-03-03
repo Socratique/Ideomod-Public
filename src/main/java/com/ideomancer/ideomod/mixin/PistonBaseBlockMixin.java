@@ -300,8 +300,10 @@ public abstract class PistonBaseBlockMixin {
         java.util.Set<BlockPos> savedPositions = new java.util.HashSet<>();
         savedPositions.add(pullPos);
 
-        // If the pulled block is sticky, scan its group for more blocks
-        if (pullState.isStickyBlock()) {
+        // If the pulled block is sticky or a vanilla metal conductor,
+        // scan its group for more blocks to save
+        if (pullState.isStickyBlock()
+                || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(pullState.getBlock()) != null) {
             scanStickyGroup(level, pullPos, moveDir, dimensionKey, savedPositions);
         }
 
@@ -372,7 +374,8 @@ public abstract class PistonBaseBlockMixin {
                 savedPositions.add(checkPos);
 
                 // Scan its sticky group too (resolver's addBlockLine behavior)
-                if (checkState.isStickyBlock()) {
+                if (checkState.isStickyBlock()
+                        || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(checkState.getBlock()) != null) {
                     scanStickyGroup(level, checkPos, moveDir,
                             dimensionKey, savedPositions);
                 }

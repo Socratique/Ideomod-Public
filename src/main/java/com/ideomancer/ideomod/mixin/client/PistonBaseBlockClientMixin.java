@@ -24,9 +24,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.LinkedList;
 import java.util.List;
-import java.util.Queue;
 import java.util.Set;
 
 /**
@@ -105,6 +103,7 @@ public abstract class PistonBaseBlockClientMixin {
             return 0;
         }
 
+        // Walk the line of blocks being pulled (same as vanilla retraction)
         List<BlockPos> lineBlocks = new ArrayList<>();
         BlockPos current = pullPos;
         for (int i = 0; i < MAX_PUSH_BLOCKS; i++) {
@@ -114,26 +113,17 @@ public abstract class PistonBaseBlockClientMixin {
             current = current.relative(direction);
         }
 
+        // Use MovementScanHelper for sticky group expansion from each
+        // block in the line. This is the SINGLE SOURCE OF TRUTH for
+        // sticky group scanning — same code as server-side save path.
+        // Handles vanilla metal conductors, cross-frame mediation, etc.
         Set<BlockPos> allBlocks = new HashSet<>(lineBlocks);
-        Queue<BlockPos> queue = new LinkedList<>(lineBlocks);
-
-        while (!queue.isEmpty() && allBlocks.size() < MAX_PUSH_BLOCKS) {
-            BlockPos pos = queue.poll();
-            BlockState state = level.getBlockState(pos);
-
-            if (!state.isStickyBlock()) continue;
-
-            for (Direction face : Direction.values()) {
-                BlockPos neighbor = pos.relative(face);
-                if (allBlocks.contains(neighbor)) continue;
-
-                BlockState neighborState = level.getBlockState(neighbor);
-                if (neighborState.isAir()) continue;
-
-                if (state.canStickTo(neighborState) && neighborState.canStickTo(state)) {
-                    allBlocks.add(neighbor);
-                    queue.add(neighbor);
-                }
+        for (BlockPos linePos : lineBlocks) {
+            BlockState state = level.getBlockState(linePos);
+            if (state.isStickyBlock()
+                    || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
+                Set<BlockPos> group = MovementScanHelper.scanStickyGroup(level, linePos, MAX_PUSH_BLOCKS);
+                allBlocks.addAll(group);
             }
         }
 
@@ -176,8 +166,9 @@ public abstract class PistonBaseBlockClientMixin {
                 allBlocks.add(checkPos);
 
                 // Scan sticky group attached to this sympathetic oddstone
-                // (machine frames, activated framed blocks, etc.)
-                if (checkState.isStickyBlock()) {
+                // (machine frames, activated framed blocks, vanilla metals, etc.)
+                if (checkState.isStickyBlock()
+                        || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(checkState.getBlock()) != null) {
                     ideomod$scanStickyGroupInto(level, checkPos, allBlocks);
                 }
             }

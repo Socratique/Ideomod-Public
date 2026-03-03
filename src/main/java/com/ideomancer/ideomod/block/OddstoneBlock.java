@@ -19,7 +19,7 @@ import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
 
 /**
  * Oddstone - a strange stone block with five unique properties:
- * 
+ *
  * 1. MOB AVOIDANCE: Mobs refuse to pathfind over this block.
  * 2. REDSTONE INSULATION: Does not conduct redstone signal through it.
  *    (Set via .isRedstoneConductor(false) in ModBlocks registration)
@@ -28,11 +28,12 @@ import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
  * 4. ONE-WAY STICKINESS: Oddstone grabs ALL slime types (slime, honey, odd slime).
  *    No slime type can grab Oddstone back. Oddstone also sticks to other Oddstone.
  *    Also sticks to Framed versions of all the above (via INNER_STICKY check).
- * 5. PORTAL FRAME: When ALL Oddstone blocks in a valid frame are powered,
- *    the portal activates. If ANY Oddstone loses power, it deactivates.
- *    (Handled by OddstonePortalHandler)
+ * 5. PORTAL FRAME: Oddstone blocks form the edges of portal frames. Portals
+ *    are activated by throwing an ender pearl into the frame interior (handled
+ *    by EnderPearlPortalHandler). Deactivation occurs when the frame structure
+ *    is broken (Oddstone or corner block removed).
  *
- * Written by Claude, directed and guided by The Ideomancer.
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class OddstoneBlock extends Block {
 
@@ -44,6 +45,14 @@ public class OddstoneBlock extends Block {
     // FEATURE 5: Portal Frame — delegates to OddstonePortalHandler
     // ========================================================================
 
+    /**
+     * Neighbor changes are still relevant for portal DEACTIVATION validation.
+     * When a neighbor changes next to an Oddstone that's adjacent to a portal,
+     * the handler re-validates the frame structure (corners present, oddstone
+     * present). If the frame is broken, the portal deactivates.
+     *
+     * Activation is handled by EnderPearlPortalHandler, not by neighborChanged.
+     */
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
@@ -77,7 +86,7 @@ public class OddstoneBlock extends Block {
      * Oddstone sticks to ALL slime-type blocks and other Oddstone,
      * including their Framed variants.
      * It's the universal grabber — the "parent" of all sticky systems.
-     * 
+     *
      * - Oddstone + Slime: YES (Oddstone grabs slime)
      * - Oddstone + Honey: YES (Oddstone grabs honey)
      * - Oddstone + Odd Slime: YES (Oddstone grabs odd slime)
@@ -85,7 +94,7 @@ public class OddstoneBlock extends Block {
      * - Oddstone + Framed Slime/Honey/OddSlime/Oddstone: YES (via INNER_STICKY)
      * - Oddstone + Machine Block: NO (Machine Block is its own exclusive family)
      * - Oddstone + anything else: NO (Oddstone only grabs sticky things + itself)
-     * 
+     *
      * The reverse (slime/honey/odd slime grabbing Oddstone) is BLOCKED
      * by StickinessRules grab immunity rules registered in Ideomod.java.
      */

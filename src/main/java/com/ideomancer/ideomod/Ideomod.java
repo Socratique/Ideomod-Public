@@ -9,6 +9,7 @@ import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.movement.StickinessRules;
 import com.ideomancer.ideomod.block.movement.StickyType;
+import com.ideomancer.ideomod.block.portal.EnderPearlPortalHandler;
 import com.ideomancer.ideomod.client.render.FramedBlockItemModel;
 import com.ideomancer.ideomod.client.render.FramedBlockRenderer;
 import com.ideomancer.ideomod.client.gui.MachineFrameScreen;
@@ -79,6 +80,7 @@ public class Ideomod {
         registerStickinessRules();
         registerStructureDefinitions();
         registerStructureEventHandlers();
+        registerPortalEventHandlers();
         LOGGER.info("Ideomod common setup complete!");
     }
 
@@ -130,22 +132,8 @@ public class Ideomod {
         // ================================================================
 
         // --- Rule 1: Non-Oddstone can't grab Oddstone (real or framed) ---
-        // Protects both bare OddstoneBlock AND FramedBlock with INNER_STICKY=ODDSTONE.
-        // Nothing except another oddstone-type block can grab oddstone.
-        //
-        // CARVE-OUTS:
-        //   A) Framed Oddstone (INNER_STICKY=ODDSTONE) IS allowed to grab real
-        //      Oddstone and other framed oddstone — inner oddstone stickiness.
-        //   B) For FRAMED oddstone targets only (not bare), the frame network
-        //      can reach it:
-        //      - ACTIVE same-material IFrameBlock (frames or framed blocks)
-        //      - Machine Family (the activation source for the network)
-        //      This is the core framing mechanic: "framing is the only way
-        //      other blocks can grab oddstone."
-        //      Bare OddstoneBlock is NEVER grabbed by frames or machines.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
-                    // Is the target an oddstone-type block?
                     boolean targetIsOddstone = target.getBlock() instanceof OddstoneBlock;
                     boolean targetIsFramedOddstone = StickinessRules.isFramedOddstone(target);
                     if (!targetIsOddstone && !targetIsFramedOddstone) return false;
@@ -154,22 +142,16 @@ public class Ideomod {
                     if (StickinessRules.isOddstoneType(grabber)) return false;
 
                     // Carve-out B: frame network can reach FRAMED oddstone
-                    // (bare oddstone is never grabbed by the frame network)
                     if (targetIsFramedOddstone && target.getValue(FramedBlock.ACTIVE)) {
-                        // Machine Family always connects to its network members
                         if (MachineFrameBlock.isMachineFamily(grabber.getBlock())) return false;
-                        // ACTIVE same-material frame connection
                         if (StickinessRules.isActiveFrameConnection(grabber, target)) return false;
                     }
 
-                    // Non-oddstone grabber trying to grab oddstone target: BLOCKED
                     return true;
                 }
         );
 
         // --- Rule 2: Machine Family can't grab sticky blocks ---
-        // Machine Frames, Tracks, and Trolleys don't pull slime/honey/odd
-        // slime along. The reverse (slime grabs Machine Family) IS allowed.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
                     if (!MachineFrameBlock.isMachineFamily(grabber.getBlock())) return false;
@@ -181,8 +163,6 @@ public class Ideomod {
         );
 
         // --- Rule 3: Slime/honey can't grab Odd Slime (mutual exclusion) ---
-        // The reverse (Odd Slime can't grab slime/honey) is handled by
-        // OddSlimeBlock.canStickTo() returning false at Layer 1.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
                     if (!(target.getBlock() instanceof OddSlimeBlock)) return false;
@@ -193,32 +173,20 @@ public class Ideomod {
         );
 
         // --- Rule 4: Frame Family can't grab sticky blocks ---
-        // Frames and framed blocks don't pull slime/honey/odd slime/oddstone.
-        //
-        // CARVE-OUTS for each target type:
-        //   - Matching INNER_STICKY: Framed Slime grabs slime, etc.
-        //   - INNER_STICKY=ODDSTONE: Framed Oddstone grabs ALL slime types
-        //     (mirrors real Oddstone's universal grabber behavior).
-        //   - ACTIVE same-material frame connection for framed oddstone targets.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
                     if (!StickinessRules.isFrameFamily(grabber.getBlock())) return false;
                     Block targetBlock = target.getBlock();
                     StickyType targetType = StickyType.of(target);
 
-                    // Only protect actual sticky targets
                     if (targetBlock instanceof SlimeBlock || targetBlock instanceof HoneyBlock
                             || targetBlock instanceof OddSlimeBlock) {
-                        // Carve-out: matching inner sticky or framed oddstone (universal grabber)
                         if (StickinessRules.hasMatchingInnerSticky(grabber, targetType)) return false;
                         return true;
                     }
 
-                    // Oddstone targets
                     if (StickinessRules.isOddstoneType(target)) {
-                        // Carve-out: Framed Oddstone inner type
                         if (StickinessRules.hasMatchingInnerSticky(grabber, StickyType.ODDSTONE)) return false;
-                        // Carve-out: ACTIVE same-material frame connection (framed oddstone targets only)
                         if (StickinessRules.isFramedOddstone(target) && target.getValue(FramedBlock.ACTIVE)) {
                             if (StickinessRules.isActiveFrameConnection(grabber, target)) return false;
                         }
@@ -233,17 +201,12 @@ public class Ideomod {
         // DIRECTIONAL RULES
         // ================================================================
 
-        // Real Odd Slime: only sticky when pushed in FACING direction.
-        // Blanket rule is fine — real Odd Slime has no other stickiness source.
         StickinessRules.registerDirectionalRule(
                 (state, pushDirection) -> {
                     if (!(state.getBlock() instanceof OddSlimeBlock)) return false;
                     return pushDirection != state.getValue(OddSlimeBlock.FACING);
                 }
         );
-
-        // NOTE: Framed Odd Slime does NOT register a directional rule here.
-        // See class javadoc for explanation. Handled in mixin instead.
 
         LOGGER.info("Registered stickiness rules: 4 grab immunity + 1 directional");
     }
@@ -256,6 +219,16 @@ public class Ideomod {
     private void registerStructureEventHandlers() {
         MinecraftForge.EVENT_BUS.register(new StructureManager.EventHandler());
         LOGGER.info("Registered structure event handlers");
+    }
+
+    /**
+     * Registers the ender pearl portal activation handler.
+     * Listens for ProjectileImpactEvent to catch ender pearls landing
+     * in valid Oddstone portal frames.
+     */
+    private void registerPortalEventHandlers() {
+        MinecraftForge.EVENT_BUS.register(new EnderPearlPortalHandler());
+        LOGGER.info("Registered ender pearl portal activation handler");
     }
 
     private void clientSetup(final FMLClientSetupEvent event) {

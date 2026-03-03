@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-02-23a (Package reorganization. Machine Track/Trolley updated to [DONE].)*
+*Last updated: 2026-03-02a (Cross-frame mediation, vanilla metal conductors, signal-based activation, activation-gated stickiness.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -777,8 +777,8 @@ Frame-only stickiness (no inner sticky block):
 
 With inner sticky block (e.g., Framed Slime): inherits inner block's grab behavior in addition to frame stickiness above. Framed Slime grabs Normal blocks. Framed Odd Slime grabs directionally.
 
-**Activation model (redstone-style wipe-and-rebuild):**
-Framed Blocks use the same FrameActivation system as Frame Blocks. When anything changes, the entire connected frame network is wiped to inactive, then rebuilt from Machine Block sources. See Frame Blocks section for full algorithm description.
+**Activation model (redstone-style signal strength with anti-signal suppression):**
+Framed Blocks use the same FrameActivation system as Frame Blocks. Signal strength 15, decays by 1 per conductor. Mediators (framed blocks with cross-material inner conductor) pass ALL materials as universal bridges. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
@@ -847,30 +847,36 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.recalculate() -- redstone-style wipe-and-rebuild from Machine Block sources. |
 | Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
 | Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
-| Activation chaining | [DONE] | Chains through same-material frames up to 12 blocks from Machine Block source. Cross-material stops propagation. |
+| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Block source. Cross-material stops propagation unless via mediator. Anti-signal suppression via redstone-powered Machine Blocks. |
+| Vanilla metal conductors | [DONE] | iron_block and copper_block participate in frame activation networks. Activation tracked ephemerally in FrameActivation. Only sticky when activated. |
+| Cross-frame mediation | [DONE] | Framed blocks with cross-material inner conductor (e.g., copper-framed iron) are mediators -- pass ALL materials when activated. Unlimited mediator hops. |
+| Activation-gated stickiness | [DONE] | Frame-to-frame stickiness requires ACTIVE on both sides. Machine blocks only grab active frames. |
 | Waterlogging | [DONE] | Implements SimpleWaterloggedBlock. BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. Bucket interaction. updateShape() schedules fluid ticks. Water contained within frame (standard full-cube waterlogged behavior). |
 
-**Activation model (redstone-style wipe-and-rebuild):**
+**Activation model (redstone-style signal strength with anti-signal suppression):**
 Frames are passive like redstone dust. They never decide their own activation state.
-All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.recalculate(pos),
-which does a full network wipe-and-rebuild:
-1. DISCOVER: BFS from change point through all connected frames (any material, active or not)
-2. WIPE: Set all discovered frames to active=false (UPDATE_CLIENTS only, no neighbor cascade)
-3. FIND SOURCES: Check all frames + change position for adjacent Machine Blocks
-4. RE-ACTIVATE: Flood-fill from each Machine Block through same-material chains (capped at 12)
+All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.recalculate(pos).
+1. DISCOVER: BFS from change point through all connected conductors (any material, active or not)
+2. WIPE: Set all discovered IFrameBlocks to active=false, clear vanilla metal activation set
+3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
+4. PROPAGATE ACTIVATION: BFS from unpowered machines, strength 15 decaying by 1. Material routing: conductors only accept matching materials. Mediators pass ALL materials.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered machines, strength = redstone level, decaying by 1. Binary override.
+6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
 
 Machine Blocks also call FrameActivation.recalculate() in their own lifecycle hooks.
+Redstone input changes trigger via neighborChanged automatically.
 
-**Stickiness matrix (when active):**
+**Stickiness matrix (when active, requires active on BOTH sides for frame-to-frame):**
 
-| | Machine Fam | Iron Frame | Copper Frame | Slime | Honey | Odd Slime | Oddstone | Normal |
-|---|---|---|---|---|---|---|---|---|
-| Iron Frame (active) | YES | YES | no* | no | no | no | no | no |
-| Copper Frame (active) | YES | no* | YES | no | no | no | no | no |
+| | Machine Fam | Iron Frame (active) | Copper Frame (active) | Iron Frame (inactive) | Vanilla Iron (activated) | Vanilla Copper (activated) | Slime | Honey | Odd Slime | Oddstone | Normal |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Iron Frame (active) | YES | YES | no* | no | YES | no | no | no | no | no | no |
+| Copper Frame (active) | YES | no* | YES | no | no | YES | no | no | no | no | no |
 
 - `no*` = mutual canStickTo exclusion (cross-material)
-- `no` = grab immunity rule (rules 9-11) or canStickTo returns false
+- `no` = grab immunity rule (rules 9-11) or canStickTo returns false or inactive
 - When inactive: isStickyBlock() returns false, block is non-sticky
+- Machine Fam only grabs active frames (IMachineFamily.canMachineFamilyStickTo checks isActive)
 
 **Known issues:**
 - Model is cube_all -- should be custom frame shape

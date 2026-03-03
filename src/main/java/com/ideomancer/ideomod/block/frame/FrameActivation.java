@@ -11,41 +11,96 @@ import java.util.*;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 
 /**
- * Handles activation and deactivation of Frame Block chains.
+ * Handles activation and deactivation of Frame Block networks.
  *
- * Works like redstone: any change triggers a full network wipe-and-rebuild.
- * Machine Blocks are signal sources, Frame Blocks are passive conductors.
+ * Works like redstone dust: Machine Blocks are signal sources (like torches),
+ * conductors carry and decay the signal, and the signal has a maximum range
+ * of 15 blocks from source.
+ *
+ * ACTIVATION SIGNAL:
+ * ==================
+ * - Unpowered Machine Block emits activation strength 15
+ * - Each conductor block decays the signal by 1
+ * - A block is activated if it receives strength > 0
+ * - Maximum range: 15 blocks from source
+ *
+ * ANTI-ACTIVATION SIGNAL:
+ * =======================
+ * - A Machine Block receiving redstone power becomes a SUPPRESSOR:
+ *   - It stops emitting activation signal entirely
+ *   - It emits an anti-activation signal with strength = redstone level
+ *   - Anti-signal decays by 1 per conductor block, same as activation
+ * - Any block reached by anti-signal (strength > 0) is DEACTIVATED,
+ *   regardless of how strong the activation signal from other sources is.
+ *   Anti-signal is a binary override, not subtraction.
+ *
+ * CONDUCTOR TYPES:
+ * ================
+ * 1. FRAME BLOCKS (IFrameBlock): ACTIVE blockstate property.
+ *    Conduct for their getFrameMaterial() material.
+ *
+ * 2. FRAMED BLOCKS with INNER_CONDUCTOR: If the inner conductor is a
+ *    different material than the frame, the block is a MEDIATOR — when
+ *    activated, it passes ALL materials (universal bridge).
+ *
+ * 3. VANILLA METAL BLOCKS: No ACTIVE property. Activation tracked in
+ *    ephemeral Map<Long, Integer> rebuilt every recalculate(). Conduct
+ *    for their material only. Queryable via isVanillaMetalActivated(pos).
  *
  * THE ALGORITHM:
  * ==============
- * When ANYTHING changes (machine or frame placed/broken/neighbor updated):
- *
- *   1. DISCOVER: From the change point, flood-fill through all connected
- *      frame blocks (any material, active or inactive). Finds the entire
- *      frame network connected to the event.
- *
- *   2. WIPE: Set every discovered frame to ACTIVE=false.
- *      Uses UPDATE_CLIENTS only (flag 2) — no neighborChanged cascade.
- *
- *   3. FIND SOURCES: For every frame in the network AND for the change
- *      position itself, check 6 neighbors for Machine Blocks.
- *
- *   4. RE-ACTIVATE: From each Machine Block, flood-fill activation through
- *      same-material frame chains, capped at MAX_ACTIVATION_RANGE.
- *
- * This is the "turn it off and on again" approach. Simple, correct,
- * handles every case: machine removed, frame broken mid-chain, frame
- * placed bridging two chains, etc. No special cases needed.
+ * 1. DISCOVER: BFS from change point through all conductors.
+ * 2. WIPE: Set all IFrameBlock to ACTIVE=false, clear vanilla metal map.
+ * 3. FIND SOURCES: Find Machine Blocks adjacent to network.
+ * 4. ACTIVATE: BFS from unpowered machines, strength 15 decaying by 1.
+ *    Each entry carries available materials + signal strength.
+ *    Each block records the max strength received.
+ * 5. SUPPRESS: BFS from powered machines, anti-strength = redstone level,
+ *    decaying by 1. Any block reached by anti-signal is deactivated.
+ * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
+ *    no anti-signal.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class FrameActivation {
 
     /**
-     * Maximum number of frame blocks a single activation flood-fill can reach
-     * from one Machine Block. Matches the vanilla piston push limit.
+     * Maximum activation signal strength. Matches redstone's max of 15.
      */
-    public static final int MAX_ACTIVATION_RANGE = 12;
+    public static final int MAX_SIGNAL_STRENGTH = 15;
+
+    // ========================================================================
+    // VANILLA METAL ACTIVATION TRACKING
+    // ========================================================================
+
+    /**
+     * Ephemeral set of activated vanilla metal positions (packed longs).
+     * Rebuilt every recalculate(). Vanilla blocks have no ACTIVE property,
+     * so we track them here.
+     */
+    private static final Set<Long> activatedVanillaMetals = new HashSet<>();
+
+    /**
+     * Query whether a vanilla metal block at the given position is
+     * currently activated (connected to a machine source, not suppressed).
+     */
+    public static boolean isVanillaMetalActivated(BlockPos pos) {
+        return activatedVanillaMetals.contains(pos.asLong());
+    }
+
+    /**
+     * Check if a block at a position is an activated conductor of any kind.
+     * Covers IFrameBlocks (via ACTIVE property) and vanilla metals (via set).
+     */
+    public static boolean isActivatedConductor(BlockState state, BlockPos pos) {
+        if (state.getBlock() instanceof IFrameBlock) {
+            return isActive(state);
+        }
+        if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
+            return isVanillaMetalActivated(pos);
+        }
+        return false;
+    }
 
     // ========================================================================
     // THE ONE PUBLIC METHOD
@@ -53,64 +108,197 @@ public class FrameActivation {
 
     /**
      * Called when anything changes that might affect frame activation.
-     * Discovers the entire frame network, wipes it, finds Machine Block
-     * sources, and rebuilds activation from each source.
-     *
-     * Safe to call from anywhere — Machine Block or Frame Block lifecycle.
+     * Full wipe-and-rebuild with signal strength propagation.
      */
     public static void recalculate(Level level, BlockPos changePos) {
         if (level.isClientSide()) return;
 
-        // Step 1: Discover the entire frame network connected to changePos
+        // Step 1: Discover the entire conductor network
         Set<BlockPos> network = discoverNetwork(level, changePos);
-
         if (network.isEmpty()) return;
 
-        // Step 2: Wipe all frames to inactive (silent — no neighbor cascade)
-        for (BlockPos framePos : network) {
-            BlockState state = level.getBlockState(framePos);
-            if (isActive(state)) {
-                level.setBlock(framePos, state.setValue(FrameBlock.ACTIVE, false),
+        // Step 2: Wipe all activation states
+        for (BlockPos pos : network) {
+            BlockState state = level.getBlockState(pos);
+            if (state.getBlock() instanceof IFrameBlock && isActive(state)) {
+                level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, false),
                         Block.UPDATE_CLIENTS);
             }
+            activatedVanillaMetals.remove(pos.asLong());
         }
 
-        // Step 3: Find all Machine Blocks adjacent to any frame in the network
-        // or adjacent to the change position itself
+        // Step 3: Find all Machine Blocks adjacent to any network block
         Set<BlockPos> machineSources = new HashSet<>();
-
-        for (BlockPos framePos : network) {
-            for (Direction dir : Direction.values()) {
-                BlockPos neighborPos = framePos.relative(dir);
-                BlockState neighborState = level.getBlockState(neighborPos);
-                if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) {
-                    machineSources.add(neighborPos);
-                }
-            }
+        for (BlockPos pos : network) {
+            findAdjacentMachines(level, pos, machineSources);
         }
+        findAdjacentMachines(level, changePos, machineSources);
 
-        // Also check direct neighbors of changePos
-        for (Direction dir : Direction.values()) {
-            BlockPos neighborPos = changePos.relative(dir);
-            BlockState neighborState = level.getBlockState(neighborPos);
-            if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) {
-                machineSources.add(neighborPos);
-            }
-        }
-
-        // Also check if changePos itself is a Machine Block
         BlockState changeState = level.getBlockState(changePos);
         if (MachineFrameBlock.isMachineFamily(changeState.getBlock())) {
             machineSources.add(changePos);
         }
 
-        // Step 4: Re-activate from each Machine Block source
-        for (BlockPos machinePos : machineSources) {
-            activateFromMachine(level, machinePos);
+        if (machineSources.isEmpty()) {
+            Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, no sources",
+                    changePos, network.size());
+            return;
         }
 
-        Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, sources={}",
-                changePos, network.size(), machineSources.size());
+        // Step 4: Propagate activation signal from unpowered machines
+        // Each position maps to its maximum received signal strength
+        Map<Long, Integer> activationStrength = new HashMap<>();
+
+        for (BlockPos machinePos : machineSources) {
+            int redstonePower = level.getBestNeighborSignal(machinePos);
+            if (redstonePower == 0) {
+                // Unpowered: emit activation at strength 15
+                propagateSignal(level, machinePos, MAX_SIGNAL_STRENGTH, activationStrength);
+            }
+        }
+
+        // Step 5: Propagate anti-activation signal from powered machines
+        Map<Long, Integer> antiStrength = new HashMap<>();
+
+        for (BlockPos machinePos : machineSources) {
+            int redstonePower = level.getBestNeighborSignal(machinePos);
+            if (redstonePower > 0) {
+                // Powered: emit anti-signal at redstone strength
+                propagateSignal(level, machinePos, redstonePower, antiStrength);
+            }
+        }
+
+        // Step 6: Apply — activate blocks that have signal and no anti-signal
+        for (BlockPos pos : network) {
+            long packed = pos.asLong();
+            int activation = activationStrength.getOrDefault(packed, 0);
+            int anti = antiStrength.getOrDefault(packed, 0);
+
+            boolean shouldActivate = activation > 0 && anti == 0;
+
+            BlockState state = level.getBlockState(pos);
+
+            if (state.getBlock() instanceof IFrameBlock) {
+                if (shouldActivate && !isActive(state)) {
+                    level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, true),
+                            Block.UPDATE_CLIENTS);
+                }
+                // Already wiped to false in step 2, so no else needed
+            } else if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
+                if (shouldActivate) {
+                    activatedVanillaMetals.add(packed);
+                }
+            }
+        }
+
+        Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, sources={}, powered={}",
+                changePos, network.size(), machineSources.size(),
+                machineSources.stream().filter(p -> level.getBestNeighborSignal(p) > 0).count());
+    }
+
+    // ========================================================================
+    // SIGNAL PROPAGATION
+    // ========================================================================
+
+    /**
+     * BFS queue entry: position, available materials, and signal strength.
+     */
+    private record SignalEntry(BlockPos pos, EnumSet<FrameMaterial> availableMaterials, int strength) {}
+
+    /**
+     * Propagate a signal (activation or anti-activation) from a machine
+     * block through the conductor network. Each conductor decays the
+     * signal by 1. Records the maximum strength at each position.
+     *
+     * Material rules apply: a conductor only accepts signal if its
+     * conductive materials overlap with the available materials.
+     * Mediators pass ALL materials when reached.
+     *
+     * @param level         The level
+     * @param machinePos    The machine block position (source)
+     * @param startStrength The initial signal strength (1-15)
+     * @param strengthMap   Output: packed pos -> max strength received
+     */
+    private static void propagateSignal(Level level, BlockPos machinePos,
+                                          int startStrength,
+                                          Map<Long, Integer> strengthMap) {
+        if (startStrength <= 0) return;
+
+        Queue<SignalEntry> queue = new ArrayDeque<>();
+        // Track the best strength we've queued for each position to avoid
+        // re-processing with weaker signals
+        Map<Long, Integer> bestQueued = new HashMap<>();
+
+        EnumSet<FrameMaterial> allMaterials = EnumSet.allOf(FrameMaterial.class);
+
+        // Seed: all conductor neighbors of the machine
+        for (Direction dir : Direction.values()) {
+            BlockPos neighborPos = machinePos.relative(dir);
+            BlockState neighborState = level.getBlockState(neighborPos);
+            if (isConductor(neighborState)) {
+                long packed = neighborPos.asLong();
+                int newStrength = startStrength;
+                if (!bestQueued.containsKey(packed) || bestQueued.get(packed) < newStrength) {
+                    bestQueued.put(packed, newStrength);
+                    queue.add(new SignalEntry(neighborPos, allMaterials, newStrength));
+                }
+            }
+        }
+
+        while (!queue.isEmpty()) {
+            SignalEntry entry = queue.poll();
+            BlockPos current = entry.pos();
+            EnumSet<FrameMaterial> available = entry.availableMaterials();
+            int strength = entry.strength();
+
+            if (strength <= 0) continue;
+
+            long packed = current.asLong();
+
+            // Skip if we've already processed this position with equal or
+            // better strength (from a different source or path)
+            int recorded = strengthMap.getOrDefault(packed, 0);
+            if (recorded >= strength) continue;
+
+            BlockState currentState = level.getBlockState(current);
+            if (!isConductor(currentState)) continue;
+
+            // Check material compatibility
+            EnumSet<FrameMaterial> blockMaterials = getConductiveMaterials(currentState);
+            EnumSet<FrameMaterial> accepted = EnumSet.copyOf(blockMaterials);
+            accepted.retainAll(available);
+            if (accepted.isEmpty()) continue;
+
+            // Record this strength
+            strengthMap.put(packed, strength);
+
+            // Determine outgoing materials
+            EnumSet<FrameMaterial> outgoing;
+            if (isMediator(currentState)) {
+                outgoing = EnumSet.allOf(FrameMaterial.class);
+            } else {
+                outgoing = blockMaterials;
+            }
+
+            // Decay and continue
+            int nextStrength = strength - 1;
+            if (nextStrength <= 0) continue;
+
+            for (Direction dir : Direction.values()) {
+                BlockPos neighborPos = current.relative(dir);
+                long neighborPacked = neighborPos.asLong();
+
+                // Only queue if this would be a stronger signal than what
+                // we've already queued for this neighbor
+                if (!bestQueued.containsKey(neighborPacked) || bestQueued.get(neighborPacked) < nextStrength) {
+                    BlockState neighborState = level.getBlockState(neighborPos);
+                    if (isConductor(neighborState)) {
+                        bestQueued.put(neighborPacked, nextStrength);
+                        queue.add(new SignalEntry(neighborPos, outgoing, nextStrength));
+                    }
+                }
+            }
+        }
     }
 
     // ========================================================================
@@ -128,11 +316,74 @@ public class FrameActivation {
         return null;
     }
 
-    static boolean isActive(BlockState state) {
+    public static boolean isActive(BlockState state) {
         if (state.getBlock() instanceof IFrameBlock) {
             return state.getValue(FrameBlock.ACTIVE);
         }
         return false;
+    }
+
+    /**
+     * Checks if a block is any kind of conductor in the activation network.
+     */
+    private static boolean isConductor(BlockState state) {
+        if (state.getBlock() instanceof IFrameBlock) return true;
+        return FrameMaterial.fromVanillaBlock(state.getBlock()) != null;
+    }
+
+    /**
+     * Checks if a block is a MEDIATOR — a framed block whose inner conductor
+     * is a DIFFERENT material than its frame. When activated, mediators
+     * become universal conductors that pass ALL materials.
+     */
+    private static boolean isMediator(BlockState state) {
+        if (!(state.getBlock() instanceof FramedBlock)) return false;
+        int innerConductor = state.getValue(FramedBlock.INNER_CONDUCTOR);
+        if (innerConductor == 0) return false;
+        FrameMaterial innerMat = FrameMaterial.fromConductorValue(innerConductor);
+        if (innerMat == null) return false;
+        FrameMaterial frameMat = ((IFrameBlock) state.getBlock()).getFrameMaterial();
+        return innerMat != frameMat;
+    }
+
+    /**
+     * Returns all materials a conductor block handles.
+     */
+    private static EnumSet<FrameMaterial> getConductiveMaterials(BlockState state) {
+        EnumSet<FrameMaterial> materials = EnumSet.noneOf(FrameMaterial.class);
+
+        if (state.getBlock() instanceof IFrameBlock frameBlock) {
+            materials.add(frameBlock.getFrameMaterial());
+
+            if (state.getBlock() instanceof FramedBlock) {
+                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
+                    state.getValue(FramedBlock.INNER_CONDUCTOR));
+                if (innerMat != null) {
+                    materials.add(innerMat);
+                }
+            }
+        }
+
+        FrameMaterial vanillaMat = FrameMaterial.fromVanillaBlock(state.getBlock());
+        if (vanillaMat != null) {
+            materials.add(vanillaMat);
+        }
+
+        return materials;
+    }
+
+    // ========================================================================
+    // HELPERS
+    // ========================================================================
+
+    private static void findAdjacentMachines(Level level, BlockPos pos, Set<BlockPos> machineSources) {
+        for (Direction dir : Direction.values()) {
+            BlockPos neighborPos = pos.relative(dir);
+            BlockState neighborState = level.getBlockState(neighborPos);
+            if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) {
+                machineSources.add(neighborPos);
+            }
+        }
     }
 
     // ========================================================================
@@ -140,9 +391,8 @@ public class FrameActivation {
     // ========================================================================
 
     /**
-     * Flood-fill from changePos to find all connected frame blocks.
-     * Crosses material boundaries. Traverses both active and inactive frames.
-     * The changePos itself may or may not be a frame.
+     * Flood-fill from changePos to find all connected conductor blocks.
+     * Crosses material boundaries — discovery doesn't care about materials.
      */
     private static Set<BlockPos> discoverNetwork(Level level, BlockPos changePos) {
         Set<BlockPos> network = new HashSet<>();
@@ -151,26 +401,23 @@ public class FrameActivation {
 
         visited.add(changePos);
 
-        // If changePos is itself a frame, include it
         BlockState changeState = level.getBlockState(changePos);
-        if (getFrameMaterial(changeState) != null) {
+        if (isConductor(changeState)) {
             network.add(changePos);
             queue.add(changePos);
         }
 
-        // Seed from changePos neighbors
         for (Direction dir : Direction.values()) {
             BlockPos neighborPos = changePos.relative(dir);
             if (visited.add(neighborPos)) {
                 BlockState neighborState = level.getBlockState(neighborPos);
-                if (getFrameMaterial(neighborState) != null) {
+                if (isConductor(neighborState)) {
                     network.add(neighborPos);
                     queue.add(neighborPos);
                 }
             }
         }
 
-        // BFS through all connected frames
         while (!queue.isEmpty()) {
             BlockPos current = queue.poll();
 
@@ -178,7 +425,7 @@ public class FrameActivation {
                 BlockPos neighborPos = current.relative(dir);
                 if (visited.add(neighborPos)) {
                     BlockState neighborState = level.getBlockState(neighborPos);
-                    if (getFrameMaterial(neighborState) != null) {
+                    if (isConductor(neighborState)) {
                         network.add(neighborPos);
                         queue.add(neighborPos);
                     }
@@ -187,73 +434,5 @@ public class FrameActivation {
         }
 
         return network;
-    }
-
-    // ========================================================================
-    // STEP 4: ACTIVATE FROM MACHINE
-    // ========================================================================
-
-    /**
-     * From a Machine Block, flood-fill activation outward through each
-     * adjacent material chain independently, capped at MAX_ACTIVATION_RANGE.
-     */
-    private static void activateFromMachine(Level level, BlockPos machinePos) {
-        EnumSet<FrameMaterial> processed = EnumSet.noneOf(FrameMaterial.class);
-
-        for (Direction dir : Direction.values()) {
-            BlockPos neighborPos = machinePos.relative(dir);
-            BlockState neighborState = level.getBlockState(neighborPos);
-            FrameMaterial material = getFrameMaterial(neighborState);
-
-            if (material != null && processed.add(material)) {
-                activateChain(level, machinePos, material);
-            }
-        }
-    }
-
-    /**
-     * Flood-fill activation through a same-material frame chain.
-     * Starts from a Machine Block position (skips the machine itself).
-     * Capped at MAX_ACTIVATION_RANGE.
-     */
-    private static void activateChain(Level level, BlockPos machinePos, FrameMaterial material) {
-        Queue<BlockPos> queue = new ArrayDeque<>();
-        Set<BlockPos> visited = new HashSet<>();
-        visited.add(machinePos);
-
-        for (Direction dir : Direction.values()) {
-            BlockPos neighborPos = machinePos.relative(dir);
-            if (visited.add(neighborPos)) {
-                BlockState neighborState = level.getBlockState(neighborPos);
-                if (getFrameMaterial(neighborState) == material) {
-                    queue.add(neighborPos);
-                }
-            }
-        }
-
-        int activated = 0;
-
-        while (!queue.isEmpty() && activated < MAX_ACTIVATION_RANGE) {
-            BlockPos current = queue.poll();
-            BlockState currentState = level.getBlockState(current);
-
-            if (getFrameMaterial(currentState) != material) continue;
-
-            if (!isActive(currentState)) {
-                level.setBlock(current, currentState.setValue(FrameBlock.ACTIVE, true),
-                        Block.UPDATE_CLIENTS);
-                activated++;
-            }
-
-            for (Direction dir : Direction.values()) {
-                BlockPos neighborPos = current.relative(dir);
-                if (visited.add(neighborPos)) {
-                    BlockState neighborState = level.getBlockState(neighborPos);
-                    if (getFrameMaterial(neighborState) == material) {
-                        queue.add(neighborPos);
-                    }
-                }
-            }
-        }
     }
 }

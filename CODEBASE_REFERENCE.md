@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-01 (backward walk grab immunity fix: call-pair toggle)*
+*Last updated: 2026-03-02a (cross-frame mediation, vanilla metal conductors, signal-based activation, activation-gated stickiness)*
 
 ---
 
@@ -34,15 +34,18 @@ com.ideomancer.ideomod
   |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
   |     |     |                                Static isActive(BlockState) helper.
   |     |     |-- FrameMaterial.java           Data-carrying enum: IRON, COPPER. displayName,
-  |     |     |                                registryPrefix, item registry. Single source for
-  |     |     |                                material-specific lookups.
+  |     |     |                                registryPrefix, item registry, miningTimeModifier.
+  |     |     |                                fromVanillaBlock(), toConductorValue(),
+  |     |     |                                fromConductorValue(). Single source for material lookups.
   |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE + WATERLOGGED.
   |     |     |                                Implements IFrameBlock + SimpleWaterloggedBlock.
   |     |     |                                Passive conductor. canStickTo: same-material IFrameBlock,
   |     |     |                                Machine Family, slime/honey/odd_slime permissive,
   |     |     |                                FramedBlock(INNER_STICKY>0) permissive. Cross-material
   |     |     |                                IFrameBlock falls through (no short-circuit).
-  |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
+  |     |     |-- FrameActivation.java         Static utility: signal-based activation with strength
+  |     |     |                                decay (0-15) and anti-signal suppression. Tracks
+  |     |     |                                vanilla metal activation. Single BFS with material flow.
   |     |     |-- FrameabilityHelper.java      Tag-driven whitelist for frameable blocks (#ideomod:frameable_blocks)
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
   |     |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
@@ -52,6 +55,7 @@ com.ideomancer.ideomod
   |     |-- machine/
   |     |     |-- IMachineFamily.java          Interface: Machine Family marker. Static helpers
   |     |     |                                isMachineFamily(Block), canMachineFamilyStickTo().
+  |     |     |                                Frame family stickiness requires ACTIVE state.
   |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI. Implements IMachineFamily.
   |     |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
   |     |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
@@ -69,8 +73,9 @@ com.ideomancer.ideomod
   |     |     |                                Single source of truth for sticky classification.
   |     |     |                                fromBlock(), of(), isExcludedFrom(), canGrab().
   |     |     \-- MovementScanHelper.java      Shared algorithms: isOddstoneOrFramedOddstone(),
-  |     |                                      scanSympathetic(), scanStickyGroup(). Eliminates
-  |     |                                      3x duplication across mixin files.
+  |     |                                      scanSympathetic(), scanStickyGroup(). Single source
+  |     |                                      of truth for sticky group scanning. Vanilla metal
+  |     |                                      awareness via isVanillaMetalConnection().
   |     |-- piston/
   |     |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
   |     |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
@@ -103,6 +108,7 @@ com.ideomancer.ideomod
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner.
   |     |                                      Call-pair toggle for backward walk grab immunity.
+  |     |                                      Vanilla metal conductor scanning (bidirectional).
   |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull
   |     |                                      immunity + immovable inner. Uses MovementScanHelper.
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
@@ -154,18 +160,20 @@ Three-layer architecture for asymmetric and directional stickiness. **StickyType
 
 Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin` at two points: (A) HEAD of addBlockLine during branching — full grab immunity + directional checks; (B) @Redirect on canStickTo in backward walk — directional checks on both calls, grab immunity on Call 1 only (front block reaching back) via call-pair toggle.
 
-**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock):
+**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock). "Vanilla Metal" = iron_block, copper_block when activated:
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
-| Slime        |  YES  |  no*  |    no*    |     YES     |    YES    |    no    |  YES   |
-| Honey        |  no*  |  YES  |    no*    |     YES     |    YES    |    no    |  YES   |
-| Odd Slime    |  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
-| Machine Fam  |  no   |  no   |    no     |     YES     |    YES    |    no    |   no   |
-| Frame Fam (active) | no | no |    no     |     YES     |  YES (m)  |    no    |   no   |
-| Oddstone     |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
+|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
+| Slime        |  YES  |  no*  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
+| Honey        |  no*  |  YES  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
+| Odd Slime    |  no*  |  no*  |  YES (d)  |   YES (d)   |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
+| Machine Fam  |  no   |  no   |    no     |     YES     |        YES         |         no           |            no             |    no    |   no   |
+| Frame Fam (active) | no | no |    no     |     YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Vanilla Metal (activated) | no | no | no |     YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Oddstone     |  YES  |  YES  |    YES    |      no     |        no          |         no           |            no             |   YES    |   no   |
 
 `no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional | `(m)` = material-matched
+Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Fam only grabs active frames. Vanilla metals only sticky when activated (FrameActivation.isVanillaMetalActivated).
 
 ### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
@@ -253,7 +261,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
 3. **Block entity with GUI**: MachineFrameBlockEntity with single item slot. IPistonMovable implementation preserves inventory through all piston move types. onRemove() drops contents only when broken (movedByPiston guard).
 
-**IMachineFamily interface** (`block/machine/IMachineFamily.java`): Marker interface for Machine Family blocks. Provides static helpers `isMachineFamily(Block)` (checks `instanceof IMachineFamily`) and `canMachineFamilyStickTo(BlockState)`. All three machine blocks implement this interface, eliminating copy-pasted stickiness logic. Adding a new machine family block: implement the interface, stickiness comes free.
+**IMachineFamily interface** (`block/machine/IMachineFamily.java`): Marker interface for Machine Family blocks. Provides static helpers `isMachineFamily(Block)` (checks `instanceof IMachineFamily`) and `canMachineFamilyStickTo(BlockState)`. Frame family check in canMachineFamilyStickTo requires `FrameActivation.isActive(other)` -- machine blocks only grab active frames. All three machine blocks implement this interface.
 
 **Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- blocks that conduct POWER (MachineFrameBlock, MachineTrackBlock).
 
@@ -263,18 +271,24 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrameBlock, SimpleWaterloggedBlock).
 
-1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source.
-2. **Material exclusivity**: canStickTo returns true for same-material IFrameBlock. Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. Also permissive to: Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, FramedBlock with INNER_STICKY>0.
-3. **Waterlogging**: BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. updateShape() schedules fluid ticks. Standard full-cube waterlogged behavior (water contained).
-4. **Grab immunity**: Rules 1-4 (consolidated) prevent specific grabber→target pairs. Rule 4 has carve-outs for matching inner types.
+1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source. Signal strength 15, decays by 1 per conductor. Max range 15 blocks.
+2. **Material exclusivity**: canStickTo returns true for same-material IFrameBlock **only when neighbor is also active** (`IFrameBlock.isActive(other)`). Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. Also permissive to: Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, FramedBlock with INNER_STICKY>0.
+3. **Cross-frame mediation**: canStickTo recognizes FramedBlock neighbors with INNER_CONDUCTOR matching this frame's material. E.g., iron frame sticks to copper-framed iron block.
+4. **Vanilla metal conductors**: canStickTo returns true for same-material vanilla metal blocks (iron_block, copper_block).
+5. **Waterlogging**: BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. updateShape() schedules fluid ticks.
+6. **Grab immunity**: Rules 1-4 (consolidated) prevent specific grabber->target pairs. Rule 4 has carve-outs for matching inner types.
 
-**FrameActivation algorithm** (redstone-style wipe-and-rebuild):
-1. DISCOVER: BFS from change point through all connected frames (any material, active or inactive)
-2. WIPE: Set all frames to active=false (UPDATE_CLIENTS only, no neighbor cascade)
-3. FIND SOURCES: Check all frames + change position for adjacent Machine Blocks
-4. RE-ACTIVATE: From each Machine Block, flood-fill through same-material chains (cap 12)
+**FrameActivation algorithm** (redstone-style signal strength with anti-signal suppression):
+1. DISCOVER: BFS from change point through all conductors (IFrameBlock + vanilla metals, any material/state)
+2. WIPE: Set all IFrameBlocks to ACTIVE=false, clear vanilla metal activation set
+3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
+4. PROPAGATE ACTIVATION: BFS from unpowered machines, strength 15 decaying by 1 per block. Each entry carries available materials + strength. Mediators (framed blocks with cross-material inner conductor) pass ALL materials.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered machines, strength = redstone input level, decaying by 1. Binary override: any block reached = deactivated.
+6. APPLY: Block activates only if activation > 0 AND anti-signal == 0. IFrameBlocks get ACTIVE=true, vanilla metals added to activatedVanillaMetals set.
 
-Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlace/onRemove/neighborChanged. Single entry point: `FrameActivation.recalculate(level, pos)`.
+Max range: 15 blocks from source. Public queries: `isVanillaMetalActivated(pos)`, `isActivatedConductor(state, pos)`, `isActive(state)`.
+
+Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlace/onRemove/neighborChanged. Redstone input changes trigger via neighborChanged automatically. Single entry point: `FrameActivation.recalculate(level, pos)`.
 
 **Rendering**: RenderType.cutout() registered in Ideomod.clientSetup(). noOcclusion() in block properties. Transparent interior pixels render correctly.
 
@@ -285,16 +299,19 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 
 1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~19 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding, stepOn, fallOn, updateEntityAfterFallOn, entityInside all preserved. Speed/jump factor via EntityMovementMixin. Push reaction (immovable inners) via PistonBaseBlockMixin Feature 4 + Resolver Feature 5.
 2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
-3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering (DirectionalBlock.FACING, HorizontalDirectionalBlock.FACING, RotatedPillarBlock.AXIS). Also controls Framed Odd Slime directional stickiness.
-4. **INNER_STICKY property** (IntegerProperty 0-4): Maps to `StickyType` enum values (NONE=0, SLIME=1, HONEY=2, ODD_SLIME=3, ODDSTONE=4). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner() which delegates to `StickyType.fromBlock()`. Enables inner sticky behavior at blockstate level.
-5. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
-6. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). STICKY_ODDSTONE mirrors real oddstone: grabs all slime types + oddstone, not normal blocks. Grab immunity Rules 1 and 4 have carve-outs for matching inner types, oddstone universal grabber, and active same-material frame connections.
-7. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance check in PistonStructureResolverMixin. No blanket directional rule registered.
-8. **noOcclusion()**: Block properties include noOcclusion() to prevent neighbor face culling (required for translucent inner blocks).
-9. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
-10. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
-11. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
-12. **Middle-click**: getCloneItemStack() uses `frameMaterial.getFramedBlockItem()` for proper item lookup.
+3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering.
+4. **INNER_STICKY property** (IntegerProperty 0-4): Maps to `StickyType` enum values (NONE=0, SLIME=1, HONEY=2, ODD_SLIME=3, ODDSTONE=4). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner().
+5. **INNER_CONDUCTOR property** (IntegerProperty 0-2): Exposes inner block's conductor material at blockstate level (0=none, 1=iron, 2=copper). Synced by FramedBlockEntity.updateBlockstateFromInner() via FrameMaterial.fromVanillaBlock() + toConductorValue(). Enables cross-frame mediation in canStickTo() and activation without BE access.
+6. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). canStickTo requires neighbor IFrameBlock to be active. isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
+7. **Cross-frame mediation**: When INNER_CONDUCTOR is set to a different material than the frame, the block is a MEDIATOR. In activation: passes ALL materials (universal bridge). In stickiness: canStickTo matches both frame material AND inner conductor material.
+8. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions).
+9. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance mixin check.
+10. **noOcclusion()**: Block properties include noOcclusion() to prevent neighbor face culling.
+11. **Crafting**: FramedBlockRecipe (CustomRecipe): 1 frame + 1 frameable block = framed block with BlockEntityTag NBT.
+12. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
+13. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
+
+Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICKY) x 3 (INNER_CONDUCTOR) = 180 states.
 
 **FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~290 vanilla blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
 

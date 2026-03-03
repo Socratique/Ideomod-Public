@@ -84,34 +84,35 @@ The `StickyType` enum (`block/movement/StickyType.java`) centralizes all sticky 
 
 ### Stickiness Matrix
 
-Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and future Framed Block variants). Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules -- material exclusivity is handled by canStickTo (Layer 1).
+Who grabs whom (rows = grabber, columns = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame (and Framed Block variants). "Vanilla Metal" = iron_block, copper_block when activated by FrameActivation. Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules -- material exclusivity is handled by canStickTo (Layer 1).
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
-| **Slime**    |  YES  |  no*  |    no*    |     YES     |    YES    |    no    |  YES   |
-| **Honey**    |  no*  |  YES  |    no*    |     YES     |    YES    |    no    |  YES   |
-| **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |  YES (d)  |    no    | YES (d)|
-| **Machine Fam**| no  |  no   |    no     |     YES     |    YES    |    no    |   no   |
-| **Frame Fam (active)**| no | no | no     |     YES     |  YES (m)  |    no    |   no   |
-| **Framed Slime (active)**| YES | no* | no* | YES | YES (m) | no | YES |
-| **Framed Honey (active)**| no* | YES | no* | YES | YES (m) | no | YES |
-| **Framed Odd Slime (active)**| no* | no* | YES (d) | YES | YES (m) | no | YES (d) |
-| **Framed Oddstone (active)**| YES | YES | YES | YES | YES (m) | YES | no |
-| **Framed Oddstone (inactive)**| YES | YES | YES | no | no | YES | no |
-| **Framed Sticky (inactive)**| (i) | (i) | (i) | no | no | no | (i) |
-| **Oddstone** |  YES  |  YES  |    YES    |      no     |    no     |   YES    |   no   |
+|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-----------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
+| **Slime**    |  YES  |  no*  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
+| **Honey**    |  no*  |  YES  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
+| **Odd Slime**|  no*  |  no*  |  YES (d)  |   YES (d)   |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
+| **Machine Fam**| no  |  no   |    no     |     YES     |        YES         |         no           |            no             |    no    |   no   |
+| **Frame Fam (active)**| no | no | no     |     YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| **Vanilla Metal (activated)**| no | no | no | YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| **Framed Slime (active)**| YES | no* | no* | YES | YES (m) | no | YES (m) | no | YES |
+| **Framed Honey (active)**| no* | YES | no* | YES | YES (m) | no | YES (m) | no | YES |
+| **Framed Odd Slime (active)**| no* | no* | YES (d) | YES | YES (m) | no | YES (m) | no | YES (d) |
+| **Framed Oddstone (active)**| YES | YES | YES | YES | YES (m) | no | YES (m) | YES | no |
+| **Framed Oddstone (inactive)**| YES | YES | YES | no | no | no | no | YES | no |
+| **Framed Sticky (inactive)**| (i) | (i) | (i) | no | no | no | no | no | (i) |
+| **Oddstone** |  YES  |  YES  |    YES    |      no     |        no          |         no           |            no             |   YES    |   no   |
 
 - `no*` = mutual exclusion (canStickTo returns false on both sides)
-- `no` = blocked by grab immunity rule (canStickTo says yes, mixin says no)
+- `no` = blocked by grab immunity rule (canStickTo says yes, mixin says no) OR activation-gated (inactive = not sticky)
 - `(d)` = directional -- only when pushed in FACING direction
 - `(m)` = material-matched -- iron sticks to iron only, copper to copper only (Layer 1 canStickTo)
 - `(i)` = inner sticky behavior only -- Framed Slime grabs like slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional). No frame stickiness when inactive.
-- Frame Fam (active) = only sticky when BooleanProperty ACTIVE=true (driven by FrameActivation)
+- Frame Fam (active) = only sticky when BooleanProperty ACTIVE=true (driven by FrameActivation). Stickiness requires ACTIVE on BOTH sides for frame-to-frame connections.
+- Machine Fam only grabs active Frame Fam (IMachineFamily.canMachineFamilyStickTo checks FrameActivation.isActive)
+- Vanilla Metal (activated) = iron_block/copper_block connected to machine source via FrameActivation. Only forms sticky connections when activated (FrameActivation.isVanillaMetalActivated). Treated as frame family members for same-material stickiness.
 - Framed Sticky (active) = has BOTH inner stickiness + frame stickiness simultaneously
 - Framed Sticky (inactive) = inner stickiness only, no frame stickiness
-- Framed Oddstone (active) = oddstone inner stickiness (grabs all slime types + oddstone) + frame stickiness (machine fam + same-material frames)
-- Framed Oddstone (inactive) = oddstone inner stickiness only (grabs slime/honey/odd_slime/oddstone real+framed, NOT machine fam or frames)
-- When inactive and INNER_STICKY=0, isStickyBlock()=false — behaves as normal non-sticky block
+- When inactive and INNER_STICKY=0, isStickyBlock()=false -- behaves as normal non-sticky block
 - Normal = any non-sticky block (stone, dirt, etc.)
 
 ### Inner Sticky Carve-Out (Rule 4)
@@ -179,13 +180,25 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 
 **Frame Family -> Odd Slime**: BLOCKED. Grab immunity rule 11.
 
-**Machine Family -> Frame Family**: ALLOWED. canMachineFamilyStickTo() returns true for frame family. No immunity rule.
+**Machine Family -> Frame Family**: ALLOWED only when frame is active. canMachineFamilyStickTo() checks `FrameActivation.isActive(other)`. Inactive frames are not grabbed.
 
 **Frame Family -> Machine Family**: ALLOWED when active. canStickTo returns true for Machine Family. No immunity rule.
 
-**Frame Family -> Frame Family (same material)**: ALLOWED when active. canStickTo returns true for same-material IFrameBlock. No immunity rule.
+**Frame Family -> Frame Family (same material, both active)**: ALLOWED. canStickTo returns true for same-material IFrameBlock when `IFrameBlock.isActive(other)` is true. No immunity rule.
+
+**Frame Family -> Frame Family (one or both inactive)**: NOT POSSIBLE. canStickTo gates frame-to-frame material checks behind `IFrameBlock.isActive(other)`. Inactive neighbor falls through to permissive checks only.
 
 **Frame Family -> Frame Family (cross-material)**: BLOCKED at Layer 1 for frame-to-frame. canStickTo falls through on material mismatch (does NOT short-circuit to false). For plain frames/framed blocks with INNER_STICKY=0, no permissive entry matches — returns false. For FramedBlock with INNER_STICKY>0 grabbing a cross-material frame, the FrameBlock's permissive entry for `FramedBlock with INNER_STICKY>0` allows the passive side. Net: cross-material frame stickiness is blocked, but cross-material inner stickiness can still grab frames.
+
+**Vanilla Metal (activated) <-> Frame Family (active, same material)**: ALLOWED. Vanilla metals form sticky connections through FrameActivation.isVanillaMetalActivated() checks in PistonStructureResolverMixin and MovementScanHelper. Only when both are activated and same material.
+
+**Vanilla Metal (activated) <-> Machine Family**: ALLOWED. Vanilla metals connect to machine family when activated via shouldVanillaMetalStick/shouldVanillaMetalGrabNeighbor.
+
+**Vanilla Metal (activated) <-> Vanilla Metal (same material, activated)**: ALLOWED. Same-material activated vanilla metals chain together.
+
+**Vanilla Metal (not activated)**: NOT STICKY. FrameActivation.isVanillaMetalActivated() returns false, all stickiness checks fail. Behaves as normal block.
+
+**Cross-Frame Mediation**: Framed blocks with INNER_CONDUCTOR set to a different material than their frame (e.g., copper-framed iron block) can stick to BOTH material families. canStickTo checks both frame material and inner conductor material for IFrameBlock neighbors. In activation, mediators pass ALL materials as universal bridges. Example: iron frame sticks to copper-framed iron block (inner conductor matches iron).
 
 **Frame Family <-> Oddstone (bare)**: NOT POSSIBLE. Both canStickTo return false for each other. No interaction. Bare oddstone cannot be grabbed by frames.
 
@@ -209,17 +222,19 @@ Note: During Track-initiated pushes, Track is not dragged because its position i
 
 | Component | File | Role |
 |-----------|------|------|
-| `canStickTo` overrides | Each block class | Layer 1: type compatibility (permissive) |
+| `canStickTo` overrides | Each block class | Layer 1: type compatibility (permissive). Frame-to-frame checks require ACTIVE on both sides. |
 | Grab immunity rules | `StickinessRules.java` | Layer 2: blocks specific grabber->target pairs |
 | Directional rules | `StickinessRules.java` | Layer 3: blocks grabs based on push direction |
 | Rule registration | `Ideomod.java -> registerStickinessRules()` | Registers all rules at startup |
-| Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules |
-| Frame activation | `FrameActivation.java` | Wipe-and-rebuild activation from Machine Block sources |
+| Rule enforcement | `PistonStructureResolverMixin.java` | Intercepts resolver to apply rules. Vanilla metal bidirectional scan. |
+| Frame activation | `FrameActivation.java` | Signal-based activation (strength 0-15) with anti-signal suppression. Vanilla metal activation tracking. |
+| Vanilla metal queries | `FrameActivation.isVanillaMetalActivated()` | Ephemeral activation state for iron_block/copper_block |
 | Frame type checks | `StickinessRules.isFrameFamily()` | Helper for grab immunity rule predicates |
 | `StickyType enum` | `StickyType.java` | Single source of truth for sticky block classification |
-| `IMachineFamily` | `IMachineFamily.java` | Machine Family marker interface with shared stickiness |
+| `IMachineFamily` | `IMachineFamily.java` | Machine Family marker interface. canMachineFamilyStickTo requires active frames. |
+| `FrameMaterial` | `FrameMaterial.java` | fromVanillaBlock(), toConductorValue(), fromConductorValue() for conductor mapping |
 | Rule helpers | `StickinessRules.java` | `isOddstoneType(), isFramedOddstone(), isActiveFrameConnection(), hasMatchingInnerSticky()` |
-| MovementScanHelper | `MovementScanHelper.java` | Shared oddstone detection and scanning algorithms |
+| MovementScanHelper | `MovementScanHelper.java` | Shared scanning. scanStickyGroup() with vanilla metal awareness. Single source of truth. |
 
 ### Mixin Injection Points
 

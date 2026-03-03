@@ -10,6 +10,10 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import com.ideomancer.ideomod.block.frame.FrameActivation;
+import com.ideomancer.ideomod.block.frame.FrameMaterial;
+import com.ideomancer.ideomod.block.frame.IFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.HashSet;
@@ -134,18 +138,22 @@ public class MovementScanHelper {
      * Returns the complete set of positions connected via mutual stickiness,
      * including the start position. A block is included if it's stuck to
      * at least one block already in the group (with both blocks passing
-     * canStickTo checks in both directions).
+     * canStickTo checks in both directions), OR if it's connected via
+     * vanilla metal conductor chains (iron/copper blocks bridging frame
+     * family members).
      *
-     * Limited to MAX_PUSH_BLOCKS (vanilla piston limit).
+     * Limited to maxSize (vanilla piston limit).
      *
      * Consolidated from PistonBaseBlockMixin.scanStickyGroup and
      * PistonBaseBlockClientMixin.ideomod$scanStickyGroupInto.
      */
     public static Set<BlockPos> scanStickyGroup(Level level, BlockPos startPos, int maxSize) {
         Set<BlockPos> visited = new HashSet<>();
+        Set<BlockPos> group = new HashSet<>();
         LinkedList<BlockPos> queue = new LinkedList<>();
 
         visited.add(startPos);
+        group.add(startPos);
 
         // Seed with neighbors of the start block
         for (Direction dir : Direction.values()) {
@@ -165,23 +173,48 @@ public class MovementScanHelper {
             // Check if this block is stuck to any block already in the group
             boolean stuckToGroup = false;
             for (Direction dir : Direction.values()) {
-                BlockPos adjacentInGroup = pos.relative(dir);
-                if (visited.contains(adjacentInGroup) && !adjacentInGroup.equals(pos)) {
-                    BlockState adjacentState = level.getBlockState(adjacentInGroup);
-                    if (adjacentState.isStickyBlock()
-                            && adjacentState.canStickTo(state)
-                            && state.canStickTo(adjacentState)) {
-                        stuckToGroup = true;
-                        break;
-                    }
+                BlockPos adjacentPos = pos.relative(dir);
+                if (!group.contains(adjacentPos)) continue;
+
+                BlockState adjacentState = level.getBlockState(adjacentPos);
+
+                // Standard stickiness check (both directions)
+                if (adjacentState.isStickyBlock()
+                        && adjacentState.canStickTo(state)
+                        && state.canStickTo(adjacentState)) {
+                    stuckToGroup = true;
+                    break;
+                }
+
+                // Vanilla metal conductor check:
+                // If the adjacent block in group is a vanilla metal, check if
+                // this block should stick to it (frame family connection)
+                FrameMaterial adjacentMetal = FrameMaterial.fromVanillaBlock(adjacentState.getBlock());
+                if (adjacentMetal != null && isVanillaMetalConnection(adjacentMetal, state, adjacentPos, pos)) {
+                    stuckToGroup = true;
+                    break;
+                }
+
+                // Reverse: if THIS block is a vanilla metal, check if the
+                // adjacent block in group is something it should stick to
+                FrameMaterial thisMetal = FrameMaterial.fromVanillaBlock(state.getBlock());
+                if (thisMetal != null && isVanillaMetalConnection(thisMetal, adjacentState, pos, adjacentPos)) {
+                    stuckToGroup = true;
+                    break;
                 }
             }
 
             if (!stuckToGroup) continue;
+            group.add(pos);
             count++;
 
-            // If this block is also sticky, scan its neighbors too
-            if (state.isStickyBlock()) {
+            // Expand BFS if this block can pull neighbors:
+            // - Normal sticky blocks
+            // - Vanilla metal conductors (they bridge frame families)
+            boolean shouldExpand = state.isStickyBlock()
+                    || FrameMaterial.fromVanillaBlock(state.getBlock()) != null;
+
+            if (shouldExpand) {
                 for (Direction dir : Direction.values()) {
                     BlockPos neighbor = pos.relative(dir);
                     if (!visited.contains(neighbor)) {
@@ -191,6 +224,45 @@ public class MovementScanHelper {
             }
         }
 
-        return visited;
+        return group;
+    }
+
+    /**
+     * Checks if a vanilla metal block of the given material should connect
+     * to the given other block for sticky group scanning purposes.
+     * Only connects when the vanilla metal is ACTIVATED (part of a frame
+     * network connected to a machine source).
+     *
+     * A vanilla iron block connects to:
+     * - Active iron frames/framed blocks (same material)
+     * - Active framed blocks with INNER_CONDUCTOR matching (cross-frame mediation)
+     * - Machine Family blocks
+     * - Other activated vanilla iron blocks
+     */
+    private static boolean isVanillaMetalConnection(FrameMaterial metalMat, BlockState otherState,
+                                                      BlockPos metalPos, BlockPos otherPos) {
+        // Vanilla metal must be activated to form connections
+        if (!FrameActivation.isVanillaMetalActivated(metalPos)) return false;
+
+        // Same-material active IFrameBlock
+        if (otherState.getBlock() instanceof IFrameBlock otherFrame) {
+            if (!IFrameBlock.isActive(otherState)) return false;
+            if (otherFrame.getFrameMaterial() == metalMat) return true;
+            // Cross-frame mediation
+            if (otherState.getBlock() instanceof FramedBlock) {
+                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
+                    otherState.getValue(FramedBlock.INNER_CONDUCTOR));
+                if (innerMat == metalMat) return true;
+            }
+            return false;
+        }
+        // Machine Family
+        if (MachineFrameBlock.isMachineFamily(otherState.getBlock())) return true;
+        // Same-material activated vanilla metal
+        FrameMaterial otherMetal = FrameMaterial.fromVanillaBlock(otherState.getBlock());
+        if (otherMetal == metalMat) {
+            return FrameActivation.isVanillaMetalActivated(otherPos);
+        }
+        return false;
     }
 }

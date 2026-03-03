@@ -108,9 +108,24 @@ public class FrameBlock extends Block implements IFrameBlock, SimpleWaterloggedB
     public boolean canStickTo(BlockState state, BlockState other) {
         Block otherBlock = other.getBlock();
 
-        // --- Frame family: same-material match ---
+        // --- Frame family: same-material match, both must be active ---
         if (otherBlock instanceof IFrameBlock otherFrame) {
-            if (otherFrame.getFrameMaterial() == this.frameMaterial) return true;
+            // Other frame must be active to stick
+            if (!IFrameBlock.isActive(other)) {
+                // Fall through — might have inner stickiness (framed slime etc.)
+            } else {
+                if (otherFrame.getFrameMaterial() == this.frameMaterial) return true;
+
+                // Cross-frame mediation: if other is a FramedBlock with an inner
+                // conductor matching OUR frame material, we stick to it.
+                // Example: iron frame sticks to copper-framed iron block (inner=IRON)
+                if (otherBlock instanceof FramedBlock) {
+                    FrameMaterial otherInnerMat = FrameMaterial.fromConductorValue(
+                        other.getValue(FramedBlock.INNER_CONDUCTOR));
+                    if (otherInnerMat == this.frameMaterial) return true;
+                }
+            }
+
             // Cross-material: DON'T return false here. The other block might
             // have inner stickiness (e.g. iron-framed slime) that should still
             // be able to grab us. Fall through to permissive checks below.
@@ -118,6 +133,10 @@ public class FrameBlock extends Block implements IFrameBlock, SimpleWaterloggedB
 
         // --- Machine family ---
         if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
+
+        // --- Vanilla metal conductor: same-material match ---
+        FrameMaterial otherVanillaMat = FrameMaterial.fromVanillaBlock(otherBlock);
+        if (otherVanillaMat == this.frameMaterial) return true;
 
         // --- Permissive: allow vanilla stickies to grab us ---
         if (otherBlock instanceof SlimeBlock) return true;

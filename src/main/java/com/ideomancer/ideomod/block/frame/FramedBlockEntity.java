@@ -139,9 +139,13 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     }
 
     /**
-     * Sync the INNER_STICKY blockstate property from the current inner block.
-     * Called after any operation that changes the inner block identity:
-     * placement, piston restore, chunk load.
+     * Sync the INNER_STICKY and INNER_CONDUCTOR blockstate properties from
+     * the current inner block. Called after any operation that changes the
+     * inner block identity: placement, piston restore, chunk load.
+     *
+     * INNER_STICKY: tracks sticky inner types (slime, honey, odd slime, oddstone)
+     * INNER_CONDUCTOR: tracks vanilla metal conductor inners (iron_block, copper_block)
+     *   for cross-frame mediation in canStickTo()
      *
      * Also preserves ACTIVE and FACING from the existing blockstate.
      */
@@ -151,11 +155,19 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         BlockState currentState = getBlockState();
         if (!(currentState.getBlock() instanceof FramedBlock)) return;
 
-        int stickyType = computeStickyType(getInnerBlock());
+        Block inner = getInnerBlock();
+
+        int stickyType = computeStickyType(inner);
         int currentSticky = currentState.getValue(FramedBlock.INNER_STICKY);
 
-        if (stickyType != currentSticky) {
-            BlockState newState = currentState.setValue(FramedBlock.INNER_STICKY, stickyType);
+        FrameMaterial conductorMat = FrameMaterial.fromVanillaBlock(inner);
+        int conductorValue = conductorMat != null ? conductorMat.toConductorValue() : 0;
+        int currentConductor = currentState.getValue(FramedBlock.INNER_CONDUCTOR);
+
+        if (stickyType != currentSticky || conductorValue != currentConductor) {
+            BlockState newState = currentState
+                .setValue(FramedBlock.INNER_STICKY, stickyType)
+                .setValue(FramedBlock.INNER_CONDUCTOR, conductorValue);
             // Use flag 2 (UPDATE_CLIENTS) — no neighbor cascade needed for this
             level.setBlock(worldPosition, newState, Block.UPDATE_CLIENTS);
         }
@@ -233,7 +245,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null;
             setChanged();
-            // Sync INNER_STICKY to blockstate after piston restore
+            // Sync INNER_STICKY and INNER_CONDUCTOR to blockstate after piston restore
             updateBlockstateFromInner();
         }
     }

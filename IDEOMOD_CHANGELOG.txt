@@ -1,5 +1,180 @@
 # Ideomod Changelog
 
+## [2026-03-02a] Frame System Overhaul — Cross-Frame Mediation, Vanilla Metal Conductors, Signal-Based Activation
+
+Major overhaul of the frame activation and stickiness systems. Introduces INNER_CONDUCTOR
+blockstate property for cross-frame mediation, vanilla metal blocks (iron_block, copper_block)
+as frame network conductors, redstone-style signal strength activation with anti-signal
+suppression, and unified scanning pipelines.
+
+### Feature 1: INNER_CONDUCTOR Blockstate Property
+
+FramedBlock gains INNER_CONDUCTOR IntegerProperty (0=none, 1=iron, 2=copper). Exposes the
+inner block's conductor material at the blockstate level, enabling cross-frame mediation
+in canStickTo() without block entity access.
+
+FramedBlockEntity.updateBlockstateFromInner() now syncs both INNER_STICKY and INNER_CONDUCTOR.
+Uses FrameMaterial.fromVanillaBlock() to detect metal inners and toConductorValue() for the
+mapping. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace().
+
+FrameMaterial gains toConductorValue()/fromConductorValue() for int<->enum conversion.
+fromVanillaBlock() returns IRON for iron_block, COPPER for copper_block.
+
+Blockstate count: 60 -> 180 per framed block type (x3 for conductor values).
+
+Files: FramedBlock.java, FramedBlockEntity.java, FrameMaterial.java
+
+### Feature 2: Vanilla Metal Blocks as Frame Network Conductors
+
+Vanilla iron_block and copper_block now participate in frame activation networks and
+piston sticky group scanning. They conduct for their respective material and form sticky
+connections with same-material active frame family members.
+
+Activation tracking: FrameActivation maintains ephemeral Set<Long> activatedVanillaMetals,
+rebuilt every recalculate(). Public query: FrameActivation.isVanillaMetalActivated(pos).
+Vanilla metals only form sticky connections when activated (connected to machine source).
+
+PistonStructureResolverMixin: bidirectional vanilla metal scan in addVanillaMetalConductors().
+Direction A: find vanilla metals adjacent to pushed frame family members. Direction B: find
+frame family members adjacent to pushed vanilla metals. Loops until stable.
+
+MovementScanHelper.scanStickyGroup(): vanilla metal connection checks alongside standard
+isStickyBlock()/canStickTo(). Vanilla metals expand BFS (their neighbors get queued).
+isVanillaMetalConnection() checks activation state, material match, and cross-frame mediation.
+
+Files: FrameActivation.java, PistonStructureResolverMixin.java, MovementScanHelper.java
+
+### Feature 3: Cross-Frame Mediation via Mediators
+
+Framed blocks with a different-material inner conductor (e.g., copper-framed iron block)
+are MEDIATORS. When activated, mediators become universal conductors that pass ALL materials,
+like mini machine blocks. This enables unlimited material family hops without chain spawning.
+
+Example: Machine -> iron frame -> iron-framed copper -> copper frame -> copper-framed iron
+-> iron frame -> ... Each mediator resets available materials to ALL.
+
+Same-material inner conductors (iron-framed iron) are NOT mediators -- they just conduct
+for their single material like a normal frame.
+
+isMediator() check: FramedBlock with INNER_CONDUCTOR != 0 and inner material != frame material.
+
+Files: FrameActivation.java, FrameBlock.java, FramedBlock.java, PistonStructureResolverMixin.java
+
+### Feature 4: Redstone-Style Signal Strength Activation
+
+FrameActivation completely rewritten. Replaces flat MAX_ACTIVATION_RANGE=12 cap with
+redstone-style signal strength 0-15.
+
+Activation signal: unpowered Machine Block emits strength 15. Decays by 1 per conductor
+block. Max range: 15 blocks from source. Each block records strongest signal received.
+
+Anti-activation signal: redstone-powered Machine Block stops emitting activation, instead
+emits anti-signal with strength = redstone input level. Decays by 1 per block. Binary
+override: any block reached by anti-signal is deactivated regardless of activation strength.
+
+Algorithm:
+1. DISCOVER: BFS through all conductors (unchanged)
+2. WIPE: Set IFrameBlocks to ACTIVE=false, clear vanilla metal activation set
+3. FIND SOURCES: Find adjacent Machine Blocks (unchanged)
+4. PROPAGATE ACTIVATION: BFS from unpowered machines, strength 15, decaying. Each entry
+   carries available materials + strength. Mediators pass ALL materials.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered machines, strength = redstone level, decaying.
+6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
+
+Example: Machine -- 15 frames -- Machine(redstone=5). First 10 frames active, last 5
+suppressed by anti-signal.
+
+Signal decay prevents backward activation (same as redstone dust). No block can send a
+stronger signal back to its source.
+
+Files: FrameActivation.java
+
+### Feature 5: Activation Required for Stickiness
+
+Active frames no longer stick to inactive frames. Machine blocks no longer grab inactive
+frames. Stickiness requires activation on BOTH sides for frame family connections.
+
+FrameBlock.canStickTo(): frame family material checks gated behind IFrameBlock.isActive(other).
+FramedBlock.canStickTo(): same treatment for neighbor IFrameBlock checks.
+IMachineFamily.canMachineFamilyStickTo(): frame family returns FrameActivation.isActive(other).
+FrameActivation.isActive() made public for cross-package access.
+
+Permissive entries (slime/honey grabbing inactive frames) still work -- those aren't gated.
+
+Files: FrameBlock.java, FramedBlock.java, IMachineFamily.java, FrameActivation.java
+
+### Feature 6: Client-Side Pipeline Consolidation
+
+PistonBaseBlockClientMixin.captureRetraction() replaced inline BFS with
+MovementScanHelper.scanStickyGroup() delegation. Single source of truth for sticky group
+scanning across server save, client capture, and sympathetic paths.
+
+All isStickyBlock() gates across PistonBaseBlockMixin, PistonBaseBlockClientMixin, and
+MovementScanHelper now include FrameMaterial.fromVanillaBlock() fallback for vanilla metals.
+
+Files: PistonBaseBlockClientMixin.java, PistonBaseBlockMixin.java, MovementScanHelper.java
+
+### Ender Pearl Portal Activation (from prior session, included in batch)
+
+OddstonePortalHandler: removed redstone power checks for activation.
+EnderPearlPortalHandler: new class, ProjectileImpactEvent listener. Three activation
+strategies (direct oddstone hit, interior hit, corner hit). Cancels pearl teleport on success.
+OddstoneBlock: neighborChanged delegates to handler for deactivation only.
+
+Files: OddstonePortalHandler.java, EnderPearlPortalHandler.java, OddstoneBlock.java, Ideomod.java
+
+### Portal Cascade-Break Fix (from prior session)
+
+Changed fill flag from 2 to 2|16 (UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE). Suppresses
+updateShape() on neighboring blocks during fill, preventing mid-fill self-destruction.
+
+Files: OddstonePortalHandler.java
+
+### Recipe Material-Match Rejection (from prior session)
+
+FramedBlockRecipe.scanContainer() rejects recipes where frame material doesn't match
+inner block material type. Copper frame + iron block = rejected.
+
+Files: FramedBlockRecipe.java
+
+### All modified files this session:
+
+| File | Location |
+|------|----------|
+| FrameActivation.java | block/frame/ |
+| FrameBlock.java | block/frame/ |
+| FramedBlock.java | block/frame/ |
+| FramedBlockEntity.java | block/frame/ |
+| FrameMaterial.java | block/frame/ |
+| IMachineFamily.java | block/machine/ |
+| MovementScanHelper.java | block/movement/ |
+| PistonStructureResolverMixin.java | mixin/ |
+| PistonBaseBlockMixin.java | mixin/ |
+| PistonBaseBlockClientMixin.java | mixin/client/ |
+
+### Bugs resolved:
+
+1. Vanilla iron/copper blocks not sticking to frame family (isStickyBlock()=false bypass)
+2. Activation not propagating through cross-frame mediators beyond first hop (chain spawning
+   from machine position instead of mediator position, then replaced entirely with unified BFS)
+3. Framed block inner data lost on retraction through vanilla metal chains (scanStickyGroup
+   didn't traverse vanilla metals)
+4. Transit rendering missing for framed blocks connected through vanilla metals (client mixin
+   had inline BFS copy that was never updated)
+5. Activation propagating to unconnected materials at distance (flat 12-block cap replaced
+   with signal strength decay)
+6. Active frames grabbing inactive frames (canStickTo not checking neighbor activation)
+
+### Architecture improvements:
+
+1. Two retraction pipelines (server save + client capture) now share MovementScanHelper.scanStickyGroup()
+2. FrameActivation uses single unified BFS with material flow instead of per-material chain spawning
+3. Vanilla metal activation tracked ephemerally (no blockstate modification of vanilla blocks)
+4. INNER_CONDUCTOR blockstate eliminates BE lookups during canStickTo() and activation
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-01b] Frame System Polish — Waterlogging, Mining, Rendering, Bug #10
 
 Four features and one bug fix for the Frame/Framed Block system.

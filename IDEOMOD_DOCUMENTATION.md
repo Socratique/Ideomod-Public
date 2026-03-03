@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-01b (waterlogging, mining overhaul, inside-face rendering, FrameBlock canStickTo cross-material fix)*
+*Last updated: 2026-03-02a (cross-frame mediation, vanilla metal conductors, signal-based activation, activation-gated stickiness)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -602,37 +602,74 @@ BlockMoveHelper has its own save logic in step 2.5 for Repulser/Attractor/Track 
 
 ## 6b. FRAME ACTIVATION SYSTEM
 
-The Frame Activation system controls when Frame Blocks (and future Framed Blocks) become sticky. It uses a redstone-style "wipe-and-rebuild" approach: Machine Blocks are signal sources, Frame Blocks are passive conductors.
+The Frame Activation system controls when Frame Blocks and Framed Blocks become sticky. It uses a redstone-style signal strength model: Machine Blocks are signal sources, conductors decay the signal, and redstone-powered machines can suppress activation.
 
 ### Architecture
 
-**FrameActivation.java** is a static utility class with one public method: `recalculate(Level, BlockPos)`. This is called by all lifecycle hooks on both Machine Blocks and Frame Blocks (onPlace, onRemove, neighborChanged).
+**FrameActivation.java** is a static utility class with one public method: `recalculate(Level, BlockPos)`. This is called by all lifecycle hooks on both Machine Blocks and Frame Blocks (onPlace, onRemove, neighborChanged). Redstone input changes on Machine Blocks trigger via neighborChanged automatically.
+
+### Signal Strength Model
+
+**Activation signal**: Unpowered Machine Blocks emit activation signal at strength 15. Each conductor block decays the signal by 1 (like redstone dust). Maximum activation range: 15 blocks from source. Each block records the strongest signal received from any path (shortest path wins).
+
+**Anti-activation signal**: A Machine Block receiving redstone power becomes a SUPPRESSOR. It stops emitting activation entirely and instead emits an anti-signal with strength equal to its redstone input level (1-15). Anti-signal also decays by 1 per conductor. Any block reached by anti-signal (strength > 0) is DEACTIVATED, regardless of how strong the activation signal from other sources is. This is a binary override, not subtraction.
+
+**Example**: Machine -- 15 frames -- Machine(redstone=5). The left machine sends activation 15, 14, 13... 1 across all 15 frames. The right machine sends anti-signal 5, 4, 3, 2, 1 into the last 5 frames. Result: first 10 frames active, last 5 suppressed.
+
+Signal decay prevents backward activation (same as redstone dust) — no block can send a stronger signal back to its source.
+
+### Conductor Types
+
+| Type | Activation State | Conducts For | When Activated Passes |
+|------|-----------------|--------------|----------------------|
+| Frame Block (IFrameBlock) | ACTIVE blockstate property | Own frame material | Own material(s) |
+| Framed Block (normal) | ACTIVE blockstate property | Frame material + inner conductor (if set) | Own material(s) |
+| Framed Block (mediator) | ACTIVE blockstate property | Frame material + inner conductor | ALL materials (universal bridge) |
+| Vanilla Metal (iron_block, copper_block) | Ephemeral Set<Long> in FrameActivation | Own metal material | Own material |
+| Machine Block (source) | Always active | N/A (source) | ALL materials |
+
+**Mediator**: A framed block whose INNER_CONDUCTOR is a different material than its frame (e.g., copper-framed iron block: frame=COPPER, inner=IRON). When activated, mediators pass ALL materials like a machine block, enabling unlimited material family hops. Same-material inner conductors (iron-framed iron) are NOT mediators.
 
 ### The Algorithm
 
 When `recalculate()` is called:
 
-1. **DISCOVER**: BFS from the change point through all connected frames (any material, active or inactive). Finds the entire frame network.
-2. **WIPE**: Set every discovered frame to ACTIVE=false. Uses `Block.UPDATE_CLIENTS` (flag 2) only -- no neighborChanged cascade during the sweep.
-3. **FIND SOURCES**: For every frame in the network AND the change position, check all 6 neighbors for Machine Blocks (via `MachineFrameBlock.isMachineFamily()`).
-4. **RE-ACTIVATE**: From each Machine Block found, flood-fill activation through same-material frame chains. Each material is processed independently. Capped at `MAX_ACTIVATION_RANGE` (12) blocks per chain per source.
+1. **DISCOVER**: BFS from the change point through all connected conductors (IFrameBlock + vanilla metals, any material, active or inactive). Finds the entire network.
+2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade). Clear vanilla metal positions from activatedVanillaMetals set.
+3. **FIND SOURCES**: For every block in the network AND the change position, check 6 neighbors for Machine Blocks.
+4. **PROPAGATE ACTIVATION**: From each unpowered Machine Block, BFS with signal strength 15. Each entry carries available materials + strength. A conductor accepts if its conductive materials intersect the available materials. Mediators pass ALL materials. Signal decays by 1 per hop. Records max strength per position.
+5. **PROPAGATE ANTI-SIGNAL**: From each powered Machine Block, BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
+6. **APPLY**: For each network block: activate if activation > 0 AND anti-signal == 0. IFrameBlocks get ACTIVE=true. Vanilla metals get added to activatedVanillaMetals.
 
-### Why Wipe-and-Rebuild?
+### Vanilla Metal Activation Tracking
 
-Earlier attempts used incremental/reactive approaches (frames checking their own activation state, cascade deactivation, etc.) and all failed because frames in chains would see still-active neighbors and incorrectly retain their state. The wipe-and-rebuild pattern avoids this entirely by ensuring all frames start from a clean `false` state before any activation propagates.
+Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains an ephemeral `Set<Long> activatedVanillaMetals` (packed BlockPos longs) rebuilt every recalculate().
+
+Public queries:
+- `isVanillaMetalActivated(BlockPos)` — is this vanilla metal connected to a machine source?
+- `isActivatedConductor(BlockState, BlockPos)` — covers both IFrameBlocks (via ACTIVE) and vanilla metals (via set)
+- `isActive(BlockState)` — checks IFrameBlock ACTIVE property only (public for cross-package access)
+
+### Stickiness Activation Requirements
+
+Frame-family stickiness requires activation on BOTH sides:
+- **FrameBlock.canStickTo()**: Frame family material checks gated behind `IFrameBlock.isActive(other)`. Inactive neighbor falls through to permissive checks (slime/honey can still grab).
+- **FramedBlock.canStickTo()**: Same treatment for neighbor IFrameBlock checks within the ACTIVE block.
+- **IMachineFamily.canMachineFamilyStickTo()**: Frame family returns `FrameActivation.isActive(other)`. Machine blocks only grab active frames.
+- **Vanilla metals**: shouldVanillaMetalStick/shouldVanillaMetalGrabNeighbor check `FrameActivation.isVanillaMetalActivated(metalPos)`.
 
 ### Key Types
 
 | Type | Role |
 |------|------|
 | `IFrameBlock` | Interface. Marker for Frame Family blocks. Provides `getFrameMaterial()`. Has static `isActive(BlockState)` helper. |
-| `FrameMaterial` | Data-carrying enum: IRON, COPPER. Stores displayName, registryPrefix, and item registry references. Used for material matching in activation and stickiness. |
-| `FrameBlock` | Base block class. `BooleanProperty ACTIVE` (default false). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.recalculate()`. |
-| `FrameActivation` | Static utility. `recalculate()` is the single entry point. Also provides `isFrameFamily(Block)` and `getFrameMaterial(BlockState)` helpers. |
+| `FrameMaterial` | Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry, miningTimeModifier. `fromVanillaBlock()`, `toConductorValue()`, `fromConductorValue()` for conductor mapping. |
+| `FrameBlock` | Base block class. ACTIVE + WATERLOGGED properties. `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.recalculate()`. |
+| `FrameActivation` | Static utility. `recalculate()` is the single entry point. Signal strength propagation, anti-signal suppression, vanilla metal tracking. Public queries: `isVanillaMetalActivated()`, `isActivatedConductor()`, `isActive()`, `isFrameFamily()`, `getFrameMaterial()`. |
 
 ### Performance
 
-Networks are bounded by the physical size of frame chains (in practice, piston push limit of 12). Wipe-and-rebuild touches each frame at most twice (once to wipe, once to activate). For a 12-frame chain this is 24 setBlock calls -- negligible.
+Networks are bounded by signal decay (max 15 blocks from source). Propagation touches each position at most twice per signal type (activation + anti). For a 15-frame chain this is ~30 setBlock calls. The BFS uses `bestQueued` tracking to avoid re-processing positions with weaker signals.
 
 ### Rendering
 
@@ -654,10 +691,11 @@ FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrid
 | ACTIVE | BooleanProperty | false (default), true | Frame-family stickiness activation (Machine Block driven) |
 | FACING | DirectionProperty | 6 directions (default NORTH) | Inner block orientation + Framed Odd Slime directional stickiness |
 | INNER_STICKY | IntegerProperty | 0-4 (default 0) | Inner sticky type from StickyType enum: 0=NONE, 1=SLIME, 2=HONEY, 3=ODD_SLIME, 4=ODDSTONE |
+| INNER_CONDUCTOR | IntegerProperty | 0-2 (default 0) | Inner block conductor material: 0=NONE, 1=IRON, 2=COPPER. Enables cross-frame mediation at blockstate level. |
 
-Total blockstate count: 2 x 6 x 5 = 60 states per framed block type.
+Total blockstate count: 2 x 6 x 5 x 3 = 180 states per framed block type.
 
-FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY computed by FramedBlockEntity.updateBlockstateFromInner() which calls `StickyType.fromBlock()` to delegate to StickyType for classification, then updates the blockstate. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace(). INNER_STICKY values now centralized in StickyType enum: 0=NONE, 1=SLIME (SlimeBlock), 2=HONEY (HoneyBlock), 3=ODD_SLIME (OddSlimeBlock), 4=ODDSTONE (OddstoneBlock).
+FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY and INNER_CONDUCTOR computed by FramedBlockEntity.updateBlockstateFromInner(). INNER_STICKY delegates to `StickyType.fromBlock()`. INNER_CONDUCTOR uses `FrameMaterial.fromVanillaBlock()` + `toConductorValue()`. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace().
 
 ### FrameabilityHelper
 
@@ -704,7 +742,7 @@ Both use early-exit: if vanilla already returned a non-default value (not 1.0f),
 
 FramedBlock has two independent stickiness systems that combine:
 
-**Frame stickiness** (same as Frame Blocks): Requires ACTIVE=true (driven by FrameActivation system). Sticks to same-material IFrameBlock and Machine Family. Grab immunity rules 9-11 prevent grabbing slime/honey/odd slime.
+**Frame stickiness** (same as Frame Blocks): Requires ACTIVE=true (driven by FrameActivation system). Sticks to same-material IFrameBlock **only when neighbor is also active**. Sticks to Machine Family. Cross-frame mediation: sticks to framed blocks with matching INNER_CONDUCTOR. Sticks to same-material activated vanilla metals. Grab immunity rules 9-11 prevent grabbing slime/honey/odd slime.
 
 **Inner stickiness** (based on INNER_STICKY property): Requires INNER_STICKY > 0. Applies the vanilla stickiness behavior of the inner block type. Framed Slime grabs normal blocks like real slime. Framed Honey grabs like real honey. Framed Odd Slime grabs like real odd slime (directional). Framed Oddstone grabs all slime types and other oddstone like real oddstone (universal grabber). Vanilla mutual exclusions apply (slime vs honey, slime vs odd slime, honey vs odd slime).
 

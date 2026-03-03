@@ -61,6 +61,15 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public static final DirectionProperty FACING = DirectionalBlock.FACING;
     public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 4);
 
+    /**
+     * Tracks whether the inner block is a vanilla metal conductor.
+     * 0 = not a conductor, 1 = IRON (iron_block inner), 2 = COPPER (copper_block inner).
+     *
+     * This enables cross-frame mediation in canStickTo() without needing
+     * block entity access. Set by FramedBlockEntity.updateBlockstateFromInner().
+     */
+    public static final IntegerProperty INNER_CONDUCTOR = IntegerProperty.create("inner_conductor", 0, 2);
+
     public static final int STICKY_NONE = 0;
     public static final int STICKY_SLIME = 1;
     public static final int STICKY_HONEY = 2;
@@ -75,7 +84,8 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         this.registerDefaultState(this.stateDefinition.any()
                 .setValue(ACTIVE, false)
                 .setValue(FACING, Direction.NORTH)
-                .setValue(INNER_STICKY, STICKY_NONE));
+                .setValue(INNER_STICKY, STICKY_NONE)
+                .setValue(INNER_CONDUCTOR, 0));
     }
 
     @Override
@@ -85,7 +95,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(ACTIVE, FACING, INNER_STICKY);
+        builder.add(ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR);
     }
 
     // ========================================================================
@@ -437,7 +447,18 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     /**
      * Combined stickiness: frame rules (gated by ACTIVE) + inner block
-     * rules (gated by INNER_STICKY) + permissive entries.
+     * rules (gated by INNER_STICKY) + cross-frame mediation + permissive entries.
+     *
+     * CROSS-FRAME MEDIATION (via INNER_CONDUCTOR property):
+     * When active, a framed block sticks to blocks matching EITHER its
+     * frame material OR its inner conductor material. For example:
+     *
+     *   copper-framed iron block (material=COPPER, inner_conductor=IRON):
+     *     ✓ Copper frames/framed blocks (frame material match)
+     *     ✓ Iron frames/framed blocks (inner conductor match)
+     *     ✓ Vanilla iron blocks (inner conductor match)
+     *     ✓ Vanilla copper blocks (frame material match)
+     *     ✓ Machine Family (always)
      *
      * DEBUG LOGGING: Temporary logging for bug #10 investigation.
      * Search for "BUG10" to find all debug lines. Remove once resolved.
@@ -446,19 +467,41 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public boolean canStickTo(BlockState state, BlockState other) {
         Block otherBlock = other.getBlock();
         int innerSticky = state.getValue(INNER_STICKY);
+        int innerConductor = state.getValue(INNER_CONDUCTOR);
+        FrameMaterial innerMat = FrameMaterial.fromConductorValue(innerConductor);
 
         // --- Frame family rules -- ONLY when activated by Machine Block ---
         if (state.getValue(ACTIVE)) {
             if (otherBlock instanceof IFrameBlock otherFrame) {
-                boolean materialMatch = otherFrame.getFrameMaterial() == this.frameMaterial;
-                if (materialMatch) return true;
-                // BUG10: Cross-material frame — don't return false, fall through
-                // to inner sticky / permissive checks
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
-                    "[BUG10 canStickTo] Cross-material frame fall-through. self={} ({}), other={} ({})",
-                    this.frameMaterial, state, otherFrame.getFrameMaterial(), other);
+                // Other frame must also be active for frame-family stickiness
+                if (!IFrameBlock.isActive(other)) {
+                    // Fall through — might have inner stickiness (framed slime etc.)
+                } else {
+                    // Same frame material — stick
+                    if (otherFrame.getFrameMaterial() == this.frameMaterial) return true;
+
+                    // Cross-frame mediation: MY inner conductor matches OTHER's frame material
+                    if (innerMat != null && innerMat == otherFrame.getFrameMaterial()) return true;
+
+                    // Cross-frame mediation (reverse): OTHER's inner conductor matches MY frame material
+                    if (otherBlock instanceof FramedBlock) {
+                        FrameMaterial otherInnerMat = FrameMaterial.fromConductorValue(
+                            other.getValue(INNER_CONDUCTOR));
+                        if (otherInnerMat != null && otherInnerMat == this.frameMaterial) return true;
+                    }
+                }
+
+                // Cross-material: DON'T return false here. The other block might
+                // have inner stickiness that should still be able to grab us.
             }
             if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
+
+            // Vanilla metal block: same frame material OR inner conductor match
+            FrameMaterial otherVanillaMat = FrameMaterial.fromVanillaBlock(otherBlock);
+            if (otherVanillaMat != null) {
+                if (otherVanillaMat == this.frameMaterial) return true;
+                if (innerMat != null && innerMat == otherVanillaMat) return true;
+            }
         }
 
         // --- Inner block stickiness rules ---
@@ -468,20 +511,11 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
             if (myType == StickyType.ODDSTONE) {
                 boolean result = myType.canGrab(otherType) && otherType != StickyType.NONE;
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
-                    "[BUG10 canStickTo] ODDSTONE inner: otherType={}, result={}", otherType, result);
                 return result;
             }
 
             // Slime-family inner: sticks to everything EXCEPT excluded types
-            if (myType.isExcludedFrom(otherType)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
-                    "[BUG10 canStickTo] Inner sticky EXCLUDED: myType={}, otherType={}", myType, otherType);
-                return false;
-            }
-            com.ideomancer.ideomod.Ideomod.LOGGER.info(
-                "[BUG10 canStickTo] Inner sticky ALLOWS: myType={}, otherType={}, other={}",
-                myType, otherType, other);
+            if (myType.isExcludedFrom(otherType)) return false;
             return true;
         }
 
@@ -492,13 +526,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
         if (otherBlock instanceof OddstoneBlock) return true;
 
         if (otherBlock instanceof FramedBlock && other.getValue(INNER_STICKY) > 0) return true;
-
-        // BUG10: Final failure
-        com.ideomancer.ideomod.Ideomod.LOGGER.info(
-            "[BUG10 canStickTo] FAILED — no rule matched. self={} [active={}, inner_sticky={}, material={}], other={} [{}]",
-            this.getClass().getSimpleName(),
-            state.getValue(ACTIVE), innerSticky, this.frameMaterial,
-            otherBlock.getClass().getSimpleName(), other);
 
         return false;
     }

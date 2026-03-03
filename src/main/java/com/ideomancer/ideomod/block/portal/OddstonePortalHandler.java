@@ -9,64 +9,69 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import com.ideomancer.ideomod.block.OddstoneBlock;
 
 /**
  * Handles Oddstone Portal activation and deactivation logic.
- * 
- * Extracted from OddstoneBlock to keep that class focused on the
- * block's own properties (stickiness, mob avoidance, etc.) while
- * this class manages the portal lifecycle:
- * 
- * - Activation: frame detection → registration → filling interior
- * - Deactivation: unregistration → clearing portal blocks
- * - Neighbor change handling: power gained/lost, corner block broken
- * - Block removal handling: frame block broken
- * 
- * DEACTIVATION STRATEGY:
- * Rather than reacting to a single Oddstone's momentary state during
- * neighborChanged (which can false-trigger from unrelated block updates),
- * deactivation re-validates the ENTIRE frame. If any Oddstone in the
- * frame has lost power or any corner block is missing, the portal is
- * deactivated. This mirrors the activation path, which also validates
- * the entire frame before lighting.
- * 
+ *
+ * ACTIVATION MODEL (ender pearl ritual):
+ * =======================================
+ * Portals are activated by throwing an ender pearl into a valid frame interior,
+ * analogous to lighting a nether portal with flint and steel. No redstone
+ * required — just build the frame and throw the pearl.
+ *
+ * The ender pearl event is handled by EnderPearlPortalHandler, which calls
+ * tryActivate() on this class when a pearl lands inside a valid frame.
+ *
+ * DEACTIVATION:
+ * =============
+ * Portals deactivate when:
+ * - A frame Oddstone is physically broken (onBlockRemoved → immediate deactivation)
+ * - A corner block is broken (detected via neighborChanged → validateOrDeactivate)
+ * - A frame Oddstone is removed by other means (entity, explosion, etc.)
+ *
+ * No redstone involvement in deactivation either. The frame must simply
+ * remain structurally intact.
+ *
  * All methods are static — this is a utility class, not a block.
- * Called by OddstoneBlock.neighborChanged() and OddstoneBlock.onRemove().
+ * Called by OddstoneBlock.onRemove(), OddstoneBlock.neighborChanged(),
+ * and EnderPearlPortalHandler.
+ *
+ * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class OddstonePortalHandler {
+
+    /**
+     * Re-entrancy guard. When tryActivate() is filling portal blocks into
+     * the frame interior, each setBlock() triggers neighborChanged on adjacent
+     * Oddstone blocks. Without this guard, those calls would enter
+     * validateOrDeactivate() mid-fill, detect an incomplete portal, and
+     * immediately deactivate the portal we're in the process of creating.
+     */
+    private static boolean activating = false;
 
     // ========================================================================
     // NEIGHBOR CHANGE — called by OddstoneBlock.neighborChanged()
     // ========================================================================
 
     /**
-     * Handles an Oddstone block's neighbor changing. Decides whether
-     * to try activating or deactivating a portal.
-     * 
-     * Activation: if this Oddstone has power and isn't already part of
-     * a lit portal, attempt frame detection and activation.
-     * 
-     * Deactivation: if this Oddstone is adjacent to a lit portal,
-     * re-validate the entire frame. Only deactivates if the frame
-     * is genuinely broken (Oddstone unpowered or corner missing).
-     * This prevents false deactivation from unrelated neighbor
-     * updates like placing blocks near the frame exterior.
+     * Handles an Oddstone block's neighbor changing.
+     *
+     * Since activation is now ender-pearl-only, neighborChanged only handles
+     * deactivation validation: if this Oddstone is adjacent to a lit portal,
+     * re-validate the entire frame structure. Only deactivates if the frame
+     * is genuinely broken (Oddstone missing or corner block missing).
      */
     public static void onNeighborChanged(ServerLevel level, BlockPos pos,
                                           BlockPos neighborPos) {
-        boolean hasPower = level.hasNeighborSignal(pos);
+        if (activating) return; // Mid-fill — don't validate during portal creation
+
         boolean adjacentToPortal = isAdjacentToPortal(level, pos);
 
-        if (hasPower && !adjacentToPortal) {
-            tryActivate(level, pos);
-        } else if (adjacentToPortal) {
-            // Re-validate the entire frame instead of reacting to this
-            // single block's state. The frame check handles all cases:
-            // - Oddstone lost power
-            // - Corner block broken
-            // - Frame Oddstone broken (covered by onBlockRemoved, but
-            //   this catches edge cases from neighbor cascades)
+        if (adjacentToPortal) {
+            // Re-validate the entire frame. Checks:
+            // - All Oddstone blocks still present
+            // - All corner blocks still present
+            // Does NOT check redstone — portals don't need power.
             validateOrDeactivate(level, pos);
         }
     }
@@ -92,24 +97,30 @@ public class OddstonePortalHandler {
     }
 
     // ========================================================================
-    // ACTIVATION
+    // ACTIVATION — called by EnderPearlPortalHandler
     // ========================================================================
 
     /**
-     * Attempts to activate a portal from this Oddstone's position.
-     * Runs frame detection, validates all Oddstone blocks are powered,
-     * registers the address, and fills the interior with portal blocks.
+     * Attempts to activate a portal from an Oddstone frame block's position.
+     * Runs frame detection, registers the address, and fills the interior
+     * with portal blocks.
+     *
+     * Called by EnderPearlPortalHandler when an ender pearl lands inside
+     * a valid frame. The handler finds a frame Oddstone adjacent to the
+     * landing position and calls this method.
+     *
+     * @return true if the portal was successfully activated
      */
-    private static void tryActivate(ServerLevel level, BlockPos pos) {
+    public static boolean tryActivate(ServerLevel level, BlockPos oddstonePos) {
         OddstonePortalFrameDetector.FrameResult frame =
-                OddstonePortalFrameDetector.detectFrame(level, pos);
+                OddstonePortalFrameDetector.detectFrame(level, oddstonePos);
 
-        if (frame == null) return;
+        if (frame == null) return false;
 
         // Check if already lit
         for (BlockPos interior : frame.interiorPositions) {
             if (level.getBlockState(interior).is(ModBlocks.ODDSTONE_PORTAL.get())) {
-                return;
+                return false;
             }
         }
 
@@ -124,13 +135,13 @@ public class OddstonePortalHandler {
         switch (result) {
             case FAILED_ADDRESS_FULL:
                 Ideomod.LOGGER.info("Oddstone Portal at {} failed to light - address [{}] is taken",
-                        pos, frame.address);
-                level.playSound(null, pos, SoundEvents.FIRE_EXTINGUISH,
+                        oddstonePos, frame.address);
+                level.playSound(null, oddstonePos, SoundEvents.FIRE_EXTINGUISH,
                         SoundSource.BLOCKS, 0.5F, 1.0F);
-                return;
+                return false;
 
             case FAILED_ALREADY_EXISTS:
-                return;
+                return false;
 
             case REGISTERED_UNLINKED:
             case REGISTERED_LINKED:
@@ -138,11 +149,26 @@ public class OddstonePortalHandler {
                 BlockState portalState = ModBlocks.ODDSTONE_PORTAL.get().defaultBlockState()
                         .setValue(OddstonePortalBlock.AXIS, portalAxis);
 
-                for (BlockPos interior : frame.interiorPositions) {
-                    level.setBlock(interior, portalState, 2);
+                // Guard: prevent neighborChanged from triggering validateOrDeactivate
+                // during the fill loop. Each setBlock fires neighborChanged on adjacent
+                // Oddstone blocks, which would otherwise see a partially-filled portal
+                // and deactivate it.
+                activating = true;
+                try {
+                    for (BlockPos interior : frame.interiorPositions) {
+                        // Flag 18 = UPDATE_CLIENTS (2) | UPDATE_KNOWN_SHAPE (16)
+                        // UPDATE_KNOWN_SHAPE suppresses updateShape() on neighboring
+                        // blocks, preventing partially-filled portal blocks from
+                        // cascade-breaking when they see air neighbors that haven't
+                        // been filled yet. This is the same flag vanilla uses when
+                        // filling nether portals.
+                        level.setBlock(interior, portalState, 2 | 16);
+                    }
+                } finally {
+                    activating = false;
                 }
 
-                level.playSound(null, pos, SoundEvents.FLINTANDSTEEL_USE,
+                level.playSound(null, oddstonePos, SoundEvents.FLINTANDSTEEL_USE,
                         SoundSource.BLOCKS, 1.0F, 1.0F);
 
                 if (result == OddstonePortalSavedData.RegisterResult.REGISTERED_LINKED) {
@@ -152,7 +178,10 @@ public class OddstonePortalHandler {
                     Ideomod.LOGGER.info("Oddstone Portal activated (unlinked) at {} [{}]",
                             registrationPos, frame.address);
                 }
-                break;
+                return true;
+
+            default:
+                return false;
         }
     }
 
@@ -162,12 +191,10 @@ public class OddstonePortalHandler {
 
     /**
      * Re-validates the portal frame that this Oddstone is part of.
-     * If the frame is no longer valid (power lost or corner missing),
-     * deactivates the portal. If the frame is still valid, does nothing.
+     * If the frame is no longer structurally valid (Oddstone missing
+     * or corner missing), deactivates the portal.
      *
-     * This is the key fix for false deactivation: instead of assuming
-     * the portal is broken because ONE Oddstone got a neighborChanged,
-     * we walk the entire frame and check everything.
+     * No redstone checks — portals don't need power to stay active.
      */
     private static void validateOrDeactivate(ServerLevel level, BlockPos oddstonePos) {
         // Find an adjacent portal block to start navigation
@@ -202,7 +229,7 @@ public class OddstonePortalHandler {
             return;
         }
 
-        // Check all Oddstone in the frame are still Oddstone AND powered
+        // Check all Oddstone in the frame are still present (no power check)
         final boolean[] frameValid = {true};
         geom.forEachOddstonePosition(pos -> {
             if (!isValidFrameOddstone(level, pos)) {
@@ -219,15 +246,12 @@ public class OddstonePortalHandler {
     }
 
     /**
-     * Checks that a position is Oddstone AND receiving a redstone signal.
+     * Checks that a position contains an Oddstone block.
+     * No redstone power check — portals don't need power.
      */
     private static boolean isValidFrameOddstone(Level level, BlockPos pos) {
         if (!level.getBlockState(pos).is(ModBlocks.ODDSTONE.get())) {
             Ideomod.LOGGER.debug("Portal frame invalid - expected Oddstone at {}", pos);
-            return false;
-        }
-        if (!level.hasNeighborSignal(pos)) {
-            Ideomod.LOGGER.debug("Portal frame invalid - Oddstone at {} has no redstone signal", pos);
             return false;
         }
         return true;
@@ -235,10 +259,10 @@ public class OddstonePortalHandler {
 
     /**
      * Unregisters a portal from saved data and clears all its portal blocks.
-     * 
+     *
      * This is the single deactivation exit point — all paths that kill a
-     * portal (corner break, power loss, frame break) come through here.
-     * 
+     * portal (corner break, oddstone break, frame break) come through here.
+     *
      * Break particles and sound come from PortalUtils.clearPortalBlocks(),
      * which uses level.destroyBlock() — same visual/audio as when portal
      * blocks cascade-break via updateShape when a frame Oddstone is mined.

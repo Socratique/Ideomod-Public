@@ -27,11 +27,14 @@ public interface IMachineFamily {
 
     /**
      * Shared canStickTo logic for all Machine Family members.
+     * Frame family blocks must be ACTIVE to stick to machine blocks.
      */
     static boolean canMachineFamilyStickTo(BlockState other) {
         Block otherBlock = other.getBlock();
         if (isMachineFamily(otherBlock)) return true;
-        if (FrameActivation.isFrameFamily(otherBlock)) return true;
+        if (FrameActivation.isFrameFamily(otherBlock)) {
+            return FrameActivation.isActive(other);
+        }
         if (otherBlock instanceof SlimeBlock) return true;
         if (otherBlock instanceof HoneyBlock) return true;
         if (otherBlock instanceof OddSlimeBlock) return true;
