@@ -1,5 +1,80 @@
 # Ideomod Changelog
 
+## [2026-03-07] Bug #10 Fix — Immovable Frame Anchor Detection (Feature 7)
+
+Fixed bug #10: active framed blocks with immovable inners (obsidian, crying
+obsidian, reinforced deepslate, bedrock-type) were not anchoring piston move
+groups when positioned behind a group member in the push direction.
+
+### Root cause analysis:
+
+The issue was NOT in the backward walk's canStickTo logic as originally
+theorized. Through diagnostic logging, the actual cause was identified:
+
+When vanilla's backward walk (inside addBlockLine) encounters a block where
+isPushable returns false, it treats it as a wall and silently stops walking
+(returns true = "this line is fine, stop here"). It never makes a recursive
+addBlockLine call for that position. Since Feature 5's immovable inner check
+lives at HEAD of addBlockLine, it never fires for blocks the backward walk
+skips. The framed obsidian was invisible to the resolver.
+
+Sideways grabs (branching phase) worked correctly because branching calls
+addBlockLine directly on the neighbor position, which DOES trigger Feature 5.
+
+### Fix: Feature 7 — Immovable Frame Anchor Detection [IMPLEMENTED]
+
+File: mixin/PistonStructureResolverMixin.java
+
+Added a post-gathering anchor scan in the TAIL injection of addBranchingBlocks
+(same location as Feature 3 sympathetic search and Feature 6 vanilla metal
+conductors). After all blocks have been gathered into toPush, the new
+ideomod$hasImmovableFrameAnchor() method scans every block in toPush and
+checks all 6 neighbors for framed blocks with immovable inners that:
+  1. Are NOT already in toPush (already handled by Feature 5)
+  2. ARE active (inactive framed obsidian has no frame stickiness connection)
+  3. Would be frame-sticky with the group member (same material, cross-frame
+     mediation, or machine family adjacency)
+
+If any such anchor is found, the resolve fails (cir.setReturnValue(false)),
+preventing the group from moving. This mirrors Feature 5's behavior but
+catches the case vanilla's backward walk silently skips.
+
+### Key design constraint discovered during testing:
+
+The immovable framed block must be ACTIVE to anchor. An inactive framed
+obsidian sitting next to an active group is just inert — it has no frame
+stickiness connection and should not prevent movement. Players can
+intentionally deactivate framed obsidian (e.g., via machine block frame
+deactivation from a different end) to disconnect it from a group.
+
+### Issue #11 observation:
+
+getLightEmission() delegation was found to already be implemented in
+FramedBlock.java (lines 357-364). The override queries the inner block's
+defaultBlockState().getLightEmission(). This may have been added during a
+prior behavioral delegation session without changelog entry. Issue #11
+status updated to NEEDS VERIFICATION — requires in-game testing to confirm
+framed glowstone etc. actually emit light (the lightLevel predicate at block
+registration may also need updating).
+
+### Files changed:
+- mixin/PistonStructureResolverMixin.java — Added Feature 7: ideomod$hasImmovableFrameAnchor()
+  helper + anchor check call in ideomod$sympatheticSearch TAIL injection.
+  Added BUG10 Feature5 and Feature7 diagnostic logging (temporary).
+
+### Documentation updates:
+- IDEOMOD_CHANGELOG.txt: this entry
+- IDEOMOD_DOCUMENTATION.md: Feature 7 documented in PistonStructureResolver
+  section, injection summary table updated, known issue #10 struck as FIXED,
+  issue #11 updated with observation, timestamp updated
+- CODEBASE_REFERENCE.md: issue #10 struck as FIXED, issue #11 updated,
+  timestamp updated
+- IDEOMOD_DESIGN.md: framed blocks known issues updated (issue #10 removed,
+  issue #11 updated)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-02a] Frame System Overhaul — Cross-Frame Mediation, Vanilla Metal Conductors, Signal-Based Activation
 
 Major overhaul of the frame activation and stickiness systems. Introduces INNER_CONDUCTOR

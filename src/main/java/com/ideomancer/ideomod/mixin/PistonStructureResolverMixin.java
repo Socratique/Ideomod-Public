@@ -94,7 +94,20 @@ public abstract class PistonStructureResolverMixin {
         // --- Feature 5: Framed block immovable inner check (ALL phases) ---
         {
             BlockState targetState = this.level.getBlockState(pos);
-            if (!targetState.isAir() && ideomod$isFramedBlockWithImmovableInner(targetState, pos)) {
+            boolean isFramedImmovable = !targetState.isAir() && ideomod$isFramedBlockWithImmovableInner(targetState, pos);
+            if (targetState.getBlock() instanceof FramedBlock) {
+                String innerInfo = "no_be";
+                BlockEntity debugBe = this.level.getBlockEntity(pos);
+                if (debugBe instanceof FramedBlockEntity debugFbe && debugFbe.hasInnerBlock()) {
+                    innerInfo = debugFbe.getInnerBlockId().toString();
+                }
+                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    "[BUG10 Feature5] addBlockLine called: pos={}, inner={}, isImmovable={}, inBranching={}, dir={}",
+                    pos, innerInfo, isFramedImmovable, ideomod$inBranching.get(), dir);
+            }
+            if (isFramedImmovable) {
+                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    "[BUG10 Feature5] RETURNING FALSE — immovable framed block at {}", pos);
                 cir.setReturnValue(false);
                 return;
             }
@@ -328,6 +341,22 @@ public abstract class PistonStructureResolverMixin {
         if (addedAny || addedMetals) {
             cir.setReturnValue(true);
         }
+
+        // --- Feature 7: Immovable framed block anchor check ---
+        // After all blocks have been gathered (branching + metals + sympathetic),
+        // check if any block in toPush is adjacent to a framed block with an
+        // immovable inner (obsidian, crying obsidian, reinforced deepslate, etc.)
+        // that would be frame-sticky with it. If so, that immovable block anchors
+        // the entire group — the move must fail.
+        //
+        // This catches the case that vanilla's backward walk misses: when an
+        // immovable block is adjacent to a group member, vanilla's isPushable
+        // check silently stops the walk (returns true = "fine, stop here").
+        // But for frame-sticky immovable blocks, we need to treat them as
+        // anchors that prevent the entire group from moving.
+        if (ideomod$hasImmovableFrameAnchor()) {
+            cir.setReturnValue(false);
+        }
     }
 
     // ====================================================================
@@ -488,6 +517,61 @@ public abstract class PistonStructureResolverMixin {
         // Same-material vanilla metal
         FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
         return neighborMat == metalMat;
+    }
+
+    // ====================================================================
+    // FEATURE 7: IMMOVABLE FRAME ANCHOR DETECTION
+    // ====================================================================
+
+    /**
+     * Checks if any block in toPush is adjacent to a framed block with an
+     * immovable inner that is frame-sticky with it. If so, the immovable
+     * block acts as an anchor and the entire move must fail.
+     *
+     * Only checks blocks NOT already in toPush (blocks in toPush were already
+     * handled by Feature 5's addBlockLine HEAD check).
+     */
+    @Unique
+    private boolean ideomod$hasImmovableFrameAnchor() {
+        for (BlockPos pushedPos : this.toPush) {
+            BlockState pushedState = this.level.getBlockState(pushedPos);
+
+            for (Direction dir : Direction.values()) {
+                BlockPos neighborPos = pushedPos.relative(dir);
+                if (this.toPush.contains(neighborPos)) continue;
+
+                BlockState neighborState = this.level.getBlockState(neighborPos);
+                if (!ideomod$isFramedBlockWithImmovableInner(neighborState, neighborPos)) continue;
+
+                // Immovable framed block must be active to form a frame stickiness
+                // connection. Inactive framed obsidian is just inert — not connected
+                // to the group, so it doesn't anchor anything.
+                if (neighborState.getBlock() instanceof FramedBlock
+                    && !neighborState.getValue(FramedBlock.ACTIVE)) continue;
+
+                // Check frame stickiness in both directions
+                if (ideomod$wouldFrameStickinessAllow(pushedState, neighborState)
+                    || ideomod$wouldFrameStickinessAllow(neighborState, pushedState)) {
+                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                        "[BUG10 Feature7] ANCHOR FOUND: immovable framed block at {} anchors group via {} at {}",
+                        neighborPos, pushedState, pushedPos);
+                    return true;
+                }
+
+                // Also check if the pushed block is a Machine Family member
+                // adjacent to an active immovable framed block (machine blocks
+                // stick to all active frame family members)
+                if (MachineFrameBlock.isMachineFamily(pushedState.getBlock())
+                    && neighborState.getBlock() instanceof IFrameBlock
+                    && IFrameBlock.isActive(neighborState)) {
+                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                        "[BUG10 Feature7] ANCHOR FOUND: immovable framed block at {} anchors group via machine family at {}",
+                        neighborPos, pushedPos);
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     // ====================================================================

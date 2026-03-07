@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-07 (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, backward walk framed pull gap, framed light emission delegation)*
+*Last updated: 2026-03-07b (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, framed light emission delegation [needs verification])*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -405,7 +405,7 @@ This is needed because ranged pistons pass the device's own position as `pistonP
 |--------|----------|------|---------|---------|
 | `resolve` | HEAD | @Inject | Feature 4 | Override startPos for ranged pistons |
 | `addBranchingBlocks` | HEAD | @Inject | Phase detection | Set `inBranching = true` |
-| `addBranchingBlocks` | TAIL | @Inject | Feature 3 | Sympathetic Oddstone search |
+| `addBranchingBlocks` | TAIL | @Inject | Feature 3, 6, 7 | Sympathetic Oddstone search + vanilla metal conductors + immovable frame anchor check |
 | `addBranchingBlocks` | TAIL | @Inject | Phase detection | Set `inBranching = false` |
 | `addBlockLine` | HEAD | @Inject (cancellable) | Feature 5 + 1A + 2A | Immovable inner check (all phases) + block sideways grabs (branching only) |
 | `addBlockLine` | canStickTo INVOKE | @Redirect | Features 1B+2B | Chain cohesion (call-pair toggle: grab immunity on Call 1 only) |
@@ -417,6 +417,20 @@ When `addBlockLine` encounters a FramedBlock whose inner block would be immovabl
 Needed because vanilla's `addBlockLine` returns TRUE (skip) when `isPushable` returns false. For blocks that ARE part of a sticky group via frame activation, skipping is wrong — the immovable block should anchor the group and prevent movement.
 
 Helper: `ideomod$isFramedBlockWithImmovableInner(BlockState, BlockPos)` — checks FramedBlock BE for inner block identity (hardcoded Blocks.OBSIDIAN/CRYING_OBSIDIAN/REINFORCED_DEEPSLATE) and destroySpeed == -1.
+
+### Feature 7: Immovable Frame Anchor Detection (TAIL of addBranchingBlocks)
+
+Post-gathering safety check. After all blocks have been collected into toPush (by branching, Feature 6 vanilla metal conductors, and Feature 3 sympathetic search), scans every block in toPush for adjacent framed blocks with immovable inners that would form a frame stickiness connection. If found, fails the resolve (the immovable block anchors the group).
+
+This exists because vanilla's backward walk silently skips unpushable blocks (isPushable returns false -> walk stops, returns true). Feature 5 at HEAD of addBlockLine never fires for blocks the backward walk skips. Sideways grabs (branching) DO trigger Feature 5, so they work correctly. Feature 7 catches the backward walk gap.
+
+Conditions for anchor detection (ALL must be true):
+1. Neighbor is a FramedBlock with immovable inner (obsidian, crying obsidian, reinforced deepslate, destroySpeed -1)
+2. Neighbor is NOT already in toPush (those are handled by Feature 5)
+3. Neighbor is ACTIVE (inactive framed obsidian has no frame stickiness connection)
+4. Frame stickiness connects the neighbor to the group member (same material, cross-frame mediation via ideomod$wouldFrameStickinessAllow, or Machine Family adjacency)
+
+Helper: `ideomod$hasImmovableFrameAnchor()` — iterates toPush, checks 6 neighbors per block, returns true if any immovable anchor found.
 
 ---
 
@@ -1319,8 +1333,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~7~~ | ~~Sympathetic retraction with machine-activated framed blocks~~ | ~~Data loss bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.~~ |
 | 8 | Machine Track signal bleeds into attached Machine Blocks via Trolley | Gameplay bug | MachineTrackBlock.java. Track conduction signal passes through Trolley into any Machine Frame stuck to it, incorrectly powering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intentional for the Track-Trolley push system only -- it should not feed into frame activation networks. Fix direction: isolate Track signal from FrameActivation source detection, likely by excluding MachineTrackBlock as a valid activation source in FrameActivation.recalculate(), or by preventing POWER conduction from propagating past non-conduit blocks (Trolleys). |
 | 9 | Repulser/Attractor cannot target Framed Oddstone | Movement bug | RangedPistonUtil.java. ODDSTONE_ONLY filter predicate checks block identity via state.is(ModBlocks.ODDSTONE.get()) -- bare Oddstone only. Framed Oddstone is a FramedBlock instance with INNER_STICKY=ODDSTONE, not an OddstoneBlock, so it fails the predicate. Fix: expand ODDSTONE_ONLY predicate to also match FramedBlock instances where state.getValue(FramedBlock.INNER_STICKY) == StickyType.ODDSTONE.ordinal() (or equivalent). |
-| 10 | Framed blocks not pulled from behind in push direction | Movement bug | PistonStructureResolverMixin.java. Backward walk Redirect (Feature 1B+2B) lacks a general frame stickiness second-chance path. The existing ideomod$wouldFrameStickinessAllow second-chance only fires when a Framed Odd Slime directional rule blocked inner stickiness. Framed blocks with INNER_STICKY=0 that rely purely on frame stickiness (e.g. framed obsidian, framed stone) are not picked up in the backward walk even when ACTIVE and same-material. Sideways grabs work correctly (HEAD injection, Feature 1A+2A, has full logic). Fix: extend backward walk Redirect to run ideomod$wouldFrameStickinessAllow as a general second-chance for any FramedBlock with INNER_STICKY=0 where canStickTo alone is insufficient, not only when a directional rule fired. |
-| 11 | Framed inner blocks with light emission do not emit light | Missing delegation | FramedBlock.java. getLightEmission() behavioral delegation not implemented. Framed glowstone, sea lantern, shroomlight, etc. emit no light in the world. Same class of missing delegation as soul sand speed / honey jump factor (fixed via EntityMovementMixin). Fix: override getLightEmission(BlockState, BlockGetter, BlockPos) in FramedBlock to query the inner block's defaultBlockState().getLightEmission(). May also need to ensure the block property lightLevel predicate delegates correctly at registration time in ModBlocks.java. |
+| ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
+| 11 | Framed inner blocks with light emission do not emit light | Missing delegation (NEEDS VERIFICATION) | FramedBlock.java. getLightEmission() override EXISTS in FramedBlock (queries inner block's defaultBlockState().getLightEmission()). May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |
 
 
 ## 15. CONVENTIONS & PATTERNS

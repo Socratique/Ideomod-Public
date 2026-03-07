@@ -396,8 +396,7 @@ Framed Blocks use the same FrameActivation system as Frame Blocks. Signal streng
 **Known issues:**
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
 - Item model translucency: translucent inner blocks (glass, slime) render opaque in inventory. Cosmetic only.
-- Framed blocks with INNER_STICKY=0 are not pulled from behind in the push direction. The PistonStructureResolverMixin backward walk Redirect lacks a general frame stickiness second-chance path -- only Framed Odd Slime's directional case has one currently. Sideways grabs work correctly.
-- Framed inner blocks with light emission (glowstone, sea lantern, shroomlight, etc.) do not emit light. getLightEmission() behavioral delegation is not yet implemented in FramedBlock.
+- Framed inner blocks with light emission (glowstone, sea lantern, shroomlight, etc.) may not emit light. getLightEmission() override exists in FramedBlock.java but needs in-game verification. If not working, lightLevel predicate at block registration may also need updating.
 
 **Completed improvements (2026-02-22f):**
 

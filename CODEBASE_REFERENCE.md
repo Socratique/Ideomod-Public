@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-07 (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, backward walk framed pull gap, framed light emission delegation)*
+*Last updated: 2026-03-07b (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, framed light emission delegation [needs verification])*
 
 ---
 
@@ -382,7 +382,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
 8. **Machine Track signal bleeds into attached Machine Blocks via Trolley** -- Track conduction passes through Trolley into any Machine Frame stuck to it, incorrectly triggering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intended only for the Track-Trolley push system. Fix: isolate Track from FrameActivation source detection in FrameActivation.recalculate() or guard POWER propagation past non-conduit blocks. File: MachineTrackBlock.java, FrameActivation.java.
 9. **Repulser/Attractor cannot target Framed Oddstone** -- ODDSTONE_ONLY filter predicate in RangedPistonUtil checks state.is(ModBlocks.ODDSTONE) (bare Oddstone only). Framed Oddstone is a FramedBlock with INNER_STICKY=ODDSTONE and fails the filter. Fix: expand predicate to also match FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
-10. **Framed blocks not pulled from behind in push direction** -- PistonStructureResolverMixin backward walk Redirect (Feature 1B+2B) lacks a general frame stickiness second-chance. ideomod$wouldFrameStickinessAllow only fires for Framed Odd Slime directional gating. Framed blocks with INNER_STICKY=0 relying on frame stickiness (framed obsidian, framed stone, etc.) are not grabbed in the backward walk even when ACTIVE and same-material. Sideways grabs work (HEAD injection has full logic). Fix: run frame stickiness second-chance for any INNER_STICKY=0 FramedBlock where canStickTo alone fails, not only when directional rule fired. File: PistonStructureResolverMixin.java.
-11. **Framed inner blocks with light emission do not emit light** -- getLightEmission() not delegated in FramedBlock. Framed glowstone, sea lantern, shroomlight etc. emit no light. Fix: override getLightEmission() in FramedBlock to query inner block's defaultBlockState(). May also require lightLevel predicate at registration in ModBlocks.java. File: FramedBlock.java, ModBlocks.java.
+10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
+11. **Framed inner blocks with light emission do not emit light** -- getLightEmission() override EXISTS in FramedBlock.java (queries inner defaultBlockState). NEEDS VERIFICATION: may already work. If not, lightLevel predicate at registration in ModBlocks.java may also need updating. File: FramedBlock.java, ModBlocks.java.
 
 Written by Claude, directed and guided by The Ideomancer.
