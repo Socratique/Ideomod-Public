@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-02a (Cross-frame mediation, vanilla metal conductors, signal-based activation, activation-gated stickiness.)*
+*Last updated: 2026-03-07 (Rust system, iron/copper registry substitution plan, lore & world design dump: The After dimension, ghost blocks, ectoplasm, new potions, overworld structures, biomes, wargs, untamed ravagers, Steve/Herobrine lore. Enchanting Overhaul expanded: vanilla mechanics documented, budget system detailed, levelless enchant flat costs, curses as negative budget, catalyst slot weight-biasing mechanic, level ceiling via ring structure, new enchants: Weight, Aspect of Tool; new curse: Curse of Conductivity.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -33,7 +33,8 @@
 7. [Structures](#7-structures)
 8. [Recipes & Crafting](#8-recipes--crafting)
 9. [Systems & Infrastructure](#9-systems--infrastructure)
-10. [Brainstorm Bin](#10-brainstorm-bin)
+10. [Lore & World Design](#10-lore--world-design)
+11. [Brainstorm Bin](#11-brainstorm-bin)
 
 ---
 
@@ -255,451 +256,66 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Property | Value |
 |----------|-------|
 | ID | `machine_block` |
-| Hardness | 3.0 / Blast 6.0 |
+| Class | MachineFrameBlock |
+| Hardness | 5.0 / Blast 6.0 |
 | Tool | Pickaxe |
-| Sound | Metal |
-| Type | Block Entity (single item slot + specialization ID) |
-| Movable | Yes -- PushReaction.NORMAL, PistonBaseBlockMixin bypasses vanilla's BE check |
-| Recipe | Hollow Stone + iron + slime (TBD -- requires Hollow Stone) |
-
-**Base behavior (no item inserted):**
-- Selective stickiness: sticky to all other Machine Block variants. Exclusive with slime & honey.
-- One-way with slime: slime grabs Machine Block; Machine Block does NOT grab slime. Via mixin.
-- Right-click opens a single-slot GUI. Insert an item to specialize. Right-click (or shift-right-click) to retrieve item. Block reverts to blank chassis when empty.
-
-**Current implemented features:**
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Selective stickiness | [DONE] | Sticky only to other Machine Blocks. Exclusive with slime & honey. |
-| Redstone conduction | [DONE] | Will become Machine Conductor specialization. |
-| Power color tint | [DONE] | Will move to Machine Conductor specialization. |
-| One-way with slime | [DONE] | Stays on base chassis. |
-| Block entity with GUI | [DONE] | Single item slot. Right-click to open. Insert to specialize, remove to revert. |
-| Piston movement data preservation | [DONE] | IPistonMovable interface. Works for push, pull, Repulser, Attractor, Track. |
-
-**Stickiness rules:**
-Machine Block specializations stick to **same-type only**. A Machine Conductor sticks to other Machine Conductors. A Machine Pipe sticks to other Machine Pipes. Different specialization types do NOT stick to each other.
-
-**Universal connector exceptions:** The following types stick to ALL Machine Block variants regardless of specialization:
-- Base (empty) Machine Block -- the blank chassis connects everything
-- Frame Blocks / Framed Blocks -- structural connectors bridge different systems
-- Machine Push Limit Extender -- structural support block, universal connector
-
-These universal connectors are the "glue" that lets players bridge different Machine subsystems on the same structure. Without them, each specialization type is its own isolated sticky group.
-
-**Implementation note:** Stickiness check compares specialization IDs. Two Machine Blocks stick if: (a) same specialization, OR (b) either block is a universal connector type (base, frame, extender). The one exception: during a Track-initiated move operation, the Track and Trolley do not stick to each other (the Trolley slides free). In all other contexts, Tracks and Trolleys stick normally to same-type and universal connectors.
-
-**Block entity movement** [DONE]:
-When a Machine Block is moved by a piston (or Repulser/Attractor/Track), the block entity data is serialized via IPistonMovable.saveMovementData(), stored in MovingBlockEntityData keyed by destination position, and restored into the fresh block entity after the 2-tick animation by PistonMovingBlockEntityMixin. PistonBaseBlockMixin bypasses vanilla's block entity pushability check. Data preservation works for all movement types: vanilla piston push, sticky piston retract, Repulser push, Attractor pull, and Track-driven Trolley movement. The stored data is the full inventory contents (currently one item), serialized via ContainerHelper.
-
-**Visual feedback:**
-Each specialization should have a distinct visual indicator so players can identify machine types at a glance. Approach TBD -- options include: overlay texture per specialization on each face (small icon), tint color per type, or subtle model variation. Base chassis (no item) uses the existing dark steel grey appearance.
-
----
-
-#### Machine Specializations [IDEA]
-
-The following specializations are defined by inserting the corresponding item into a Machine Block's GUI slot. The item sits in the slot and is retrievable at any time. Removing the item reverts the block to a blank chassis.
-
-**Omnidirectional principle:** Several specializations (Piston, Observer, Repeater, Inverter) operate on all 6 faces simultaneously. The rule for these is: when a face is active (receiving signal, detecting change, etc.), only the opposite face is locked/affected. The other 4 faces remain fully independent. This means a single omnidirectional Machine Block can handle up to 3 non-opposing face pairs simultaneously, replacing what would take 3 separate vanilla blocks.
-
----
-
-**Machine Conductor** (insert: Redstone Dust) [DONE -- needs refactor to specialization system]
-
-Solid-state redstone wire as a full block. Receives and transmits redstone signal. Signal decays by 1 per block (like redstone dust). Whitelist (redstone_components tag) prevents feedback loops since Machine Conductor is itself a signal source. Visual: power color tint from dark steel grey (0) to bright red (15).
-
-This is the existing Machine Block redstone behavior, moved into a specialization.
-
----
-
-**Machine Pipe** (insert: Hopper) [IDEA]
-
-Signal-triggered item transport. Inert until it receives a redstone signal. On signal, pulls one item from the container on the signal-receiving face, then automatically pushes it to the next connected container or Machine Pipe. Does not pull continuously -- each pulse moves one item.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Redstone signal on any face. Pulls from the container on that face. |
-| Transfer rate | 1 item per signal pulse |
-| Default push direction | Opposite the face that received the signal (and pulled the item) |
-| Round-robin | If connected to multiple valid outputs, cycles through them on subsequent pulls, excluding the face it pulled from |
-| State tracking | Block entity stores last-output index for round-robin |
-| Filtering | None (transfers any item). Filter specialization possible later. |
-| Visual | TBD -- pipe icon overlay or subtle model change |
-
-**Transfer flow:**
-```
-Signal arrives on NORTH face ->
-  Check NORTH neighbor for inventory (chest, hopper, other pipe, etc.)
-  Pull 1 item from that inventory ->
-  Push to SOUTH (opposite face, default first output) ->
-    If SOUTH is blocked or no container, try next valid face in round-robin ->
-    Exclude NORTH (the pull face) from output candidates
-```
-
-**Design notes:**
-- Signal-triggered means the pipe is controllable with redstone timing. Clock it with a repeater for steady throughput, pulse it manually for precise transfers.
-- Simpler than hoppers: no passive suction, no comparator output (though that could be added). Just "signal in, item moves."
-- The default-to-opposite-face behavior means a straight line of pipes works intuitively without configuration.
-- Can receive items pushed from another Machine Pipe (acts as a container for the pushing pipe). When it receives an item this way, it pushes forward using the same round-robin logic.
-
----
-
-**Machine Track** (insert: Powered Rail) [DONE]
-
-Rail infrastructure for Machine Trolleys. Implemented as standalone block (MachineTrackBlock). Receives and conducts redstone signal (like Machine Conductor). When a Machine Trolley is adjacent, the Track moves the Trolley in the direction opposite to the redstone signal source. Uses BlockMoveHelper directly (not RangedPistonUtil). Signal direction detected via direct source interrogation (conduit blocks with higher POWER, tagged redstone components) rather than vanilla hasSignal().
-
-| Detail | Value |
-|--------|-------|
-| ID | `machine_track` |
-| Signal behavior | Receives and conducts redstone like Machine Conductor. POWER 0-15, decay by 1. |
-| Trolley interaction | On rising edge, checks all 6 adjacent blocks for Trolleys. Pushes ALL found Trolleys in computed direction. |
-| Movement mechanic | Uses BlockMoveHelper.moveBlockAt() directly. Block event encodes pushDir + trolleyFace via bit packing for client sync. |
-| Stickiness | Machine Family stickiness (sticks to Machine Frame, other Tracks, Trolleys, Frame Family). |
-
-**Design notes:**
-- Uses BlockMoveHelper directly rather than RangedPistonUtil -- no scanning needed, just push the adjacent Trolley.
-- Signal direction computed from actual conduit neighbors with higher power, not vanilla hasSignal() (avoids weak power misfires).
-- Pushes ALL adjacent Trolleys simultaneously in the computed direction.
-
----
-
-**Machine Trolley** (insert: Minecart) [DONE]
-
-Passive cargo carrier. Implemented as standalone block (MachineTrolleyBlock). Has no movement logic of its own -- entirely passive. Pushed by Tracks.
-
-| Detail | Value |
-|--------|-------|
-| ID | `machine_trolley` |
-| Self-movement | None. Trolley is moved by adjacent Tracks. |
-| Payload | Other Machine Blocks (not Tracks or Trolleys) stick to the Trolley and move with it as a group. |
-| Stickiness | Machine Family stickiness. Delegates to MachineFrameBlock.canMachineFamilyStickTo(). |
-
-**Design notes:**
-- A Trolley sitting on a line of Tracks is essentially a block-based minecart. No entity, no rails -- just blocks.
-- Payload capacity is limited by piston push limits (or Machine Grabber-extended limits).
-- Multiple Trolleys in a group? If two Trolleys are stuck together via intermediate Machine Blocks, a Track would move the whole group. Could be useful or chaotic -- worth testing.
-- Does NOT conduct redstone (unlike Track).
-
----
-
-**Machine Inverter** (insert: Redstone Torch) [IDEA]
-
-NOT gate as a full block. Emits a redstone signal from any face that is NOT receiving a signal. When a face receives a signal, the opposite face stops emitting. Each axis operates independently -- only the opposite face is affected.
-
-| Detail | Value |
-|--------|-------|
-| Default state | Emitting on all faces (like a redstone torch) |
-| When powered on a face | Opposite face stops emitting. Other axes unaffected. |
-| Per-axis operation | North/south, east/west, up/down each operate independently. Signal in from north turns off south output, but east/west/up/down outputs remain on. |
-| Signal strength | 15 when emitting, 0 when suppressed (TBD -- or should it invert the signal level?) |
-
-**Design notes:**
-- Follows the same opposite-face-only rule as other omnidirectional specializations.
-- A single Machine Inverter can invert up to 3 independent signal lines simultaneously.
-- Default-on behavior means an unpowered Machine Inverter emits from all 6 faces at strength 15. Powering individual faces selectively disables their opposite outputs.
-
----
-
-**Machine Repeater** (insert: Redstone Repeater) [IDEA]
-
-Signal delay block. GUI includes number buttons to set tick delay (1-4 ticks, like vanilla repeater). Receives signal on any face, outputs on the opposite face after the set delay. Only the opposite face is locked per active signal -- can delay signals on up to 3 independent axes simultaneously.
-
-| Detail | Value |
-|--------|-------|
-| Delay range | 1-4 ticks (matching vanilla repeater) |
-| GUI | Number buttons for delay selection (in addition to the specialization item slot) |
-| Directionality | Receives from any face, outputs on opposite face. Each axis operates independently. |
-| Locking | Only the opposite face is locked per signal. Can relay on up to 3 non-opposing axes simultaneously. |
-| Simultaneous operation | Signal from north (delay -> south) + signal from east (delay -> west) + signal from up (delay -> down) all operate independently with their own delay timers. |
-
-**Design notes:**
-- Each face-pair (north/south, east/west, up/down) maintains its own independent delay timer.
-- Delay setting in GUI applies to all axes (single global delay value). Per-axis delay would be more powerful but significantly more complex GUI -- probably not worth it.
-- A single Machine Repeater at a junction can delay 3 independent signal lines. Extremely space-efficient.
-
----
-
-**Machine Clock** (insert: Clock) [IDEA]
-
-Programmable pulse generator. When receiving a redstone signal, emits a 1-tick pulse at a configurable interval. GUI has selection buttons to set the tick interval. Stops pulsing when the input signal is removed.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Requires continuous redstone input to operate. No input = no pulses. |
-| Output | 1-tick redstone pulse at the configured interval |
-| Interval | Configurable via GUI buttons (TBD -- range from every 2 ticks to every 40 ticks? Or specific presets?) |
-| Omnidirectional | Follows the opposite-face-only rule. Input on one face, output on opposite face. Up to 3 independent clock signals simultaneously. |
-
-**Design notes:**
-- Replaces the need for vanilla repeater clock circuits (the classic 2-repeater loop). One block, configurable speed, clean signal.
-- The "requires input" design means it's controllable -- feed it a signal to start the clock, cut the signal to stop. No runaway clocks.
-- Combined with Machine Pipe, this is the core of automated item transport: Clock pulses the Pipe at whatever rate you want.
-- The clock item as the specialization token is thematically perfect -- it's literally a clock.
-
----
-
-**Machine Pulser** (insert: Button) [IDEA]
-
-Rising-edge detector. Converts any incoming signal into a single 1-tick pulse. Only fires on the rising edge (signal turning on). A constant signal produces exactly one pulse -- the signal must turn off and on again to fire another. Essentially a monostable circuit as a single block.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Rising edge of redstone signal (off -> on transition) |
-| Output | Single 1-tick pulse on the opposite face |
-| Constant signal | Ignored after the initial pulse. Signal must drop to 0 and return to fire again. |
-| Omnidirectional | Follows the opposite-face-only rule. Each face-pair tracks its own edge state independently. Up to 3 independent pulse outputs simultaneously. |
-
-**Design notes:**
-- Essential for converting sustained signals into clean pulses. Place between a lever and a Machine Piston to get one push per flip instead of a stuck piston.
-- Like a Conductor but smarter -- it doesn't just pass the signal through, it shapes it.
-- The button as specialization token is thematic: buttons produce a single pulse, so does this block.
-- Pairs naturally with Machine Clock: Clock generates periodic pulses from a constant signal, Pulser generates a single pulse from a constant signal.
-
----
-
-**Machine Toggle** (insert: Lever) [IDEA]
-
-Redstone-controlled toggle switch. Alternates between on and off states each time it receives a rising-edge signal. First pulse turns it on (emits redstone), second pulse turns it off, third turns it on, etc. Essentially a T flip-flop as a single block.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Rising edge of redstone signal (off -> on transition) |
-| Output | Toggles between emitting signal (on) and not emitting (off) on the opposite face |
-| State | Persistent -- remembers on/off state. Survives chunk unloads. |
-| Omnidirectional | Follows the opposite-face-only rule. Each face-pair maintains its own independent toggle state. Up to 3 independent toggles simultaneously. |
-
-**Design notes:**
-- Replaces the vanilla T flip-flop (which requires multiple blocks -- sticky piston + slime + redstone). One block, clean toggle.
-- The lever as specialization token is perfect: a lever is a toggle, so is this block. But this one is redstone-controlled rather than player-controlled.
-- Useful for: button -> toggle on/off for doors, machines, lights. Pulse from Machine Observer -> toggle a circuit. Any "press once to start, press again to stop" behavior.
-- State persists through chunk unloads and game restarts (stored in block entity NBT).
-
----
-
-**Machine Observer** (insert: Observer) [IDEA]
-
-Omni-directional block update detector. Watches ALL six faces for block changes. When a change is detected on any face, sends a signal pulse out the opposite face. Only the opposite face is locked during that pulse -- all other faces remain active and can detect/fire independently.
-
-| Detail | Value |
-|--------|-------|
-| Detection | All 6 faces simultaneously |
-| Output | Pulse on the face opposite to the detected change |
-| Locking | Only the opposite face is locked during a pulse (the output face cannot simultaneously detect). Other 4 faces remain fully active. |
-| Simultaneous events | Can detect changes on up to 3 non-opposing face pairs simultaneously, firing 3 independent output pulses. |
-| Pulse duration | 1 redstone tick (TBD) |
-
-**Design notes:**
-- Eliminates vanilla observer's biggest limitation: fixed orientation. One block, all directions covered.
-- The opposite-face-only lockout means a single Machine Observer can serve up to 3 independent circuits at once (e.g. detect north -> fire south, detect east -> fire west, detect up -> fire down, all simultaneously).
-- This makes it an incredibly dense detection hub. One block at an intersection replaces what would normally take 3 separate vanilla observers.
-
----
-
-**Machine Piston** (insert: Piston or Sticky Piston) [IDEA]
-
-Omni-directional piston. Any face can be the pushing face, determined by which face receives the redstone signal -- pushes out from the opposite face. No piston head needed. Only the opposite face is locked per signal -- can push in up to 3 directions simultaneously.
-
-| Detail | Value |
-|--------|-------|
-| Push direction | Opposite to the face receiving signal |
-| Sticky vs non-sticky | Determined by inserted item: regular Piston = push only, Sticky Piston = push and pull |
-| Push limit | Standard (12, or extended by Machine Grabber/Extender if present in group) |
-| Movement logic | Standard piston structure resolution via existing mixin infrastructure |
-| Locking | Only the opposite face is locked per signal. Receiving signal on north locks south (pushing south), but east/west/up/down remain available. |
-| Simultaneous push | Can push in up to 3 non-opposing directions at once (e.g. signal from north + east + up = push south + west + down simultaneously). |
-
-**Design notes:**
-- No piston head block. The Machine Piston pushes from its own face directly. This means it's a full cube that doesn't extend, which is a significant space savings over vanilla pistons.
-- Simultaneous multi-directional push from a single block is extremely powerful. One Machine Piston at an intersection can serve 3 independent circuits.
-- Each push direction resolves independently -- different push groups, different block limits per direction. A push failing in one direction doesn't affect the others.
-- Combined with Machine Observer, enables very compact redstone contraptions that would normally require sprawling vanilla builds.
-
-**Open questions:**
-- *What happens if the same block is in two different push groups from the same Machine Piston? (e.g. a block that's both south and west of the piston, in both push groups) Probably: first push to resolve wins, second push recalculates with the block already moved.*
-
----
-
-**Machine Battery** (insert: Redstone Block) [IDEA]
-
-Wireless redstone broadcaster. When receiving a redstone signal, emits that signal to all Machine Blocks within a radius.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Must receive a redstone signal to activate (unlike redstone block which is always on) |
-| Broadcast radius | TBD (5 blocks to match Oddstone sympathetic range? Or configurable via GUI?) |
-| Target | Machine Blocks only (all variants) |
-| Signal strength | TBD -- broadcasts at received strength? Fixed 15? Decays with distance? |
-
-**Design notes:**
-- Creates wireless redstone clusters without physical wire connections.
-- Potential feedback loop concern: if a Battery powers Machine Conductors, and those Conductors feed back to the Battery, infinite loop. May need the same whitelist approach as Machine Conductor, or a rule that Batteries don't trigger other Batteries.
-
----
-
-**Machine Linker** (insert: Oddstone variant) [IDEA]
-
-Wireless redstone broadcaster paired by Oddstone variant. The Oddstone variant placed in the slot determines the "channel." All Linkers with the same Oddstone variant in range communicate. When one receives a redstone signal, it broadcasts that signal to all other Linkers on the same channel within radius.
-
-| Detail | Value |
-|--------|-------|
-| Channel | Determined by which Oddstone variant is in the slot (cobbled, bricks, polished, etc.) |
-| Broadcast | One-to-many. All Linkers with matching Oddstone variant in radius receive the signal. |
-| Signal type | Broadcasts signal strength (0-15). Transmits the received strength, not fixed 15. |
-| Radius | TBD (8-16 blocks? Could scale with Oddstone variant tier?) |
-| Target | Only other Machine Linkers with matching Oddstone variant |
-
-**Design notes:**
-- Number of available channels = number of Oddstone variants. Each variant is a frequency. Cobbled Oddstone Linkers talk to cobbled, Brick Linkers talk to brick, etc.
-- Unlike Machine Battery (which broadcasts to all Machine Blocks in range), the Linker only talks to other Linkers. More targeted, channel-based communication.
-- Synergy with Oddstone variant frequency system: the same Oddstone variant that defines sympathetic movement frequency also defines Linker communication channels. One resource, two wireless systems.
-- Feedback prevention: Linkers should probably not trigger other Linkers that are already outputting (same-tick latch), or use a brief cooldown. Alternatively, Linkers only broadcast when receiving a NON-Linker signal (external input only).
-- Part of the Odd Family thematically -- requires Oddstone to function.
-
----
-
-**Machine Grabber** (insert: TBD -- possibly Piston + Slime? Or unique item?) [IDEA]
-
-Active mass-capture block. When receiving a redstone signal, grabs a 3x3x3 volume of blocks in front of it, incorporating them into the current push group. Extends the effective piston push limit for the structure it's part of.
-
-| Detail | Value |
-|--------|-------|
-| Activation | Redstone signal toggles grab state on/off |
-| Capture volume | 3x3x3 cube in front of facing direction (27 blocks max) |
-| Effect | Captured blocks become part of any piston push group that includes the Grabber |
-| Push limit | Adds captured blocks to the group regardless of normal stickiness. Effectively extends push limit by up to 27. |
-| Stickiness bypass | Grabs ANY movable block in the volume, not just sticky-connected ones |
-
-**Design notes:**
-- Unlike passive stickiness, the Grabber actively claims a volume. This lets it move heterogeneous collections of vanilla blocks that have no sticky properties.
-- The 3x3x3 volume is fixed and directional -- the Grabber faces a direction and grabs the cube in front of it.
-- When the Grabber is part of a piston group, the grabbed blocks move with it. When it's not being pushed, the grab state is just "ready" -- the blocks aren't held in place or anything.
-- Very powerful -- should be expensive to craft and/or require Oddstone.
-
----
-
-**Machine Fluid Pipe** (insert: Bucket) [IDEA]
-
-Fluid transport. Signal-triggered, same pattern as Machine Pipe. The bucket in the slot is functional -- it fills with whatever fluid the pipe picks up. Deposits fluid out the output face like a dispenser.
-
-| Detail | Value |
-|--------|-------|
-| Trigger | Redstone signal on any face. Pulls fluid from that face. |
-| Fluid source | Picks up source blocks (water, lava) from the world, or pulls from cauldrons and fluid-handling block entities. Consumes the source block. |
-| Bucket state | The bucket in the GUI slot fills with the picked-up fluid (empty bucket -> water bucket or lava bucket). Visible in GUI. |
-| Output | Deposits fluid out the opposite face (default) or round-robins through output faces. Dispenses like a dispenser -- places a source block or fills a cauldron. |
-| Round-robin | Same as Machine Pipe: excludes pull face, cycles through valid outputs. |
-| Visual | TBD -- fluid color visible through block? Drip particles matching contained fluid? |
-
-**Fluid interaction (water meets lava):**
-
-When a fluid pipe tries to push fluid into another fluid pipe that already contains the opposing fluid, a reaction occurs:
-
-| Push | Into Pipe Containing | Result |
-|------|---------------------|--------|
-| Water | Lava (lava bucket) | Lava bucket becomes obsidian. Pipe reverts to Machine Block with obsidian in slot (Machine Anchor). Pushed water is consumed. |
-| Lava | Water (water bucket) | Water bucket becomes stone. Pipe reverts to Machine Block with stone in slot (inert). Pushed lava is consumed. |
-
-Both fluids are consumed in the reaction. The receiving pipe loses its fluid pipe specialization because the bucket is destroyed -- replaced by the reaction product (obsidian or stone) sitting in the item slot.
-
-**Design notes:**
-- The bucket being functional (not just a specialization token) is key. You can see what fluid the pipe is carrying by checking the GUI.
-- Fluid interactions create natural consequences for routing mistakes AND intentional fluid mixing. Water-into-lava producing a Machine Anchor (obsidian in slot) is a discoverable mechanic.
-- Dispenser-style output means fluid pipes can fill areas, create water/lava sources, or feed into cauldrons. Useful for irrigation, lava moats, cobblestone generators, etc.
-- Pulling from cauldrons enables controlled fluid intake from brewing/alchemy setups.
-
----
-
-**Machine Anchor** (insert: Obsidian) [IDEA]
-
-Immovable anchor point. A Machine Block with obsidian in its slot becomes unmovable by pistons, Repulsers, Attractors, or any other movement system. Critically, it retains Machine Block stickiness -- so if a piston tries to push a group that includes a Machine Anchor, the entire push fails (same behavior as vanilla obsidian blocking a piston push).
-
-| Detail | Value |
-|--------|-------|
-| Movability | Immovable. Any push group containing a Machine Anchor fails to move. |
-| Stickiness | Normal Machine Block stickiness. Sticks to all Machine Block variants. |
-| Net effect | Acts as a brake/anchor. Locks a structure in place. |
-
-**Design notes:**
-- Primary use: fixed infrastructure. Anchor one end of a track line so Trolleys don't push the tracks. Anchor a station so moving contraptions dock against it without displacing it.
-- Discoverable through the fluid pipe water-into-lava interaction (obsidian ends up in the slot). But can also be crafted intentionally by simply inserting obsidian into a Machine Block.
-- The combination of "immovable" + "sticky" is what makes this special. Vanilla obsidian is immovable but not sticky. The Machine Anchor is both, which means it can block movement of entire connected structures, not just itself.
-- Counterplay: remove the obsidian from the slot to make it movable again.
-
----
-
-**Machine Push Limit Extender** (insert: TBD) [IDEA]
-
-Passive push limit increase. When this Machine Block is part of a piston push group, it increases the push limit for that group. Each extender adds a fixed number to the limit (e.g. +6), but occupies one slot itself, creating a net gain with diminishing returns.
-
-| Detail | Value |
-|--------|-------|
-| Limit increase | +6 per extender (TBD -- balance dependent) |
-| Net gain | +5 per extender (gains 6 but uses 1 slot) |
-| Passive | No activation needed -- just being in the push group is enough |
-| Stacking | Multiple extenders stack additively |
-
-**Design notes:**
-- Rewards building with Machine Blocks. Want bigger contraptions? Use more Machine Block material.
-- Diminishing returns create a soft ceiling -- you can push larger structures but each additional extender is proportionally less impactful.
-- Different philosophy than Machine Grabber: Extender makes connected structures bigger. Grabber captures unconnected volumes.
-
----
-
-#### Open Specialization Slots
-
-*The following are potential future specializations. Items listed are thematic suggestions -- the system is extensible to any item-to-behavior mapping.*
-
-| Potential Item | Possible Specialization | Notes |
-|----------------|------------------------|-------|
-| Comparator | Machine Comparator? | Signal measurement / conditional output. Reads inventory levels, signal strength comparison. |
-| Dropper | Machine Ejector? | Ejects items into the world or into adjacent blocks. |
-| TNT | Machine Launcher? | Explosive push? Launches blocks or entities? |
-| Chest | Machine Storage? | Small shared inventory accessible to adjacent Machine Pipes. |
-| Furnace | Machine Smelter? | In-line smelting within a pipe network? |
-| Sculk Sensor | Machine Vibration Sensor? | Detects vibrations, outputs redstone. Wireless detection. |
-| Note Block | Machine Speaker? | Plays sounds, redstone-activated. Programmable notes. |
-| Daylight Detector | Machine Light Sensor? | Outputs signal based on light level at the block. |
-| Compass | Machine Locator? | Detects or points toward specific block types in range? |
-| Tripwire Hook | Machine Tripwire? | Detects entity passage between two Machine Tripwires. |
-
-*This list is a brainstorm -- not all of these will necessarily be implemented. The system is designed to grow organically as new specializations prove useful.*
-
-**Known issues:** None currently. Machine Frame block entity with GUI is implemented. Redstone conduction separated from base block.
-
----
-
-### Machine Track [DONE]
-> Non-directional Machine Family block. Pushes adjacent Trolleys when it receives a redstone signal. Push direction is opposite to signal source direction.
-
-| Property | Value |
-|----------|-------|
-| ID | `machine_track` |
-| Placement | Non-directional |
-| Activation | Redstone pulse (rising edge, POWER 0 -> nonzero) |
-| Target | Adjacent Machine Trolley blocks |
-| Movable | Yes (can be pushed by pistons) |
-| Redstone | Conducts signal (POWER 0-15, decay by 1, same as Machine Block) |
-| Recipe | TBD |
+| Type | Block Entity (single item slot) |
+| Placement | Non-directional (base form) |
+| Redstone | Accepts redstone signal. Powered machine blocks emit anti-signal to suppress frame activation in their network. |
+| Recipe | 4 iron + 4 redstone + 1 slime (placeholder) |
+
+**Specializations (insert item to transform):**
+
+| Item Inserted | Specialization | Status |
+|---------------|----------------|--------|
+| Redstone dust | Conductor | [DONE] |
+| Hopper | Pipe | [DONE] |
+| Rail | Track | [DONE] |
+| Minecart | Trolley | [DONE] |
+| Comparator | Repeater | [DONE] |
+| Clock (item TBD) | Clock | [DONE] |
+| Redstone torch | Pulser | [DONE] |
+| Lever | Toggle | [DONE] |
+| Piston | Machine Piston | [DONE] |
+| Sticky Piston | Machine Sticky Piston | [DONE] |
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Signal-direction push | [DONE] | Signal from north -> push south. Checks actual sources, not weak power. |
-| All-face Trolley detection | [DONE] | Pushes ALL adjacent Trolleys in pushDir, not just the one on the push face. |
-| Redstone conduction | [DONE] | Interoperable with Machine Block conduction chains via isRedstoneConduit(). |
-| Block event sync | [DONE] | Bit-packed param (pushDir + trolleyFace) for client-server animation. |
-| Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
+| Machine Family stickiness | [DONE] | Sticks to other Machine Family members (Machine Blocks, Frames, Framed Blocks when activated). Uses IMachineFamily interface. |
+| Anti-signal emission | [DONE] | Powered (redstone-active) Machine Blocks emit anti-signal into adjacent frame networks, suppressing frame activation. Strength = redstone level, decays by 1 per conductor. Binary override: blocks with anti-signal > 0 cannot activate. |
+| Frame network activation | [DONE] | Unpowered Machine Blocks emit activation signal (strength 15) into adjacent frame networks. IFrameBlock conductors propagate, material routing applies. |
+| Item slot | [DONE] | Single slot. Insert item to specialize. Remove item with empty hand right-click to de-specialize. Item is preserved. |
 
-**Known issues:**
-- None currently
+---
 
-**Design notes:**
-- Track is protected during pushes because its position is passed as initiatorPos to BlockMoveHelper (resolver treats it as pistonPos).
-- Does NOT use level.hasSignal() for direction detection because the Track emits strong signal, causing vanilla's weak power to leak through adjacent solid blocks (Trolleys would appear as signal sources).
-- Future: will become a Machine Block chassis variant (item-slot transform).
+### Machine Specializations [DONE]
+> Functional variants of the Machine Block, created by inserting an item into the slot.
+
+**Machine Conductor:**
+Passes activation and stickiness signals along machine networks without adding function. Pure connector block.
+
+**Machine Pipe:**
+Directional item transport. Pushes items one block in facing direction per redstone pulse.
+
+**Machine Track:**
+Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Track and Trolley do NOT stick to each other during Track-initiated movement (conditional stickiness -- normal Machine Family stickiness in all other contexts).
+
+**Machine Repeater:**
+Three-axis redstone repeater. Receives signal on any face, outputs on the opposite. No locking (removed -- timing/strength disambiguation broken for three-axis; players who need locking use vanilla repeaters).
+
+**Machine Clock:**
+Emits a configurable redstone pulse at a set interval. Right-click to cycle intervals.
+
+**Machine Pulser:**
+Emits a single redstone pulse on placement or activation. One-shot signal source.
+
+**Machine Toggle:**
+Flip-flop. First activation = ON, second = OFF. Maintains state.
+
+**Machine Piston / Machine Sticky Piston:**
+Piston behavior as Machine Family members. Fully sticky to Machine Family, participates in frame activation networks.
 
 ---
 
@@ -721,9 +337,6 @@ Passive push limit increase. When this Machine Block is part of a piston push gr
 |---------|--------|-------|
 | Cargo carrying | [DONE] | Carries anything stuck to it via Machine Family or slime stickiness. |
 | Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
-
-**Known issues:**
-- None currently
 
 **Design notes:**
 - No active behavior. Pure cargo block.
@@ -783,6 +396,8 @@ Framed Blocks use the same FrameActivation system as Frame Blocks. Signal streng
 **Known issues:**
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
 - Item model translucency: translucent inner blocks (glass, slime) render opaque in inventory. Cosmetic only.
+- Framed blocks with INNER_STICKY=0 are not pulled from behind in the push direction. The PistonStructureResolverMixin backward walk Redirect lacks a general frame stickiness second-chance path -- only Framed Odd Slime's directional case has one currently. Sideways grabs work correctly.
+- Framed inner blocks with light emission (glowstone, sea lantern, shroomlight, etc.) do not emit light. getLightEmission() behavioral delegation is not yet implemented in FramedBlock.
 
 **Completed improvements (2026-02-22f):**
 
@@ -822,7 +437,7 @@ isRandomlyTicking() returns true. randomTick() checks if inner block is Blocks.I
 All 8 frame/framed block JSON models updated with inverted cuboid element (from [16,16,16] to [0,0,0]) for inward-facing normals. Frame interior visible through transparent inner blocks (glass, ice, etc.). Pure JSON change.
 
 **Future ideas:**
-- *[IDEA] Copper frames oxidize over time? Waxable?*
+- *[IDEA] Copper frames oxidize over time? Waxable? -- See Iron/Copper Registry Substitution below.*
 - *[IDEA] Different blast resistance per frame material?*
 
 ---
@@ -890,6 +505,76 @@ Redstone input changes trigger via neighborChanged automatically.
 
 ---
 
+### Iron/Copper Block Registry Substitution [DESIGNED]
+> Replacing vanilla iron_block and copper_block with custom versions that own their blockstate properties. Required to add ACTIVE visual state, rust stages (iron), and full frame family membership to these blocks.
+
+**Why substitution is necessary:**
+Vanilla blocks cannot have new blockstate properties added to them after registration. We need to add ACTIVE (visual change when part of an active frame network) and RUST_STAGE (iron only) as real blockstate properties. The only way to achieve this cleanly is to own the block registration entirely -- replacing vanilla's entry with our own via Forge registry substitution (the Quark pattern).
+
+From the player's perspective, nothing changes: same craft recipe, same name, same item, same everything. Our code runs underneath.
+
+**What our iron block gains:**
+- RUST_STAGE (0-3) -- drives texture. Stage 0 = vanilla. Stages 1-3 = exposed/weathered/rusted.
+- ACTIVE (boolean) -- drives texture when part of an active frame network.
+- Wax interaction (honeycomb locks rust stage).
+- Grindstone reversal (pick up rusted block, use in grindstone, drops previous stage).
+
+**What our copper block gains:**
+- ACTIVE (boolean) -- drives texture when part of an active frame network.
+- The four vanilla oxidation stages become ours to control.
+- Wax interaction inherited from vanilla.
+
+**Rust system design:**
+
+| Stage | Name | Visual |
+|-------|------|--------|
+| 0 | Iron Block | Clean vanilla |
+| 1 | Exposed Iron | Light orange flecks, surface discoloration |
+| 2 | Weathered Iron | Spreading rust patches |
+| 3 | Rusted Iron | Deep red-brown, heavily corroded |
+
+Progression triggers (moisture exposure):
+- Rain with sky access -- rains and the block can see the sky = accumulate moisture ticks.
+- Adjacent water source block -- constant exposure, faster than rain.
+- Submerged -- fastest rust rate.
+- Biome modifier -- swamp/jungle/beach/ocean: accelerated. Desert/mesa: halted.
+
+Reversal: pick up the block (mine it), put in a grindstone. Output is the block at the previous stage. Wax (honeycomb) locks the current stage and prevents further progression.
+
+**Implementation note:**
+Registry substitution is the highest-risk operation in modding. Can cause save compatibility issues if done carelessly. Planned for a dedicated session after current systems reach a clean boundary. Test only on fresh worlds initially.
+
+**Deferred to:** Future dedicated session.
+
+---
+
+### Ghost Block [DESIGNED]
+> Ethereal, translucent block crafted from ectoplasm. Passable by walking players (slow slide-through). Impassable when crouching. Swappable with real blocks via right-click. Component in the Arcane Projector recipe.
+
+| Property | Value |
+|----------|-------|
+| ID | `ghost_block` |
+| Hardness | TBD (probably very low or instant-break) |
+| Tool | Any / none |
+| Recipe | TBD (ectoplasm-based) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Translucent appearance | [IDEA] | Ethereal, ghostlike visual. Semi-transparent, slight glow or shimmer. |
+| Walk-through passable | [IDEA] | Non-crouching players pass through at reduced speed (slow slide, like walking through cobwebs but without damage or sticking). |
+| Crouch-impassable | [IDEA] | Crouching players cannot pass through. Solid collision when sneaking. |
+| Block swap | [IDEA] | Right-click a placed ghost block with any real block in hand: ghost block returns to your inventory, real block takes its place. Clean swap, no dropping. |
+| Arcane Projector component | [IDEA] | Required crafting ingredient for the Arcane Projector. Ghost Block is necessary for the projector to function -- thematically, projection uses the same ephemeral material. |
+
+**Design notes:**
+- The walk-through mechanic makes ghost blocks useful as one-way barriers, slow traps, decorative hazards, or secret passages.
+- The right-click swap mechanic is the gameplay hook -- use ghost blocks as placeholder markers while building, then swap them for real blocks one by one when you're happy with the layout.
+- Source: crafted from ectoplasm dropped by ghosts. Ghost hunting becomes a gathering loop for a useful building material.
+
+---
+
 ### Inhibitor Block [IDEA]
 > Area-of-effect mob suppression block. Crafted from Oddstone. Creates a safe zone that reduces hostile mob spawning and discourages mobs from entering its radius.
 
@@ -925,7 +610,6 @@ Redstone input changes trigger via neighborChanged automatically.
 - *[IDEA] Fuel/maintenance cost? (redstone power, consumable resource, durability?)*
 - *[IDEA] Visual indicator of active radius? (particles, subtle glow?)*
 - *[IDEA] Stacking multiple Inhibitors -- stronger effect or just wider coverage?*
-- *[IDEA] Obsidian multiblock base structure -- beacon-like pyramid of obsidian with lapis corners (increase effectiveness) or diamond corners (increase range). See Multiblock Structures section.*
 
 ---
 
@@ -1001,10 +685,6 @@ Pulse fires ->
 - Oddstone cost puts it in the mid-game, gated by Oddstone economy.
 - Can be pushed by pistons while loaded (mobile placement/framing station).
 
-**Edge cases to decide:**
-- What blocks CAN'T be framed? (Bedrock, block entities like chests, other framed blocks, air?)
-- If inventory has mixed items (some blocks, some frames), does it use whatever's next in sequence, or prioritize one type?
-
 ---
 
 ### Oddstone Repulser [DONE]
@@ -1030,7 +710,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Uses vanilla block event system for client-server synchronization. Movement runs on both sides for proper animation. |
 
 **Known issues:**
-- None currently
+- Cannot target Framed Oddstone. The ODDSTONE_ONLY filter predicate in RangedPistonUtil checks block identity via state.is(ModBlocks.ODDSTONE) -- bare Oddstone only. Framed Oddstone is a FramedBlock with INNER_STICKY=ODDSTONE and is not recognized by this filter. Fix: expand predicate to also match FramedBlock instances where INNER_STICKY equals StickyType.ODDSTONE.
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -1063,7 +743,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Same block event pattern as Repulser for client-server animation. |
 
 **Known issues:**
-- None currently
+- Cannot target Framed Oddstone. Same root cause as Repulser -- ODDSTONE_ONLY predicate in RangedPistonUtil checks block identity only. Fix: expand predicate to also match FramedBlock with INNER_STICKY=ODDSTONE.
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -1194,7 +874,7 @@ Pulse fires ->
 | Tool | Pickaxe |
 | Type | Block Entity (3x3 item grid + FACING) |
 | Placement | Directional (faces player look direction) |
-| Recipe | TBD (obsidian + glass + ? -- Magic Family crafting) |
+| Recipe | TBD (obsidian + glass + ghost block -- Magic Family crafting) |
 
 **Features:**
 
@@ -1208,6 +888,7 @@ Pulse fires ->
 
 **Design notes:**
 - Think of it as a magic holographic projector. Place blocks in the pattern grid, power it, and those blocks appear at a distance. Cut power and they vanish.
+- Ghost Block required in the recipe -- thematically the projector manifests ephemeral matter, and ghost blocks are already that.
 - Primary uses: temporary bridges, traps (floor appears solid then vanishes), dynamic walls, construction scaffolding, redstone-controlled architecture.
 - The 3x3 grid means projected structures are small -- this is precision placement, not large-scale construction. For larger structures, use multiple Projectors.
 - Signal-distance control means you can sweep a projected platform across space by varying redstone signal strength. Combined with Machine Clock for gradual stepping, this enables moving platforms.
@@ -1399,6 +1080,31 @@ Branches express their connections as arms (additive geometry extending outward 
 
 ---
 
+### Bramble Block [IDEA]
+> A damaging variant of the Bush Block. Visually similar to bushes but deals damage when walked through. Spawns naturally in Haunted Forest biomes replacing normal bush/undergrowth.
+
+| Property | Value |
+|----------|-------|
+| ID | `bramble` |
+| Hardness | ~0.2 / Blast 0 (leaf-equivalent) |
+| Tool | Shears |
+| Notes | Connecting foliage like Bush Block. Same 6-boolean blockstate pattern. Deals contact damage to entities passing through. |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Contact damage | [IDEA] | Deals damage to players and mobs that move through or stand inside the block (similar to cacti/sweet berry bushes). |
+| Connecting shape | [IDEA] | Inherits Bush Block's multipart model approach. Visually distinct texture -- darker, thornier appearance. |
+| Haunted Forest spawn | [IDEA] | Primary undergrowth of the Haunted Forest biome. Replaces or supplements normal bush/shrub placement. |
+
+**Design notes:**
+- A darker reskin of the Bush Block with damage behavior. The Haunted Forest becomes a place where getting through the undergrowth costs you.
+- Makes travel in Haunted Forests feel appropriately hostile without being impassable.
+- Pairs naturally with the ghost spawning in that biome -- the world itself pushes back.
+
+---
+
 ### [Template -- Copy for New Blocks]
 > *One-line description.*
 
@@ -1526,6 +1232,50 @@ Branches express their connections as arms (additive geometry extending outward 
 | Campfire smoke | Bottled Smoke | Blinds, slows, damages drinker briefly |
 | Nether portal block | Bottled Nether Portal | Teleports drinker to the Nether |
 | (more TBD) | | |
+
+---
+
+### Ectoplasm [IDEA]
+> Rare drop from ghost-type mobs. Primary crafting material for Ghost Blocks and potion ingredients.
+
+| Property | Value |
+|----------|-------|
+| ID | `ectoplasm` |
+| Type | Crafting material |
+| Source | Dropped by ghost mobs (overworld ghosts, After dimension ghosts, etc.) |
+| Drop rate | TBD (moderate -- ghosts are common in certain contexts, so shouldn't be too rare) |
+
+**Uses:**
+- Ghost Block (primary use)
+- Phasing Potion ingredient
+- Flight Potion ingredient (with phantom membrane)
+
+**Design notes:**
+- Ghost hunting loop: find ghosts, kill them, collect ectoplasm, craft ghost blocks or potions.
+- In the Haunted Forest biome (higher ghost spawn rate), ectoplasm becomes more easily farmable.
+- In The After dimension, ghosts are the primary inhabitants, making ectoplasm highly available there.
+
+---
+
+### Lore Books [IDEA]
+> Written books found as loot in structures. Detail the history of the Old World from different perspectives. Not craftable. Each serves as both world-building and player guidance.
+
+**Book types:**
+
+*Engineer's Diary:*
+Written from the perspective of an Old World crafter/builder. Technical in tone. Describes machines, systems, and infrastructure built by the advanced civilization. Guides players toward Ideomod mechanical content (machine blocks, portals, etc.) while hinting at the war and its causes. Found in: workshop ruins, underground structures, city ruins in The After.
+
+*Explorer's Manual:*
+Written by an Old World expedition member. Describes dimensional exploration and discovery. Guides players toward dimension-related content (portals, The After). Contains partial portal addresses, hints about dimension-specific dangers and resources, observations about the state of the world. Found in: portal ruins, surface ruins, The After libraries.
+
+*Familiar Notebooks/Diaries:*
+Written by an unnamed person -- the player character's past self (Steve, though never named explicitly). Personal, fragmented, unreliable narrator. Details the events of the war, the immortality procedure, the fate of the civilization, and oblique references to "my brother" (Herobrine). Found in: unique structures, very rare loot. Multiple volumes, each revealing more. Written in a voice that feels intimate and strange -- the player is reading their own past.
+
+**Design notes:**
+- Books are loot, not crafted. Finding one is a discovery event.
+- They hint and imply rather than state directly. Players piece together the lore themselves.
+- Engineer's Diary and Explorer's Manual are more common -- functional guides with lore layered on top.
+- Familiar Notebooks are rare and treated as significant finds. Each one reveals a piece of Steve's history.
 
 ---
 
@@ -1685,6 +1435,44 @@ Branches express their connections as arms (additive geometry extending outward 
 
 ---
 
+### Desolate Biome [IDEA]
+> Post-war surface scarring. Barren wastelands that hint at catastrophic destruction.
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Surface composition | [IDEA] | Sand and gravel only. No living plant life. No grass, trees, bushes, or flowers. |
+| Ore replacement | [IDEA] | All ore blocks in this biome are replaced with gravel. The earth has been stripped of value. |
+| Visual feel | [IDEA] | Flat to rolling dunes. Occasional ruins. Oppressive emptiness. |
+
+**Design notes:**
+- A biome that tells a story through its existence. Something terrible happened here.
+- The ore-to-gravel replacement is a meaningful gameplay signal: this is not a place to mine.
+- Pairs with the Ruined City structures (see Structures) -- desolate biomes are where the ruins are most common.
+- Named TBD -- "Desolation", "Wastes", "Scarred Plains"?
+
+---
+
+### Haunted Forest Biome [IDEA]
+> Dark, oppressive forest biome with elevated ghost spawning and dangerous undergrowth.
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Ghost spawn rate | [IDEA] | Higher baseline ghost mob spawn rate than other biomes. Best overworld source of ectoplasm. |
+| Bramble undergrowth | [IDEA] | Normal bushes replaced with Bramble blocks -- same visual shape, deal damage on contact. Travel through is costly. |
+| Atmosphere | [IDEA] | Dark sky/fog tint? Permanently overcast? Eerie ambient sounds? Visual feel TBD. |
+| Tree type | [IDEA] | Dark oak or new variant? Twisted, gnarled appearance. |
+
+**Design notes:**
+- The Haunted Forest is the overworld's haunted zone. Worth visiting for ectoplasm, hostile to casual travel.
+- Brambles making movement through it painful fits the biome's theme: the forest doesn't want you here.
+- Pairs with ghost lore -- the war left lingering spiritual residue in certain places.
+
+---
+
 ## 5. MOBS & AI
 
 ### Mob Difficulty Scaling [IDEA]
@@ -1700,6 +1488,27 @@ Branches express their connections as arms (additive geometry extending outward 
 - Phase through blocks means standard defenses (walls, sealed rooms) don't work against them.
 - Countered by Inhibitor Block's mob discouragement aura.
 - Thematically: disturbing the earth awakens spirits.
+- Drop: Ectoplasm (primary source).
+- Spawn locations: underground (Mining Threat), Haunted Forest biome (overworld), The After dimension (common).
+
+---
+
+### Revenant [IDEA]
+> Armored zombie-like ghost. Exclusive to The After dimension. Strong hostile mob -- piglin brute tier.
+
+| Property | Value |
+|----------|-------|
+| ID | `revenant` |
+| Spawns | The After dimension -- city structures primarily |
+| Hostility | Always hostile |
+| Strength | Piglin brute tier (high health, high damage) |
+| Drops | TBD (gear they're wearing? ectoplasm? After-exclusive loot?) |
+
+**Design notes:**
+- Revenants are the inhabitants of The After's cities. They were people once.
+- The combination of armor+gear makes them visually distinct from vanilla zombies -- these are soldiers, guards, civilians preserved in a ghostly state.
+- The After's cities should feel dangerous because of them, not just atmospheric.
+- Lore tie-in: they're the echoes of the Old World's population, still "living" in the memory-dimension.
 
 ---
 
@@ -1733,6 +1542,58 @@ Branches express their connections as arms (additive geometry extending outward 
 - *How far does the whistle reach sculk sensors? 50 blocks would be dramatic. 100+ would be terrifying.*
 - *Can it be silenced? (wool, sneaking up on it, one-hit kill before it reacts?)*
 - *Multiple Whistlers in proximity -- do they chain-agitate each other? That could create truly dangerous deep dark pockets.*
+
+---
+
+### Warg [IDEA]
+> Hostile, oversized wolf variant. Naturally spawning predator. Also a transformation state -- wolves struck by lightning become Wargs.
+
+| Property | Value |
+|----------|-------|
+| ID | `warg` |
+| Spawns | Forests (natural spawn, rarer than wolves) |
+| Hostility | Always hostile to players |
+| Size | Larger than a wolf -- visually distinct, more threatening |
+| Lightning transform | Normal wolves struck by lightning become Wargs |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Natural spawn | [IDEA] | Rare spawn in forest biomes. More threatening than wolves by default. |
+| Lightning conversion | [IDEA] | When a vanilla wolf is struck by lightning, it converts to a Warg. Similar mechanic to pig -> zombie piglin. |
+| Aggression | [IDEA] | Hostile to players on sight. May also attack passive mobs (not just defensive like wolves). |
+| Tamed wolf protection | [IDEA] | Does a Warg attack tamed wolves? Probably yes -- makes lightning storms dangerous for wolf owners. |
+
+**Design notes:**
+- The lightning conversion mechanic means thunderstorms become a minor threat to wolf owners -- a natural, emergent tension.
+- Wargs as the "what wolves could be if something went wrong" -- takes a familiar mob and makes it dangerous.
+- Lore tie-in: engineered war animal? Or just a natural predator that got pushed to the margins? Ambiguous -- the lore can support either.
+
+---
+
+### Untamed Ravager [IDEA]
+> Wild ravager variant. Spawns in certain biomes. Has a proximity hostility timer -- becomes hostile after the player is nearby too long, or instantly hostile if directly adjacent.
+
+| Property | Value |
+|----------|-------|
+| ID | `untamed_ravager` (or variant state of vanilla ravager?) |
+| Spawns | Certain overworld biomes -- plains, savanna? TBD |
+| Hostility | Semi-hostile (timer-based) |
+
+**Features:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Proximity timer | [IDEA] | When a player comes within a medium radius, a hidden timer starts. If the player remains within range for the full duration, the ravager becomes hostile. If the player backs away in time, the timer resets. |
+| Adjacent instant aggro | [IDEA] | If a player steps directly next to the ravager (1-block distance), it becomes instantly hostile regardless of timer. Personal space violation. |
+| Pillager supply chain | [IDEA] | Lore explanation for where pillagers get their ravagers -- they capture and domesticate these wild ones. |
+
+**Design notes:**
+- This creates a mob you can observe and navigate around, unlike most Minecraft mobs which are binary (passive or always-hostile).
+- Players learn to give untamed ravagers a wide berth. Experienced players learn exactly how close is safe.
+- The "backs away resets timer" mechanic means careful players can coexist near them. Reckless players get charged.
+- The adjacent instant-aggro rule means you can never truly sneak up on one without triggering it.
 
 ---
 
@@ -1782,14 +1643,13 @@ Branches express their connections as arms (additive geometry extending outward 
 |---------|--------|-------|
 | Structure detection | [IDEA] | Uses Multiblock Framework. Brewing stand GUI title updates to "Alchemy Station" (or similar) when structure is valid. |
 | Extra ingredient slot | [IDEA] | Active structure adds an additional slot in the brewing GUI where components normally go. Enables recipes that require two ingredients per brew cycle. |
-| Expanded recipes | [IDEA] | New potion recipes not available in vanilla brewing. Specific recipes TBD. Some may require the extra slot (two-ingredient brews). |
-| Extended vanilla potions | [IDEA] | Allows upgrading past current vanilla potion tiers and durations. Costs more resources for each step beyond vanilla limits. |
-| Modified vanilla recipes | [IDEA] | Some existing brewing recipes may be rebalanced or have alternate paths through the Alchemy Station. |
+| Expanded recipes | [IDEA] | New potion recipes not available in vanilla brewing. Some may require the extra slot (two-ingredient brews). |
+| Extended vanilla potions | [IDEA] | Allows upgrading past current vanilla potion tiers and durations. |
+| Glittering Potion base | [IDEA] | New potion base brewed with diamond and gold. Stronger than awkward potion. Required base for Flight Potion and other high-tier potions. |
 
 **Design notes:**
 - The Brewery is a *place*, not a single block. You build a brewing corner in your base with the right components and it becomes more powerful. Very vanilla+ -- it's still a brewing stand, it just works better in context.
 - The extra slot is the key mechanical addition. Two-ingredient brews open up a whole recipe design space without touching the vanilla brewing system.
-- Contributor scaling from the Multiblock Framework drives quality: bare-minimum structure works but with limitations. Adding more/better contributor blocks improves outcomes (see Potion Infusion below).
 - No Oddstone gate on the basic structure. Mortar & Pestle needs hardstone (copper-tier gate), which feels right for early-mid progression.
 
 **Future ideas:**
@@ -1814,20 +1674,93 @@ Branches express their connections as arms (additive geometry extending outward 
 | Bonus outcomes | [IDEA] | High-quality structures have a chance of bonus effects: bumped tier, extended duration, or an extra positive effect. |
 
 **Design notes:**
-- This is the endgame brewing mechanic. Multi-effect potions are very powerful (Strength + Speed + Fire Resistance in one bottle), so the risk system and structure investment keep it balanced.
+- This is the endgame brewing mechanic. Multi-effect potions are very powerful, so the risk system and structure investment keep it balanced.
 - The progression: basic brewing (vanilla) -> Alchemy Station (expanded recipes, extra slot) -> Potion Infusion (multi-effect, structure-gated quality).
-- The structure investment is the balance lever, not raw material cost. You don't need rare ingredients to infuse -- you need a well-built station. This rewards builders and base investment.
 - Stacks with the potion stacking change (see Systems > Potion Stacking) -- multi-effect potions that stack to 4 are a genuine loadout option.
 
-**Design questions (open):**
-- *How many effects can be stacked into one potion? Cap at 2? 3? Unlimited but with escalating risk per additional effect?*
-- *Can you infuse splash/lingering potions, or only drinkable?*
-- *Does infusing an already-infused potion work? (Add a third effect to a two-effect potion?) Escalating risk per layer would be interesting.*
+---
+
+### New Potions [IDEA]
+> New potion types unlocked through the Alchemy Station. Several require upgraded ingredients or the Glittering Potion base.
+
+**Glittering Potion:**
+
+| Property | Value |
+|----------|-------|
+| Type | Potion base (like Awkward Potion) |
+| Brew | Diamond + gold at Alchemy Station |
+| Role | Higher-tier base for powerful new potions. Cannot be drunk itself. |
+
+A new alternative to Awkward Potion as a brewing base, unlocking a tier of potions unavailable from standard ingredients. Requires the upgraded Alchemy Station to brew.
+
+**Flight Potion:**
+
+| Property | Value |
+|----------|-------|
+| Base | Glittering Potion |
+| Ingredients | Ectoplasm + Phantom Membrane |
+| Effect | Grants creative-style flight. |
+| Duration | Very short. A few seconds to half a minute -- a burst of flight, not sustained wings. |
+| Cost note | Requires Glittering Potion (diamond + gold), ectoplasm (ghost farming), and phantom membrane (phantom killing). Intentionally high cost for the power level. |
+
+**Phasing Potion:**
+
+| Property | Value |
+|----------|-------|
+| Base | Awkward Potion (standard) |
+| Ingredients | Ectoplasm |
+| Effect | Player becomes ghostlike -- can pass through blocks. Player model becomes translucent. Nametag hidden. |
+| Duration | TBD (moderate -- long enough to be useful, short enough to require management) |
+
+**Flower Potion:**
+
+| Property | Value |
+|----------|-------|
+| Base | Awkward Potion |
+| Ingredients | Flowers (any? specific type?) |
+| Effect (drinking) | Potion particle effects replaced with flower petals. Flowers grow on grass blocks the player walks over. |
+| Effect (splash) | Grows a patch of flowers on impact area. |
+| Duration | Medium. Flower-growing effect lasts for the duration. |
+| Tone | Purely fun/cosmetic. No combat use. |
+
+**Design notes on new potions:**
+- The Glittering Potion base creates a gated tier: cheap potions from awkward base, expensive/powerful potions from glittering base. Flight especially earns its cost.
+- Phasing and Flight together create a ghost-theme potion pair sourced from ghost materials -- hunting ghosts gives you ghost-like powers.
+- Flower Potion is deliberately useless for combat. Some potions should just be fun. The splash version has niche utility as a decorating tool.
 
 ---
 
 ### Enchanting Overhaul [IDEA]
 > Comprehensive rework of the vanilla enchanting system. New point-budget mechanic, catalyst slot, tiered resources, expanded enchantments, and removed restrictions.
+
+**How Vanilla Enchanting Works (reference for design decisions):**
+
+The vanilla system has several layers that all feed into a single number -- the "modified level" -- which determines everything:
+
+1. The button shows a base level (set by bookshelf count, capped at 15 bookshelves -> ~level 30 on bottom slot).
+2. Enchantability (a per-material stat) inflates that number by a random bonus (most likely enchantability/4). Gold has the highest enchantability (22-25), diamond is low (10).
+3. A small random +/-15% nudge is applied. The result is the modified level.
+4. Every enchantment has a defined level range per tier (e.g. Sharpness III appears at modified levels 23-43). The modified level determines which tiers are in the candidate pool.
+5. Enchantments are selected by weighted random from the pool. Common enchants (Protection, Sharpness, Efficiency) have weight 10. Rare ones (Silk Touch, Thorns, Infinity) have weight 1-2.
+6. After the first enchant, bonus enchants roll at (modified level + 1) / 50 probability. Modified level halves each roll. This cascades until it fails or runs out.
+
+Key insight: enchantability secretly does three jobs -- inflates effective level, unlocks higher tiers, and increases bonus enchant probability. We are keeping this system largely intact and building on top of it.
+
+**What We Keep (Vanilla Mechanics Preserved):**
+- Bookshelf-based level scaling (bookshelves raise the button numbers, which feed everything else)
+- Enchantability per material (gold stays magically receptive; high enchantability = higher effective level = better tiers more likely)
+- Weighted random enchant selection (weights stay, catalyst slot biases them)
+- Tier ranges per enchantment (we extend ranges upward for new max levels, not replace them)
+- Bonus enchant chain rolls
+
+**What We Change:**
+- Budget cap replaces "you get what you get" -- player deliberately assembles their loadout
+- Catalyst slot biases the weight pool toward desired enchant families
+- Level caps raised beyond vanilla (new tier ranges added above vanilla max)
+- Expanded bookshelf range via obsidian ring structure (more bookshelves = higher modified levels = new tiers reachable)
+- Levelless enchants get flat point costs (see Budget section)
+- Curses subtract from budget cost (see Curses section)
+- Anvil "too expensive" cap removed
 
 **Enchantment Level Budget:**
 
@@ -1843,37 +1776,83 @@ Option C: Protection II (2) + Fire Prot II (2) + Blast Prot II (2) + Unbreaking 
 
 - Replaces vanilla's "you get what you get" enchanting with deliberate choices.
 - No enchantment incompatibilities -- any enchant can go on any appropriate gear, limited only by the budget and cost/rarity of high-level enchants.
-- Enchantment levels can go beyond vanilla caps (Protection V+, Sharpness VI+, etc.) but higher levels cost proportionally more and are rarer.
-- Different gear materials / tiers have different max enchant levels. Diamond > iron > stone, etc. Exact numbers TBD.
+- Enchantment levels can go beyond vanilla caps (Protection V+, Sharpness VI+, etc.) but higher levels cost proportionally more and are rarer, requiring higher modified levels to appear.
+- Different gear materials / tiers have different max enchant levels. Exact numbers TBD, but sword is the highest-demand item (fully loaded vanilla sword costs ~19 points), so budget ceiling should accommodate that.
+
+**Levelless Enchants -- Flat Point Costs:**
+
+Some enchantments have no level (they are simply on or off). These are assigned a flat point cost reflecting their power rather than defaulting to 1.
+
+| Enchantment | Flat Cost | Notes |
+|-------------|-----------|-------|
+| Mending | 4 | Most powerful passive enchant in the game -- infinite durability |
+| Infinity | 3 | Effectively infinite arrows -- high value |
+| Silk Touch | 2 | Situational but powerful -- changes tool function entirely |
+| Aqua Affinity | 1 | Minor utility |
+| Flame | 2 | Consistent fire damage on bow |
+| (others TBD) | TBD | Assign based on perceived power level |
+
+**Curses -- Negative Point Costs:**
+
+Curses subtract points from the budget, freeing up space for more enchantments. This transforms curses from pure downside into a meaningful tradeoff. The curse IS the balancing mechanism -- no additional point floor or ceiling is needed, because stacking curses means living with stacked curses.
+
+| Enchantment | Point Value | Notes |
+|-------------|-------------|-------|
+| Curse of Vanishing | -2 | Item deletes on death -- significant risk |
+| Curse of Binding | -2 | Cannot remove armor -- situational risk |
+| (new curses TBD) | -1 to -3 | Scaled to severity of the curse's downside |
+
+Design note: No artificial cap on curse stacking. A player who puts 4 curses on a sword to free up budget has to live with 4 curses. The gameplay consequence is self-regulating.
 
 **Catalyst Slot:**
 
-Addition to the Enhanced Enchanting Table structure (see Multiblock Framework). A new slot in the enchanting GUI for catalyst items.
+Addition to the Enhanced Enchanting Table structure (see Multiblock Framework). A new slot in the enchanting GUI for catalyst items. Catalysts work by multiplying the weight of certain enchantments in the selection pool -- they do not guarantee outcomes, they bias the lottery.
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Catalyst slot | [IDEA] | New slot in enchanting GUI when structure is active. Accepts catalyst items. |
-| Enchantment biasing | [IDEA] | Placing a catalyst makes certain enchantments more likely to appear in the enchanting options. Different catalysts bias toward different enchant families. |
-| Catalyst items | [IDEA] | TBD -- could be existing items with thematic links (flint -> Sharpness family, feather -> movement enchants, blaze powder -> fire enchants) or new dedicated catalyst items. |
+| Catalyst slot | [IDEA] | New slot in enchanting GUI when structure has lapis corners active. Accepts catalyst items. |
+| Enchantment biasing | [IDEA] | Placing a catalyst multiplies the weight of enchantments in that family. E.g. blaze powder -> Fire Aspect and Flame get heavier weights. Sharpness at weight 10 can still beat a boosted Looting at weight 2x2=4. |
+| Bias strength | [IDEA] | TBD -- 2x feels like a nudge, 5x feels like a near-guarantee. Sweet spot probably around 3x. Too weak = pointless, too strong = vending machine. |
+| Catalyst consumed? | [IDEA] | TBD -- consumed per enchant feels like a per-decision cost; reusable feels like a permanent station upgrade. Both valid, different play feel. |
+| Catalyst items | [IDEA] | TBD -- thematic links: flint -> Sharpness family, feather -> movement enchants, blaze powder -> fire enchants, rabbit's foot -> luck/looting, etc. |
+| Structure amplification | [IDEA] | Does a better-built structure amplify the catalyst effect? Would tie structure investment and catalyst slot together. |
 
 **Tiered Enchanting Resources:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Resource tiers | [IDEA] | Lapis is no longer the only enchanting fuel. Higher-tier enchanting (higher levels, rarer enchants) requires rarer resources. Specific tier list TBD -- could follow a progression like lapis -> amethyst -> Oddstone dust -> something else. |
+| Resource tiers | [IDEA] | Lapis is no longer the only enchanting fuel. Higher-tier enchanting requires rarer resources. Specific tier list TBD -- could follow lapis -> amethyst -> Oddstone dust -> something else. |
+
+**Raising the Level Ceiling:**
+
+To unlock enchantment tiers beyond vanilla caps, players need modified levels higher than vanilla allows (~30 max). This is achieved by:
+- Obsidian ring expansions allowing more bookshelves to count (more rings = more bookshelves = higher base level)
+- The vanilla bookshelf cap (15) is lifted by the ring structure -- each ring allows more bookshelves in valid positions
+- New enchantment tier ranges are defined above vanilla maximums (e.g. Sharpness VI at modified level 56-76, requiring a modified level vanilla cannot reach)
+- Gold's high enchantability still inflates further on top, so gold gear benefits most from high-level tables
 
 **Anvil Changes:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Remove "too expensive" cap | [IDEA] | Anvil no longer refuses operations. Cost still scales, but the hard cap is gone. If you have the levels, you can do it. |
+| Remove "too expensive" cap | [IDEA] | Anvil no longer refuses operations. Cost still scales with prior work, but the hard 39-level cap is gone. If you have the levels, you can do it. |
 
-**Expanded Enchantments & Curses:**
+**Expanded Enchantments:**
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| New enchantments | [IDEA] | Specific list TBD. Goal is to expand the pool so the catalyst system and budget system have more to work with. |
-| New curses | [IDEA] | More curses to create risk in enchanting. Curses cost zero budget points but occupy space -- they're penalties, not choices. |
+New enchantments designed to give the catalyst system, budget system, and higher level ranges more to work with. Goal is a richer pool, not a bloated one. A few targeted additions.
+
+| Enchantment | Type | Applies To | Effect | Notes |
+|-------------|------|-----------|--------|-------|
+| Weight | Curse (optional) | Armor | Increases fall speed and fall damage taken. When landing on a mob, deals damage to it proportional to fall distance. | Player choice -- accept the downside, weaponize the fall. Works with high-fall playstyles. |
+| Aspect of [Tool] | Enchantment | Tools | The enchanted tool also functions as the named tool type. E.g. Aspect of Bow on a pickaxe: the pickaxe can also shoot arrows. | Discovery-driven -- players find wild combinations. Implementation complexity TBD. Multiple variants (Aspect of Bow, Aspect of Axe, etc.) each as separate enchants. |
+| (more TBD) | -- | -- | -- | Expand as enchanting system develops |
+
+**New Curses:**
+
+| Curse | Point Value | Effect | Notes |
+|-------|-------------|--------|-------|
+| Curse of Conductivity | -2 | During thunderstorms, the player has an elevated chance of being struck by lightning while wearing the cursed item. | Thematic risk -- weather becomes a genuine hazard. High-value tradeoff in non-storm conditions. |
+| (more TBD) | -- | -- | Curses should always have a clear, observable downside that the player can understand and weigh against the budget gain. |
 
 **Magic Bottles:**
 
@@ -1889,15 +1868,21 @@ Addition to the enchanting structure. A new contributor block or structure exten
 
 **Design notes:**
 - The enchant level budget is the core change. It transforms enchanting from a slot machine into a build system. Players theory-craft loadouts, make tradeoffs, specialize gear.
-- Catalysts + budget + tiered resources create three levers for progression: what you can get (catalysts), how much you can fit (budget), and what tier you can access (resources).
-- Magic Bottles are deliberately weird and experimental. They turn the enchanting table from "gear enhancer" into "magical workstation." The environmental capture mechanic encourages exploration and experimentation.
-- Removing the too-expensive cap is a QoL change that respects player investment. If someone has 80 levels, let them spend 80 levels.
+- Catalysts + budget + tiered resources create three levers for progression: what you can get (catalysts), how much you can fit (budget), and what tier you can access (structure investment + resources).
+- Curses as negative-cost budget items recontextualizes something players currently avoid into a genuine strategic resource.
+- Weight is a curse that doubles as a weapon -- classic cursed-item fantasy trope, emergent combat potential.
+- Aspect of [Tool] enchants are discovery-driven. Players find combinations that feel like secrets. Implementation complexity is a concern -- flag for design review when we get there.
+- Curse of Conductivity makes weather a meaningful gameplay variable instead of aesthetic background.
+- Removing the too-expensive cap respects player investment. If someone has 80 levels, they earned 80 levels.
 
-**Design questions (open):**
-- *What determines a gear piece's max enchant level? Material tier? Item type? Can it be increased (Arcane modifier -- see Crafting Modifiers)?*
-- *Do curses reduce available budget, or do they take zero points but still occupy a "slot"?*
-- *Catalyst consumption -- one per enchant? One per session? Durability-based?*
-- *Magic Bottle capture -- instant or does it take time/resources?*
+**Open questions:**
+- *Budget numbers per material tier -- exact values TBD. Anchor: fully loaded vanilla sword is ~19 points, so sword budget ceiling needs to reach at least that.*
+- *Does enchantability affect the budget at all, or only the enchant selection process? Gold's enchantability bonus already gives it better rolls -- does it also get a larger budget, or is the enchantability bonus enough?*
+- *Catalyst consumed per use or reusable?*
+- *Catalyst bias strength multiplier (2x? 3x? 5x?)*
+- *Does structure quality amplify catalyst effect?*
+- *How many Aspect of [Tool] variants? What tools are worth it?*
+- *Weight curse: is it a curse (negative budget cost) or a regular enchant with a built-in downside? Leaning curse.*
 
 ---
 
@@ -1911,6 +1896,57 @@ Addition to the enchanting structure. A new contributor block or structure exten
 - Lore books hinting at addresses for other portals
 - Ties into Oddstone Portal system (see Mechanical Systems -> Oddstone Portals)
 - Discovery-driven gameplay -- exploration rewarded with portal network access
+
+---
+
+### Ruined Cities [IDEA]
+> Partially buried overworld structures. Remnants of the Old World's surface civilization.
+
+**Design notes:**
+- Made primarily of stone and brick variants (cobblestone, stone bricks, mossy variants, cracked).
+- Partially buried -- foundations sunk into the earth, upper stories exposed. Feels like something that sank or was covered over time.
+- Scattered across the surface, more common in Desolate Biomes.
+- Loot: lore books, rare materials, schematic fragments.
+- Hints at a civilization that built on the surface before the war made it uninhabitable.
+- Underground continuation possible: some city ruins connect to deeper underground structures.
+
+---
+
+### Ruined Bridges [IDEA]
+> Massive single columns rising from the terrain. Rare remnants of world-spanning infrastructure.
+
+**Design notes:**
+- Single column structures -- what remains when a colossal bridge spanning the world is mostly destroyed. Only the support pillars remain.
+- Enormous scale. Towers above the terrain. The remaining stub implies a structure that once dwarfed anything the player could build.
+- Rare. Finding one is a notable event. They should feel like landmarks.
+- Made of stone, bricks, iron/copper block variants (or the rusted/oxidized versions once the substitution is done).
+- No loot necessarily -- the structure IS the discovery. Context and atmosphere.
+- Lore implication: the Old World built infrastructure at a scale the player can barely comprehend.
+
+---
+
+### Underground War Structures [IDEA]
+> Hidden underground structures hinting at the war, engineered mobs, and the underground civilization.
+
+**Design notes:**
+- Various types: laboratories, barracks, storage facilities, creature pens.
+- Creature pens imply where creepers, ravagers, phantoms were engineered/bred. Degraded equipment, broken spawn infrastructure, notes left by engineers.
+- Connects to the Familiar Notebooks lore -- Steve/the player may have been involved in this.
+- Loot: Engineer's Diaries, schematics, rare materials, mob-related drops.
+- Found at various underground depths, distinct from vanilla structures (strongholds, ancient cities).
+- The stronghold and ancient city already exist -- these new structures fill in the gaps and add context to why those structures exist underground.
+
+---
+
+### The After -- City Structures [IDEA]
+> City-like clusters of structures in The After dimension. Primary spawn location for Revenants.
+
+**Design notes:**
+- Made of After-dimension stone variants, brick, and the ghostly aesthetic of the dimension.
+- Denser than overworld ruins -- The After preserves the memory of the city more completely.
+- Revenants patrol and inhabit these areas. High danger.
+- Best source of After-exclusive loot and lore books.
+- Visually: the city AS IT WAS, but rendered in the After's ethereal palette.
 
 ---
 
@@ -1949,11 +1985,6 @@ Addition to the enchanting structure. A new contributor block or structure exten
 - Crafting at a basic workbench gives no modifier chance. You need a proper station. This rewards players who invest in their crafting setup.
 - Modifier names appear as prefixes on the item: "Hardened Iron Chestplate", "Tempered Diamond Pickaxe", etc.
 - One modifier per item. No stacking. Simple and readable.
-
-**Design questions (open):**
-- *What's the base chance? 10%? 25%? How much does a full station boost it?*
-- *Can modifiers appear on non-gear items? (Probably not -- keep it focused on equipment.)*
-- *Can you reroll a modifier somehow, or is it permanent? Permanent feels right -- it makes each craft meaningful.*
 
 ---
 
@@ -2001,11 +2032,6 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 - The Drafting Table is cheap to build but the schematics and ink are the real gates. The table is infrastructure, not a bottleneck.
 - Crafting schematics for normally uncraftable items (tridents, etc.) give those items a path to acquisition beyond luck, without making them trivially available.
 - The whole system rewards exploration: find schematics in the world, bring them back to your workshop, use them carefully.
-
-**Design questions (open):**
-- *What items get crafting schematics? Trident is a clear candidate. What else -- elytra? Saddle? Enchanted golden apple? Each one needs a recipe that feels fair.*
-- *Can you copy a copy? (Probably yes -- the ink cost is the limiter, not copy-generation.)*
-- *Artisan's Ink source -- rare mob drop? Complex recipe? Bought from a specific villager type?*
 
 ---
 
@@ -2096,10 +2122,6 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 - Global change, not gated behind the Brewery. This is pure QoL that benefits all players from the start.
 - Synergizes strongly with Potion Infusion (see Magic & Enchanting) -- multi-effect potions that stack to 4 become a genuine alternative to enchanted gear for temporary boosts.
 
-**Design questions (open):**
-- *Does this affect tipped arrows? (Probably not -- they already stack to 64.)*
-- *Splash and lingering too, or just drinkable? All three feels consistent.*
-
 ---
 
 ### Multiblock Structure Framework [WIP]
@@ -2115,171 +2137,39 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 
 | Role | Scan behavior | Counts as component? | Example |
 |------|--------------|---------------------|---------|
-| Core | Trigger block. Placing it causes the Manager to scan. | Yes | Furnace, workstation, custom core block |
-| Connector | Scan flows through it to find more blocks. | Yes | Stone frame, obsidian bridge |
-| Contributor | Adds values to the structure's totals. | Yes | Machine Core (speed bonus), bookshelf (enchant power), bed (rest) |
-| Effector | Where the structure's effects manifest. | Yes | The furnace being boosted, the villager's assigned station |
-| Ignored | Scan flows through but doesn't count as a component. | No | Air, light blocks |
+| Core | Triggers scan | Yes | Furnace, Enchanting Table, Brewing Stand |
+| Connector | Expands scan to neighbors | Yes | Stone bricks (workshop walls/floor) |
+| Contributor | Counted, enables/boosts effects | Yes | Machine Block, Mortar & Pestle, Bookshelf |
+| Effector | Receives the structure's effect | Yes (usually Core) | The Core block itself |
+| Ignored | Present in scan area, doesn't affect result | No | Air, torches, decorative items |
 
-Anything not in the ruleset: scan does not flow through it, doesn't count. Natural termination -- no explicit "wall" role needed.
+**Structure types (planned):**
 
-**A single block can fill multiple roles.** A furnace can be both Core (triggers the scan) and Effector (receives the speed boost). A Machine Core block can be a Contributor (adds speed) in one structure type while being a Core in a different structure type.
+| Structure | Core | Status |
+|-----------|------|--------|
+| Machine Furnace Array | Furnace / Blast Furnace / Smoker | [DONE] |
+| Villager Workshop | Various workstations | [IDEA] |
+| Enhanced Enchanting Table | Enchanting Table | [IDEA] |
+| Brewery / Alchemy Station | Brewing Stand | [IDEA] |
+
+**Implementation phasing:**
+
+| Phase | What | Status |
+|-------|------|--------|
+| 1 | Structure Manager saved data + Scanner utility + Structure Result data class + Effect handler interface | [DONE] |
+| 2 | First structure: Machine Furnace Array (simplest useful case, uses existing blocks) | [DONE] |
+| 3 | Villager Workshop structure (tests spatial validation, complex contributor rules) | [IDEA] |
+| 4 | Pattern scan mode + a shaped structure to test it | [IDEA] |
+| 5 | Polish: comparator output, particles, sounds, GUI panels, visual debug mode | [IDEA] |
+| 6 | Data-driven: refactor rulesets from Java to JSON for moddability | [IDEA] |
 
 ---
 
-**Structure Lifecycle:**
+**Enhanced Enchanting Table Structure:**
 
 ```
-FORMATION
-  1. Player places a Core block (or triggers an existing one).
-  2. Structure Manager detects the placement and checks: "Does any
-     registered structure type use this block as a Core?"
-  3. If yes, Manager runs the scanner with that structure type's ruleset.
-  4. Scanner flood-fills outward from the Core, classifying blocks by role.
-  5. If the result meets validation rules -> structure is REGISTERED.
-     Gets an ID, stored in the Manager's saved data. Persists across saves.
+Ring 0 (3x3 base):          Ring 1 (5x5):               Ring 2 (7x7):
 
-UPDATES
-  6. When any block within a registered structure's area is placed/broken,
-     the Manager is notified (via Forge block change events).
-  7. Manager rescans the affected structure with its ruleset.
-  8. If still valid -> update the registration (new component counts, etc.).
-  9. If now invalid -> DEREGISTER the structure. Effects stop.
-
-CORE LOSS
-  10. If the Core block that originally triggered formation is broken:
-      - Manager checks: is there another valid Core of the same type
-        still in the structure? If yes -> that one becomes the new
-        anchor. Structure persists.
-      - If no Core remains -> structure DEREGISTERS.
-
-DEREGISTRATION
-  11. Structure entry removed from Manager. Effects stop. All blocks
-      revert to being normal blocks. No cleanup needed on the blocks
-      themselves since they never stored structure data.
-```
-
-**The structure outlives any individual block** (except when no valid Core remains). Breaking and replacing a block causes a rescan, not a full teardown-rebuild. This is critical for the villager workshop case -- replacing a workstation doesn't destroy the room.
-
----
-
-**Scanning -- How It Works:**
-
-**Flood scan (freeform/shapeless structures):**
-
-1. Start at Core position. Add to "visited" set.
-2. Check all 6 adjacent blocks.
-3. For each: ask the ruleset "what is this block?"
-   - If in the ruleset as CONNECTOR or IGNORED: queue its neighbors for scanning (scan flows through).
-   - If in the ruleset as CONTRIBUTOR or EFFECTOR: add to results.
-   - If not in the ruleset at all: do nothing. Don't queue neighbors. Scan stops here naturally.
-4. Repeat until queue is empty, max distance reached, or max component count reached.
-5. Run validation rules. Return Structure Result.
-
-**Pattern scan (shaped structures):**
-
-1. Start at Core position.
-2. Ruleset provides a 3D template of expected blocks at specific offsets.
-3. Check each position. Positions can accept multiple block types.
-4. Track global constraints ("at least 1 of X, at most 2 of Y").
-5. Supports rotation (check all 4 horizontal orientations).
-6. Return Structure Result.
-
-**Hybrid:** Pattern scan first (is the frame valid?), then flood scan from inside (what's inside the frame?).
-
----
-
-**Per-Contributor Spatial Validation:**
-
-Some contributors need more than just "are you present?" -- they need "are you placed correctly?" The ruleset can attach a **spatial validator** to specific contributor types.
-
-Example: In the furnace array, furnaces must have clear faces (air adjacent on functional sides). The scanner finds a furnace, then runs its spatial validator: "Does this furnace have at least one air block on a non-frame face?" If yes -> valid contributor. If no -> found but flagged as invalid.
-
-This enables player feedback like: "Furnaces: 3 valid, 1 blocked" -- tells the player exactly what to fix.
-
----
-
-**Structure Manager (world-level saved data):**
-
-| Responsibility | How |
-|---------------|-----|
-| Stores all registered structures | SavedData (like OddstonePortalSavedData). Persists across saves/loads. |
-| Holds all structure type rulesets | Loaded at mod init. Each structure type is a named ruleset. |
-| Listens for Core block placement | Forge block place event -> check if placed block is a Core for any ruleset -> scan. |
-| Listens for block changes near structures | Forge neighbor/block change events -> check if position is within any registered structure's area -> rescan that structure. |
-| Provides structure data to game systems | Other systems query the Manager: "Is there a valid workshop structure at this location?" "What are its contributor totals?" |
-
-**Performance:** Scans only run on block placement/breaking events, not per-tick. Each registered structure stores a bounding box -- block changes outside all bounding boxes are ignored instantly. Bounding box check is very cheap.
-
----
-
-**Ruleset Parameters:**
-
-| Parameter | Purpose |
-|-----------|---------|
-| Structure type name | Unique identifier ("machine_furnace_array", "villager_workshop") |
-| Core block(s) | Which block types trigger a scan when placed. Can be multiple types. |
-| Scan type | FLOOD / PATTERN / HYBRID |
-| Max scan distance | Hard cap on how far from Core the scan can reach |
-| Max components | Cap on total counted blocks (performance + balance) |
-| Block classification | Map of block type -> role (connector/contributor/effector/ignored) |
-| Contribution values | Map of contributor types -> what values they add |
-| Spatial validators | Optional per-contributor placement checks |
-| Validation rules | Minimum/maximum requirements for the structure to be valid |
-| Multi-core allowed | Can the structure contain multiple Core blocks? |
-| Effect definition | What the structure does when valid (custom logic per structure type) |
-
----
-
-**Example Structures:**
-
-**Machine Furnace Array [DONE]:**
-
-| Property | Value |
-|----------|-------|
-| Core block | Furnace, Blast Furnace, Smoker (all vanilla furnace types) |
-| Frame | #ideomod:furnace_array_frame tag (18 stone-family blocks) |
-| Max cluster | 3 wide x 2 tall (6 furnaces) |
-| Effectors | The furnaces themselves |
-| Effect | GUI renamed to "Enhanced Furnace/Blast Furnace/Smoker" + 50% cooking speed boost |
-
-Build: Place furnaces facing the same direction. Surround back, sides, top, and bottom with stone-family frame blocks. Front faces must have air (for item access). Structure auto-detects on any relevant block placement.
-
-Implementation notes:
-- Scanner normalizes core position to clusterMin for consistent exclusivity keying
-- Frame bounds normalized with Math.min/max to handle all facing directions
-- Speed boost via AbstractFurnaceBlockEntityMixin: +1 extra progress on even ticks, clamped to totalTime - 1 (vanilla uses equality check for completion)
-- Core detection uses block entity iteration from nearby chunks (cheap, no chunk scanning)
-
-**Villager Workshop:**
-
-| Property | Value |
-|----------|-------|
-| Core block | Workstation (smithing table, loom, brewing stand, etc.) |
-| Connectors | Any solid full block (walls/floor/ceiling material) |
-| Contributors | Bed (+rest, required), chest (+storage), composter or food container (+food), door/window (+skyAccess) |
-| Effectors | The workstation (villager assignment point) |
-| Ignored | Air (living/working space) |
-| Spatial validation | Bed must not be exposed to sky (has solid block above it). Structure must have minimum interior air volume (walking space). At least one block with clear path to sky (window/door). |
-| Effect | Villager assigned to this workshop gains willingness to trade. Trade quality scales with contributor completeness. Missing components -> missing features (no bed = no overnight restock, no food = no breeding, no sky = mood penalty/worse prices). |
-
-Build: Build a room. Add a workstation, bed, chest, and food source. Make sure there's a window or door to the sky and enough walking space. Villager claims the workshop and starts trading. Better room = better trades.
-
-**Enhanced Enchanting Table:**
-
-| Property | Value |
-|----------|-------|
-| Core block | Enchanting table |
-| Base structure | 3x3 obsidian platform directly beneath the enchanting table |
-| Corner modifiers | Lapis blocks in corners add catalyst slot. Diamond blocks in corners increase available enchantment range/variety. Mixed corners allowed -- lapis and diamond can coexist. |
-| Ring expansion | Additional concentric square rings of obsidian extending outward from the 3x3 base, always connected to the table via obsidian. Each ring allows bookshelves to be placed further away while still counting toward enchant power. |
-| Contributors | Bookshelf (enchantPower: 1), amethyst cluster (luck: 1), candle (stability: 1) |
-| Effectors | Enchanting table (gains enhanced options, catalyst slot, expanded range) |
-| Ignored | Air |
-
-**Obsidian ring structure:**
-```
-Ring 0 (base):     Ring 1 (first expansion):     Ring 2 (second expansion):
   O O O              . . . . .                      . . . . . . .
   O [E] O            . O O O .                      . . . . . . .
   O O O              . O [E] O .                    . . O O O . .
@@ -2304,12 +2194,6 @@ Ring 0 (base):     Ring 1 (first expansion):     Ring 2 (second expansion):
 - All 4 corners same type = maximum effect for that modifier
 - Mixed corners = partial effect of each
 
-**Design notes:**
-- Transforms enchanting from "place 15 bookshelves in a ring" into a genuine build project. Players who invest in larger obsidian ring structures get access to more bookshelves and wider enchant variety.
-- The obsidian base establishes the Magic Family structural grammar: obsidian frames with mineral block corners. Same language as Beacon Rework, Inhibitor/Promoter structures, and Magic Core.
-- Corner modifiers create meaningful choices: do you prioritize the catalyst slot (lapis) for biased enchanting, or wider enchant selection (diamond)?
-- Bookshelves in the wider ring zones could be mixed with other contributors (amethyst for luck, candles for stability) without crowding the immediate area around the table.
-
 ---
 
 **Brewery / Alchemy Station:**
@@ -2323,8 +2207,6 @@ Ring 0 (base):     Ring 1 (first expansion):     Ring 2 (second expansion):
 | Ignored | Air |
 | Spatial validation | Mortar & Pestle and Cauldron must be within scan range of brewing stand |
 | Effect | Brewing stand GUI updates title, gains additional ingredient slot. Expanded recipe list. Contributor quality scales Potion Infusion success rate. |
-
-Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron nearby. The brewing stand becomes an Alchemy Station with extra capabilities. Add more contributor blocks to improve Potion Infusion outcomes.
 
 ---
 
@@ -2348,26 +2230,6 @@ Build: Place a brewing stand. Add a mortar & pestle and water-filled cauldron ne
 | Oddstone Economy | Advanced structure types (machine arrays, arcane workshops) could require Oddstone components. |
 | Redstone / Machine Blocks | Machine Blocks as contributors in machine-type structures. Machine Core block sends wireless redstone to Machine Blocks in radius AND participates as contributor in structures. |
 | Villager AI | Villager assigned to a registered workshop structure. AI queries the Manager for structure validity and contributor totals. |
-
----
-
-**Implementation phasing:**
-
-| Phase | What | Status |
-|-------|------|--------|
-| 1 | Structure Manager saved data + Scanner utility + Structure Result data class + Effect handler interface | [DONE] |
-| 2 | First structure: Machine Furnace Array (simplest useful case, uses existing blocks) | [DONE] |
-| 3 | Villager Workshop structure (tests spatial validation, complex contributor rules) | [IDEA] |
-| 4 | Pattern scan mode + a shaped structure to test it | [IDEA] |
-| 5 | Polish: comparator output, particles, sounds, GUI panels, visual debug mode | [IDEA] |
-| 6 | Data-driven: refactor rulesets from Java to JSON for moddability | [IDEA] |
-
----
-
-**Open questions:**
-- *How does the Manager handle chunk boundaries? If a structure spans two chunks and one unloads, structure should probably stay registered but flag as "partially unloaded" and skip effect application until fully loaded.* (Current implementation: structures stay registered across chunk boundaries. Effect application checks block existence at runtime. No partial-unload tracking yet.)
-- *Should there be a creative/debug tool for visualizing registered structures?* **Partially resolved**: Structure Debug Stick shows register/deregister chat messages. Visual block highlighting (colored outlines on structure blocks) still TBD for Phase 5.
-- *Villager workshop: how does villager "assignment" work? Does the villager claim the nearest valid workshop, or does the player assign them? Vanilla uses proximity -- extending that feels more vanilla+.*
 
 ---
 
@@ -2407,13 +2269,6 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 - The fuel depletion should have visual/audio feedback: beam flickering, dimming light, warning sound when fuel is low. Grace period before shutoff so players can react.
 - Compatible with the obsidian multiblock structural grammar -- the beacon pyramid IS the structure, mineral blocks ARE the modifiers.
 
-**Open questions:**
-- *Exact range numbers per tier? Current vanilla 4-tier beacon is 20/30/40/50 blocks. Netherite could go to 200+.*
-- *Does mixing mineral types in the pyramid average the range, or use the lowest/highest tier?*
-- *Does the fuel system apply to beacon effects too, or just range? (Could tie specific effects to specific fuel types.)*
-- *Warning system: visual beam flicker + sound? Chat message? Particle effect?*
-- *Can the beacon be automated? (Machine Pipe feeding fuel into it?)*
-
 ---
 
 ### World Anchor [IDEA]
@@ -2443,19 +2298,6 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 | 2-tier base | 5x5 chunk area |
 | 3-tier base | 7x7 chunk area? |
 
-**Design notes:**
-- Based on the ender pearl chunk-loading mechanic added in 1.20 (ender pearls thrown into nether portals keep chunks loaded). This block formalizes that into a deliberate, buildable system.
-- The obsidian pyramid structure mirrors the Beacon, Inhibitor, and Promoter -- consistent structural grammar across the mod's infrastructure blocks.
-- Chunk loading is very powerful -- this should be expensive and progression-gated. Ender pearls as fuel creates ongoing cost and ties into End progression.
-- Primary use: keeping farms, Machine Block contraptions, and infrastructure running when the player is elsewhere.
-- Could use mineral block corners for additional effects (like the other obsidian multiblocks), but the base functionality is just chunk loading.
-
-**Open questions:**
-- *Fuel consumption rate for ender pearls? One per in-game day? Per real-time hour?*
-- *Should it require redstone power to activate, or run passively?*
-- *Performance implications of player-controlled chunk loading -- should there be a per-world limit?*
-- *Does it work in all dimensions?*
-
 ---
 
 ### Magic Core [IDEA]
@@ -2476,22 +2318,6 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 | Potion duration extension | [IDEA] | Active potion effects on the player decay slower (or not at all?) while in range. Extends effective potion duration without consuming more potions. |
 | Obsidian multiblock base | [IDEA] | Same structural grammar as Beacon, Inhibitor/Promoter, World Anchor. Beacon-like obsidian pyramid with mineral block corners for range/power scaling. |
 | Passive operation | [IDEA] | Always active once structure is valid. No fuel, no redstone. The structure IS the investment. |
-
-**Design notes:**
-- The Magic Core is the passive enchantment/potion counterpart to the Beacon's status effects. Beacon gives you Haste/Speed/etc. Magic Core makes your existing gear and potions better.
-- Creates a strong "home base advantage" -- players who build a Magic Core in their base have stronger gear and longer-lasting potions while near it. Incentivizes returning to base and building infrastructure.
-- Enchantment boost should probably have limits -- maybe only boosts enchantments that are already present (doesn't add new ones), and caps at +1 or +2 levels above what's on the gear.
-- Potion extension means players can drink potions at home and have them last longer for expeditions, or maintain permanent potion effects while working in their base.
-- The obsidian multiblock structure means this is a significant build investment. Not something you casually place -- you build a sanctum.
-- Pairs with the Enchanting Overhaul: the enchant level budget system means +1 level is meaningful but not game-breaking. A Protection IV becoming Protection V is strong but not a new tier of power.
-
-**Open questions:**
-- *Which enchantments does it boost? All of them? Only combat enchants? Only utility enchants? A configurable list?*
-- *Boost amount: flat +1 per tier of structure? Percentage-based?*
-- *Potion extension: slower decay (2x duration)? Pause decay entirely while in range?*
-- *Does it affect all players in range, or only the builder/owner?*
-- *Range scaling with structure size -- same progression as Beacon (20/30/40/50+ blocks per tier)?*
-- *Visual effect: subtle particle aura around players in range? Ambient sound?*
 
 ---
 
@@ -2528,13 +2354,79 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 
 ---
 
-## 10. BRAINSTORM BIN
+## 10. LORE & WORLD DESIGN
+
+*The overarching narrative of the mod world. Not delivered through cutscenes or text walls -- told through structures, books found as loot, mob behavior, biome conditions, and the state of the world itself. Players piece it together.*
+
+---
+
+### The Old World
+
+An advanced civilization once existed. They were engineers, builders, explorers -- they mastered machines, magic, and dimensional travel. At their height, they built infrastructure spanning the entire world (the Ruined Bridges are what remain) and expanded into multiple dimensions.
+
+Then they went to war.
+
+The cause was the search for immortality. Different factions sought different methods. The war escalated until the surface became uninhabitable -- hence the stronghold, the ancient city, and the new underground structures we'll add being built deep underground, away from the devastation above.
+
+Mobs as we know them were engineered weapons: creepers (living explosives), ravagers (war mounts, bred from wild stock), phantoms (aerial attackers), and others. Evidence of this is found in underground creature-pen structures -- degraded equipment, broken spawn infrastructure, fragments of technical documentation.
+
+---
+
+### Steve
+
+Steve is the player character. He is a lich -- an immortal being who bound his own life force to the world itself, making the world his phylactery. He was one of the Old World's most advanced crafters. When his entire civilization destroyed itself, he succeeded where everyone else failed: he found immortality.
+
+Then he went to sleep. For a very long time.
+
+The player waking up at the start of a new world is Steve waking from this sleep. This explains why the player knows so much, can do so much, and starts from nothing: Steve remembers how to do everything, but the world has moved on. He has to rebuild.
+
+The Familiar Notebooks/Diaries are Steve's own journals from before the sleep. Reading them is the player encountering their own past self -- a strange, unreliable narrator who is also you. The voice should feel intimate and slightly wrong, like reading a diary you don't remember writing.
+
+---
+
+### Herobrine
+
+Steve had a brother. During the search for immortality, Steve attempted the procedure on his brother as well. It failed -- not completely, but wrongly. His brother was trapped between life and death: not alive, not dead, not corporeal, not gone. The diaries refer to him obliquely. Never by name. Steve's writing about his brother is the most fragmented and difficult section of the Familiar Notebooks -- grief, guilt, and something that might be fear.
+
+Herobrine's nature (if he appears in the mod at all) is left ambiguous. He is a presence, a lore element, not necessarily a mob or encounter.
+
+---
+
+### The After
+
+The After is a dimension that is a memory of the Old World. It looks like the overworld but with an ethereal filter -- ghostly colors, dark sky, the feel of somewhere that echoes what it once was. The After preserves what the overworld lost.
+
+Blocks in The After do not drop themselves. Mining anything in The After drops Ghost Blocks or ectoplasm -- the world is made of memory, not matter. Ghost blocks CAN be brought back to the overworld and used as building material.
+
+Ghosts are the common mob. In the cities, Revenants patrol -- armored, gear-carrying zombie-like ghosts at piglin brute strength. They are the echoes of the Old World's people, still occupying the spaces they lived in.
+
+**Accessing The After:** A portal, similar in nature to the Nether portal. Construction method and materials TBD.
+
+**The After as a resource dimension:**
+- Ectoplasm farming (ghosts are common)
+- Ghost block collection (mining yields ghost blocks)
+- Lore (the best libraries and archives are in the After's cities)
+- Danger (Revenants in city zones, hostile environment)
+
+---
+
+### Narrative Delivery (Books & Structures)
+
+The lore is never stated directly in a loading screen or wiki entry. It is assembled by the player from:
+
+- **Engineer's Diary** -- Technical perspective. Found in workshop ruins and underground structures. Talks about machines, the war effort, hints at what the mobs were built for.
+- **Explorer's Manual** -- Expedition perspective. Found in portal ruins, The After. Talks about dimensional exploration, partial portal addresses, observations about what The After is.
+- **Familiar Notebooks** -- Steve's own journals. Rare. Found in unique structures. Fragmented and personal. Reveals the most about the true history. Multiple volumes.
+
+The books guide players toward content while layering lore on top. An Engineer's Diary might describe a machine and also mention "the council's decision to repurpose the production lines." An Explorer's Manual might give a portal address and also note that the address leads somewhere that "no longer exists the way I remember."
+
+---
+
+## 11. BRAINSTORM BIN
 
 *Unorganized ideas. Move to proper sections when they take shape.*
 
-- 
-- 
-- 
+-
 
 ---
 
@@ -2547,7 +2439,10 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 5. **Discovery-driven** -- Players should find and figure things out, not just follow recipes.
 6. **Structural grammar** -- Consistent design language across infrastructure blocks. Obsidian = arcane base material. Mineral block corners = modifiers (lapis = utility, diamond = power/range). Concentric expansion = scaling. Players learn the pattern once, apply it everywhere (enchanting table, beacon, inhibitor, promoter, world anchor, magic core).
 7. **Thematic families** -- Blocks are organized into Machine (iron/engineering), Odd (oddstone/wireless), and Magic (obsidian/arcane) families. Each has its own resource chain, aesthetic, and gameplay niche.
+8. **World as story** -- The state of the world tells its own history. Biomes, structures, mob behavior, and the blocks themselves hint at what happened. No exposition dumps -- players read the world.
 
 ---
 
 *This is a living document. Add ideas freely -- they'll get organized as they develop.*
+
+*Written by Claude, directed and guided by The Ideomancer.*

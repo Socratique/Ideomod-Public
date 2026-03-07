@@ -38,6 +38,7 @@
 |  |           |  |  +-- RangedPistonFlags.java
 |  |           |  |  \\-- RangedPistonUtil.java
 |  |           |  +-- portal
+|  |           |  |  +-- EnderPearlPortalHandler.java
 |  |           |  |  +-- OddstonePortalBlock.java
 |  |           |  |  +-- OddstonePortalFrameDetector.java
 |  |           |  |  +-- OddstonePortalHandler.java
