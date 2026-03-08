@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-07b (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, framed light emission delegation [needs verification])*
+*Last updated: 2026-03-08 (known issues: Track signal bleed. Issues #5, #9, #11 resolved.)*
 
 ---
 
@@ -209,7 +209,7 @@ Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Fam only grabs activ
 
 **Linking**: Max 2 portals per address. First lights unlinked, second auto-links to first. Destroying one unlinks the other.
 
-**Teleportation**: Linked portals preserve relative position (fractional offset). Cross-axis portals (X vs Z) rotate player yaw 90 degrees to face through the destination portal. Unlinked portals scatter-teleport 200-1000 blocks + 5 hearts damage.
+**Teleportation**: Linked portals preserve relative position (fractional offset). All teleports apply 180-degree yaw rotation so player exits facing away from destination portal (doorway effect). Cross-axis portals (X vs Z) additionally rotate 90 degrees to align with destination axis. Unlinked portals scatter-teleport 200-1000 blocks + 5 hearts damage.
 
 **Deactivation strategy**: Full frame re-validation via `validateOrDeactivate()`. When any frame Oddstone gets neighborChanged, navigates from portal block to frame, checks all corners + all Oddstone powered. Only deactivates if validation fails. Prevents false triggers from unrelated neighbor updates. Immediate deactivation via `onBlockRemoved()` when a frame Oddstone is physically broken.
 
@@ -302,7 +302,8 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering.
 4. **INNER_STICKY property** (IntegerProperty 0-4): Maps to `StickyType` enum values (NONE=0, SLIME=1, HONEY=2, ODD_SLIME=3, ODDSTONE=4). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner().
 5. **INNER_CONDUCTOR property** (IntegerProperty 0-2): Exposes inner block's conductor material at blockstate level (0=none, 1=iron, 2=copper). Synced by FramedBlockEntity.updateBlockstateFromInner() via FrameMaterial.fromVanillaBlock() + toConductorValue(). Enables cross-frame mediation in canStickTo() and activation without BE access.
-6. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). canStickTo requires neighbor IFrameBlock to be active. isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
+6. **INNER_LIGHT property** (IntegerProperty 0-15): Inner block's light emission level. Read by lightLevel predicate in ModBlocks.java. Pre-populated in getStateForPlacement() from item NBT so the lighting engine detects emission on the first setBlock. Also synced by updateBlockstateFromInner() for piston restores and chunk loads.
+7. **Activation-based stickiness**: Same IFrameBlock + FrameActivation system as Frame Blocks. Material-matched (iron<->iron, copper<->copper). canStickTo requires neighbor IFrameBlock to be active. isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0.
 7. **Cross-frame mediation**: When INNER_CONDUCTOR is set to a different material than the frame, the block is a MEDIATOR. In activation: passes ALL materials (universal bridge). In stickiness: canStickTo matches both frame material AND inner conductor material.
 8. **Inner sticky behavior**: Framed blocks with sticky inners preserve native stickiness. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions).
 9. **Framed Odd Slime directional**: Inner stickiness blocked in non-FACING push directions. Frame stickiness still works via second-chance mixin check.
@@ -311,7 +312,7 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 12. **Dynamic creative tab**: FRAMED_BLOCKS_TAB iterates all registered blocks, checks FrameabilityHelper.isFrameable(), creates variants.
 13. **F3 debug**: FramedBlockDebugOverlay shows inner block ID on right-side F3 panel.
 
-Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICKY) x 3 (INNER_CONDUCTOR) = 180 states.
+Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICKY) x 3 (INNER_CONDUCTOR) x 16 (INNER_LIGHT) = 2880 states.
 
 **FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~290 vanilla blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
 
@@ -377,12 +378,12 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
 3. ~~**Framed block transit rendering (Trolley/Repulser/Attractor)**~~ -- FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.
 4. **Framed blocks not grabbed by slime during Repulser/Attractor moves** -- Slime stickiness may not propagate correctly through BlockMoveHelper path.
-5. **Frame inside-face rendering** -- Frame JSON models need inverted cuboid for visible inner faces.
+5. ~~**Frame inside-face rendering**~~ -- FIXED. Inverted cuboid elements added to frame JSON models.
 6. ~~**Sympathetic framed oddstone transit rendering**~~ -- FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.
 7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
 8. **Machine Track signal bleeds into attached Machine Blocks via Trolley** -- Track conduction passes through Trolley into any Machine Frame stuck to it, incorrectly triggering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intended only for the Track-Trolley push system. Fix: isolate Track from FrameActivation source detection in FrameActivation.recalculate() or guard POWER propagation past non-conduit blocks. File: MachineTrackBlock.java, FrameActivation.java.
-9. **Repulser/Attractor cannot target Framed Oddstone** -- ODDSTONE_ONLY filter predicate in RangedPistonUtil checks state.is(ModBlocks.ODDSTONE) (bare Oddstone only). Framed Oddstone is a FramedBlock with INNER_STICKY=ODDSTONE and fails the filter. Fix: expand predicate to also match FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
+9. ~~**Repulser/Attractor cannot target Framed Oddstone**~~ -- FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
 10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
-11. **Framed inner blocks with light emission do not emit light** -- getLightEmission() override EXISTS in FramedBlock.java (queries inner defaultBlockState). NEEDS VERIFICATION: may already work. If not, lightLevel predicate at registration in ModBlocks.java may also need updating. File: FramedBlock.java, ModBlocks.java.
+11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.
 
 Written by Claude, directed and guided by The Ideomancer.

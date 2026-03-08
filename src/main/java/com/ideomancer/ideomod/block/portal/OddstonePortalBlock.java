@@ -30,8 +30,10 @@ import org.jetbrains.annotations.Nullable;
  * portal A, you come out the left side of portal B.
  * 
  * When portals have different orientations (X-axis vs Z-axis), the
- * player's facing is rotated 90° to face through the destination
- * portal's plane, preserving the feeling of walking "through" it.
+ * player's facing is rotated 90° to align with the destination axis,
+ * then an additional 180° is applied. All teleports include a 180°
+ * rotation so the player exits facing away from the destination portal,
+ * as if walking through a doorway.
  * 
  * LINKED portals: position-preserving teleport to partner.
  * UNLINKED portals: scatter-teleport 200-1000 blocks + 5 hearts damage.
@@ -145,14 +147,16 @@ public class OddstonePortalBlock extends Block {
      * 
      * HOW ROTATION WORKS:
      * ===================
+     * All teleports apply a 180° yaw rotation so the player exits
+     * facing AWAY from the destination portal — like walking through
+     * a doorway.
+     *
      * When source and destination portals have different axes (X vs Z),
-     * the player is rotated 90° so they face through the destination
-     * portal's plane. This preserves the feeling of "walking through"
-     * — you enter facing one direction and exit facing the natural
-     * direction of the destination portal.
+     * an additional 90° rotation is applied first to align the player
+     * with the destination portal's orientation.
      * 
-     * Same-axis portals: no rotation (player keeps their facing).
-     * Cross-axis portals: 90° rotation to align with destination.
+     * Same-axis portals: 180° rotation (face away from destination).
+     * Cross-axis portals: 90° + 180° rotation.
      */
     private void linkedTeleport(ServerLevel level, ServerPlayer player,
                                  OddstonePortalSavedData.PortalEntry entry,
@@ -275,10 +279,18 @@ public class OddstonePortalBlock extends Block {
                 yaw -= 90.0F;
             }
 
-            // Normalize to -180..180
-            while (yaw > 180.0F) yaw -= 360.0F;
-            while (yaw <= -180.0F) yaw += 360.0F;
         }
+
+        // Rotate 180° so the player exits facing AWAY from the destination
+        // portal — as if they walked straight through a doorway. This stacks
+        // with the cross-axis 90° rotation above:
+        //   Same-axis portals: 0° + 180° = 180° (face away from destination)
+        //   Cross-axis portals: ±90° + 180° = effective -90°/+90° from original
+        yaw += 180.0F;
+
+        // Normalize to -180..180
+        while (yaw > 180.0F) yaw -= 360.0F;
+        while (yaw <= -180.0F) yaw += 360.0F;
 
         // Teleport with rotation
         player.teleportTo(level, targetX, targetY, targetZ, yaw, pitch);

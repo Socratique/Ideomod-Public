@@ -50,8 +50,19 @@ import java.util.List;
  * Each behaves as a transparent proxy for its inner block (stored in the
  * block entity) while adding frame-family stickiness on top.
  *
- * DEBUG: Temporary logging in canStickTo() for bug #10 investigation.
- * Remove debug logging once bug is resolved.
+ * LIGHT EMISSION FIX (Issue #11):
+ * getStateForPlacement() reads the inner block from the item's NBT and
+ * pre-populates INNER_LIGHT, INNER_STICKY, and INNER_CONDUCTOR on the
+ * blockstate BEFORE the block enters the world. This ensures the very
+ * first setBlock() call has the correct light value, so the chunk's
+ * light-change detection (old=AIR emission 0 -> new=FRAMED emission 15)
+ * triggers the lighting engine immediately — same as vanilla glowstone.
+ *
+ * Without this, the block is placed with INNER_LIGHT=0 (default state),
+ * the lighting engine sees no change from air, and never queues a light
+ * update. Later blockstate updates via updateBlockstateFromInner() set
+ * the correct value but the lighting engine has already cached "0" and
+ * doesn't re-evaluate.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -70,6 +81,18 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      */
     public static final IntegerProperty INNER_CONDUCTOR = IntegerProperty.create("inner_conductor", 0, 2);
 
+    /**
+     * Tracks the inner block's light emission level (0-15).
+     * Set at placement time via getStateForPlacement() from item NBT,
+     * and kept in sync by FramedBlockEntity.updateBlockstateFromInner()
+     * for piston restores and chunk loads.
+     *
+     * The lightLevel predicate in ModBlocks.java reads this property
+     * so the lighting engine knows the block's emission without needing
+     * block entity access.
+     */
+    public static final IntegerProperty INNER_LIGHT = IntegerProperty.create("inner_light", 0, 15);
+
     public static final int STICKY_NONE = 0;
     public static final int STICKY_SLIME = 1;
     public static final int STICKY_HONEY = 2;
@@ -85,7 +108,8 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                 .setValue(ACTIVE, false)
                 .setValue(FACING, Direction.NORTH)
                 .setValue(INNER_STICKY, STICKY_NONE)
-                .setValue(INNER_CONDUCTOR, 0));
+                .setValue(INNER_CONDUCTOR, 0)
+                .setValue(INNER_LIGHT, 0));
     }
 
     @Override
@@ -95,17 +119,56 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR);
+        builder.add(ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT);
     }
 
     // ========================================================================
     // PLACEMENT
     // ========================================================================
 
+    /**
+     * Build the initial blockstate for placement. Reads the item stack's
+     * BlockEntityTag to determine the inner block, then pre-populates
+     * INNER_LIGHT, INNER_STICKY, and INNER_CONDUCTOR so the blockstate
+     * is fully correct from the very first setBlock() call.
+     *
+     * This is critical for light emission: the chunk's light-change detection
+     * compares old emission (air=0) vs new emission during setBlock(). If the
+     * new state already has INNER_LIGHT=15, the lighting engine queues a proper
+     * propagation update immediately — same as placing vanilla glowstone.
+     *
+     * The block entity doesn't exist yet at this point (it's created after
+     * setBlock), so we read directly from the item's NBT rather than
+     * delegating to FramedBlockEntity.
+     */
     @Override
     public BlockState getStateForPlacement(BlockPlaceContext context) {
-        return this.defaultBlockState()
+        BlockState state = this.defaultBlockState()
                 .setValue(FACING, context.getNearestLookingDirection().getOpposite());
+
+        // Read inner block from the item's NBT to pre-populate derived properties
+        ItemStack stack = context.getItemInHand();
+        ResourceLocation innerBlockId = FramedBlockEntity.getInnerBlockIdFromStack(stack);
+        if (innerBlockId != null) {
+            Block innerBlock = BuiltInRegistries.BLOCK.get(innerBlockId);
+            // Guard against unknown registry keys (returns AIR)
+            if (innerBlock != Blocks.AIR || innerBlockId.equals(BuiltInRegistries.BLOCK.getKey(Blocks.AIR))) {
+                // INNER_LIGHT: from inner block's default light emission
+                int light = innerBlock.defaultBlockState().getLightEmission();
+                state = state.setValue(INNER_LIGHT, light);
+
+                // INNER_STICKY: from StickyType classification
+                int sticky = StickyType.fromBlock(innerBlock).getInnerStickyValue();
+                state = state.setValue(INNER_STICKY, sticky);
+
+                // INNER_CONDUCTOR: from FrameMaterial vanilla block detection
+                FrameMaterial conductorMat = FrameMaterial.fromVanillaBlock(innerBlock);
+                int conductor = conductorMat != null ? conductorMat.toConductorValue() : 0;
+                state = state.setValue(INNER_CONDUCTOR, conductor);
+            }
+        }
+
+        return state;
     }
 
     // ========================================================================
@@ -354,6 +417,15 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     // DELEGATED BEHAVIORS -- Visual Properties
     // ========================================================================
 
+    /**
+     * Runtime light emission delegation. Queries the block entity for the inner
+     * block's light level. This is a fallback for code paths that call
+     * getLightEmission() directly rather than reading the blockstate predicate.
+     *
+     * The primary light emission path is the INNER_LIGHT blockstate property,
+     * read by the lightLevel predicate registered in ModBlocks.java. The
+     * lighting engine uses that predicate, not this method, for light propagation.
+     */
     @Override
     public int getLightEmission(BlockState state, BlockGetter level, BlockPos pos) {
         FramedBlockEntity fbe = getFramedBE(level, pos);

@@ -1,5 +1,7 @@
 package com.ideomancer.ideomod.block.piston;
 
+import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -22,7 +24,8 @@ import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
  *
  * FILTER PREDICATES:
  * ==================
- *   - ODDSTONE_ONLY: Oddstone Repulser/Attractor
+ *   - ODDSTONE_ONLY: Oddstone Repulser/Attractor (matches bare Oddstone
+ *     AND Framed Oddstone via INNER_STICKY=ODDSTONE)
  *   - anyMovable(level): Arcane Repulser/Attractor (future)
  *
  * Written by Claude, directed and guided by The Ideomancer.
@@ -109,9 +112,26 @@ public class RangedPistonUtil {
     // FILTER PREDICATES
     // ========================================================================
 
-    /** Only Oddstone blocks. Used by Oddstone Repulser/Attractor. */
-    public static final Predicate<BlockState> ODDSTONE_ONLY =
-            state -> state.is(ModBlocks.ODDSTONE.get());
+    /**
+     * Matches Oddstone blocks -- both bare OddstoneBlock AND Framed Oddstone
+     * (FramedBlock with INNER_STICKY == StickyType.ODDSTONE).
+     *
+     * Used by Oddstone Repulser/Attractor.
+     *
+     * FIX 2026-03-07: Previously only checked state.is(ModBlocks.ODDSTONE.get()),
+     * which missed Framed Oddstone entirely. Framed Oddstone is a FramedBlock
+     * instance whose INNER_STICKY blockstate property equals StickyType.ODDSTONE
+     * (value 4). Now checks both cases.
+     */
+    public static final Predicate<BlockState> ODDSTONE_ONLY = state -> {
+        // Case 1: bare Oddstone block
+        if (state.is(ModBlocks.ODDSTONE.get())) return true;
+        // Case 2: Framed Oddstone (FramedBlock with INNER_STICKY = ODDSTONE)
+        if (state.getBlock() instanceof FramedBlock) {
+            return state.getValue(FramedBlock.INNER_STICKY) == StickyType.ODDSTONE.ordinal();
+        }
+        return false;
+    };
 
     /**
      * Any piston-movable block. Used by Arcane variants (future).

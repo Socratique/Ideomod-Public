@@ -1,5 +1,85 @@
 # Ideomod Changelog
 
+## [2026-03-08] Issue #9, #11 Fixes + Portal Exit Rotation + Issue #5 Struck
+
+Three bug fixes and one new feature. Issue #5 (frame inside-face rendering)
+struck as already resolved.
+
+### Issue #9 Fix: Repulser/Attractor Now Target Framed Oddstone [FIXED]
+
+File: block/piston/RangedPistonUtil.java
+
+Issue: ODDSTONE_ONLY filter predicate checked state.is(ModBlocks.ODDSTONE.get())
+-- bare Oddstone only. Framed Oddstone is a FramedBlock with INNER_STICKY=ODDSTONE
+and was invisible to the Repulser/Attractor scan.
+
+Fix: Expanded ODDSTONE_ONLY predicate from a simple block identity check to a
+lambda that checks two cases:
+  1. state.is(ModBlocks.ODDSTONE.get()) -- bare Oddstone (unchanged)
+  2. state.getBlock() instanceof FramedBlock AND
+     state.getValue(FramedBlock.INNER_STICKY) == StickyType.ODDSTONE.ordinal()
+     -- Framed Oddstone via blockstate property
+
+New imports: FramedBlock, StickyType.
+
+### Issue #11 Fix: Framed Light-Emitting Blocks Now Emit Light [FIXED]
+
+Files: block/frame/FramedBlock.java, block/frame/FramedBlockEntity.java,
+       registry/ModBlocks.java
+
+Issue: Framed glowstone, sea lanterns, etc. did not emit light to surrounding
+blocks. Block texture brightened but lighting engine never propagated outward.
+
+Root cause: Two-part problem.
+  1. No lightLevel predicate in block registration (defaulted to 0).
+  2. Block placed with INNER_LIGHT=0 default state -- lighting engine saw no
+     emission change from air and never queued a light update.
+
+Fix: Three changes:
+  1. INNER_LIGHT IntegerProperty (0-15) added to FramedBlock. Synced by
+     FramedBlockEntity.updateBlockstateFromInner(). Blockstate count:
+     180 -> 2880 per framed block type.
+  2. .lightLevel(state -> state.getValue(FramedBlock.INNER_LIGHT)) added to
+     both framed block registrations in ModBlocks.java.
+  3. getStateForPlacement() reads item NBT and pre-populates INNER_LIGHT
+     (plus INNER_STICKY and INNER_CONDUCTOR) so the first setBlock() has the
+     correct emission value. Lighting engine detects AIR(0)->FRAMED(15)
+     naturally.
+
+Key learning: Minecraft's lighting engine reliably detects emission changes
+during initial placement but is unreliable for subsequent setBlock calls with
+dynamic lightLevel predicates. Set correct values in getStateForPlacement().
+
+### Portal 180-Degree Exit Rotation [IMPLEMENTED]
+
+File: block/portal/OddstonePortalBlock.java
+
+Players now exit Oddstone portals facing away from the destination portal, as
+if walking through a doorway. Added unconditional yaw += 180.0F after existing
+cross-axis rotation:
+  - Same-axis portals: 0 + 180 = 180 degrees (face away)
+  - Cross-axis portals: +/-90 + 180 degrees (face away, axis-adjusted)
+
+### Issue #5 Struck: Frame Inside-Face Rendering [ALREADY FIXED]
+
+Frame JSON models already have inverted cuboid elements for visible inner faces.
+Design doc shows this as [DONE]. Struck from all Known Issues lists.
+
+### Files changed:
+- block/piston/RangedPistonUtil.java -- ODDSTONE_ONLY predicate expanded
+- block/frame/FramedBlock.java -- INNER_LIGHT property, getStateForPlacement()
+- block/frame/FramedBlockEntity.java -- INNER_LIGHT sync, UPDATE_ALL for light,
+  load() immediate sync, checkBlock() call
+- registry/ModBlocks.java -- lightLevel predicate on both framed blocks
+- block/portal/OddstonePortalBlock.java -- 180 degree exit rotation
+
+### Documentation updates:
+- IDEOMOD_CHANGELOG.txt, IDEOMOD_DOCUMENTATION.md, CODEBASE_REFERENCE.md,
+  IDEOMOD_DESIGN.md all updated.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-07] Bug #10 Fix — Immovable Frame Anchor Detection (Feature 7)
 
 Fixed bug #10: active framed blocks with immovable inners (obsidian, crying

@@ -37,10 +37,45 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * This is needed because isStickyBlock() and canStickTo() only receive
  * a BlockState (no position context) and cannot look up the block entity.
  *
+ * INNER LIGHT:
+ * ============
+ * When the inner block emits light (glowstone, sea lantern, etc.), the
+ * block entity syncs the light level to the blockstate's INNER_LIGHT
+ * property. This is needed because Minecraft's lighting engine uses the
+ * lightLevel predicate from BlockBehaviour.Properties, which only receives
+ * a BlockState — no position, no level, no block entity access.
+ *
+ * LIGHTING ENGINE INVALIDATION:
+ * =============================
+ * After changing INNER_LIGHT via setBlock(), we explicitly call
+ * level.getLightEngine().checkBlock(pos) to force the lighting engine
+ * to re-evaluate this position. Without this explicit poke, the engine
+ * may not notice the light change — vanilla's internal light-change
+ * detection in LevelChunk.setBlockState() can miss dynamic lightLevel
+ * predicates that read blockstate properties, because it compares old
+ * and new states but both may evaluate against stale context.
+ *
+ * LIFECYCLE NOTE — BLOCKSTATE SYNC TIMING:
+ * =========================================
+ * During fresh placement, vanilla's lifecycle order is:
+ *   1. setBlock() — places block with default state (INNER_LIGHT=0)
+ *   2. onPlace() — fires BEFORE block entity exists
+ *   3. newBlockEntity() — creates empty BE
+ *   4. BlockEntityTag NBT applied — load() fires, innerBlockId set
+ *   5. onLoad() — fires on chunk load path, NOT guaranteed on placement
+ *
+ * Because onPlace() fires before the BE exists, it can't sync blockstate
+ * properties. The fix is to call updateBlockstateFromInner() from load()
+ * when the level is already available (placement path), AND from onLoad()
+ * when the level becomes available later (chunk load path). Both are
+ * guarded by the server-side + level-exists check so only one actually
+ * fires per placement.
+ *
  * updateBlockstateFromInner() is called from:
- *   - FramedBlock.onPlace() — after item NBT is loaded into the BE
+ *   - setInnerBlock() — programmatic inner block changes
+ *   - load() — when level is available (fresh placement via BlockEntityTag)
+ *   - onLoad() — when level becomes available (chunk load from disk)
  *   - loadMovementData() — after piston restore
- *   - load() via onLoad() — after chunk loading (level available)
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -139,13 +174,21 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     }
 
     /**
-     * Sync the INNER_STICKY and INNER_CONDUCTOR blockstate properties from
-     * the current inner block. Called after any operation that changes the
-     * inner block identity: placement, piston restore, chunk load.
+     * Sync the INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT blockstate
+     * properties from the current inner block. Called after any operation
+     * that changes the inner block identity: placement, piston restore,
+     * chunk load.
      *
      * INNER_STICKY: tracks sticky inner types (slime, honey, odd slime, oddstone)
      * INNER_CONDUCTOR: tracks vanilla metal conductor inners (iron_block, copper_block)
      *   for cross-frame mediation in canStickTo()
+     * INNER_LIGHT: tracks inner block's light emission level (0-15)
+     *   for Minecraft's lighting engine via lightLevel predicate
+     *
+     * When the light value changes, explicitly pokes the lighting engine
+     * via getLightEngine().checkBlock() after the setBlock() call. This
+     * is necessary because vanilla's internal light-change detection in
+     * LevelChunk.setBlockState() can miss dynamic lightLevel predicates.
      *
      * Also preserves ACTIVE and FACING from the existing blockstate.
      */
@@ -164,12 +207,27 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         int conductorValue = conductorMat != null ? conductorMat.toConductorValue() : 0;
         int currentConductor = currentState.getValue(FramedBlock.INNER_CONDUCTOR);
 
-        if (stickyType != currentSticky || conductorValue != currentConductor) {
+        int lightLevel = inner.defaultBlockState().getLightEmission();
+        int currentLight = currentState.getValue(FramedBlock.INNER_LIGHT);
+
+        boolean lightChanged = lightLevel != currentLight;
+
+        if (stickyType != currentSticky || conductorValue != currentConductor
+                || lightChanged) {
             BlockState newState = currentState
                 .setValue(FramedBlock.INNER_STICKY, stickyType)
-                .setValue(FramedBlock.INNER_CONDUCTOR, conductorValue);
-            // Use flag 2 (UPDATE_CLIENTS) — no neighbor cascade needed for this
-            level.setBlock(worldPosition, newState, Block.UPDATE_CLIENTS);
+                .setValue(FramedBlock.INNER_CONDUCTOR, conductorValue)
+                .setValue(FramedBlock.INNER_LIGHT, lightLevel);
+            level.setBlock(worldPosition, newState, Block.UPDATE_ALL);
+
+            // Explicitly tell the lighting engine to re-evaluate this position.
+            // Vanilla's LevelChunk.setBlockState() should do this internally when
+            // it detects a light emission change, but dynamic lightLevel predicates
+            // that read blockstate properties can be missed. This direct poke
+            // guarantees the engine recalculates light propagation.
+            if (lightChanged) {
+                level.getLightEngine().checkBlock(worldPosition);
+            }
         }
     }
 
@@ -185,6 +243,21 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         }
     }
 
+    /**
+     * Load inner block data from NBT. Called in two contexts:
+     *
+     * 1. FRESH PLACEMENT: Vanilla applies BlockEntityTag from the item stack
+     *    after creating the block entity. At this point the level IS available
+     *    (the block is already placed in the world), so we can immediately
+     *    sync blockstate properties including INNER_LIGHT for the lighting engine.
+     *
+     * 2. CHUNK LOAD FROM DISK: level may or may not be available yet. If not,
+     *    onLoad() will handle the blockstate sync when the level becomes available.
+     *
+     * The updateBlockstateFromInner() call is guarded by the standard
+     * level != null && !isClientSide check, so it's safe in both contexts —
+     * it simply no-ops if the level isn't ready yet.
+     */
     @Override
     public void load(CompoundTag tag) {
         super.load(tag);
@@ -192,12 +265,24 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null; // Force re-resolve
         }
+        // Attempt immediate blockstate sync. During fresh placement, the level
+        // is available and this sets INNER_LIGHT (etc.) right away — critical
+        // for the lighting engine to propagate light from the moment of placement.
+        // During chunk load, level is typically null here, so this no-ops and
+        // onLoad() handles it instead.
+        if (level != null && !level.isClientSide() && hasInnerBlock()) {
+            updateBlockstateFromInner();
+        }
     }
 
     /**
      * Called when the block entity's level is set (after chunk load).
      * This is the earliest point where we have both the inner block data
      * (from load()) and a valid level reference for blockstate updates.
+     *
+     * During fresh placement, updateBlockstateFromInner() may have already
+     * run in load() — the dirty check in updateBlockstateFromInner() ensures
+     * no redundant setBlock() calls if the values already match.
      */
     @Override
     public void onLoad() {
@@ -245,7 +330,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null;
             setChanged();
-            // Sync INNER_STICKY and INNER_CONDUCTOR to blockstate after piston restore
+            // Sync INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT to blockstate after piston restore
             updateBlockstateFromInner();
         }
     }

@@ -183,6 +183,11 @@ public class ModBlocks {
      *
      * isRedstoneConductor delegates to the inner block via block entity lookup.
      * pushReaction NORMAL so pistons can move it (IPistonMovable preserves data).
+     *
+     * lightLevel reads INNER_LIGHT from blockstate so the lighting engine
+     * knows this block can emit light when containing glowstone, sea lanterns,
+     * etc. The INNER_LIGHT property is synced by FramedBlockEntity.updateBlockstateFromInner().
+     * FIX 2026-03-07: Issue #11 — framed light-emitting blocks now actually emit light.
      */
     public static final RegistryObject<Block> IRON_FRAMED_BLOCK = BLOCKS.register("iron_framed_block",
             () -> new FramedBlock(FrameMaterial.IRON, BlockBehaviour.Properties.of()
@@ -192,11 +197,15 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()
                     .isRedstoneConductor(FRAMED_REDSTONE_CONDUCTOR)
+                    .lightLevel(state -> state.getValue(FramedBlock.INNER_LIGHT))
             ));
 
     /**
      * Copper Framed Block. Same dynamic mining pattern as Iron Framed Block.
      * Copper frame modifier is 0.5 (slightly less than iron's 0.75).
+     *
+     * lightLevel reads INNER_LIGHT from blockstate — same as Iron Framed Block.
+     * FIX 2026-03-07: Issue #11 — framed light-emitting blocks now actually emit light.
      */
     public static final RegistryObject<Block> COPPER_FRAMED_BLOCK = BLOCKS.register("copper_framed_block",
             () -> new FramedBlock(FrameMaterial.COPPER, BlockBehaviour.Properties.of()
@@ -206,5 +215,6 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
                     .noOcclusion()
                     .isRedstoneConductor(FRAMED_REDSTONE_CONDUCTOR)
+                    .lightLevel(state -> state.getValue(FramedBlock.INNER_LIGHT))
             ));
 }

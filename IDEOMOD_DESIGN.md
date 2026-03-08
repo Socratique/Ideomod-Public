@@ -396,7 +396,6 @@ Framed Blocks use the same FrameActivation system as Frame Blocks. Signal streng
 **Known issues:**
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
 - Item model translucency: translucent inner blocks (glass, slime) render opaque in inventory. Cosmetic only.
-- Framed inner blocks with light emission (glowstone, sea lantern, shroomlight, etc.) may not emit light. getLightEmission() override exists in FramedBlock.java but needs in-game verification. If not working, lightLevel predicate at block registration may also need updating.
 
 **Completed improvements (2026-02-22f):**
 
@@ -709,7 +708,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Uses vanilla block event system for client-server synchronization. Movement runs on both sides for proper animation. |
 
 **Known issues:**
-- Cannot target Framed Oddstone. The ODDSTONE_ONLY filter predicate in RangedPistonUtil checks block identity via state.is(ModBlocks.ODDSTONE) -- bare Oddstone only. Framed Oddstone is a FramedBlock with INNER_STICKY=ODDSTONE and is not recognized by this filter. Fix: expand predicate to also match FramedBlock instances where INNER_STICKY equals StickyType.ODDSTONE.
+- None currently
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -742,7 +741,7 @@ Pulse fires ->
 | Block event sync | [DONE] | Same block event pattern as Repulser for client-server animation. |
 
 **Known issues:**
-- Cannot target Framed Oddstone. Same root cause as Repulser -- ODDSTONE_ONLY predicate in RangedPistonUtil checks block identity only. Fix: expand predicate to also match FramedBlock with INNER_STICKY=ODDSTONE.
+- None currently
 
 **Design notes:**
 - Now extends AbstractRangedPistonBlock (~15 lines). Movement delegated to BlockMoveHelper.
@@ -1379,6 +1378,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Pair exclusivity | [DONE] | Third portal with same address refuses to light. |
 | Redstone-gated activation | [DONE] | All Oddstone must be powered. Prevents partial-frame lighting. |
 | Cross-axis rotation | [DONE] | Player yaw rotated 90 degrees when portals have different axes (X vs Z). Preserves "walking through" feeling. |
+| 180-degree exit rotation | [DONE] | All teleports rotate player 180 degrees so they exit facing away from destination portal -- doorway effect. Stacks with cross-axis rotation. Same-axis: 180 degrees. Cross-axis: 90 + 180 degrees. |
 | Frame re-validation | [DONE] | Deactivation re-validates entire frame instead of reacting to single block state. Prevents false deactivation from unrelated neighbor updates. |
 
 **Known issues:**

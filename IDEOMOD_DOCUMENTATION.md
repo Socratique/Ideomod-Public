@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-07b (known issues: Track signal bleed, Repulser/Attractor framed oddstone targeting, framed light emission delegation [needs verification])*
+*Last updated: 2026-03-08 (known issues: Track signal bleed. Issues #5, #9, #11 resolved. INNER_LIGHT property added. Portal 180-degree exit rotation.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -166,8 +166,8 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
-| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
-| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY. |
+| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
+| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
 
 ### ModItems (DeferredRegister<Item>)
 
@@ -706,10 +706,11 @@ FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrid
 | FACING | DirectionProperty | 6 directions (default NORTH) | Inner block orientation + Framed Odd Slime directional stickiness |
 | INNER_STICKY | IntegerProperty | 0-4 (default 0) | Inner sticky type from StickyType enum: 0=NONE, 1=SLIME, 2=HONEY, 3=ODD_SLIME, 4=ODDSTONE |
 | INNER_CONDUCTOR | IntegerProperty | 0-2 (default 0) | Inner block conductor material: 0=NONE, 1=IRON, 2=COPPER. Enables cross-frame mediation at blockstate level. |
+| INNER_LIGHT | IntegerProperty | 0-15 (default 0) | Inner block light emission level. Read by lightLevel predicate in ModBlocks.java so the lighting engine knows emission without block entity access. |
 
-Total blockstate count: 2 x 6 x 5 x 3 = 180 states per framed block type.
+Total blockstate count: 2 x 6 x 5 x 3 x 16 = 2880 states per framed block type.
 
-FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY and INNER_CONDUCTOR computed by FramedBlockEntity.updateBlockstateFromInner(). INNER_STICKY delegates to `StickyType.fromBlock()`. INNER_CONDUCTOR uses `FrameMaterial.fromVanillaBlock()` + `toConductorValue()`. Called on setInnerBlock(), onLoad(), loadMovementData(), and onPlace().
+FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT are pre-populated in getStateForPlacement() from item NBT (critical for lighting engine to detect emission on first setBlock), and kept in sync by FramedBlockEntity.updateBlockstateFromInner() for piston restores and chunk loads. INNER_STICKY delegates to `StickyType.fromBlock()`. INNER_CONDUCTOR uses `FrameMaterial.fromVanillaBlock()` + `toConductorValue()`. INNER_LIGHT uses `inner.defaultBlockState().getLightEmission()`. updateBlockstateFromInner() called on setInnerBlock(), onLoad(), load() (when level available), and loadMovementData().
 
 ### FrameabilityHelper
 
@@ -903,7 +904,7 @@ This prevents false deactivation from unrelated neighbor updates (levers, redsto
 
 **Linked portals**: Preserves relative position. Calculates player's fractional offset within source portal bounds (0.0 to 1.0 for both horizontal and vertical), applies same fraction to destination portal bounds. Works even if portals are different sizes.
 
-**Cross-axis rotation**: When source and destination portals have different axes (X vs Z), the player's yaw is rotated 90 degrees to face through the destination portal's plane. X-axis to Z-axis: yaw += 90 (clockwise). Z-axis to X-axis: yaw -= 90 (counterclockwise). Same-axis pairs preserve the player's original facing. Uses `player.teleportTo(level, x, y, z, yaw, pitch)`.
+**Cross-axis rotation + 180-degree exit**: All teleports apply a 180-degree yaw rotation so the player exits facing AWAY from the destination portal (doorway effect). Additionally, when source and destination portals have different axes (X vs Z), a 90-degree rotation is applied first to align with the destination axis. Same-axis: 0 + 180 = 180 degrees. Cross-axis: +/-90 + 180 degrees. Uses `player.teleportTo(level, x, y, z, yaw, pitch)`.
 
 **Unlinked portals**: Scatter teleport. Random angle, distance 200-1000 blocks, places on surface. Deals 10 damage (5 hearts).
 
@@ -1328,13 +1329,13 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 2 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. In-world rendering is correct. |
 | ~~3~~ | ~~Framed block transit rendering (Trolley/Repulser/Attractor)~~ | ~~Visual bug~~ | ~~FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.~~ |
 | ~~4~~ | ~~Framed blocks not grabbed by slime during Repulser/Attractor moves~~ | ~~Movement bug~~ | ~~FIXED 2026-03-01. Backward walk grab immunity was firing on both canStickTo calls in the pair, blocking the behind block's passive response. Fixed with call-pair toggle in PistonStructureResolverMixin.~~ |
-| 5 | Frame inside-face rendering | Cosmetic | Frame JSON models need inverted cuboid for visible inner faces |
+| ~~5~~ | ~~Frame inside-face rendering~~ | ~~Cosmetic~~ | ~~FIXED. Inverted cuboid elements added to frame JSON models.~~ |
 | ~~6~~ | ~~Sympathetic framed oddstone transit rendering~~ | ~~Visual bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.~~ |
 | ~~7~~ | ~~Sympathetic retraction with machine-activated framed blocks~~ | ~~Data loss bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.~~ |
 | 8 | Machine Track signal bleeds into attached Machine Blocks via Trolley | Gameplay bug | MachineTrackBlock.java. Track conduction signal passes through Trolley into any Machine Frame stuck to it, incorrectly powering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intentional for the Track-Trolley push system only -- it should not feed into frame activation networks. Fix direction: isolate Track signal from FrameActivation source detection, likely by excluding MachineTrackBlock as a valid activation source in FrameActivation.recalculate(), or by preventing POWER conduction from propagating past non-conduit blocks (Trolleys). |
-| 9 | Repulser/Attractor cannot target Framed Oddstone | Movement bug | RangedPistonUtil.java. ODDSTONE_ONLY filter predicate checks block identity via state.is(ModBlocks.ODDSTONE.get()) -- bare Oddstone only. Framed Oddstone is a FramedBlock instance with INNER_STICKY=ODDSTONE, not an OddstoneBlock, so it fails the predicate. Fix: expand ODDSTONE_ONLY predicate to also match FramedBlock instances where state.getValue(FramedBlock.INNER_STICKY) == StickyType.ODDSTONE.ordinal() (or equivalent). |
+| ~~9~~ | ~~Repulser/Attractor cannot target Framed Oddstone~~ | ~~Movement bug~~ | ~~FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE.~~ |
 | ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
-| 11 | Framed inner blocks with light emission do not emit light | Missing delegation (NEEDS VERIFICATION) | FramedBlock.java. getLightEmission() override EXISTS in FramedBlock (queries inner block's defaultBlockState().getLightEmission()). May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |
+| ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ | May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |
 
 
 ## 15. CONVENTIONS & PATTERNS
