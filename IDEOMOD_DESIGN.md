@@ -284,8 +284,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Machine Family stickiness | [DONE] | Sticks to other Machine Family members (Machine Blocks, Frames, Framed Blocks when activated). Uses IMachineFamily interface. |
-| Anti-signal emission | [DONE] | Powered (redstone-active) Machine Blocks emit anti-signal into adjacent frame networks, suppressing frame activation. Strength = redstone level, decays by 1 per conductor. Binary override: blocks with anti-signal > 0 cannot activate. |
-| Frame network activation | [DONE] | Unpowered Machine Blocks emit activation signal (strength 15) into adjacent frame networks. IFrameBlock conductors propagate, material routing applies. |
+| Anti-signal emission | [DONE] | Only Machine Frames emit anti-signal. Powered (redstone-active) Machine Frames suppress frame activation in adjacent networks. Strength = redstone level, decays by 1 per conductor. Binary override: blocks with anti-signal > 0 cannot activate. Other Machine Family blocks (Track, Trolley, future specializations) never suppress -- they always emit activation. |
+| Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15) into adjacent frame networks. Machine Frames only when unpowered; all others always. IFrameBlock conductors propagate, material routing applies. |
 | Item slot | [DONE] | Single slot. Insert item to specialize. Remove item with empty hand right-click to de-specialize. Item is preserved. |
 
 ---
@@ -300,7 +300,7 @@ Passes activation and stickiness signals along machine networks without adding f
 Directional item transport. Pushes items one block in facing direction per redstone pulse.
 
 **Machine Track:**
-Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Track and Trolley do NOT stick to each other during Track-initiated movement (conditional stickiness -- normal Machine Family stickiness in all other contexts).
+Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track and Trolley do NOT stick to each other during Track-initiated movement (conditional stickiness -- normal Machine Family stickiness in all other contexts).
 
 **Machine Repeater:**
 Three-axis redstone repeater. Receives signal on any face, outputs on the opposite. No locking (removed -- timing/strength disambiguation broken for three-axis; players who need locking use vanilla repeaters).
@@ -460,7 +460,7 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.recalculate() -- redstone-style wipe-and-rebuild from Machine Block sources. |
 | Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
 | Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
-| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Block source. Cross-material stops propagation unless via mediator. Anti-signal suppression via redstone-powered Machine Blocks. |
+| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Cross-material stops propagation unless via mediator. Anti-signal suppression via redstone-powered Machine Frames only. |
 | Vanilla metal conductors | [DONE] | iron_block and copper_block participate in frame activation networks. Activation tracked ephemerally in FrameActivation. Only sticky when activated. |
 | Cross-frame mediation | [DONE] | Framed blocks with cross-material inner conductor (e.g., copper-framed iron) are mediators -- pass ALL materials when activated. Unlimited mediator hops. |
 | Activation-gated stickiness | [DONE] | Frame-to-frame stickiness requires ACTIVE on both sides. Machine blocks only grab active frames. |
@@ -472,8 +472,8 @@ All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.re
 1. DISCOVER: BFS from change point through all connected conductors (any material, active or not)
 2. WIPE: Set all discovered IFrameBlocks to active=false, clear vanilla metal activation set
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
-4. PROPAGATE ACTIVATION: BFS from unpowered machines, strength 15 decaying by 1. Material routing: conductors only accept matching materials. Mediators pass ALL materials.
-5. PROPAGATE ANTI-SIGNAL: BFS from powered machines, strength = redstone level, decaying by 1. Binary override.
+4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Material routing: conductors only accept matching materials. Mediators pass ALL materials.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone level, decaying by 1. Binary override.
 6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
 
 Machine Blocks also call FrameActivation.recalculate() in their own lifecycle hooks.

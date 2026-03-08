@@ -33,12 +33,20 @@ import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
  * ALL adjacent Trolleys are pushed in that direction, not just the one
  * on the push face.
  *
- * REDSTONE CONDUCTION:
- * ====================
- * Conducts redstone signal with decay of 1 per block. Track-to-Track chains
- * work. Track-to-Machine Frame chains are broken (Machine Frame no longer
- * conducts). The connection will restore when the Machine Conductor
- * specialization is implemented (insert redstone dust into Machine Frame).
+ * REDSTONE CONDUCTION (ISOLATED):
+ * ===============================
+ * Track maintains a POWER blockstate (0-15, decay -1 per block) for internal
+ * Track-to-Track signal chaining. This is NOT exposed to vanilla's redstone
+ * system — isSignalSource=false, getSignal=0, getDirectSignal=0.
+ *
+ * Track reads signal from:
+ *   - Other Tracks: direct blockstate POWER read (via isRedstoneConduit check)
+ *   - Tagged REDSTONE_COMPONENTS: vanilla signal query (levers, repeaters, etc.)
+ *
+ * Track does NOT output signal to:
+ *   - Vanilla redstone dust, pistons, lamps, or any non-Track block
+ *   - Solid blocks (no weak power leakage through Trolleys or stone)
+ *   - Machine Frames (prevents accidental frame deactivation via anti-signal)
  *
  * STICKINESS:
  * ===========
@@ -94,22 +102,35 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
     }
 
     // ========================================================================
-    // REDSTONE CONDUCTION (independent -- Track conducts on its own)
+    // REDSTONE ISOLATION
     // ========================================================================
+    // Track does NOT expose its POWER to vanilla's redstone system.
+    // isSignalSource=false, getSignal=0, getDirectSignal=0.
+    //
+    // Track-to-Track conduction works via direct blockstate reads in
+    // calculatePower() — it checks neighbor POWER values directly, bypassing
+    // vanilla's signal query system entirely. This means:
+    //   - Tracks still chain signal to each other (decay -1 per block)
+    //   - Tracks still accept input from tagged REDSTONE_COMPONENTS (levers etc.)
+    //   - Tracks do NOT leak power into adjacent solid blocks (no weak power)
+    //   - Tracks do NOT power pistons, lamps, or anything else
+    //   - Trolleys cannot relay Track power to Machine Frames
+    //
+    // The POWER blockstate is purely internal bookkeeping for the Track network.
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        return true;
+        return false;
     }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        return state.getValue(POWER);
+        return 0;
     }
 
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        return state.getValue(POWER);
+        return 0;
     }
 
     // ========================================================================

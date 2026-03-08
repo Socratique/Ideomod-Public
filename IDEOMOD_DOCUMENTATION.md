@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-08 (known issues: Track signal bleed. Issues #5, #9, #11 resolved. INNER_LIGHT property added. Portal 180-degree exit rotation.)*
+*Last updated: 2026-03-08 (all known issues resolved. INNER_LIGHT property added. Portal 180-degree exit rotation.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -624,9 +624,9 @@ The Frame Activation system controls when Frame Blocks and Framed Blocks become 
 
 ### Signal Strength Model
 
-**Activation signal**: Unpowered Machine Blocks emit activation signal at strength 15. Each conductor block decays the signal by 1 (like redstone dust). Maximum activation range: 15 blocks from source. Each block records the strongest signal received from any path (shortest path wins).
+**Activation signal**: All Machine Family blocks (Machine Frames, Tracks, Trolleys, future specializations) are activation sources. Machine Frames emit activation at strength 15 only when unpowered (not receiving redstone). All other Machine Family blocks always emit activation at strength 15 regardless of redstone state. Each conductor block decays the signal by 1 (like redstone dust). Maximum activation range: 15 blocks from source. Each block records the strongest signal received from any path (shortest path wins).
 
-**Anti-activation signal**: A Machine Block receiving redstone power becomes a SUPPRESSOR. It stops emitting activation entirely and instead emits an anti-signal with strength equal to its redstone input level (1-15). Anti-signal also decays by 1 per conductor. Any block reached by anti-signal (strength > 0) is DEACTIVATED, regardless of how strong the activation signal from other sources is. This is a binary override, not subtraction.
+**Anti-activation signal**: Only MachineFrameBlock can emit anti-signal -- no other Machine Family member (Track, Trolley, future specializations) ever suppresses frames. A Machine Frame receiving redstone power becomes a SUPPRESSOR. It stops emitting activation entirely and instead emits an anti-signal with strength equal to its redstone input level (1-15). Anti-signal also decays by 1 per conductor. Any block reached by anti-signal (strength > 0) is DEACTIVATED, regardless of how strong the activation signal from other sources is. This is a binary override, not subtraction. All other Machine Family blocks always emit activation at strength 15 regardless of their redstone state.
 
 **Example**: Machine -- 15 frames -- Machine(redstone=5). The left machine sends activation 15, 14, 13... 1 across all 15 frames. The right machine sends anti-signal 5, 4, 3, 2, 1 into the last 5 frames. Result: first 10 frames active, last 5 suppressed.
 
@@ -651,8 +651,8 @@ When `recalculate()` is called:
 1. **DISCOVER**: BFS from the change point through all connected conductors (IFrameBlock + vanilla metals, any material, active or inactive). Finds the entire network.
 2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade). Clear vanilla metal positions from activatedVanillaMetals set.
 3. **FIND SOURCES**: For every block in the network AND the change position, check 6 neighbors for Machine Blocks.
-4. **PROPAGATE ACTIVATION**: From each unpowered Machine Block, BFS with signal strength 15. Each entry carries available materials + strength. A conductor accepts if its conductive materials intersect the available materials. Mediators pass ALL materials. Signal decays by 1 per hop. Records max strength per position.
-5. **PROPAGATE ANTI-SIGNAL**: From each powered Machine Block, BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
+4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts if its conductive materials intersect the available materials. Mediators pass ALL materials. Signal decays by 1 per hop. Records max strength per position.
+5. **PROPAGATE ANTI-SIGNAL**: From powered Machine Frames ONLY (no other Machine Family blocks), BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
 6. **APPLY**: For each network block: activate if activation > 0 AND anti-signal == 0. IFrameBlocks get ACTIVE=true. Vanilla metals get added to activatedVanillaMetals.
 
 ### Vanilla Metal Activation Tracking
@@ -1042,9 +1042,9 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class renamed 
 
 **Piston movement**: Machine Frame is movable by pistons (`PushReaction.NORMAL` in properties). PistonBaseBlockMixin bypasses vanilla's block entity check for IPistonMovable blocks. Data preserved through all movement types (vanilla piston push/pull, Repulser, Attractor, Track). See section 6 IPistonMovable for full pipeline details.
 
-### Machine Track -- Redstone Conduction + Trolley Push
+### Machine Track -- Isolated Redstone + Trolley Push
 
-Non-directional block. Part of Machine Family (sticks to Machine Block, Trolley, other Tracks). Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable). On rising edge (POWER 0 -> nonzero), checks each face for actual signal sources and pushes ALL adjacent Trolleys in the opposite direction. Uses BlockMoveHelper for piston-style movement with animation. Block event param encodes pushDir + trolleyFace via bit shifting.
+Non-directional block. Part of Machine Family (sticks to Machine Block, Trolley, other Tracks). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Track reads input from other Tracks (direct blockstate read via isRedstoneConduit) and tagged REDSTONE_COMPONENTS (levers, repeaters, etc.). Track does not output signal to any non-Track block -- no weak power leakage through solid blocks. On rising edge (POWER 0 -> nonzero), checks each face for actual signal sources and pushes ALL adjacent Trolleys in the opposite direction. Uses BlockMoveHelper for piston-style movement with animation. Block event param encodes pushDir + trolleyFace via bit shifting.
 
 ### Machine Trolley -- Passive Cargo Carrier
 
@@ -1332,7 +1332,7 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~5~~ | ~~Frame inside-face rendering~~ | ~~Cosmetic~~ | ~~FIXED. Inverted cuboid elements added to frame JSON models.~~ |
 | ~~6~~ | ~~Sympathetic framed oddstone transit rendering~~ | ~~Visual bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.~~ |
 | ~~7~~ | ~~Sympathetic retraction with machine-activated framed blocks~~ | ~~Data loss bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.~~ |
-| 8 | Machine Track signal bleeds into attached Machine Blocks via Trolley | Gameplay bug | MachineTrackBlock.java. Track conduction signal passes through Trolley into any Machine Frame stuck to it, incorrectly powering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intentional for the Track-Trolley push system only -- it should not feed into frame activation networks. Fix direction: isolate Track signal from FrameActivation source detection, likely by excluding MachineTrackBlock as a valid activation source in FrameActivation.recalculate(), or by preventing POWER conduction from propagating past non-conduit blocks (Trolleys). |
+| ~~8~~ | ~~Machine Track signal bleeds into attached Machine Blocks via Trolley~~ | ~~Gameplay bug~~ | ~~FIXED 2026-03-08. Two-part fix: (1) MachineTrackBlock redstone isolation -- isSignalSource=false, getSignal=0, getDirectSignal=0. Track POWER is now purely internal bookkeeping read via direct blockstate access in calculatePower(). No vanilla signal leakage through solid blocks. (2) FrameActivation suppression rule -- only MachineFrameBlock can emit anti-signal. All other Machine Family blocks always emit activation regardless of redstone state. Files: MachineTrackBlock.java, FrameActivation.java.~~ |
 | ~~9~~ | ~~Repulser/Attractor cannot target Framed Oddstone~~ | ~~Movement bug~~ | ~~FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE.~~ |
 | ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
 | ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ | May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |

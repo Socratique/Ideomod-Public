@@ -1,5 +1,77 @@
 # Ideomod Changelog
 
+## [2026-03-08b] Issue #8 Fix -- Track-Trolley Signal Bleed [FIXED]
+
+Resolved the last tracked known issue: Machine Track redstone signal bleeding
+through Trolleys into Machine Frames, causing unintended frame network
+deactivation.
+
+### Root cause:
+
+Two problems combined:
+
+1. MachineTrackBlock exposed its POWER value to vanilla's redstone system via
+   isSignalSource()=true, getSignal()=POWER, getDirectSignal()=POWER. This
+   meant solid blocks adjacent to a powered Track (like Trolleys) picked up
+   "weak power" through vanilla's standard mechanics. A Machine Frame on the
+   other side of the Trolley then saw that weak power via getBestNeighborSignal()
+   and flipped into suppressor mode, emitting anti-signal into its frame network.
+
+2. FrameActivation treated ALL Machine Family blocks identically for both
+   activation and suppression. Any IMachineFamily member receiving redstone
+   power would become a suppressor -- but only Machine Frames should have
+   that authority.
+
+### Fix part 1: Track redstone isolation (MachineTrackBlock.java)
+
+isSignalSource() now returns false. getSignal() and getDirectSignal() both
+return 0. Track's POWER blockstate is now purely internal bookkeeping.
+
+Track-to-Track conduction is unaffected because calculatePower() reads
+neighbor POWER values directly from the blockstate (via isRedstoneConduit
+check), completely bypassing vanilla's signal query system. Tagged
+REDSTONE_COMPONENTS (levers, repeaters, etc.) still feed into Tracks via
+vanilla's level.getSignal() call.
+
+Result: Track POWER cannot leak through solid blocks. Trolleys, stone, and
+all other non-Track blocks see zero signal from Tracks.
+
+### Fix part 2: Machine Frame-only suppression (FrameActivation.java)
+
+Step 4 (activation propagation) now branches on block type:
+- MachineFrameBlock: only emits activation when unpowered (existing behavior)
+- All other Machine Family blocks: ALWAYS emit activation at strength 15,
+  regardless of their redstone state
+
+Step 5 (anti-signal propagation) now skips any source that is not a
+MachineFrameBlock. Only Machine Frames can suppress frame networks.
+
+This future-proofs all Machine specializations (Clock, Repeater, Pulser, etc.)
+-- their redstone activity stays in their own lane and never accidentally
+deactivates frame networks they're adjacent to.
+
+### Design rule established:
+
+- Any Machine Family block = frame activation source (always strength 15)
+- Only Machine Frame = can become frame suppressor when receiving redstone
+- Track POWER = private to Track network, invisible to vanilla redstone
+- Machine Frame has no POWER property and is not a redstone conduit
+
+### Files changed:
+- MachineTrackBlock.java: isSignalSource=false, getSignal=0, getDirectSignal=0
+- FrameActivation.java: steps 4-5 branch on MachineFrameBlock instanceof
+
+### Documentation sync:
+- IDEOMOD_DOCUMENTATION.md: issue #8 resolved, Machine Track section updated,
+  anti-signal and algorithm descriptions updated to specify Machine Frame only
+- CODEBASE_REFERENCE.md: issue #8 resolved, Track and FrameActivation
+  descriptions updated
+- IDEOMOD_DESIGN.md: anti-signal emission, frame network activation, activation
+  chaining, and Machine Track descriptions updated
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-08] Issue #9, #11 Fixes + Portal Exit Rotation + Issue #5 Struck
 
 Three bug fixes and one new feature. Issue #5 (frame inside-face rendering)

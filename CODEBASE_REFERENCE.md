@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-08 (known issues: Track signal bleed. Issues #5, #9, #11 resolved.)*
+*Last updated: 2026-03-08 (all known issues resolved.)*
 
 ---
 
@@ -193,7 +193,7 @@ Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Fam only grabs activ
 
 **RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Set before `new PistonStructureResolver()`, cleared in finally block.
 
-**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()` to avoid weak power misfires. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
+**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks via direct blockstate access and from tagged REDSTONE_COMPONENTS via vanilla signal query. Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
@@ -263,7 +263,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 **IMachineFamily interface** (`block/machine/IMachineFamily.java`): Marker interface for Machine Family blocks. Provides static helpers `isMachineFamily(Block)` (checks `instanceof IMachineFamily`) and `canMachineFamilyStickTo(BlockState)`. Frame family check in canMachineFamilyStickTo requires `FrameActivation.isActive(other)` -- machine blocks only grab active frames. All three machine blocks implement this interface.
 
-**Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- blocks that conduct POWER (MachineFrameBlock, MachineTrackBlock).
+**Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- blocks that conduct POWER (MachineTrackBlock only). Machine Frame does not conduct redstone.
 
 **Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.recalculate(level, pos)` to trigger frame network wipe-and-rebuild.
 
@@ -282,8 +282,8 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 1. DISCOVER: BFS from change point through all conductors (IFrameBlock + vanilla metals, any material/state)
 2. WIPE: Set all IFrameBlocks to ACTIVE=false, clear vanilla metal activation set
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
-4. PROPAGATE ACTIVATION: BFS from unpowered machines, strength 15 decaying by 1 per block. Each entry carries available materials + strength. Mediators (framed blocks with cross-material inner conductor) pass ALL materials.
-5. PROPAGATE ANTI-SIGNAL: BFS from powered machines, strength = redstone input level, decaying by 1. Binary override: any block reached = deactivated.
+4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate regardless of redstone state. Each entry carries available materials + strength. Mediators (framed blocks with cross-material inner conductor) pass ALL materials.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone input level, decaying by 1. Binary override: any block reached = deactivated.
 6. APPLY: Block activates only if activation > 0 AND anti-signal == 0. IFrameBlocks get ACTIVE=true, vanilla metals added to activatedVanillaMetals set.
 
 Max range: 15 blocks from source. Public queries: `isVanillaMetalActivated(pos)`, `isActivatedConductor(state, pos)`, `isActive(state)`.
@@ -320,9 +320,9 @@ Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICK
 
 **MovingFrameData**: Client-side ConcurrentHashMap<BlockPos, FrameTransitInfo>. FrameTransitInfo record contains innerBlockId, facing, innerSticky. Populated by PistonBaseBlockClientMixin before vanilla destroys block entities. Read by transit renderer mixin.
 
-### 8. Machine Track (conduction + Trolley push)
+### 8. Machine Track (isolated redstone + Trolley push)
 
-Non-directional Machine Family block. Conducts redstone like Machine Block (POWER 0-15, decay by 1, interoperable chains). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement. Signal direction detected via direct source interrogation (not vanilla hasSignal).
+Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 1) for Track-to-Track chaining only. NOT exposed to vanilla redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads from other Tracks via direct blockstate access and tagged REDSTONE_COMPONENTS via vanilla signal query. On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement.
 
 ### 9. Machine Trolley (passive cargo)
 
@@ -381,7 +381,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 5. ~~**Frame inside-face rendering**~~ -- FIXED. Inverted cuboid elements added to frame JSON models.
 6. ~~**Sympathetic framed oddstone transit rendering**~~ -- FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.
 7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
-8. **Machine Track signal bleeds into attached Machine Blocks via Trolley** -- Track conduction passes through Trolley into any Machine Frame stuck to it, incorrectly triggering FrameActivation and deactivating held frames on Trolley movement. Track conduction is intended only for the Track-Trolley push system. Fix: isolate Track from FrameActivation source detection in FrameActivation.recalculate() or guard POWER propagation past non-conduit blocks. File: MachineTrackBlock.java, FrameActivation.java.
+8. ~~**Machine Track signal bleeds into attached Machine Blocks via Trolley**~~ -- FIXED 2026-03-08. Two-part fix: (1) Track redstone isolation -- isSignalSource=false, getSignal=0, getDirectSignal=0. POWER is internal bookkeeping only, read via direct blockstate access. (2) FrameActivation suppression -- only MachineFrameBlock emits anti-signal; all other Machine Family blocks always activate. File: MachineTrackBlock.java, FrameActivation.java.
 9. ~~**Repulser/Attractor cannot target Framed Oddstone**~~ -- FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
 10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
 11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.

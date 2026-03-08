@@ -26,7 +26,9 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *
  * ANTI-ACTIVATION SIGNAL:
  * =======================
- * - A Machine Block receiving redstone power becomes a SUPPRESSOR:
+ * - ONLY MachineFrameBlock can emit anti-signal. No other Machine Family
+ *   member (Track, Trolley, future specializations) ever suppresses frames.
+ * - A Machine Frame receiving redstone power becomes a SUPPRESSOR:
  *   - It stops emitting activation signal entirely
  *   - It emits an anti-activation signal with strength = redstone level
  *   - Anti-signal decays by 1 per conductor block, same as activation
@@ -52,11 +54,14 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * 1. DISCOVER: BFS from change point through all conductors.
  * 2. WIPE: Set all IFrameBlock to ACTIVE=false, clear vanilla metal map.
  * 3. FIND SOURCES: Find Machine Blocks adjacent to network.
- * 4. ACTIVATE: BFS from unpowered machines, strength 15 decaying by 1.
+ * 4. ACTIVATE: BFS from activation sources. Machine Frames only activate
+ *    when unpowered; all other Machine Family blocks always activate.
+ *    Strength 15 decaying by 1 per conductor.
  *    Each entry carries available materials + signal strength.
  *    Each block records the max strength received.
- * 5. SUPPRESS: BFS from powered machines, anti-strength = redstone level,
- *    decaying by 1. Any block reached by anti-signal is deactivated.
+ * 5. SUPPRESS: BFS from powered Machine Frames ONLY, anti-strength =
+ *    redstone level, decaying by 1. Any block reached by anti-signal
+ *    is deactivated. Other Machine Family blocks never suppress.
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
  *    no anti-signal.
  *
@@ -145,25 +150,42 @@ public class FrameActivation {
             return;
         }
 
-        // Step 4: Propagate activation signal from unpowered machines
-        // Each position maps to its maximum received signal strength
+        // Step 4: Propagate activation signal from machines
+        // Each position maps to its maximum received signal strength.
+        //
+        // SUPPRESSION RULE: Only MachineFrameBlock can suppress frame networks.
+        // All other Machine Family blocks (Track, Trolley, future specializations)
+        // ALWAYS emit activation regardless of their redstone state. This prevents
+        // Track redstone conduction, Clock pulses, Repeater signals, etc. from
+        // accidentally deactivating frame networks they're adjacent to.
         Map<Long, Integer> activationStrength = new HashMap<>();
 
         for (BlockPos machinePos : machineSources) {
-            int redstonePower = level.getBestNeighborSignal(machinePos);
-            if (redstonePower == 0) {
-                // Unpowered: emit activation at strength 15
+            BlockState machineState = level.getBlockState(machinePos);
+            boolean isMachineFrame = machineState.getBlock() instanceof MachineFrameBlock;
+
+            if (isMachineFrame) {
+                // Machine Frame: only emits activation when NOT receiving redstone
+                int redstonePower = level.getBestNeighborSignal(machinePos);
+                if (redstonePower == 0) {
+                    propagateSignal(level, machinePos, MAX_SIGNAL_STRENGTH, activationStrength);
+                }
+            } else {
+                // All other Machine Family blocks: always emit activation
                 propagateSignal(level, machinePos, MAX_SIGNAL_STRENGTH, activationStrength);
             }
         }
 
-        // Step 5: Propagate anti-activation signal from powered machines
+        // Step 5: Propagate anti-activation signal from powered Machine Frames ONLY
         Map<Long, Integer> antiStrength = new HashMap<>();
 
         for (BlockPos machinePos : machineSources) {
+            BlockState machineState = level.getBlockState(machinePos);
+            if (!(machineState.getBlock() instanceof MachineFrameBlock)) continue;
+
             int redstonePower = level.getBestNeighborSignal(machinePos);
             if (redstonePower > 0) {
-                // Powered: emit anti-signal at redstone strength
+                // Powered Machine Frame: emit anti-signal at redstone strength
                 propagateSignal(level, machinePos, redstonePower, antiStrength);
             }
         }
