@@ -1,5 +1,85 @@
 # Ideomod Changelog
 
+## [2026-03-09] Machine Specialization System -- Universal Block Swap + Type-Aware Stickiness
+
+Major rework of the Machine Family system. Every specialization is now its own
+registered block with a shared block entity, GUI, and specialization swap logic.
+The Machine Frame is the universal connector; specializations only stick to their
+own type + Machine Frames + Frame Family.
+
+### New architecture: Specialization as distinct blocks with shared block entity
+
+All Machine Family blocks (Machine Frame, Machine Track, Machine Trolley, and
+future specializations) share MachineFrameBlockEntity -- a single-slot container
+that stores the specialization item. Each specialization is a unique registered
+block implementing EntityBlock and IMachineFamily with a MachineType.
+
+### New files:
+- MachineType.java: Enum identifying each specialization for stickiness grouping.
+  FRAME is the universal connector. canStickToMachineType() encodes the rule.
+- MachineSwapHelper.java: Central swap utility. Item<->Block registry,
+  checkAndSwap(), createPreloadedStack(), createDrop(), createCloneStack().
+- PositionBoundContainer.java: Container backed by Level+BlockPos. Auto-resolves
+  to current BE at position. Survives block swaps seamlessly.
+
+### Modified files:
+- IMachineFamily.java: Added getMachineType(). canMachineFamilyStickTo() now
+  takes MachineType for type-aware stickiness.
+- MachineFrameBlock.java: MachineType.FRAME. getDrops() conditional NBT.
+  getCloneItemStack() via registry. setPlacedBy() swap trigger.
+- MachineFrameBlockEntity.java: Shared by all machine blocks. Swap trigger on
+  slot change. setItemDirect() bypass. Dynamic getDisplayName().
+- MachineFrameMenu.java: Position-bound via PositionBoundContainer.
+- MachineFrameScreen.java: Dynamic title via renderLabels() override.
+- MachineTrackBlock.java: Now EntityBlock with GUI. MachineType.TRACK.
+  Frame activation hooks. pushReaction(NORMAL) for IPistonMovable.
+- MachineTrolleyBlock.java: Same treatment. MachineType.TROLLEY.
+- ModBlockEntities.java: MACHINE_FRAME accepts Track + Trolley.
+- ModBlocks.java: pushReaction(NORMAL) on Track and Trolley.
+- ModCreativeTabs.java: Pre-loaded stacks for specializations.
+- Ideomod.java: MachineSwapHelper.registerMappings() call.
+- MovementScanHelper.java: Fixed scanStickyGroup BFS visited tracking.
+
+### Specialization item mapping (currently implemented):
+  Powered Rail -> Machine Track (MachineType.TRACK)
+  Minecart -> Machine Trolley (MachineType.TROLLEY)
+
+### Stickiness model change -- MachineType isolation:
+  OLD: All Machine Family blocks stick to all other Machine Family blocks.
+  NEW: Each specialization sticks to same-type + Machine Frame (FRAME) only.
+  - Track <-> Track: YES | Track <-> Trolley: NO | Track <-> Frame: YES
+  - Machine Frame sticks to ALL machine types (universal bridge)
+  Inter-specialization isolation handled by canStickTo (Layer 1).
+  Grab immunity rules unchanged.
+
+### GUI architecture -- PositionBoundContainer:
+  Menu holds Level + BlockPos. Container resolves to current BE on every call.
+  Block swaps create new BE at same position; menu auto-resolves. No close/reopen.
+  Title updates live via MachineFrameScreen.renderLabels() reading block each frame.
+
+### Bug fix: scanStickyGroup BFS visited tracking (MovementScanHelper.java)
+  Positions failing stickiness check were marked "visited" permanently. If a
+  position was first reached via a non-sticking neighbor (Track checking Trolley),
+  it was never rechecked from a valid path (Frame above Trolley). Fix: only mark
+  positions as settled when added to group or confirmed air. Failed checks leave
+  position eligible for re-evaluation.
+
+### Loot tables updated:
+  machine_block.json, machine_track.json, machine_trolley.json -- simple self-drop.
+  NBT preservation handled in code via getDrops() with conditional BlockEntityTag.
+
+### Challenges resolved:
+1. GUI kicked player out on swap -- fixed with PositionBoundContainer
+2. Double drops -- fixed: getDrops() override is sole drop mechanism
+3. Empty NBT on placed blocks -- fixed: conditional NBT only when slot has content
+4. Creative items had empty slots -- fixed: createPreloadedStack()
+5. GUI title not updating -- fixed: dynamic renderLabels()
+6. Middle-click not copying NBT -- fixed: registry-based createCloneStack()
+7. Item invisible after swap -- fixed: PositionBoundContainer (no stale refs)
+8. Retraction data loss for mixed-type branches -- fixed: BFS visited tracking
+
+Written by Claude, directed and guided by The Ideomancer.
+
 ## [2026-03-08b] Issue #8 Fix -- Track-Trolley Signal Bleed [FIXED]
 
 Resolved the last tracked known issue: Machine Track redstone signal bleeding

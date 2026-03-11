@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-08 (all known issues resolved. INNER_LIGHT property added. Portal 180-degree exit rotation.)*
+*Last updated: 2026-03-09 (Machine Specialization system: MachineType-aware stickiness, PositionBoundContainer GUI, block swap system, specialization as distinct blocks.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -71,12 +71,16 @@ com.ideomancer.ideomod
   |     |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
   |     |     \-- FramedBlockLoot.java         Helper for manual drop creation
   |     |-- machine/
-  |     |     |-- IMachineFamily.java          Interface: marker for Machine Family blocks.
-  |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI. Implements IMachineFamily.
-  |     |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
-  |     |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
-  |     |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys on redstone signal. Implements IMachineFamily.
-  |     |     \-- MachineTrolleyBlock.java     Passive Machine Family cargo carrier. Implements IMachineFamily.
+  |     |     |-- IMachineFamily.java          Interface: getMachineType() + canMachineFamilyStickTo(type, state).
+  |     |     |-- MachineType.java             Enum: FRAME, TRACK, TROLLEY, etc. canStickToMachineType().
+  |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
+  |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
+  |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
+  |     |     |-- MachineFrameBlock.java       MachineType.FRAME. Universal connector. EntityBlock + GUI.
+  |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
+  |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
+  |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
+  |     |     \-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -278,7 +282,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock, and FramedBlock with INNER_STICKY matching any of SLIME/HONEY/ODD_SLIME/ODDSTONE. Now uses `StickyType.of()` to classify blocks and `StickyType.ODDSTONE.canGrab()` for grab decisions. False for everything else (including MachineBlock, Frame Family without sticky inner).
 
-**Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All implement IMachineFamily and delegate to `IMachineFamily.canMachineFamilyStickTo()`. Returns true for any Machine Family block, Frame Family block (via `FrameActivation.isFrameFamily()`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else.
+**Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All implement IMachineFamily with a MachineType. `canStickTo()` delegates to `IMachineFamily.canMachineFamilyStickTo(myType, other)`. Machine Frame (MachineType.FRAME) returns true for ANY Machine Family block. Specializations return true only for same-type + FRAME. All types return true for Frame Family (via `FrameActivation.isActive(other)`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. Inter-specialization isolation (Track doesn't stick to Trolley) handled at Layer 1, not by grab immunity.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
@@ -1025,30 +1029,45 @@ The `isRelevantForAnyDefinition()` filter ensures only frame/core block placemen
 | **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. Uses `StickyType.of()` for classification and `StickyType.ODDSTONE.canGrab()` for grab decisions. Reverse grabs blocked by immunity rules 1-3. |
 | **Portal frame** | `neighborChanged()` delegates to `OddstonePortalHandler.onNeighborChanged()`. `onRemove()` delegates to `OddstonePortalHandler.onBlockRemoved()`. |
 
-### Machine Frame -- 3 Features + Machine Family Base
+### Machine Frame -- Universal Connector + Machine Family Base
 
-Registry ID: `machine_block` (unchanged for world compatibility). Class renamed from MachineBlock to MachineFrameBlock. Implements `IMachineFamily` interface.
+Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock. Implements `IMachineFamily` with `MachineType.FRAME`.
 
 | Feature | Implementation |
 |---------|---------------|
-| **Selective stickiness** | `isStickyBlock()` returns true. Permissive `canStickTo()` delegates to `IMachineFamily.canMachineFamilyStickTo()` (true for Machine Family + all slime types). Immunity rules 4-6 block Machine Family from grabbing slime types. Net result: only grabs other Machine Family blocks, but slime/honey/odd slime CAN grab it. |
-| **Redstone conduction** | POWER property (IntegerProperty 0-15). `isSignalSource()` returns true. `getSignal()`/`getDirectSignal()` return current power. `calculatePower()` checks all 6 neighbors -- takes signal from conduit blocks (`isRedstoneConduit()`: MachineFrameBlock or MachineTrackBlock, decayed by 1) or from REDSTONE_COMPONENTS tag members. Static `isUpdating` flag prevents recursion during `neighborChanged()`. Color via tintIndex: `getPowerColor(power)` interpolates RGB from (80,80,80) at 0 to (255,48,48) at 15. |
-| **Block entity with GUI** | MachineFrameBlockEntity: single item slot. Right-click opens GUI. Insert item to specialize, remove to revert to blank chassis. Implements IPistonMovable for data preservation during piston moves. `onRemove()` drops contents only when broken (not when moved by piston). |
+| **Universal stickiness** | MachineType.FRAME sticks to ALL machine types via `canStickToMachineType()`. Also sticks to Frame Family (active) and is permissive to slime/honey/odd_slime (grab immunity blocks reverse). |
+| **Block entity with GUI** | Shares MachineFrameBlockEntity with all specializations. PositionBoundContainer keeps GUI open across swaps. Right-click opens universal machine GUI. |
+| **Specialization swap** | When slot contents change, MachineSwapHelper.checkAndSwap() determines target block from item registry. Block replaced in-world, item transferred to new BE via setItemDirect(). |
+| **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Frame emits anti-signal. All other specializations always activate. |
+| **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.recalculate(). |
+| **Drop preservation** | getDrops() adds BlockEntityTag only when slot has content. Empty frames drop tagless. getCloneItemStack() uses registry-based createCloneStack() (client-safe). |
+| **Piston movement** | PushReaction.NORMAL. IPistonMovable preserves slot contents through all move types. |
 
-**Static helpers** (used by all Machine Family blocks):
-- `isMachineFamily(Block)` -- true for MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock
-- `isRedstoneConduit(Block)` -- true for MachineFrameBlock, MachineTrackBlock (blocks that conduct POWER)
-- `canMachineFamilyStickTo(BlockState)` -- shared canStickTo logic for the whole family
+**Static helpers** (used by other classes):
+- `isMachineFamily(Block)` -- delegates to IMachineFamily.isMachineFamily()
+- `isRedstoneConduit(Block)` -- true for MachineTrackBlock only
 
-**Piston movement**: Machine Frame is movable by pistons (`PushReaction.NORMAL` in properties). PistonBaseBlockMixin bypasses vanilla's block entity check for IPistonMovable blocks. Data preserved through all movement types (vanilla piston push/pull, Repulser, Attractor, Track). See section 6 IPistonMovable for full pipeline details.
+**IMachineFamily interface**: Provides `getMachineType()` for type-aware stickiness. Static `canMachineFamilyStickTo(MachineType myType, BlockState other)` checks: (1) other Machine Family -- types must match or one must be FRAME, (2) Frame Family -- must be active, (3) slime/honey/odd_slime -- permissive for grab immunity.
+
+**MachineSwapHelper**: Central swap utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley). `checkAndSwap()` with isSwapping ThreadLocal guard. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+
+**PositionBoundContainer**: Container backed by Level + BlockPos. Every method call does `level.getBlockEntity(pos)` and forwards to the current MachineFrameBlockEntity. Survives block swaps automatically. Used by MachineFrameMenu on both server and client sides.
 
 ### Machine Track -- Isolated Redstone + Trolley Push
 
-Non-directional block. Part of Machine Family (sticks to Machine Block, Trolley, other Tracks). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Track reads input from other Tracks (direct blockstate read via isRedstoneConduit) and tagged REDSTONE_COMPONENTS (levers, repeaters, etc.). Track does not output signal to any non-Track block -- no weak power leakage through solid blocks. On rising edge (POWER 0 -> nonzero), checks each face for actual signal sources and pushes ALL adjacent Trolleys in the opposite direction. Uses BlockMoveHelper for piston-style movement with animation. Block event param encodes pushDir + trolleyFace via bit shifting.
+Registry ID: `machine_track`. Class: MachineTrackBlock. Implements `IMachineFamily` with `MachineType.TRACK` + `EntityBlock`.
+
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing powered rail in slot). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). On rising edge, pushes ALL adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style movement.
+
+Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.recalculate().
 
 ### Machine Trolley -- Passive Cargo Carrier
 
-Non-directional block. Part of Machine Family. No active behavior -- just stickiness. Pushed by Tracks. Carries anything stuck to it via Machine Family or slime stickiness. Does NOT conduct redstone.
+Registry ID: `machine_trolley`. Class: MachineTrolleyBlock. Implements `IMachineFamily` with `MachineType.TROLLEY` + `EntityBlock`.
+
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing minecart in slot). No active behavior -- pure cargo. Pushed by Tracks. Stickiness: MachineType.TROLLEY -- sticks to other Trolleys + Machine Frames + Frame Family (active). Does NOT stick to Tracks. Frame activation: always emits (strength 15).
 
 ### Frame Blocks (Iron Frame, Copper Frame)
 

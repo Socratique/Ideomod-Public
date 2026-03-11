@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-08 (all known issues resolved.)*
+*Last updated: 2026-03-09 (Machine Specialization system, MachineType-aware stickiness, PositionBoundContainer GUI.)*
 
 ---
 
@@ -53,14 +53,16 @@ com.ideomancer.ideomod
   |     |     |-- FramedBlockRecipe.java       CustomRecipe: frame + block = framed block with NBT
   |     |     \-- FramedBlockLoot.java         Helper for manual drop creation
   |     |-- machine/
-  |     |     |-- IMachineFamily.java          Interface: Machine Family marker. Static helpers
-  |     |     |                                isMachineFamily(Block), canMachineFamilyStickTo().
-  |     |     |                                Frame family stickiness requires ACTIVE state.
-  |     |     |-- MachineFrameBlock.java       Machine Family base: stickiness + GUI. Implements IMachineFamily.
-  |     |     |-- MachineFrameBlockEntity.java Block entity: single item slot, IPistonMovable
-  |     |     |-- MachineFrameMenu.java        Container menu for Machine Frame GUI
-  |     |     |-- MachineTrackBlock.java       Pushes adjacent Trolleys. Implements IMachineFamily.
-  |     |     \-- MachineTrolleyBlock.java     Passive Machine Family carrier. Implements IMachineFamily.
+  |     |     |-- IMachineFamily.java          Interface: getMachineType() + canMachineFamilyStickTo(type, state).
+  |     |     |-- MachineType.java             Enum: FRAME, TRACK, TROLLEY, etc. canStickToMachineType().
+  |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
+  |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
+  |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
+  |     |     |-- MachineFrameBlock.java       MachineType.FRAME. Universal connector. EntityBlock + GUI.
+  |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
+  |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
+  |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
+  |     |     \-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -160,20 +162,23 @@ Three-layer architecture for asymmetric and directional stickiness. **StickyType
 
 Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin` at two points: (A) HEAD of addBlockLine during branching — full grab immunity + directional checks; (B) @Redirect on canStickTo in backward walk — directional checks on both calls, grab immunity on Call 1 only (front block reaching back) via call-pair toggle.
 
-**Stickiness Matrix** (rows = grabber, cols = target). "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron Framed Block, Copper Framed Block (all implement IFrameBlock). "Vanilla Metal" = iron_block, copper_block when activated:
+**Stickiness Matrix** (rows = grabber, cols = target). Machine Family uses MachineType-aware stickiness. "Machine Frame" = MachineType.FRAME (universal connector). "Machine Spec" = any specialization (Track, Trolley, etc.). "Frame Fam" = all IFrameBlock implementations. "Vanilla Metal" = iron_block, copper_block when activated:
 
-|              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-----------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
-| Slime        |  YES  |  no*  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
-| Honey        |  no*  |  YES  |    no*    |     YES     |        YES         |         YES          |            YES            |    no    |  YES   |
-| Odd Slime    |  no*  |  no*  |  YES (d)  |   YES (d)   |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
-| Machine Fam  |  no   |  no   |    no     |     YES     |        YES         |         no           |            no             |    no    |   no   |
-| Frame Fam (active) | no | no |    no     |     YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
-| Vanilla Metal (activated) | no | no | no |     YES     |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
-| Oddstone     |  YES  |  YES  |    YES    |      no     |        no          |         no           |            no             |   YES    |   no   |
+|              | Slime | Honey | Odd Slime | Machine Frame | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-------------:|:--------------:|:--------------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
+| Slime        |  YES  |  no*  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |            YES            |    no    |  YES   |
+| Honey        |  no*  |  YES  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |            YES            |    no    |  YES   |
+| Odd Slime    |  no*  |  no*  |  YES (d)  |    YES (d)    |    YES (d)     |    YES (d)     |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
+| Machine Frame|  no   |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |            no             |    no    |   no   |
+| Machine Spec |  no   |  no   |    no     |      YES      |      YES       |       no       |        YES         |         no           |            no             |    no    |   no   |
+| Frame Fam    |  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Vanilla Metal|  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Oddstone     |  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |            no             |   YES    |   no   |
 
-`no*` = mutual canStickTo exclusion | `no` = grab immunity rule | `(d)` = directional | `(m)` = material-matched
-Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Fam only grabs active frames. Vanilla metals only sticky when activated (FrameActivation.isVanillaMetalActivated).
+`no*` = mutual canStickTo exclusion | `no` = grab immunity or canStickTo rejection | `(d)` = directional | `(m)` = material-matched
+"Same-Type Spec" = same MachineType (Track<->Track). "Diff-Type Spec" = different MachineType (Track<->Trolley) -- canStickTo returns false at Layer 1.
+Machine Frame (MachineType.FRAME) is the universal bridge between all specialization types.
+Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Family only grabs active frames.
 
 ### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
@@ -253,17 +258,22 @@ Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Fam only grabs activ
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 6. **Pull immunity**: Cannot be directly pulled by sticky pistons. PistonBaseBlockMixin position-specific check. Oddstone dragged by own stickiness (e.g., stuck to slime being pulled) still moves correctly.
 
-### 6. Machine Frame (3 features + Machine Family base)
+### 6. Machine Frame (universal connector + Machine Family base)
 
-Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock. Implements **IMachineFamily** interface (as do MachineTrackBlock and MachineTrolleyBlock).
+Registry ID: `machine_block`. Class: MachineFrameBlock. Implements **IMachineFamily** with **MachineType.FRAME** (as do MachineTrackBlock with TRACK and MachineTrolleyBlock with TROLLEY).
 
-1. **Selective stickiness**: Only actively grabs other Machine Family blocks and Frame Family blocks. Permissive canStickTo via `IMachineFamily.canMachineFamilyStickTo()` lets slime/honey/odd slime grab it (one-way via immunity rules).
-2. **Redstone conduction**: Solid-state redstone dust. POWER property 0-15, decays -1 per block. Only accepts signal from conduit blocks (`isRedstoneConduit()`) or REDSTONE_COMPONENTS tag (whitelist prevents feedback). Color gradient via tintIndex (dark steel grey -> bright red).
-3. **Block entity with GUI**: MachineFrameBlockEntity with single item slot. IPistonMovable implementation preserves inventory through all piston move types. onRemove() drops contents only when broken (movedByPiston guard).
+1. **Universal stickiness**: MachineType.FRAME sticks to ALL machine types. canStickTo delegates to `IMachineFamily.canMachineFamilyStickTo(MachineType.FRAME, other)`. Permissive to slime/honey/odd_slime (grab immunity handles restriction).
+2. **Block entity with GUI**: All machine blocks share MachineFrameBlockEntity (single item slot). PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes.
+3. **Anti-signal emission**: Only Machine Frame suppresses frame networks (powered = anti-signal). All other specializations always activate.
+4. **Drop preservation**: getDrops() override -- conditional BlockEntityTag only when slot has content. getCloneItemStack() uses registry-based createCloneStack() (client-safe).
 
-**IMachineFamily interface** (`block/machine/IMachineFamily.java`): Marker interface for Machine Family blocks. Provides static helpers `isMachineFamily(Block)` (checks `instanceof IMachineFamily`) and `canMachineFamilyStickTo(BlockState)`. Frame family check in canMachineFamilyStickTo requires `FrameActivation.isActive(other)` -- machine blocks only grab active frames. All three machine blocks implement this interface.
+**IMachineFamily interface** (`block/machine/IMachineFamily.java`): Provides `getMachineType()` and static `canMachineFamilyStickTo(MachineType, BlockState)`. Type check: FRAME sticks to everything, specializations stick to same-type + FRAME. Frame Family requires active. Slime types permissive.
 
-**Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- blocks that conduct POWER (MachineTrackBlock only). Machine Frame does not conduct redstone.
+**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+
+**PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Every method call resolves to current BE at position. Menu uses this on both server and client. Survives block swaps without close/reopen.
+
+**Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- MachineTrackBlock only.
 
 **Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.recalculate(level, pos)` to trigger frame network wipe-and-rebuild.
 

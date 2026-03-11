@@ -251,7 +251,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 ---
 
 ### Machine Block [DONE]
-> Modular mechanical chassis. A block entity with a single item slot that determines its specialization. Base behavior: selective stickiness to other Machine Blocks. Insert an item to transform it into a specialized machine type. Now called "Machine Frame" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
+> Modular mechanical chassis. Every Machine Family block shares a single-slot block entity (MachineFrameBlockEntity). Insert an item into the slot to swap the block to a specialization. Remove the item to revert to Machine Frame. Each specialization is a unique registered block. Now called "Machine Frame" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
 
 | Property | Value |
 |----------|-------|
@@ -259,48 +259,53 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Class | MachineFrameBlock |
 | Hardness | 5.0 / Blast 6.0 |
 | Tool | Pickaxe |
-| Type | Block Entity (single item slot) |
+| Type | Block Entity (single item slot, shared by all specializations) |
 | Placement | Non-directional (base form) |
-| Redstone | Accepts redstone signal. Powered machine blocks emit anti-signal to suppress frame activation in their network. |
+| Redstone | Accepts redstone signal. Only Machine Frames emit anti-signal to suppress frame activation. |
 | Recipe | 4 iron + 4 redstone + 1 slime (placeholder) |
 
 **Specializations (insert item to transform):**
 
-| Item Inserted | Specialization | Status |
-|---------------|----------------|--------|
-| Redstone dust | Conductor | [DONE] |
-| Hopper | Pipe | [DONE] |
-| Rail | Track | [DONE] |
-| Minecart | Trolley | [DONE] |
-| Comparator | Repeater | [DONE] |
-| Clock (item TBD) | Clock | [DONE] |
-| Redstone torch | Pulser | [DONE] |
-| Lever | Toggle | [DONE] |
-| Piston | Machine Piston | [DONE] |
-| Sticky Piston | Machine Sticky Piston | [DONE] |
+| Item Inserted | Specialization | Block Class | MachineType | Status |
+|---------------|----------------|-------------|-------------|--------|
+| Powered Rail | Track | MachineTrackBlock | TRACK | [DONE] |
+| Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
+| Redstone dust | Conductor | TBD | CONDUCTOR | [IDEA] |
+| Hopper | Pipe | TBD | PIPE | [IDEA] |
+| Comparator | Repeater | TBD | REPEATER | [IDEA] |
+| Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
+| Redstone torch | Pulser | TBD | PULSER | [IDEA] |
+| Lever | Toggle | TBD | TOGGLE | [IDEA] |
+| Piston | Machine Piston | TBD | PISTON | [IDEA] |
+| Sticky Piston | Machine Sticky Piston | TBD | STICKY_PISTON | [IDEA] |
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Machine Family stickiness | [DONE] | Sticks to other Machine Family members (Machine Blocks, Frames, Framed Blocks when activated). Uses IMachineFamily interface. |
-| Anti-signal emission | [DONE] | Only Machine Frames emit anti-signal. Powered (redstone-active) Machine Frames suppress frame activation in adjacent networks. Strength = redstone level, decays by 1 per conductor. Binary override: blocks with anti-signal > 0 cannot activate. Other Machine Family blocks (Track, Trolley, future specializations) never suppress -- they always emit activation. |
-| Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15) into adjacent frame networks. Machine Frames only when unpowered; all others always. IFrameBlock conductors propagate, material routing applies. |
-| Item slot | [DONE] | Single slot. Insert item to specialize. Remove item with empty hand right-click to de-specialize. Item is preserved. |
+| Machine Family stickiness | [DONE] | MachineType-aware. Machine Frame (FRAME) sticks to ALL machine types. Specializations stick to same-type + FRAME only. All types stick to Frame Family (active) and are permissive to slime/honey/odd_slime. |
+| Anti-signal emission | [DONE] | Only Machine Frames emit anti-signal. All other Machine Family blocks always emit activation. |
+| Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15). Machine Frames only when unpowered; specializations always. |
+| Item slot + GUI | [DONE] | All machine blocks share MachineFrameBlockEntity. Right-click opens GUI. Insert item to specialize, remove to de-specialize. Any item accepted; only mapped items trigger swap. |
+| Block swap system | [DONE] | MachineSwapHelper central utility. PositionBoundContainer keeps GUI open across swaps. |
+| Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
+| Piston data preservation | [DONE] | All specializations implement IPistonMovable via shared block entity. |
 
 ---
 
-### Machine Specializations [DONE]
-> Functional variants of the Machine Block, created by inserting an item into the slot.
+### Machine Specializations [WIP]
+> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block sharing MachineFrameBlockEntity. Track and Trolley are implemented; remaining specializations are designed but not yet built.
 
-**Machine Conductor:**
+**Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
+
+**Machine Conductor:** [IDEA]
 Passes activation and stickiness signals along machine networks without adding function. Pure connector block.
 
-**Machine Pipe:**
+**Machine Pipe:** [IDEA]
 Directional item transport. Pushes items one block in facing direction per redstone pulse.
 
-**Machine Track:**
-Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track and Trolley do NOT stick to each other during Track-initiated movement (conditional stickiness -- normal Machine Family stickiness in all other contexts).
+**Machine Track:** [DONE]
+Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.
 
 **Machine Repeater:**
 Three-axis redstone repeater. Receives signal on any face, outputs on the opposite. No locking (removed -- timing/strength disambiguation broken for three-axis; players who need locking use vanilla repeaters).
@@ -325,6 +330,8 @@ Piston behavior as Machine Family members. Fully sticky to Machine Family, parti
 | Property | Value |
 |----------|-------|
 | ID | `machine_trolley` |
+| Class | MachineTrolleyBlock |
+| MachineType | TROLLEY |
 | Placement | Non-directional |
 | Activation | None (passive) |
 | Movable | Yes (pushed by Tracks, pistons) |
@@ -336,11 +343,13 @@ Piston behavior as Machine Family members. Fully sticky to Machine Family, parti
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Cargo carrying | [DONE] | Carries anything stuck to it via Machine Family or slime stickiness. |
-| Machine Family stickiness | [DONE] | Uses MachineBlock.canMachineFamilyStickTo(). |
+| Machine Family stickiness | [DONE] | MachineType.TROLLEY. Sticks to other Trolleys + Machine Frames + Frame Family (active). |
+| Block entity + GUI | [DONE] | Shares MachineFrameBlockEntity. Right-click opens GUI with minecart in slot. |
+| Frame activation | [DONE] | Always emits activation (strength 15). Never suppresses. |
 
 **Design notes:**
 - No active behavior. Pure cargo block.
-- Future: will become a Machine Block chassis variant (item-slot transform).
+- Created by inserting a Minecart into a Machine Frame's GUI slot.
 
 ---
 
@@ -1301,7 +1310,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 - Slime -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Honey -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Odd Slime directional rule: stickiness disabled when pushDirection != FACING
-- Machine Track <-> Machine Trolley during Track move: **CONDITIONAL [IDEA]** (not sticky to each other only during Track-initiated movement. Normal Machine Block stickiness in all other contexts.)
+- Machine Track <-> Machine Trolley: **NOT STICKY** (different MachineTypes. Machine Frame bridges them. Track pushes Trolley via BlockMoveHelper, not stickiness.)
 
 ---
 

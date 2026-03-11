@@ -1,9 +1,8 @@
 package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.registry.ModMenuTypes;
+import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
-import net.minecraft.world.Container;
-import net.minecraft.world.SimpleContainer;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
@@ -11,33 +10,38 @@ import net.minecraft.world.inventory.Slot;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Server-side menu (container) for the Machine Frame's single-slot GUI.
+ * Universal menu for all Machine Family blocks.
  *
- * Layout: one specialization slot centered above the player inventory,
- * similar to a single-slot hopper or beacon interface.
+ * Uses PositionBoundContainer instead of holding a direct block entity
+ * reference. The container looks up whatever MachineFrameBlockEntity is
+ * at the stored position on every call, so it seamlessly survives block
+ * swaps without any rebind logic.
  *
- * The slot accepts any item with a max stack size of 1. This is enforced
- * by the block entity's getMaxStackSize() returning 1.
+ * Both server and client constructors create a PositionBoundContainer
+ * pointing at the block position. The server gets the level from the
+ * player's level; the client reads the position from the network buffer.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class MachineFrameMenu extends AbstractContainerMenu {
 
-    private final Container container;
+    private final PositionBoundContainer container;
+    private final BlockPos blockPos;
 
     /**
-     * Server-side constructor -- called when opening the GUI from the block entity.
+     * Server-side constructor.
+     * Called via MenuProvider.createMenu() from the block entity.
      */
-    public MachineFrameMenu(int containerId, Inventory playerInv, Container container) {
+    public MachineFrameMenu(int containerId, Inventory playerInv, BlockPos pos) {
         super(ModMenuTypes.MACHINE_FRAME.get(), containerId);
-        this.container = container;
 
-        checkContainerSize(container, 1);
-        container.startOpen(playerInv.player);
+        this.blockPos = pos.immutable();
+        this.container = new PositionBoundContainer(playerInv.player.level(), pos);
 
-        // Specialization slot: centered at x=80, y=20 in the GUI
-        // (matches position in MachineFrameScreen's background texture)
-        this.addSlot(new Slot(container, 0, 80, 20));
+        this.container.startOpen(playerInv.player);
+
+        // Specialization slot
+        this.addSlot(new Slot(this.container, 0, 80, 20));
 
         // Player inventory (3 rows of 9)
         for (int row = 0; row < 3; row++) {
@@ -53,11 +57,18 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     }
 
     /**
-     * Client-side constructor -- called when the packet arrives from the server.
-     * Creates a dummy SimpleContainer since the real one lives on the server.
+     * Client-side constructor.
+     * Reads the block position from the network buffer and creates a
+     * PositionBoundContainer pointing at the client's level. Both sides
+     * now use the same container type — no dummy SimpleContainer.
      */
     public MachineFrameMenu(int containerId, Inventory playerInv, FriendlyByteBuf extraData) {
-        this(containerId, playerInv, new SimpleContainer(1));
+        this(containerId, playerInv, extraData.readBlockPos());
+    }
+
+    /** The block position this menu is bound to. */
+    public BlockPos getBlockPos() {
+        return this.blockPos;
     }
 
     @Override
@@ -65,11 +76,6 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         return this.container.stillValid(player);
     }
 
-    /**
-     * Shift-click transfer logic.
-     * If clicking in the specialization slot -> move to player inventory.
-     * If clicking in player inventory -> try to move into specialization slot.
-     */
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
         ItemStack result = ItemStack.EMPTY;
@@ -80,12 +86,10 @@ public class MachineFrameMenu extends AbstractContainerMenu {
             result = slotItem.copy();
 
             if (index == 0) {
-                // Specialization slot -> player inventory
                 if (!this.moveItemStackTo(slotItem, 1, 37, true)) {
                     return ItemStack.EMPTY;
                 }
             } else {
-                // Player inventory -> specialization slot
                 if (!this.moveItemStackTo(slotItem, 0, 1, false)) {
                     return ItemStack.EMPTY;
                 }

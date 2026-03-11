@@ -1,85 +1,48 @@
 package com.ideomancer.ideomod.block.machine;
 
+import com.ideomancer.ideomod.block.frame.FrameActivation;
 import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.EntityBlock;
+import net.minecraft.world.level.block.RenderShape;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.level.storage.loot.LootParams;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
+import net.minecraftforge.network.NetworkHooks;
+import org.jetbrains.annotations.Nullable;
 import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
 
+import java.util.List;
+
 /**
- * Machine Track -- a non-directional Machine Family block that pushes
- * adjacent Machine Trolleys when it receives a redstone signal.
- *
- * PUSH DIRECTION LOGIC:
- * =====================
- * The Track figures out which face received the redstone signal and pushes
- * in the OPPOSITE direction. Signal direction is determined by checking
- * actual signal sources -- redstone components (via tag) and conduit blocks
- * (currently only other Tracks, since Machine Frame no longer conducts).
- * Vanilla's level.hasSignal() is NOT used because it includes weak power
- * leaking through solid blocks, which would cause Trolleys and other inert
- * blocks to appear as signal sources.
- *
- *   Signal from NORTH face → push SOUTH
- *   Signal from TOP        → push DOWN
- *   etc.
- *
- * ALL adjacent Trolleys are pushed in that direction, not just the one
- * on the push face.
- *
- * REDSTONE CONDUCTION (ISOLATED):
- * ===============================
- * Track maintains a POWER blockstate (0-15, decay -1 per block) for internal
- * Track-to-Track signal chaining. This is NOT exposed to vanilla's redstone
- * system — isSignalSource=false, getSignal=0, getDirectSignal=0.
- *
- * Track reads signal from:
- *   - Other Tracks: direct blockstate POWER read (via isRedstoneConduit check)
- *   - Tagged REDSTONE_COMPONENTS: vanilla signal query (levers, repeaters, etc.)
- *
- * Track does NOT output signal to:
- *   - Vanilla redstone dust, pistons, lamps, or any non-Track block
- *   - Solid blocks (no weak power leakage through Trolleys or stone)
- *   - Machine Frames (prevents accidental frame deactivation via anti-signal)
- *
- * STICKINESS:
- * ===========
- * Part of the Machine Family -- sticks to Machine Frames, other Tracks,
- * and Trolleys. During a Track-initiated push, the Track itself is
- * protected from being included in the move group because its position
- * is passed as initiatorPos to BlockMoveHelper.
- *
- * Uses block event system for proper client-server animation sync.
+ * Machine Track -- pushes adjacent Machine Trolleys on redstone signal.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
-public class MachineTrackBlock extends Block implements IMachineFamily {
+public class MachineTrackBlock extends Block implements EntityBlock, IMachineFamily {
 
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
-
     private static final int EVENT_PUSH = 0;
-
-    /**
-     * Re-entrancy guard for neighborChanged. Prevents infinite update loops
-     * when this Track's power change triggers neighbor updates that bounce
-     * back. ThreadLocal so each thread has its own flag — safe if Minecraft
-     * ever processes ticks on multiple threads.
-     *
-     * Previously a plain static boolean, which works in practice (server tick
-     * is single-threaded) but is not formally thread-safe.
-     */
     private static final ThreadLocal<Boolean> isUpdating = ThreadLocal.withInitial(() -> false);
 
     public MachineTrackBlock(Properties properties) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any()
-                .setValue(POWER, 0));
+        this.registerDefaultState(this.stateDefinition.any().setValue(POWER, 0));
     }
 
     @Override
@@ -87,54 +50,50 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
         builder.add(POWER);
     }
 
-    // ========================================================================
-    // MACHINE FAMILY STICKINESS
-    // ========================================================================
+    @Override
+    public MachineType getMachineType() { return MachineType.TRACK; }
+
+    @Nullable
+    @Override
+    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
+        return new MachineFrameBlockEntity(pos, state);
+    }
 
     @Override
-    public boolean isStickyBlock(BlockState state) {
-        return true;
+    public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
+
+    @Override
+    public InteractionResult use(BlockState state, Level level, BlockPos pos,
+                                  Player player, InteractionHand hand, BlockHitResult hit) {
+        if (level.isClientSide()) return InteractionResult.SUCCESS;
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof MachineFrameBlockEntity machineFrame) {
+            if (player instanceof ServerPlayer serverPlayer) {
+                NetworkHooks.openScreen(serverPlayer, machineFrame, pos);
+            }
+        }
+        return InteractionResult.CONSUME;
     }
+
+    @Override
+    public boolean isStickyBlock(BlockState state) { return true; }
 
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        return MachineFrameBlock.canMachineFamilyStickTo(other);
-    }
-
-    // ========================================================================
-    // REDSTONE ISOLATION
-    // ========================================================================
-    // Track does NOT expose its POWER to vanilla's redstone system.
-    // isSignalSource=false, getSignal=0, getDirectSignal=0.
-    //
-    // Track-to-Track conduction works via direct blockstate reads in
-    // calculatePower() — it checks neighbor POWER values directly, bypassing
-    // vanilla's signal query system entirely. This means:
-    //   - Tracks still chain signal to each other (decay -1 per block)
-    //   - Tracks still accept input from tagged REDSTONE_COMPONENTS (levers etc.)
-    //   - Tracks do NOT leak power into adjacent solid blocks (no weak power)
-    //   - Tracks do NOT power pistons, lamps, or anything else
-    //   - Trolleys cannot relay Track power to Machine Frames
-    //
-    // The POWER blockstate is purely internal bookkeeping for the Track network.
-
-    @Override
-    public boolean isSignalSource(BlockState state) {
-        return false;
+        return IMachineFamily.canMachineFamilyStickTo(MachineType.TRACK, other);
     }
 
     @Override
-    public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        return 0;
-    }
+    public boolean isSignalSource(BlockState state) { return false; }
 
     @Override
-    public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        return 0;
-    }
+    public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) { return 0; }
+
+    @Override
+    public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) { return 0; }
 
     // ========================================================================
-    // REDSTONE + PUSH ACTIVATION
+    // LIFECYCLE
     // ========================================================================
 
     @Override
@@ -142,10 +101,8 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         if (level.isClientSide) return;
         if (isUpdating.get()) return;
-
         int oldPower = state.getValue(POWER);
         int newPower = calculatePower(level, pos);
-
         if (newPower != oldPower) {
             isUpdating.set(true);
             try {
@@ -154,11 +111,9 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
             } finally {
                 isUpdating.set(false);
             }
-
-            if (oldPower == 0 && newPower > 0) {
-                scheduleAllPushes(level, pos, newPower);
-            }
+            if (oldPower == 0 && newPower > 0) scheduleAllPushes(level, pos, newPower);
         }
+        FrameActivation.recalculate(level, pos);
     }
 
     @Override
@@ -166,16 +121,58 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
         if (!level.isClientSide() && !oldState.is(this)) {
             updatePowerState(level, pos, state);
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
+            FrameActivation.recalculate(level, pos);
         }
     }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!level.isClientSide() && !newState.is(this)) {
+        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
+            FrameActivation.recalculate(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
+
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                             @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide()) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof MachineFrameBlockEntity machineEntity) {
+                ItemStack stored = machineEntity.getSpecializationItem();
+                if (!stored.isEmpty()) MachineSwapHelper.checkAndSwap(level, pos, stored);
+            }
+        }
+    }
+
+    // ========================================================================
+    // DROPS + CLONE
+    // ========================================================================
+
+    @Override
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
+        List<ItemStack> drops = super.getDrops(state, builder);
+        if (MachineSwapHelper.isSwapping()) return drops;
+        BlockEntity be = builder.getOptionalParameter(
+                net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
+        if (be instanceof MachineFrameBlockEntity me && !me.getSpecializationItem().isEmpty()) {
+            drops.clear();
+            drops.add(MachineSwapHelper.createDrop(this, me));
+        }
+        return drops;
+    }
+
+    @Override
+    public ItemStack getCloneItemStack(BlockState state, HitResult target,
+                                        BlockGetter level, BlockPos pos, Player player) {
+        return MachineSwapHelper.createCloneStack(this);
+    }
+
+    // ========================================================================
+    // REDSTONE INTERNALS
+    // ========================================================================
 
     private void updatePowerState(Level level, BlockPos pos, BlockState state) {
         int newPower = calculatePower(level, pos);
@@ -187,25 +184,18 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
 
     private int calculatePower(Level level, BlockPos pos) {
         int bestPower = 0;
-
         for (Direction dir : Direction.values()) {
-            BlockPos neighborPos = pos.relative(dir);
-            BlockState neighborState = level.getBlockState(neighborPos);
-            Block neighborBlock = neighborState.getBlock();
-
-            if (MachineFrameBlock.isRedstoneConduit(neighborBlock)) {
-                int neighborPower = neighborState.getValue(POWER) - 1;
-                if (neighborPower > bestPower) {
-                    bestPower = neighborPower;
-                }
-            } else if (isRedstoneComponent(neighborBlock)) {
-                int signal = level.getSignal(neighborPos, dir);
-                if (signal > bestPower) {
-                    bestPower = signal;
-                }
+            BlockPos nPos = pos.relative(dir);
+            BlockState nState = level.getBlockState(nPos);
+            Block nBlock = nState.getBlock();
+            if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
+                int p = nState.getValue(POWER) - 1;
+                if (p > bestPower) bestPower = p;
+            } else if (isRedstoneComponent(nBlock)) {
+                int s = level.getSignal(nPos, dir);
+                if (s > bestPower) bestPower = s;
             }
         }
-
         return Math.min(15, Math.max(0, bestPower));
     }
 
@@ -219,29 +209,21 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
 
     private void scheduleAllPushes(Level level, BlockPos pos, int myPower) {
         for (Direction signalDir : Direction.values()) {
-            BlockPos neighborPos = pos.relative(signalDir);
-            BlockState neighborState = level.getBlockState(neighborPos);
-            Block neighborBlock = neighborState.getBlock();
-
-            boolean isActualSource = false;
-
-            if (MachineFrameBlock.isRedstoneConduit(neighborBlock)) {
-                int neighborPower = neighborState.getValue(POWER);
-                isActualSource = neighborPower > myPower;
-            } else if (isRedstoneComponent(neighborBlock)) {
-                int signal = level.getSignal(neighborPos, signalDir);
-                isActualSource = signal > 0;
+            BlockPos nPos = pos.relative(signalDir);
+            BlockState nState = level.getBlockState(nPos);
+            Block nBlock = nState.getBlock();
+            boolean isSource = false;
+            if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
+                isSource = nState.getValue(POWER) > myPower;
+            } else if (isRedstoneComponent(nBlock)) {
+                isSource = level.getSignal(nPos, signalDir) > 0;
             }
-
-            if (!isActualSource) continue;
-
+            if (!isSource) continue;
             Direction pushDir = signalDir.getOpposite();
-
-            for (Direction trolleyFace : Direction.values()) {
-                BlockPos trolleyPos = pos.relative(trolleyFace);
-                if (level.getBlockState(trolleyPos).getBlock() instanceof MachineTrolleyBlock) {
-                    int param = packDirections(pushDir, trolleyFace);
-                    level.blockEvent(pos, this, EVENT_PUSH, param);
+            for (Direction tFace : Direction.values()) {
+                BlockPos tPos = pos.relative(tFace);
+                if (level.getBlockState(tPos).getBlock() instanceof MachineTrolleyBlock) {
+                    level.blockEvent(pos, this, EVENT_PUSH, packDirs(pushDir, tFace));
                 }
             }
         }
@@ -250,33 +232,17 @@ public class MachineTrackBlock extends Block implements IMachineFamily {
     @Override
     public boolean triggerEvent(BlockState state, Level level, BlockPos pos, int id, int param) {
         if (id == EVENT_PUSH) {
-            Direction pushDir = unpackPushDir(param);
-            Direction trolleyFace = unpackTrolleyFace(param);
-            BlockPos trolleyPos = pos.relative(trolleyFace);
-
-            if (!(level.getBlockState(trolleyPos).getBlock() instanceof MachineTrolleyBlock)) {
-                return true;
-            }
-
-            BlockMoveHelper.moveBlockAt(level, pos, trolleyPos, pushDir);
+            Direction pushDir = Direction.from3DDataValue(param & 0x7);
+            Direction tFace = Direction.from3DDataValue((param >> 3) & 0x7);
+            BlockPos tPos = pos.relative(tFace);
+            if (!(level.getBlockState(tPos).getBlock() instanceof MachineTrolleyBlock)) return true;
+            BlockMoveHelper.moveBlockAt(level, pos, tPos, pushDir);
             return true;
         }
         return false;
     }
 
-    // ========================================================================
-    // DIRECTION PACKING
-    // ========================================================================
-
-    private static int packDirections(Direction pushDir, Direction trolleyFace) {
-        return pushDir.get3DDataValue() | (trolleyFace.get3DDataValue() << 3);
-    }
-
-    private static Direction unpackPushDir(int packed) {
-        return Direction.from3DDataValue(packed & 0x7);
-    }
-
-    private static Direction unpackTrolleyFace(int packed) {
-        return Direction.from3DDataValue((packed >> 3) & 0x7);
+    private static int packDirs(Direction a, Direction b) {
+        return a.get3DDataValue() | (b.get3DDataValue() << 3);
     }
 }

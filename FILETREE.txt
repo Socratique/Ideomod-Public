@@ -22,8 +22,11 @@
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
+|  |           |  |  +-- MachineSwapHelper.java
 |  |           |  |  +-- MachineTrackBlock.java
-|  |           |  |  \\-- MachineTrolleyBlock.java
+|  |           |  |  +-- MachineTrolleyBlock.java
+|  |           |  |  +-- MachineType.java
+|  |           |  |  \\-- PositionBoundContainer.java
 |  |           |  +-- movement
 |  |           |  |  +-- BlockMoveHelper.java
 |  |           |  |  +-- IPistonMovable.java

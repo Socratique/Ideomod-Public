@@ -130,6 +130,8 @@ public class ModBlocks {
                     .sound(SoundType.STONE)
             ));
 
+    // Machine Track: now an EntityBlock sharing MachineFrameBlockEntity.
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
     public static final RegistryObject<Block> MACHINE_TRACK = BLOCKS.register("machine_track",
             () -> new MachineTrackBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -137,14 +139,18 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
             ));
 
+    // Machine Trolley: now an EntityBlock sharing MachineFrameBlockEntity.
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
     public static final RegistryObject<Block> MACHINE_TROLLEY = BLOCKS.register("machine_trolley",
             () -> new MachineTrolleyBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
             ));
 
     // ========================================================================
@@ -187,7 +193,7 @@ public class ModBlocks {
      * lightLevel reads INNER_LIGHT from blockstate so the lighting engine
      * knows this block can emit light when containing glowstone, sea lanterns,
      * etc. The INNER_LIGHT property is synced by FramedBlockEntity.updateBlockstateFromInner().
-     * FIX 2026-03-07: Issue #11 — framed light-emitting blocks now actually emit light.
+     * FIX 2026-03-07: Issue #11 -- framed light-emitting blocks now actually emit light.
      */
     public static final RegistryObject<Block> IRON_FRAMED_BLOCK = BLOCKS.register("iron_framed_block",
             () -> new FramedBlock(FrameMaterial.IRON, BlockBehaviour.Properties.of()
@@ -204,8 +210,8 @@ public class ModBlocks {
      * Copper Framed Block. Same dynamic mining pattern as Iron Framed Block.
      * Copper frame modifier is 0.5 (slightly less than iron's 0.75).
      *
-     * lightLevel reads INNER_LIGHT from blockstate — same as Iron Framed Block.
-     * FIX 2026-03-07: Issue #11 — framed light-emitting blocks now actually emit light.
+     * lightLevel reads INNER_LIGHT from blockstate -- same as Iron Framed Block.
+     * FIX 2026-03-07: Issue #11 -- framed light-emitting blocks now actually emit light.
      */
     public static final RegistryObject<Block> COPPER_FRAMED_BLOCK = BLOCKS.register("copper_framed_block",
             () -> new FramedBlock(FrameMaterial.COPPER, BlockBehaviour.Properties.of()

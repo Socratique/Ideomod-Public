@@ -2,32 +2,29 @@ package com.ideomancer.ideomod.block.machine;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.Containers;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
-import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.frame.FrameActivation;
 
+import java.util.List;
+
 /**
- * Machine Frame (formerly Machine Block) -- modular mechanical chassis.
- *
- * FRAME ACTIVATION:
- * =================
- * Machine Frames are the SOURCE of activation for Frame Block chains.
- * All lifecycle events call FrameActivation.recalculate() which does a
- * full network wipe-and-rebuild — like redstone signal recalculation.
+ * Machine Frame -- the universal connector in the Machine Family.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -35,6 +32,11 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
 
     public MachineFrameBlock(Properties properties) {
         super(properties);
+    }
+
+    @Override
+    public MachineType getMachineType() {
+        return MachineType.FRAME;
     }
 
     @Nullable
@@ -61,6 +63,10 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
         return InteractionResult.CONSUME;
     }
 
+    // ========================================================================
+    // LIFECYCLE
+    // ========================================================================
+
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
@@ -73,12 +79,10 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos,
                           BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && !movedByPiston) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof MachineFrameBlockEntity machineFrame) {
-                Containers.dropContents(level, pos, machineFrame);
+        if (!state.is(newState.getBlock())) {
+            if (!level.isClientSide()) {
+                FrameActivation.recalculate(level, pos);
             }
-            FrameActivation.recalculate(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -92,14 +96,55 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
         }
     }
 
+    @Override
+    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
+                             @Nullable LivingEntity placer, ItemStack stack) {
+        super.setPlacedBy(level, pos, state, placer, stack);
+        if (!level.isClientSide()) {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof MachineFrameBlockEntity machineEntity) {
+                ItemStack stored = machineEntity.getSpecializationItem();
+                if (!stored.isEmpty()) {
+                    MachineSwapHelper.checkAndSwap(level, pos, stored);
+                }
+            }
+        }
+    }
+
+    // ========================================================================
+    // DROPS
+    // ========================================================================
+
+    @Override
+    public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
+        List<ItemStack> drops = super.getDrops(state, builder);
+        if (MachineSwapHelper.isSwapping()) return drops;
+
+        BlockEntity be = builder.getOptionalParameter(
+                net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
+        if (be instanceof MachineFrameBlockEntity machineEntity
+                && !machineEntity.getSpecializationItem().isEmpty()) {
+            drops.clear();
+            drops.add(MachineSwapHelper.createDrop(this, machineEntity));
+        }
+        return drops;
+    }
+
+    /**
+     * Creative middle-click. Uses registry lookup (not BE read) because
+     * this runs client-side where the BE inventory isn't synced.
+     * Machine Frame is not a specialization, so returns a plain stack.
+     */
+    @Override
+    public ItemStack getCloneItemStack(BlockState state, HitResult target,
+                                        BlockGetter level, BlockPos pos, Player player) {
+        return MachineSwapHelper.createCloneStack(this);
+    }
+
     // ========================================================================
     // MACHINE FAMILY HELPERS
     // ========================================================================
 
-    /**
-     * Check if a block is part of the Machine Family.
-     * Delegates to IMachineFamily.isMachineFamily() for consistency.
-     */
     public static boolean isMachineFamily(Block block) {
         return IMachineFamily.isMachineFamily(block);
     }
@@ -108,13 +153,9 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
         return block instanceof MachineTrackBlock;
     }
 
-    /**
-     * Check if this block can stick to another block.
-     * Delegates to IMachineFamily.canMachineFamilyStickTo() for consistency.
-     */
-    public static boolean canMachineFamilyStickTo(BlockState other) {
-        return IMachineFamily.canMachineFamilyStickTo(other);
-    }
+    // ========================================================================
+    // STICKINESS
+    // ========================================================================
 
     @Override
     public boolean isStickyBlock(BlockState state) {
@@ -123,6 +164,6 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
 
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        return canMachineFamilyStickTo(other);
+        return IMachineFamily.canMachineFamilyStickTo(MachineType.FRAME, other);
     }
 }

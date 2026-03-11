@@ -4,6 +4,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineSwapHelper;
 import com.ideomancer.ideomod.registry.ModRecipeSerializers;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
@@ -63,6 +64,10 @@ public class Ideomod {
         ModMenuTypes.MENUS.register(modEventBus);
         ModRecipeSerializers.RECIPE_SERIALIZERS.register(modEventBus);
 
+        // Register specialization mappings (item -> block) for machine swap system.
+        // Uses deferred suppliers internally so safe to call before registry resolution.
+        MachineSwapHelper.registerMappings();
+
         modEventBus.addListener(this::commonSetup);
         modEventBus.addListener(this::clientSetup);
         modEventBus.addListener(this::onModifyBakingResult);
@@ -88,8 +93,20 @@ public class Ideomod {
      * Registers all stickiness rules for the mod.
      * See STICKINESS_SYSTEM.md for full documentation.
      *
-     * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock.
+     * Machine Family = MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock
+     *   (and future specializations). All implement IMachineFamily.
      * Frame Family = IronFrame, CopperFrame, IronFramedBlock, CopperFramedBlock.
+     *
+     * MACHINE FAMILY STICKINESS MODEL (MachineType-aware):
+     * =====================================================
+     * Machine Frame (MachineType.FRAME) sticks to ALL machine types.
+     * Specializations stick to SAME type + FRAME only (via canStickTo).
+     * All types stick to Frame Family (when active) and are permissive
+     * to slime/honey/odd_slime (so grab immunity can block the reverse).
+     *
+     * Inter-specialization isolation (Track doesn't stick to Trolley) is
+     * handled by canStickTo returning false, NOT by grab immunity rules.
+     * Machine Frame bridges different specialization types.
      *
      * CONSOLIDATED RULES (4 grab immunity + 1 directional):
      * ======================================================
@@ -97,7 +114,7 @@ public class Ideomod {
      *         Protects both OddstoneBlock and FramedBlock with INNER_STICKY=ODDSTONE.
      *         CARVE-OUTS:
      *           A) Framed Oddstone (INNER_STICKY=ODDSTONE) IS allowed to grab
-     *              real Oddstone and other framed oddstone — inner stickiness.
+     *              real Oddstone and other framed oddstone -- inner stickiness.
      *           B) For FRAMED oddstone targets only (not bare): Machine Family
      *              and ACTIVE same-material IFrameBlock can reach framed oddstone.
      *              "Framing is the only way other blocks can grab oddstone."
@@ -117,7 +134,7 @@ public class Ideomod {
      * =======================================
      * Framed Odd Slime does NOT use a blanket directional rule here. A blanket
      * rule would disable ALL stickiness (including frame stickiness) when pushed
-     * in non-FACING directions, which is wrong — an ACTIVE Framed Odd Slime
+     * in non-FACING directions, which is wrong -- an ACTIVE Framed Odd Slime
      * should still stick to same-material frames regardless of push direction.
      *
      * Instead, the directional gating for Framed Odd Slime's INNER stickiness

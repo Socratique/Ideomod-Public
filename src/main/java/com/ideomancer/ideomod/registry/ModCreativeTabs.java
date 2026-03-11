@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.frame.FrameabilityHelper;
 import com.ideomancer.ideomod.block.frame.FramedBlockItem;
+import com.ideomancer.ideomod.block.machine.MachineSwapHelper;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -75,8 +76,11 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ODD_SLIME.get());
                         output.accept(ModItems.ODDSTONE_REPULSER.get());
                         output.accept(ModItems.ODDSTONE_ATTRACTOR.get());
-                        output.accept(ModItems.MACHINE_TRACK.get());
-                        output.accept(ModItems.MACHINE_TROLLEY.get());
+
+                        // Machine specializations: pre-loaded with their specialization item
+                        // so they come ready to place as the correct block type.
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TRACK.get()));
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TROLLEY.get()));
 
                         // Frame Blocks
                         output.accept(ModItems.IRON_FRAME.get());

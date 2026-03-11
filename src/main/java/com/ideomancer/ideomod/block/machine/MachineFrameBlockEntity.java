@@ -18,27 +18,19 @@ import org.jetbrains.annotations.Nullable;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 
 /**
- * Block entity for Machine Frame -- stores a single item that determines
- * the block's specialization.
+ * Shared block entity for ALL Machine Family blocks.
  *
- * Implements WorldlyContainer for hopper interaction and IPistonMovable
- * for surviving piston movement with data intact.
- *
- * PISTON MOVEMENT:
- * The specialization item is serialized to NBT before the move and
- * restored after the 2-tick animation completes. This is handled by
- * BlockMoveHelper (save phase) and MachineFrameBlock.onPlace() (restore
- * phase) via the MovingBlockEntityData registry.
+ * Stores a single item that determines the block's specialization. When
+ * the slot contents change, calls MachineSwapHelper to check if the block
+ * type should change. The menu uses PositionBoundContainer so it
+ * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class MachineFrameBlockEntity extends BlockEntity
         implements WorldlyContainer, MenuProvider, IPistonMovable {
 
-    /** Single-slot inventory. Index 0 = the specialization item. */
     private NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
-
-    /** Slot indices accessible from all faces (just slot 0). */
     private static final int[] SLOTS = {0};
 
     public MachineFrameBlockEntity(BlockPos pos, BlockState state) {
@@ -52,7 +44,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     @Override
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
-        ContainerHelper.saveAllItems(tag, this.items);
+        ContainerHelper.saveAllItems(tag, this.items, true);
     }
 
     @Override
@@ -63,13 +55,13 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
-    // IPISTON MOVABLE -- piston movement data save/restore
+    // IPISTON MOVABLE
     // ========================================================================
 
     @Override
     public CompoundTag saveMovementData() {
         CompoundTag tag = new CompoundTag();
-        ContainerHelper.saveAllItems(tag, this.items);
+        ContainerHelper.saveAllItems(tag, this.items, true);
         return tag;
     }
 
@@ -97,25 +89,20 @@ public class MachineFrameBlockEntity extends BlockEntity
     // ========================================================================
 
     @Override
-    public int getContainerSize() {
-        return 1;
-    }
+    public int getContainerSize() { return 1; }
 
     @Override
-    public boolean isEmpty() {
-        return this.items.get(0).isEmpty();
-    }
+    public boolean isEmpty() { return this.items.get(0).isEmpty(); }
 
     @Override
-    public ItemStack getItem(int slot) {
-        return this.items.get(slot);
-    }
+    public ItemStack getItem(int slot) { return this.items.get(slot); }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
         ItemStack result = ContainerHelper.removeItem(this.items, slot, amount);
         if (!result.isEmpty()) {
             this.setChanged();
+            triggerSwapCheck();
         }
         return result;
     }
@@ -132,6 +119,25 @@ public class MachineFrameBlockEntity extends BlockEntity
             stack.setCount(this.getMaxStackSize());
         }
         this.setChanged();
+        triggerSwapCheck();
+    }
+
+    /**
+     * Sets the item WITHOUT triggering a swap check. Used by
+     * MachineSwapHelper after it has already performed the block swap.
+     */
+    public void setItemDirect(ItemStack stack) {
+        this.items.set(0, stack);
+        if (stack.getCount() > this.getMaxStackSize()) {
+            stack.setCount(this.getMaxStackSize());
+        }
+        this.setChanged();
+    }
+
+    private void triggerSwapCheck() {
+        if (this.level != null && !this.level.isClientSide()) {
+            MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));
+        }
     }
 
     @Override
@@ -147,23 +153,17 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     @Override
-    public void clearContent() {
-        this.items.clear();
-    }
+    public void clearContent() { this.items.clear(); }
 
     @Override
-    public int getMaxStackSize() {
-        return 1;
-    }
+    public int getMaxStackSize() { return 1; }
 
     // ========================================================================
-    // WORLDLY CONTAINER (sided access for hoppers)
+    // WORLDLY CONTAINER
     // ========================================================================
 
     @Override
-    public int[] getSlotsForFace(net.minecraft.core.Direction side) {
-        return SLOTS;
-    }
+    public int[] getSlotsForFace(net.minecraft.core.Direction side) { return SLOTS; }
 
     @Override
     public boolean canPlaceItemThroughFace(int slot, ItemStack stack, @Nullable net.minecraft.core.Direction direction) {
@@ -176,17 +176,17 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
-    // MENU PROVIDER (opens GUI when right-clicked)
+    // MENU PROVIDER
     // ========================================================================
 
     @Override
     public Component getDisplayName() {
-        return Component.translatable("ideomod.container.machine_frame");
+        return Component.translatable(this.getBlockState().getBlock().getDescriptionId());
     }
 
     @Nullable
     @Override
     public AbstractContainerMenu createMenu(int containerId, Inventory playerInv, Player player) {
-        return new MachineFrameMenu(containerId, playerInv, this);
+        return new MachineFrameMenu(containerId, playerInv, this.worldPosition);
     }
 }
