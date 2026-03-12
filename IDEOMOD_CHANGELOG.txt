@@ -1,5 +1,99 @@
 # Ideomod Changelog
 
+## [2026-03-12] Machine Conductor Specialization -- Solid-Block Redstone Wire
+
+New Machine Family specialization: Machine Conductor. Insert redstone dust into
+a Machine Frame to create a solid-block redstone wire. Carries vanilla redstone
+signal (0-15, decays by 1 per block) through a full solid block. Connects to
+vanilla redstone components on all 6 faces. Machine Family member with stickiness
+and frame activation.
+
+### Input/Output Face Model
+
+The Conductor receives signal on ONE face (the input face) and outputs on the
+other 5 faces. Input face is determined by which face has the strongest incoming
+signal. This model prevents feedback structurally -- the block never outputs
+back toward its source.
+
+Input face selection rules:
+- Strongest signal across all 6 faces wins
+- If current input face still has strongest signal, it stays
+- If input source turns off, all faces rescanned for new input
+- If no signal on any face, inputFace=null, POWER=0
+
+Input face stored in MachineFrameBlockEntity as nullable Direction field.
+Persists through saves and piston movement via IPistonMovable.
+
+### Signal Types (source vs wire decay)
+
+- Source blocks (levers, repeaters, redstone blocks): no decay.
+  Lever(15) -> Conductor gives POWER=15.
+- Wire blocks (dust, other Conductors): decay by 1.
+  Dust(14) -> Conductor gives POWER=13.
+
+Both getSignal (weak) and getDirectSignal (strong) output on all faces except
+the input face. Strong power enables Conductor -> Solid Block -> Piston/Repeater
+(matching vanilla dust behavior).
+
+### Anti-Feedback Mechanisms
+
+1. Input face suppression: getSignal and getDirectSignal return 0 when queried
+   from the input face direction. Prevents direct Conductor<->wire feedback.
+
+2. Direction convention: getSignal(state, level, pos, direction) where direction
+   is FROM the querying block TO us. Suppress when
+   direction == inputFace.getOpposite().
+
+### Known Issues
+
+1. Dust on the far side of a solid block sees Conductor's strong power (issue #12).
+   Vanilla dust avoids this because all dust shares one block instance and the
+   shouldSignal flag suppresses ALL dust during any dust's scan. Our Conductor is
+   a different block class, so dust's shouldSignal doesn't affect us. Fix requires
+   a mixin into RedStoneWireBlock to suppress our getDirectSignal during dust's
+   calculateTargetStrength scan.
+
+2. Base texture renders black (issue #13). The two-layer model JSON approach
+   (base texture + tinted indicator overlay) has rendering issues. The indicator
+   overlay tints correctly, but the base texture appears black. Needs investigation
+   -- may require switching to a BESR approach like framed blocks use.
+
+### Color Handler
+
+ModColorHandlers registers block+item color handlers for tintIndex 1 (power
+indicator overlay). Squared curve gradient: POWER 0 = black (0x000000),
+POWER 1-15 = dim-to-bright red. Item shows unpowered (black) color.
+
+### Files Created
+- MachineConductorBlock.java (block/machine/)
+- blockstates/machine_conductor.json (16 power variants, same model)
+- models/block/machine_conductor.json (two-layer: base + tinted indicator)
+- models/item/machine_conductor.json
+- loot_tables/blocks/machine_conductor.json
+- textures/block/machine_conductor.png (user-created)
+- textures/block/machine_conductor_indicator.png (user-created)
+
+### Files Modified
+- MachineFrameBlockEntity.java: added inputFace field (nullable Direction)
+  with save/load/movement data preservation
+- MachineSwapHelper.java: registered Items.REDSTONE <-> MACHINE_CONDUCTOR mapping
+- ModBlocks.java: registered MACHINE_CONDUCTOR block
+- ModItems.java: registered MACHINE_CONDUCTOR BlockItem
+- ModBlockEntities.java: added MACHINE_CONDUCTOR to shared BE valid blocks
+- ModCreativeTabs.java: added Machine Conductor to creative tab
+- ModColorHandlers.java: added block+item color handlers for POWER tint
+- MachineFrameBlock.java: clarified isRedstoneConduit javadoc
+- en_us.json: added "block.ideomod.machine_conductor": "Machine Conductor"
+- pickaxe.json: added ideomod:machine_conductor
+- redstone_components.json: NOT modified (tag is for Track's input whitelist,
+  Conductor doesn't need it)
+
+### Documentation sync
+- IDEOMOD_DOCUMENTATION.md: Machine Conductor section, known issues #12 and #13
+- CODEBASE_REFERENCE.md: package structure, MachineConductorBlock entry
+- IDEOMOD_DESIGN.md: Conductor status updated to [WIP], description rewritten
+
+
 ## [2026-03-09] Machine Specialization System -- Universal Block Swap + Type-Aware Stickiness
 
 Major rework of the Machine Family system. Every specialization is now its own

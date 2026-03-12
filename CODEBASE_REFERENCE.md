@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-09 (Machine Specialization system, MachineType-aware stickiness, PositionBoundContainer GUI.)*
+*Last updated: 2026-03-12 (Machine Conductor specialization, inputFace field in MachineFrameBlockEntity.)*
 
 ---
 
@@ -62,7 +62,9 @@ com.ideomancer.ideomod
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
-  |     |     \-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
+  |     |     |-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
+  |     |     \-- MachineConductorBlock.java   MachineType.CONDUCTOR. Solid-block redstone wire.
+  |     |                                      Input/output face model. EntityBlock + GUI.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -201,6 +203,8 @@ Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Family only grabs ac
 **MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks via direct blockstate access and from tagged REDSTONE_COMPONENTS via vanilla signal query. Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
+
+**MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity. Visual: two-layer model with tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issues: dust sees strong power through solid blocks (#12), base texture renders black (#13).
 
 **Filter predicates**: `ODDSTONE_ONLY` (current), `ANY_MOVABLE` (future Arcane variants).
 

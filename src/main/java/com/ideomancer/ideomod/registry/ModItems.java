@@ -48,6 +48,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_TROLLEY = ITEMS.register("machine_trolley",
             () -> new BlockItem(ModBlocks.MACHINE_TROLLEY.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_CONDUCTOR = ITEMS.register("machine_conductor",
+            () -> new BlockItem(ModBlocks.MACHINE_CONDUCTOR.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 

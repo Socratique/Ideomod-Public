@@ -270,7 +270,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 |---------------|----------------|-------------|-------------|--------|
 | Powered Rail | Track | MachineTrackBlock | TRACK | [DONE] |
 | Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
-| Redstone dust | Conductor | TBD | CONDUCTOR | [IDEA] |
+| Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [WIP] |
 | Hopper | Pipe | TBD | PIPE | [IDEA] |
 | Comparator | Repeater | TBD | REPEATER | [IDEA] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
@@ -298,8 +298,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
-**Machine Conductor:** [IDEA]
-Passes activation and stickiness signals along machine networks without adding function. Pure connector block.
+**Machine Conductor:** [WIP]
+Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin), base texture renders black (needs renderer investigation).
 
 **Machine Pipe:** [IDEA]
 Directional item transport. Pushes items one block in facing direction per redstone pulse.

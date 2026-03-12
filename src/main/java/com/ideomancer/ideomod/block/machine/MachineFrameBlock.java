@@ -149,6 +149,11 @@ public class MachineFrameBlock extends Block implements EntityBlock, IMachineFam
         return IMachineFamily.isMachineFamily(block);
     }
 
+    /**
+     * Returns true for blocks that carry isolated machine-internal redstone
+     * (Track's POWER system). The Conductor is NOT included here because it
+     * carries vanilla redstone signal, not Track-internal signal.
+     */
     public static boolean isRedstoneConduit(Block block) {
         return block instanceof MachineTrackBlock;
     }

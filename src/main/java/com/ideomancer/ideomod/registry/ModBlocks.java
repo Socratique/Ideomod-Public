@@ -6,6 +6,7 @@ import com.ideomancer.ideomod.block.frame.FrameBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrolleyBlock;
@@ -150,6 +151,20 @@ public class ModBlocks {
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Conductor: solid-block redstone wire. Carries vanilla redstone signal
+    // (0-15, decays by 1). isRedstoneConductor=false prevents it from carrying
+    // strong signal through itself (keeps it equivalent to dust, not repeater).
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
+    public static final RegistryObject<Block> MACHINE_CONDUCTOR = BLOCKS.register("machine_conductor",
+            () -> new MachineConductorBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
                     .pushReaction(PushReaction.NORMAL)
             ));
 

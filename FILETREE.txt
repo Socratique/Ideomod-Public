@@ -19,6 +19,7 @@
 |  |           |  |  \\-- IFrameBlock.java
 |  |           |  +-- machine
 |  |           |  |  +-- IMachineFamily.java
+|  |           |  |  +-- MachineConductorBlock.java
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
@@ -109,6 +110,7 @@
 |     |     |  +-- iron_frame.json
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
+|     |     |  +-- machine_conductor.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
@@ -132,6 +134,7 @@
 |     |     |  |  +-- iron_framed_block.json
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
+|     |     |  |  +-- machine_conductor.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
@@ -148,6 +151,7 @@
 |     |     |     +-- iron_frame.json
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
+|     |     |     +-- machine_conductor.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
@@ -168,6 +172,8 @@
 |     |        |  +-- iron_frame.png
 |     |        |  +-- iron_frame_active.png
 |     |        |  +-- machine_block.png
+|     |        |  +-- machine_conductor.png
+|     |        |  +-- machine_conductor_indicator.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
@@ -194,6 +200,7 @@
 |     |  |  |     +-- iron_frame.json
 |     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
+|     |  |  |     +-- machine_conductor.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json

@@ -1,0 +1,20 @@
+{
+  "variants": {
+    "power=0":  { "model": "ideomod:block/machine_conductor" },
+    "power=1":  { "model": "ideomod:block/machine_conductor" },
+    "power=2":  { "model": "ideomod:block/machine_conductor" },
+    "power=3":  { "model": "ideomod:block/machine_conductor" },
+    "power=4":  { "model": "ideomod:block/machine_conductor" },
+    "power=5":  { "model": "ideomod:block/machine_conductor" },
+    "power=6":  { "model": "ideomod:block/machine_conductor" },
+    "power=7":  { "model": "ideomod:block/machine_conductor" },
+    "power=8":  { "model": "ideomod:block/machine_conductor" },
+    "power=9":  { "model": "ideomod:block/machine_conductor" },
+    "power=10": { "model": "ideomod:block/machine_conductor" },
+    "power=11": { "model": "ideomod:block/machine_conductor" },
+    "power=12": { "model": "ideomod:block/machine_conductor" },
+    "power=13": { "model": "ideomod:block/machine_conductor" },
+    "power=14": { "model": "ideomod:block/machine_conductor" },
+    "power=15": { "model": "ideomod:block/machine_conductor" }
+  }
+}

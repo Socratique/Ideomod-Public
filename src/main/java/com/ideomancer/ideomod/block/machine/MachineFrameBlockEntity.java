@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
@@ -25,6 +26,11 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * type should change. The menu uses PositionBoundContainer so it
  * automatically sees the new block entity after a swap — no rebind needed.
  *
+ * Also stores an inputFace for redstone-active specializations (Conductor,
+ * future Toggle/Pulser/Clock). The input face is the direction from which
+ * signal is received; the block outputs on all other faces. Specializations
+ * that don't use redstone (Track, Trolley, Frame) ignore this field.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class MachineFrameBlockEntity extends BlockEntity
@@ -33,8 +39,34 @@ public class MachineFrameBlockEntity extends BlockEntity
     private NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
     private static final int[] SLOTS = {0};
 
+    private static final String TAG_INPUT_FACE = "InputFace";
+
+    /**
+     * The face from which this block receives redstone signal.
+     * Null = no input (unpowered). Used by Conductor and future
+     * redstone specializations. Signal is output on all faces EXCEPT this one.
+     */
+    @Nullable
+    private Direction inputFace = null;
+
     public MachineFrameBlockEntity(BlockPos pos, BlockState state) {
         super(ModBlockEntities.MACHINE_FRAME.get(), pos, state);
+    }
+
+    // ========================================================================
+    // INPUT FACE (for redstone specializations)
+    // ========================================================================
+
+    @Nullable
+    public Direction getInputFace() {
+        return this.inputFace;
+    }
+
+    public void setInputFace(@Nullable Direction face) {
+        if (this.inputFace != face) {
+            this.inputFace = face;
+            this.setChanged();
+        }
     }
 
     // ========================================================================
@@ -45,6 +77,9 @@ public class MachineFrameBlockEntity extends BlockEntity
     protected void saveAdditional(CompoundTag tag) {
         super.saveAdditional(tag);
         ContainerHelper.saveAllItems(tag, this.items, true);
+        if (this.inputFace != null) {
+            tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
+        }
     }
 
     @Override
@@ -52,6 +87,11 @@ public class MachineFrameBlockEntity extends BlockEntity
         super.load(tag);
         this.items = NonNullList.withSize(1, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(tag, this.items);
+        if (tag.contains(TAG_INPUT_FACE)) {
+            this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
+        } else {
+            this.inputFace = null;
+        }
     }
 
     // ========================================================================
@@ -62,6 +102,9 @@ public class MachineFrameBlockEntity extends BlockEntity
     public CompoundTag saveMovementData() {
         CompoundTag tag = new CompoundTag();
         ContainerHelper.saveAllItems(tag, this.items, true);
+        if (this.inputFace != null) {
+            tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
+        }
         return tag;
     }
 
@@ -69,6 +112,11 @@ public class MachineFrameBlockEntity extends BlockEntity
     public void loadMovementData(CompoundTag tag) {
         this.items = NonNullList.withSize(1, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(tag, this.items);
+        if (tag.contains(TAG_INPUT_FACE)) {
+            this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
+        } else {
+            this.inputFace = null;
+        }
         this.setChanged();
     }
 

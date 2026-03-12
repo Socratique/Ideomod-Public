@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-09 (Machine Specialization system: MachineType-aware stickiness, PositionBoundContainer GUI, block swap system, specialization as distinct blocks.)*
+*Last updated: 2026-03-12 (Machine Conductor specialization: solid-block redstone wire, input/output face model, inputFace field in MachineFrameBlockEntity.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -80,7 +80,8 @@ com.ideomancer.ideomod
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
-  |     |     \-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
+  |     |     |-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
+  |     |     \-- MachineConductorBlock.java   MachineType.CONDUCTOR. EntityBlock + GUI + redstone wire.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -168,6 +169,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. Extends AbstractRangedPistonBlock. |
 | `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
+| `machine_conductor` | MachineConductorBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + vanilla redstone signal (0-15). |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -176,6 +178,8 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 ### ModItems (DeferredRegister<Item>)
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
+
+BlockItem: `MACHINE_CONDUCTOR` for MachineConductorBlock.
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
@@ -1069,6 +1073,34 @@ Registry ID: `machine_trolley`. Class: MachineTrolleyBlock. Implements `IMachine
 
 Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing minecart in slot). No active behavior -- pure cargo. Pushed by Tracks. Stickiness: MachineType.TROLLEY -- sticks to other Trolleys + Machine Frames + Frame Family (active). Does NOT stick to Tracks. Frame activation: always emits (strength 15).
 
+### Machine Conductor -- Solid-Block Redstone Wire
+
+Registry ID: `machine_conductor`. Class: MachineConductorBlock. Implements `IMachineFamily` with `MachineType.CONDUCTOR` + `EntityBlock`.
+
+Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1 per block). Connects to vanilla redstone components on all 6 faces. Outputs weak power (getSignal) and strong power (getDirectSignal) on all faces except the input face.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing redstone dust in slot).
+
+**Input/Output Face Model**: Receives signal on ONE face (input), outputs on other 5. Input face = strongest incoming signal. Stored as `inputFace` (nullable Direction) in MachineFrameBlockEntity. Persists through saves and piston movement.
+
+**Signal types**: Source blocks (levers, repeaters) = no decay. Wire blocks (dust, other Conductors) = -1 decay. Formula: scan all 6 faces, categorize each as source or wire, pick strongest.
+
+**Anti-feedback**: Input face suppression in getSignal/getDirectSignal. Returns 0 when `direction == inputFace.getOpposite()` (querier is on our input side).
+
+**Conductor-to-Conductor**: Uses neighbor's `getSignal()` which respects that neighbor's own input face suppression, then applies -1 decay.
+
+**Dust interaction**: Reads dust POWER directly with -1 decay (dust's getSignal is directional and may return 0 if not "pointing" at us).
+
+Stickiness: MachineType.CONDUCTOR -- sticks to other Conductors + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+**Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Squared curve gradient: POWER 0 = black, 1-15 = dim-to-bright red.
+
+**Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). (2) Base texture renders black (issue #13 -- model/renderer investigation needed).
+
+---
+
 ### Frame Blocks (Iron Frame, Copper Frame)
 
 Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock` and `SimpleWaterloggedBlock`. `BooleanProperty ACTIVE` (default false). `BooleanProperty WATERLOGGED` (default false, auto-set when placed in water). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.recalculate()`. See section 6b for the activation algorithm.
@@ -1355,6 +1387,9 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~9~~ | ~~Repulser/Attractor cannot target Framed Oddstone~~ | ~~Movement bug~~ | ~~FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE.~~ |
 | ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
 | ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ | May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |
+
+| 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix: mixin into RedStoneWireBlock.calculateTargetStrength to set a flag that MachineConductorBlock.getDirectSignal can check, or mixin into RedStoneWireBlock.getDirectSignal equivalent to also suppress Conductor output. |
+| 13 | Machine Conductor base texture renders black | Visual bug | Two-layer model JSON (base + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks instead of dual-element model. |
 
 
 ## 15. CONVENTIONS & PATTERNS
