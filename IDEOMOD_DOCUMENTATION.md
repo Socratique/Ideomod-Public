@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-12 (Machine Conductor specialization: solid-block redstone wire, input/output face model, inputFace field in MachineFrameBlockEntity.)*
+*Last updated: 2026-03-13 (Post-audit doc cleanup: EnderPearlPortalHandler documented, Oddstone feature count settled at 6, ModTags FURNACE_ARRAY_FRAME gap noted, frameable blocks count updated to ~310, Known Issues #12/#13 formatted, stickiness matrix cross-ref added.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -55,7 +55,7 @@ com.ideomancer.ideomod
   |                              buses, stickiness rules, structure definitions,
   |                              and StructureManager event handler.
   |-- block/
-  |     |-- OddstoneBlock.java           Core block: 5 features (see section 9)
+  |     |-- OddstoneBlock.java           Core block: 6 features (see section 9)
   |     |-- OddSlimeBlock.java           Directional slime (FACING-gated stickiness)
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- frame/
@@ -101,7 +101,8 @@ com.ideomancer.ideomod
   |           |-- OddstonePortalFrameDetector.java  Frame scanning, validation, address reading
   |           |-- OddstonePortalSavedData.java      Per-dimension portal registry (NBT)
   |           |-- PortalGeometry.java          Portal dimensions, corners, axis data structure.
-  |           \-- PortalUtils.java             Corner validation, interior nav, clearing helpers
+  |           |-- PortalUtils.java             Corner validation, interior nav, clearing helpers
+  |           \-- EnderPearlPortalHandler.java Ender pearl portal activation (Forge event handler)
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (tintIndex system)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
@@ -193,14 +194,14 @@ Two tabs:
 
 ### ModTags
 
-Three custom TagKeys, all for blocks:
+Four custom block tags, three with TagKey constants in ModTags.java:
 
-| Tag | Purpose | JSON Location |
-|-----|---------|---------------|
-| `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
-| `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | `data/ideomod/tags/blocks/redstone_components.json` |
-| `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | `data/ideomod/tags/blocks/furnace_array_frame.json` |
-| `FRAMEABLE_BLOCKS` | Whitelist of blocks that can be wrapped in frames (~290 vanilla blocks) | `data/ideomod/tags/blocks/frameable_blocks.json` |
+| Tag | Purpose | TagKey in ModTags? | JSON Location |
+|-----|---------|-------------------|---------------|
+| `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | YES | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
+| `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | YES | `data/ideomod/tags/blocks/redstone_components.json` |
+| `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | NO -- referenced inline in FurnaceArrayDefinition. Should be added to ModTags.java for compile-time safety. | `data/ideomod/tags/blocks/furnace_array_frame.json` |
+| `FRAMEABLE_BLOCKS` | Whitelist of blocks that can be wrapped in frames (~310 vanilla + 2 ideomod blocks) | YES | `data/ideomod/tags/blocks/frameable_blocks.json` |
 
 See section 13 for the full contents of each tag.
 
@@ -244,6 +245,8 @@ The `StickyType` enum (in `block/movement/StickyType.java`) serves as the single
 ### Stickiness Matrix
 
 Rows = grabber, columns = target. "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron/Copper Framed Blocks. Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules.
+
+*Note: This is the overview matrix with collapsed columns. See CODEBASE_REFERENCE.md and STICKINESS_SYSTEM.md for the detailed matrix with Machine Frame / Same-Type Spec / Diff-Type Spec / Vanilla Metal columns separated.*
 
 |              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
@@ -1386,10 +1389,9 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~8~~ | ~~Machine Track signal bleeds into attached Machine Blocks via Trolley~~ | ~~Gameplay bug~~ | ~~FIXED 2026-03-08. Two-part fix: (1) MachineTrackBlock redstone isolation -- isSignalSource=false, getSignal=0, getDirectSignal=0. Track POWER is now purely internal bookkeeping read via direct blockstate access in calculatePower(). No vanilla signal leakage through solid blocks. (2) FrameActivation suppression rule -- only MachineFrameBlock can emit anti-signal. All other Machine Family blocks always emit activation regardless of redstone state. Files: MachineTrackBlock.java, FrameActivation.java.~~ |
 | ~~9~~ | ~~Repulser/Attractor cannot target Framed Oddstone~~ | ~~Movement bug~~ | ~~FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE.~~ |
 | ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
-| ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ | May have been added during a prior session. Needs in-game testing to confirm framed glowstone etc. actually emit light. If not working, the lightLevel predicate at block registration in ModBlocks.java may also need updating. |
-
-| 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix: mixin into RedStoneWireBlock.calculateTargetStrength to set a flag that MachineConductorBlock.getDirectSignal can check, or mixin into RedStoneWireBlock.getDirectSignal equivalent to also suppress Conductor output. |
-| 13 | Machine Conductor base texture renders black | Visual bug | Two-layer model JSON (base + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks instead of dual-element model. |
+| ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ |
+| 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
+| 13 | Machine Conductor base texture renders black | Visual bug | Two-layer model JSON (base + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks. File: models/block/machine_conductor.json. |
 
 
 ## 15. CONVENTIONS & PATTERNS

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-07 (Rust system, iron/copper registry substitution plan, lore & world design dump: The After dimension, ghost blocks, ectoplasm, new potions, overworld structures, biomes, wargs, untamed ravagers, Steve/Herobrine lore. Enchanting Overhaul expanded: vanilla mechanics documented, budget system detailed, levelless enchant flat costs, curses as negative budget, catalyst slot weight-biasing mechanic, level ceiling via ring structure, new enchants: Weight, Aspect of Tool; new curse: Curse of Conductivity.)*
+*Last updated: 2026-03-13 (Post-audit cleanup: Oddstone recipe placeholder flagged for removal, pull immunity status clarified as [DONE].)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -83,7 +83,7 @@
 | ID | `oddstone` |
 | Hardness | 2.0 / Blast 6.0 |
 | Tool | Pickaxe |
-| Recipe | None -- natural resource only. Must be mined. |
+| Recipe | None -- natural resource only. Must be mined. **NOTE:** A crafting recipe (Stone corners + Redstone center = 4x Oddstone) exists in `data/ideomod/recipes/oddstone.json` as an auto-generated placeholder from early development. This recipe should be removed -- Oddstone is intended as a natural-only resource. |
 | Mining | Drops itself (raw Oddstone) by default. Silk Touch drops Cobbled Oddstone. Inverse of vanilla stone (stone -> cobble, Oddstone -> Oddstone raw, silk touch flips). |
 | Smelting | Oddstone in furnace -> Cobbled Oddstone. Another inversion of stone (stone cooks from cobble; Oddstone cooks INTO cobble). |
 
@@ -95,7 +95,7 @@
 | Redstone insulation | [DONE] | `isRedstoneConductor=false` -- acts like glass for redstone. |
 | Sympathetic movement | [DONE] | Wireless slime -- each face searches for nearest Oddstone within radius (default 5). BFS chaining. Push chains count toward 12-block limit. |
 | One-way stickiness | [DONE] | Oddstone grabs slime; slime does NOT grab Oddstone. Via mixin + StickinessRules. |
-| Sticky piston immunity | [IDEA] | Sticky pistons should NOT be able to grab/pull Oddstone. Thematically, Oddstone is ungrabable -- it decides what it connects to. Currently only slime/honey/odd slime are blocked; vanilla sticky piston retraction is a separate code path that also needs blocking. |
+| Sticky piston immunity | [DONE] | Sticky pistons cannot directly pull Oddstone. Implemented via PistonBaseBlockMixin position-specific ThreadLocal check -- during retraction, only the block at the exact pull position is checked. Oddstone dragged by its own stickiness (e.g., stuck to slime being pulled) still moves correctly. |
 
 **Known issues:**
 - Face search is axis-aligned only (no cone/hemisphere)

@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-12 (Machine Conductor specialization, inputFace field in MachineFrameBlockEntity.)*
+*Last updated: 2026-03-13 (Post-audit doc cleanup: expanded stickiness matrix, added EnderPearlPortalHandler, added Known Issues #12-#13, updated feature counts, noted FURNACE_ARRAY_FRAME tag gap.)*
 
 ---
 
@@ -27,7 +27,7 @@ com.ideomancer.ideomod
   |-- Ideomod.java              Main mod class. Registers buses, stickiness rules,
   |                              structure definitions, StructureManager event handler.
   |-- block/
-  |     |-- OddstoneBlock.java           5-feature core block (see Oddstone section)
+  |     |-- OddstoneBlock.java           6-feature core block (see Oddstone section)
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- frame/
@@ -94,7 +94,8 @@ com.ideomancer.ideomod
   |           |-- OddstonePortalSavedData.java      Per-dimension portal registry (SavedData)
   |           |-- PortalGeometry.java          Java record: portal dimensions + frame iteration.
   |           |                                detect(), forEachOddstonePosition(), parseAxis().
-  |           \-- PortalUtils.java             Corner validation, interior nav, clearing
+  |           |-- PortalUtils.java             Corner validation, interior nav, clearing
+  |           \-- EnderPearlPortalHandler.java Ender pearl portal activation (Forge event)
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
@@ -145,7 +146,11 @@ com.ideomancer.ideomod
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>
         \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
-                                         FURNACE_ARRAY_FRAME tags
+                                         FRAMEABLE_BLOCKS tags.
+                                         NOTE: FURNACE_ARRAY_FRAME exists as JSON tag
+                                         but has no TagKey constant in ModTags.java --
+                                         referenced inline in FurnaceArrayDefinition.
+                                         Should be added as a compile-time constant.
 ```
 
 ---
@@ -164,7 +169,7 @@ Three-layer architecture for asymmetric and directional stickiness. **StickyType
 
 Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab immunity + 1 directional). Enforced by `PistonStructureResolverMixin` at two points: (A) HEAD of addBlockLine during branching — full grab immunity + directional checks; (B) @Redirect on canStickTo in backward walk — directional checks on both calls, grab immunity on Call 1 only (front block reaching back) via call-pair toggle.
 
-**Stickiness Matrix** (rows = grabber, cols = target). Machine Family uses MachineType-aware stickiness. "Machine Frame" = MachineType.FRAME (universal connector). "Machine Spec" = any specialization (Track, Trolley, etc.). "Frame Fam" = all IFrameBlock implementations. "Vanilla Metal" = iron_block, copper_block when activated:
+**Stickiness Matrix** (rows = grabber, cols = target). Machine Family uses MachineType-aware stickiness. "Machine Frame" = MachineType.FRAME (universal connector). "Machine Spec" = any specialization (Track, Trolley, Conductor, etc.). "Frame Fam" = all IFrameBlock implementations. "Vanilla Metal" = iron_block, copper_block when activated. See STICKINESS_SYSTEM.md for full pair-by-pair implementation details.
 
 |              | Slime | Honey | Odd Slime | Machine Frame | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-------------:|:--------------:|:--------------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
@@ -173,14 +178,22 @@ Rules registered in `Ideomod.registerStickinessRules()` (4 consolidated grab imm
 | Odd Slime    |  no*  |  no*  |  YES (d)  |    YES (d)    |    YES (d)     |    YES (d)     |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
 | Machine Frame|  no   |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |            no             |    no    |   no   |
 | Machine Spec |  no   |  no   |    no     |      YES      |      YES       |       no       |        YES         |         no           |            no             |    no    |   no   |
-| Frame Fam    |  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
-| Vanilla Metal|  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Frame Fam (active)|  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Vanilla Metal (act.)|  no   |  no   |    no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
+| Framed Slime (act.)|  YES  |  no*  |    no*    |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |  YES   |
+| Framed Honey (act.)|  no*  |  YES  |    no*    |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |  YES   |
+| Framed OddSlime (act.)|  no*  |  no*  |  YES (d)  |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    | YES (d)|
+| Framed Oddstone (act.)|  YES  |  YES  |    YES    |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |   YES    |   no   |
+| Framed Oddstone (inact.)|  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |            no             |   YES    |   no   |
+| Framed Sticky (inact.)|  (i)  |  (i)  |    (i)    |       no      |       no       |       no       |        no          |         no           |            no             |    no    |  (i)   |
 | Oddstone     |  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |            no             |   YES    |   no   |
 
-`no*` = mutual canStickTo exclusion | `no` = grab immunity or canStickTo rejection | `(d)` = directional | `(m)` = material-matched
+`no*` = mutual canStickTo exclusion | `no` = grab immunity or canStickTo rejection | `(d)` = directional (only when pushed in FACING direction) | `(m)` = material-matched (iron<->iron, copper<->copper) | `(i)` = inner sticky behavior only (Framed Slime grabs like slime, Framed Honey like honey, Framed Odd Slime like odd slime directional)
 "Same-Type Spec" = same MachineType (Track<->Track). "Diff-Type Spec" = different MachineType (Track<->Trolley) -- canStickTo returns false at Layer 1.
 Machine Frame (MachineType.FRAME) is the universal bridge between all specialization types.
 Frame Fam stickiness requires ACTIVE on BOTH sides. Machine Family only grabs active frames.
+Framed Sticky (active) has BOTH inner stickiness + frame stickiness. Framed Sticky (inactive) has inner stickiness only.
+Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. Framed Oddstone (inactive) has oddstone inner stickiness only (grabs slime/honey/odd_slime/oddstone but NOT machine fam or frame fam).
 
 ### 2. Block Movement System (BlockMoveHelper + Ranged Pistons + Track/Trolley + IPistonMovable)
 
@@ -328,7 +341,7 @@ Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (im
 
 Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICKY) x 3 (INNER_CONDUCTOR) x 16 (INNER_LIGHT) = 2880 states.
 
-**FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~290 vanilla blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
+**FrameabilityHelper**: Tag-driven whitelist. Checks `#ideomod:frameable_blocks` tag (~310 vanilla blocks + 2 ideomod blocks), NOT FramedBlock, NOT IFrameBlock. Infested blocks excluded.
 
 **FramedBlockItem**: Custom BlockItem. Dynamic getName() using `frameMaterial.getDisplayName()`. Static createStack() delegates to `FramedBlockEntity.setInnerBlockIdOnStack()` for NBT setup. `getInnerBlockId()` delegates to `FramedBlockEntity.getInnerBlockIdFromStack()`.
 
@@ -358,7 +371,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FURNACE_ARRAY_FRAME (18 stone-family blocks), FRAMEABLE_BLOCKS (~290 vanilla blocks whitelist for framing).
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing). Note: FURNACE_ARRAY_FRAME tag exists as JSON (18 stone-family blocks) but has no TagKey constant in ModTags.java -- referenced inline in FurnaceArrayDefinition. Should be added for compile-time safety.
 
 **ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 
@@ -391,7 +404,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 1. **OddstoneConfig.reloadConfig() not wired to command** -- config can be reloaded programmatically but there's no in-game command to trigger it. Low priority.
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
 3. ~~**Framed block transit rendering (Trolley/Repulser/Attractor)**~~ -- FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.
-4. **Framed blocks not grabbed by slime during Repulser/Attractor moves** -- Slime stickiness may not propagate correctly through BlockMoveHelper path.
+4. ~~**Framed blocks not grabbed by slime during Repulser/Attractor moves**~~ -- FIXED 2026-03-01. Backward walk grab immunity was firing on both canStickTo calls in the pair, blocking the behind block's passive response. Fixed with call-pair toggle in PistonStructureResolverMixin.
 5. ~~**Frame inside-face rendering**~~ -- FIXED. Inverted cuboid elements added to frame JSON models.
 6. ~~**Sympathetic framed oddstone transit rendering**~~ -- FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.
 7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
@@ -399,5 +412,24 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 9. ~~**Repulser/Attractor cannot target Framed Oddstone**~~ -- FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
 10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
 11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.
+12. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
+13. **Machine Conductor base texture renders black** -- Two-layer model JSON (base texture + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks instead of dual-element model. File: models/block/machine_conductor.json.
+
+### Audit-Identified Issues (2026-03-13)
+
+The following issues were identified during a comprehensive codebase audit. See IDEOMOD_AUDIT_REPORT.md for full details and recommended fixes.
+
+| ID | Severity | Issue | Location |
+|----|----------|-------|----------|
+| A | Critical | MachineConductorBlock.shouldSignal is plain boolean, not ThreadLocal. Singleton block = shared state across all conductors. | MachineConductorBlock.java |
+| B | Critical | FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization. | FrameActivation.java |
+| C | Critical | ThreadLocal cleanup gaps in PistonStructureResolverMixin -- exception between HEAD/TAIL leaves contaminated state. | PistonStructureResolverMixin.java |
+| D | Critical | ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos -- same pattern as C. | PistonBaseBlockMixin.java |
+| E | High | OddstonePortalSavedData.unregisterPortal() uses && where || is needed -- impossible condition, causes memory leak. | OddstonePortalSavedData.java |
+| F | High | FrameActivation.recalculate() has no debouncing -- large networks cause lag during construction. | FrameActivation.java |
+| G | High | ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop. | PistonStructureResolverMixin.java |
+| H | High | MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration. | MovementScanHelper.java |
+| J | Medium | OddstoneConfig sympathetic radius is unbounded -- config edit to large value causes server hang. | OddstoneConfig.java |
+| N | Low | BUG10 debug logging left at INFO level. | PistonStructureResolverMixin.java |
 
 Written by Claude, directed and guided by The Ideomancer.

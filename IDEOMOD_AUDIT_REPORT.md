@@ -1,0 +1,322 @@
+# IDEOMOD CODEBASE & DOCUMENTATION AUDIT REPORT
+*Comprehensive audit of code quality, documentation consistency, and architectural health.*
+*Conducted: 2026-03-12*
+*Written by Claude, directed and guided by The Ideomancer.*
+
+---
+
+## EXECUTIVE SUMMARY
+
+This audit examined every Java source file, all five documentation files, all resource files, and cross-referenced documentation claims against actual code. Findings are organized into three categories: **Code Issues** (bugs, performance, fragility), **Documentation Inconsistencies** (docs that don't match code), and **Architectural Recommendations** (patterns that would scale better long-term).
+
+Overall the codebase is impressively well-organized for a mod of this complexity. The three-layer stickiness system, the strategy-pattern scanner, and the IPistonMovable pipeline are all sound designs. The issues below are refinements, not fundamental problems.
+
+---
+
+## PART 1: CODE ISSUES
+
+### 1.1 CRITICAL -- Thread Safety
+
+**A. MachineConductorBlock.shouldSignal is an instance boolean, not ThreadLocal**
+
+The `shouldSignal` field is a plain boolean on the block instance. Blocks in Minecraft are singletons -- there's one `MachineConductorBlock` object shared by every conductor in the world. If two conductors run `getIncomingSignalFromFace()` on different threads (e.g., during chunk loading or parallel neighbor updates), one thread could set `shouldSignal = false` while another is mid-scan, causing incorrect signal reads.
+
+In vanilla, `RedStoneWireBlock.shouldSignal` has the same pattern and the same bug -- but vanilla only has one wire type. For us, this is a ticking time bomb as we add more conductor-like specializations.
+
+*Fix:* Change `shouldSignal` to a `ThreadLocal<Boolean>`, matching the pattern used successfully in `MachineTrackBlock.isUpdating` and `MachineSwapHelper.isSwapping`.
+
+**B. FrameActivation.activatedVanillaMetals is a plain HashSet mutated without synchronization**
+
+`activatedVanillaMetals` is a `static HashSet<Long>` that gets cleared and rebuilt during every `recalculate()` call, but queried by `isVanillaMetalActivated()` which could be called from stickiness checks on a different code path. While Minecraft is mostly single-threaded, chunk loading and Forge parallel dispatch create edge cases.
+
+*Fix:* Use `ConcurrentHashMap.newKeySet()` or swap to a fresh set atomically rather than clear-and-rebuild in place.
+
+**C. ThreadLocal cleanup gaps in PistonStructureResolverMixin**
+
+`ideomod$inBranching` and `ideomod$firstCanStickToCall` are toggled at HEAD/TAIL injection points, but if an exception is thrown between HEAD and TAIL, the ThreadLocal never resets. Subsequent piston operations on that thread would see contaminated state, causing incorrect stickiness calculations. This could manifest as blocks sticking when they shouldn't, or vice versa.
+
+*Fix:* The HEAD/TAIL pattern can't easily become try-finally in mixin world. The pragmatic fix is a "reset guard" at the top of the HEAD injection: if we're entering branching and the flag is already true, force-reset it first (defensive cleanup from a previous failed run).
+
+**D. ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos**
+
+Same pattern: set before retraction logic, cleared at RETURN. If an exception occurs mid-retraction, the ThreadLocal retains a stale BlockPos, causing the next piston retraction to wrongly apply oddstone immunity to a position in the previous operation.
+
+*Fix:* Add a defensive reset at the top of the SET method: if the ThreadLocal is non-null when we're about to set it, log a warning and clear it first.
+
+---
+
+### 1.2 HIGH -- Logic Bug
+
+**E. OddstonePortalSavedData.unregisterPortal() has an impossible condition**
+
+In `unregisterPortal()`, the code checks:
+```
+if (pos.equals(addressEntries[0]) && pos.equals(addressEntries[1]))
+```
+A single BlockPos cannot equal both slots simultaneously (they're different portal positions). This means the "both slots match" cleanup path never executes, leaving stale entries in `portalsByAddress`. Over time, this causes a memory leak as portals are created and destroyed.
+
+*Fix:* This should likely be `||` (or), not `&&` (and). Or it should be two separate conditional branches handling each slot independently.
+
+---
+
+### 1.3 HIGH -- Performance
+
+**F. FrameActivation.recalculate() has no debouncing**
+
+Every `neighborChanged`, `onPlace`, and `onRemove` call triggers a full network wipe-and-rebuild. Placing 50 frame blocks in sequence triggers 50 complete BFS recalculations, each discovering the same growing network. For a 15-block-radius network, each recalculation visits hundreds of positions.
+
+This is the single biggest performance concern in the codebase. It won't cause issues in small builds, but a player who builds a large frame network will see noticeable lag during construction.
+
+*Potential fix:* Mark the network as dirty and schedule a single recalculation for the end of the tick using `level.scheduleTick()` or a server tick event. This batches all changes in a single tick into one recalculation.
+
+**G. PistonStructureResolverMixin.ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop**
+
+The vanilla metal conductor scanning repeatedly snapshots `toPush`, iterates all positions checking all 6 faces, and repeats until no new blocks are found. For a chain of 50 vanilla metals, this loops ~50 times with growing snapshot size. No iteration limit exists.
+
+*Fix:* Replace with a single BFS pass that tracks a frontier of newly-added positions, only checking their neighbors. Add a max iteration cap (e.g., 64) as a safety valve.
+
+**H. MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration**
+
+The sympathetic scan creates a new ArrayList snapshot each pass, re-iterating all known oddstone positions and checking all 6 faces at all distances. With radius 5, each oddstone checks 30 positions per pass. With 12 oddstones chaining, worst case is ~360 checks per pass times multiple passes.
+
+*Fix:* Use a BFS queue approach -- when a new oddstone is found, only check ITS neighbors next pass, not the entire accumulated set.
+
+**I. FramedBlock does redundant block entity lookups**
+
+Nearly every delegated method (mining, sound, friction, light, redstone, pathfinding, stepOn, fallOn, entityInside, etc.) calls `getFramedBE(level, pos)` independently. Methods called in sequence (like during mining) re-fetch the same block entity multiple times per tick.
+
+*Mitigation:* This is minor individually but adds up. A helper that takes a pre-fetched BE or a method that batches the lookups would help, but isn't urgent.
+
+---
+
+### 1.4 MEDIUM -- Missing Validation
+
+**J. OddstoneConfig sympathetic radius is unbounded**
+
+If the config file is edited to set radius = 1000, the sympathetic scan will iterate across an enormous volume, causing a server hang. No cap is applied.
+
+*Fix:* `Math.min(Math.max(radius, 1), 16)` in the config loader.
+
+**K. MovingBlockEntityData key collision risk**
+
+Keys are built by string concatenation: `dimensionKey + ":" + x + "," + y + "," + z`. While dimension names in vanilla don't contain colons or commas, modded dimensions could theoretically create collisions.
+
+*Fix:* Use a proper delimiter or a compound key object. Low urgency since the collision scenario is extremely unlikely.
+
+**L. StructureManager chunk iteration during block entity search**
+
+`getBlockEntities().keySet()` is iterated without a defensive copy. If a chunk is modified during iteration (unlikely but possible during rapid block changes), a ConcurrentModificationException could occur.
+
+*Fix:* `new HashSet<>(chunk.getBlockEntities().keySet())` before iterating.
+
+---
+
+### 1.5 LOW -- Code Quality
+
+**M. Machine blocks have extensive code duplication**
+
+`use()`, `getDrops()`, `getCloneItemStack()`, `newBlockEntity()`, and lifecycle hooks are nearly identical across MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock, and MachineConductorBlock. Each new specialization copies all of these.
+
+*Recommendation:* Extract an abstract `AbstractMachineBlock` base class with default implementations. Specializations only override `getMachineType()`, `canStickTo()`, and their unique behavior. This would cut ~200 lines of duplication and make adding new specializations a 30-line task instead of a 150-line task.
+
+**N. Debug logging left at INFO level**
+
+PistonStructureResolverMixin contains `[BUG10]` logging at INFO level and MachineConductorBlock has debug logging comments. These should be removed or moved to DEBUG before any public release.
+
+**O. MachineFrameBlockEntity.inputFace is shared by all specializations**
+
+The `inputFace` field lives on the shared block entity. If a future specialization (Toggle, Pulser) also needs directional I/O, it will collide with Conductor's inputFace. This isn't a bug today but is a landmine for future work.
+
+*Recommendation:* When adding the next directional specialization, consider either (a) a Map<String, Direction> on the BE keyed by specialization name, or (b) specialization-specific BE subclasses.
+
+**P. StructureDefinition ScanMode enum has stub values**
+
+PROXIMITY and PROXIMITY_WALLED exist as enum values but throw UnsupportedOperationException if used. This could surprise someone who tries to use them.
+
+*Recommendation:* Either remove the stubs until implemented, or add a clear `@Deprecated` annotation / javadoc warning.
+
+---
+
+## PART 2: DOCUMENTATION INCONSISTENCIES
+
+### 2.1 Missing Files
+
+**Q. BLOCK_EVENT_LESSON.md is referenced but doesn't exist**
+
+CODEBASE_REFERENCE.md references it ("see BLOCK_EVENT_LESSON.md") but the file was not found in the project root or anywhere in the repo. Either it was deleted or never created.
+
+*Fix:* Either create the document or remove the reference.
+
+### 2.2 Feature Counts
+
+**R. Oddstone feature count is inconsistent**
+
+CODEBASE_REFERENCE.md line 30 says "5-feature core block" but the section header (line 256) says "6 features in one block." OddstoneBlock.java implements 5 features. The DESIGN doc lists "Sticky piston immunity" as [IDEA] (not implemented) but CODEBASE_REFERENCE section 5 describes pull immunity as implemented in PistonBaseBlockMixin. So the actual count depends on whether you count pull immunity as an Oddstone feature or a mixin feature.
+
+*Fix:* Settle on a count and make it consistent. If pull immunity counts (it's about Oddstone behavior), it's 6. If only features IN OddstoneBlock.java count, it's 5. Update both the line 30 reference and the section header to match.
+
+### 2.3 Missing Documentation Entries
+
+**S. EnderPearlPortalHandler.java exists in FILETREE but isn't documented**
+
+The file exists in `block/portal/` and appears in FILETREE.txt but is absent from CODEBASE_REFERENCE.md's package structure listing and from the Documentation's portal system description.
+
+*Fix:* Add it to CODEBASE_REFERENCE section 2 and briefly describe it in the Documentation portal section.
+
+**T. FURNACE_ARRAY_FRAME tag is missing from ModTags.java**
+
+Documentation lists 4 custom tags but ModTags.java only defines 3 TagKey constants (PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS, FRAMEABLE_BLOCKS). The FURNACE_ARRAY_FRAME tag exists as a JSON file and works fine (Minecraft loads tags from JSON regardless of Java constants), but it means there's no compile-time reference for it.
+
+*Fix:* Add `public static final TagKey<Block> FURNACE_ARRAY_FRAME = ...` to ModTags.java and use it in FurnaceArrayDefinition instead of an inline tag reference.
+
+### 2.4 Stale/Incomplete Information
+
+**U. Stickiness matrix in CODEBASE_REFERENCE is incomplete**
+
+The matrix has 8 rows but STICKINESS_SYSTEM.md and DOCUMENTATION.md have 15 rows (including Framed Slime, Framed Honey, Framed Odd Slime, Framed Oddstone active/inactive, Framed Sticky inactive). The overlapping rows are consistent, but the CODEBASE_REFERENCE version is misleading because it omits the framed block interactions entirely.
+
+*Fix:* Either expand the CODEBASE_REFERENCE matrix to match, or add a note saying "See STICKINESS_SYSTEM.md for the complete matrix including framed blocks."
+
+**V. Frameable blocks count is stale**
+
+Documentation says "~290 vanilla blocks" but the actual tag contains 311 minecraft entries + 2 ideomod entries = 313 total.
+
+*Fix:* Update to "~310 blocks" or "310+ blocks."
+
+**W. Known Issues #12 and #13 are mentioned inline but not in the Known Issues section**
+
+The MachineConductorBlock description references issues #12 (dust sees strong power through solid blocks) and #13 (base texture renders black), but these aren't listed in the numbered Known Issues section at the bottom of CODEBASE_REFERENCE.
+
+*Fix:* Add entries #12 and #13 to the Known Issues section.
+
+**X. Oddstone recipe contradiction**
+
+DESIGN doc says "Recipe | None -- natural resource only. Must be mined." but `data/ideomod/recipes/oddstone.json` contains a working crafting recipe (Stone corners + Redstone center = 4x Oddstone).
+
+*Fix:* Either the recipe is a placeholder for testing (update the design doc to note this), or the design intent changed (update the design doc to reflect the actual recipe).
+
+---
+
+## PART 3: ARCHITECTURAL RECOMMENDATIONS
+
+### 3.1 Introduce an Abstract Machine Block Base Class
+
+**Problem:** Every machine specialization duplicates ~150 lines of boilerplate (GUI opening, drop handling, clone stack, block entity creation, canStickTo delegation, lifecycle hooks calling FrameActivation).
+
+**Recommendation:** Create `AbstractMachineBlock extends Block implements EntityBlock, IMachineFamily` with:
+- Default `use()` (open GUI)
+- Default `getDrops()` (conditional NBT)
+- Default `getCloneItemStack()` (registry-based)
+- Default `newBlockEntity()` (return MachineFrameBlockEntity)
+- Default `onPlace/onRemove/neighborChanged` (call FrameActivation)
+- Default `isStickyBlock()` (return true)
+- Default `canStickTo()` (delegate to canMachineFamilyStickTo + permissive entries)
+- Abstract `getMachineType()`
+
+Specializations then only override their unique behavior. This cuts the work for each new specialization from ~150 lines to ~30 lines and eliminates the "fix it in 4+ places" problem.
+
+### 3.2 Batch Frame Activation Recalculations
+
+**Problem:** Frame activation is wipe-and-rebuild, triggered per-block-change. Large networks recalculate completely on every single block placed or broken.
+
+**Recommendation:** Implement a "dirty network" system:
+1. When a block change triggers recalculation, instead of running immediately, add the change position to a `Set<BlockPos> dirtyPositions`.
+2. At the end of the server tick (via `TickEvent.ServerTickEvent`), run one recalculation per dirty network.
+3. This naturally batches all changes in a tick into a single pass.
+
+This is the same pattern vanilla redstone uses (schedule updates rather than process immediately) and would dramatically reduce lag during construction.
+
+### 3.3 Replace Fixed-Point Loops with BFS Queues
+
+**Problem:** Both `ideomod$addVanillaMetalConductors` (mixin) and `scanSympathetic` (MovementScanHelper) use snapshot-and-rescan loops that are O(n^2) in the worst case.
+
+**Recommendation:** Refactor both to use a proper BFS queue:
+- Maintain a `Queue<BlockPos> frontier` of newly-discovered positions
+- Each iteration, only check the frontier's neighbors
+- Move checked positions to a `visited` set
+- Continue until frontier is empty
+
+This converts both algorithms from O(n^2) to O(n) where n is the number of positions in the result. The code would also be simpler and easier to reason about.
+
+### 3.4 Consider a Tag for Immovable Inner Blocks
+
+**Problem:** PistonBaseBlockMixin hardcodes OBSIDIAN, CRYING_OBSIDIAN, REINFORCED_DEEPSLATE as immovable inners. The destroySpeed == -1 check catches most cases, but modded blocks with custom push reactions won't be caught.
+
+**Recommendation:** Create an `ideomod:immovable_when_framed` block tag. This lets datapacks and other mods declare blocks that should be immovable inside frames, without code changes. Fall back to the destroySpeed check for unlisted blocks.
+
+### 3.5 Portal Geometry Caching
+
+**Problem:** `OddstonePortalBlock.linkedTeleport()` calls `PortalGeometry.detect()` twice per teleport (once for source, once for destination). For large portals, each detection scans hundreds of block positions.
+
+**Recommendation:** Cache PortalGeometry in OddstonePortalSavedData alongside the portal entry. Invalidate on deactivation. This eliminates redundant scans during teleportation.
+
+### 3.6 Long-Term: Event-Driven vs. Polling for Stickiness
+
+**Current state:** Stickiness is evaluated at piston-push time by the resolver mixin. This is correct and performant.
+
+**Observation:** As the number of stickiness rules grows (each new block type potentially adds canStickTo cases and immunity rules), the evaluation path becomes deeper. Currently there are 4 consolidated grab immunity rules with carve-outs, 1 directional rule, and 6+ canStickTo implementations.
+
+**Recommendation:** No immediate action needed, but consider whether a "stickiness capability" system (where blocks declare their stickiness profile as data rather than code) would be cleaner at scale. Something like:
+```
+StickinessProfile.builder()
+    .type(StickyType.MACHINE_FRAME)
+    .sticksTo(MachineFamily.class, FrameFamily.whenActive())
+    .permissiveTo(SlimeBlock.class, HoneyBlock.class)
+    .build()
+```
+This would replace scattered canStickTo implementations with declarative profiles, making the stickiness matrix readable directly from code.
+
+---
+
+## PART 4: MECHANICAL OBSERVATIONS
+
+### 4.1 Odd Slime Directional Stickiness Clarity
+
+Current behavior: Odd Slime only grabs when push direction matches its FACING. This is implemented cleanly but may be unintuitive to players. Consider whether a particle effect or visual cue on the "sticky face" would help communicate the mechanic (purely a design thought, not a code issue).
+
+### 4.2 Frame Activation Anti-Signal Power
+
+The anti-signal system (powered Machine Frames suppress activation) is powerful but has an asymmetry: Machine Frames are the ONLY blocks that emit anti-signal, while ALL Machine Family blocks emit activation. This means you can suppress a frame network by powering a single Machine Frame in the chain, but you can't suppress activation from a Track or Trolley. This is documented and intentional, but it creates a hierarchy where Machine Frame is both the universal connector AND the only suppressible block -- it does a lot of jobs.
+
+### 4.3 Sympathetic Movement + Push Limit Interaction
+
+Sympathetic chains count toward the 12-block push limit. With radius 5, it's possible to create configurations where the 12-block limit is consumed entirely by sympathetic links, leaving no room for the actual payload. Players might find this frustrating if they build a sympathetic relay chain and discover it can't push anything. Consider whether sympathetic links should have their own separate limit, or whether the 12-block limit should be increased when sympathetic movement is involved.
+
+### 4.4 Machine Conductor Known Issues Impact
+
+Issues #12 (dust sees strong power through solid blocks) and #13 (base texture renders black) are noted as known. Issue #12 in particular could cause confusing behavior for players who place redstone dust adjacent to conductors expecting normal signal behavior. If the Conductor is intended to eventually replace vanilla redstone in certain configurations, this will need a RedStoneWireBlock mixin to fix the strong-power-through-solids issue -- it's not something that can be fixed from the Conductor side alone.
+
+---
+
+## SUMMARY: PRIORITY ACTION LIST
+
+### Immediate (before next testing session)
+1. Fix `shouldSignal` thread safety in MachineConductorBlock
+2. Fix `unregisterPortal()` impossible condition in OddstonePortalSavedData
+3. Add sympathetic radius cap in OddstoneConfig
+4. Remove or demote BUG10 debug logging
+
+### Short-term (next few sessions)
+5. Add defensive ThreadLocal resets in PistonStructureResolverMixin
+6. Add defensive ThreadLocal reset in PistonBaseBlockMixin
+7. Add FURNACE_ARRAY_FRAME to ModTags.java
+8. Add Known Issues #12, #13 to the Known Issues section
+9. Document EnderPearlPortalHandler in CODEBASE_REFERENCE
+10. Fix Oddstone feature count inconsistency
+11. Add BLOCK_EVENT_LESSON.md or remove references
+12. Fix Oddstone recipe contradiction in DESIGN doc
+
+### Medium-term (as part of next feature work)
+13. Extract AbstractMachineBlock base class
+14. Implement frame activation batching/debouncing
+15. Replace fixed-point loops with BFS in metal conductor scanning
+16. Cache PortalGeometry in SavedData
+17. Update stickiness matrix in CODEBASE_REFERENCE
+18. Update frameable blocks count in docs
+
+### Long-term (architecture evolution)
+19. Consider declarative stickiness profiles
+20. Consider tag-based immovable inner blocks
+21. Plan inputFace field strategy for multiple directional specializations
+
+Written by Claude, directed and guided by The Ideomancer.

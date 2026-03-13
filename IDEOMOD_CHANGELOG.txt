@@ -1,5 +1,66 @@
 # Ideomod Changelog
 
+## [2026-03-13] Post-Audit Documentation Cleanup
+
+Following a comprehensive codebase and documentation audit (IDEOMOD_AUDIT_REPORT.md),
+batch documentation fixes to resolve all inconsistencies identified in the audit.
+
+### Documentation fixes applied
+
+CODEBASE_REFERENCE.md:
+- Expanded stickiness matrix from 8 rows to full 14 rows, now includes all framed
+  block variants (Framed Slime, Framed Honey, Framed OddSlime, Framed Oddstone
+  active/inactive, Framed Sticky inactive). Matches STICKINESS_SYSTEM.md.
+- Added EnderPearlPortalHandler.java to portal package listing (was in FILETREE
+  but undocumented).
+- Fixed OddstoneBlock feature count: "5-feature" -> "6-feature" (pull immunity
+  is implemented in PistonBaseBlockMixin, counts as an Oddstone feature).
+- Noted FURNACE_ARRAY_FRAME tag gap: JSON tag exists and works but has no TagKey
+  constant in ModTags.java. Should be added for compile-time safety.
+- Updated frameable blocks count from "~290 vanilla blocks" to "~310 vanilla +
+  2 ideomod blocks" (actual tag contains 313 entries).
+- Fixed Known Issue #4: was showing as open, actually FIXED 2026-03-01 (call-pair
+  toggle fix for backward walk grab immunity).
+- Added Known Issues #12 (Conductor strong power visible to dust through solid
+  blocks) and #13 (Machine Conductor base texture renders black).
+- Added Audit-Identified Issues table referencing audit report findings A-N.
+
+IDEOMOD_DOCUMENTATION.md:
+- Fixed OddstoneBlock feature count: "5 features" -> "6 features" in package listing.
+- Added EnderPearlPortalHandler.java to portal package listing.
+- Updated ModTags section: noted FURNACE_ARRAY_FRAME TagKey gap, corrected tag
+  count from "Three custom TagKeys" to "Four custom block tags, three with TagKey
+  constants".
+- Updated frameable blocks count in FRAMEABLE_BLOCKS tag entry.
+- Added cross-reference note to stickiness matrix pointing to CODEBASE_REFERENCE
+  and STICKINESS_SYSTEM.md for the detailed version with separated columns.
+- Cleaned up Known Issue #11 (had trailing note outside table formatting).
+- Properly formatted Known Issues #12 and #13 into the table.
+
+IDEOMOD_DESIGN.md:
+- Flagged Oddstone recipe contradiction: crafting recipe exists as auto-generated
+  placeholder from early development. Oddstone is intended as natural-only resource.
+  Recipe file (data/ideomod/recipes/oddstone.json) should be removed.
+- Updated Oddstone pull immunity from [IDEA] to [DONE] -- feature is implemented
+  in PistonBaseBlockMixin via position-specific ThreadLocal check.
+
+### Audit findings NOT addressed in this session (code changes needed)
+
+The following audit items require source file changes and are deferred to a
+dedicated code session:
+- (A) MachineConductorBlock.shouldSignal -> ThreadLocal
+- (B) FrameActivation.activatedVanillaMetals -> ConcurrentHashMap.newKeySet()
+- (C,D) Defensive ThreadLocal resets in PistonStructureResolverMixin and
+  PistonBaseBlockMixin
+- (E) OddstonePortalSavedData.unregisterPortal() && -> || fix
+- (F) FrameActivation debouncing / tick-end batching
+- (G,H) BFS refactors for metal conductor scanning and sympathetic scanning
+- (J) OddstoneConfig sympathetic radius cap
+- (N) BUG10 debug logging demotion to DEBUG level
+
+### No code changes in this session. Documentation only.
+
+
 ## [2026-03-12] Machine Conductor Specialization -- Solid-Block Redstone Wire
 
 New Machine Family specialization: Machine Conductor. Insert redstone dust into
