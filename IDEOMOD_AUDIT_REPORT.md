@@ -141,27 +141,27 @@ PROXIMITY and PROXIMITY_WALLED exist as enum values but throw UnsupportedOperati
 
 ### 2.1 Missing Files
 
-**Q. BLOCK_EVENT_LESSON.md is referenced but doesn't exist**
+~~**Q. BLOCK_EVENT_LESSON.md is referenced but doesn't exist**~~
 
-CODEBASE_REFERENCE.md references it ("see BLOCK_EVENT_LESSON.md") but the file was not found in the project root or anywhere in the repo. Either it was deleted or never created.
+~~CODEBASE_REFERENCE.md references it ("see BLOCK_EVENT_LESSON.md") but the file was not found in the project root or anywhere in the repo. Either it was deleted or never created.~~
 
-*Fix:* Either create the document or remove the reference.
+*RESOLVED 2026-03-13: File exists in the project. Was present but not included in the audit's file scan.*
 
 ### 2.2 Feature Counts
 
-**R. Oddstone feature count is inconsistent**
+~~**R. Oddstone feature count is inconsistent**~~
 
-CODEBASE_REFERENCE.md line 30 says "5-feature core block" but the section header (line 256) says "6 features in one block." OddstoneBlock.java implements 5 features. The DESIGN doc lists "Sticky piston immunity" as [IDEA] (not implemented) but CODEBASE_REFERENCE section 5 describes pull immunity as implemented in PistonBaseBlockMixin. So the actual count depends on whether you count pull immunity as an Oddstone feature or a mixin feature.
+~~CODEBASE_REFERENCE.md line 30 says "5-feature core block" but the section header (line 256) says "6 features in one block." OddstoneBlock.java implements 5 features. The DESIGN doc lists "Sticky piston immunity" as [IDEA] (not implemented) but CODEBASE_REFERENCE section 5 describes pull immunity as implemented in PistonBaseBlockMixin. So the actual count depends on whether you count pull immunity as an Oddstone feature or a mixin feature.~~
 
-*Fix:* Settle on a count and make it consistent. If pull immunity counts (it's about Oddstone behavior), it's 6. If only features IN OddstoneBlock.java count, it's 5. Update both the line 30 reference and the section header to match.
+*RESOLVED 2026-03-13: Settled on 6 features (pull immunity counts -- it's Oddstone behavior even though implemented in PistonBaseBlockMixin). Updated CODEBASE_REFERENCE and DOCUMENTATION to "6-feature" / "6 features". Updated DESIGN doc pull immunity from [IDEA] to [DONE].*
 
 ### 2.3 Missing Documentation Entries
 
-**S. EnderPearlPortalHandler.java exists in FILETREE but isn't documented**
+~~**S. EnderPearlPortalHandler.java exists in FILETREE but isn't documented**~~
 
-The file exists in `block/portal/` and appears in FILETREE.txt but is absent from CODEBASE_REFERENCE.md's package structure listing and from the Documentation's portal system description.
+~~The file exists in `block/portal/` and appears in FILETREE.txt but is absent from CODEBASE_REFERENCE.md's package structure listing and from the Documentation's portal system description.~~
 
-*Fix:* Add it to CODEBASE_REFERENCE section 2 and briefly describe it in the Documentation portal section.
+*RESOLVED 2026-03-13: Added to package listings in both CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md.*
 
 **T. FURNACE_ARRAY_FRAME tag is missing from ModTags.java**
 
@@ -169,31 +169,33 @@ Documentation lists 4 custom tags but ModTags.java only defines 3 TagKey constan
 
 *Fix:* Add `public static final TagKey<Block> FURNACE_ARRAY_FRAME = ...` to ModTags.java and use it in FurnaceArrayDefinition instead of an inline tag reference.
 
+*PARTIALLY RESOLVED 2026-03-13: Gap documented in CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md ModTags sections. Code fix (adding TagKey constant) still needed.*
+
 ### 2.4 Stale/Incomplete Information
 
-**U. Stickiness matrix in CODEBASE_REFERENCE is incomplete**
+~~**U. Stickiness matrix in CODEBASE_REFERENCE is incomplete**~~
 
-The matrix has 8 rows but STICKINESS_SYSTEM.md and DOCUMENTATION.md have 15 rows (including Framed Slime, Framed Honey, Framed Odd Slime, Framed Oddstone active/inactive, Framed Sticky inactive). The overlapping rows are consistent, but the CODEBASE_REFERENCE version is misleading because it omits the framed block interactions entirely.
+~~The matrix has 8 rows but STICKINESS_SYSTEM.md and DOCUMENTATION.md have 15 rows (including Framed Slime, Framed Honey, Framed Odd Slime, Framed Oddstone active/inactive, Framed Sticky inactive). The overlapping rows are consistent, but the CODEBASE_REFERENCE version is misleading because it omits the framed block interactions entirely.~~
 
-*Fix:* Either expand the CODEBASE_REFERENCE matrix to match, or add a note saying "See STICKINESS_SYSTEM.md for the complete matrix including framed blocks."
+*RESOLVED 2026-03-13: Expanded CODEBASE_REFERENCE matrix to full 14 rows matching STICKINESS_SYSTEM.md. Added cross-reference note in IDEOMOD_DOCUMENTATION.md pointing to the detailed versions.*
 
-**V. Frameable blocks count is stale**
+~~**V. Frameable blocks count is stale**~~
 
-Documentation says "~290 vanilla blocks" but the actual tag contains 311 minecraft entries + 2 ideomod entries = 313 total.
+~~Documentation says "~290 vanilla blocks" but the actual tag contains 311 minecraft entries + 2 ideomod entries = 313 total.~~
 
-*Fix:* Update to "~310 blocks" or "310+ blocks."
+*RESOLVED 2026-03-13: Updated to "~310 vanilla + 2 ideomod blocks" in both CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md.*
 
-**W. Known Issues #12 and #13 are mentioned inline but not in the Known Issues section**
+~~**W. Known Issues #12 and #13 are mentioned inline but not in the Known Issues section**~~
 
-The MachineConductorBlock description references issues #12 (dust sees strong power through solid blocks) and #13 (base texture renders black), but these aren't listed in the numbered Known Issues section at the bottom of CODEBASE_REFERENCE.
+~~The MachineConductorBlock description references issues #12 (dust sees strong power through solid blocks) and #13 (base texture renders black), but these aren't listed in the numbered Known Issues section at the bottom of CODEBASE_REFERENCE.~~
 
-*Fix:* Add entries #12 and #13 to the Known Issues section.
+*RESOLVED 2026-03-13: Added #12 and #13 to Known Issues sections in both CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md.*
 
-**X. Oddstone recipe contradiction**
+~~**X. Oddstone recipe contradiction**~~
 
-DESIGN doc says "Recipe | None -- natural resource only. Must be mined." but `data/ideomod/recipes/oddstone.json` contains a working crafting recipe (Stone corners + Redstone center = 4x Oddstone).
+~~DESIGN doc says "Recipe | None -- natural resource only. Must be mined." but `data/ideomod/recipes/oddstone.json` contains a working crafting recipe (Stone corners + Redstone center = 4x Oddstone).~~
 
-*Fix:* Either the recipe is a placeholder for testing (update the design doc to note this), or the design intent changed (update the design doc to reflect the actual recipe).
+*RESOLVED 2026-03-13: Design doc updated to flag the recipe as an auto-generated placeholder from early development that should be removed. Oddstone is confirmed as natural-only resource.*
 
 ---
 
@@ -299,20 +301,20 @@ Issues #12 (dust sees strong power through solid blocks) and #13 (base texture r
 ### Short-term (next few sessions)
 5. Add defensive ThreadLocal resets in PistonStructureResolverMixin
 6. Add defensive ThreadLocal reset in PistonBaseBlockMixin
-7. Add FURNACE_ARRAY_FRAME to ModTags.java
-8. Add Known Issues #12, #13 to the Known Issues section
-9. Document EnderPearlPortalHandler in CODEBASE_REFERENCE
-10. Fix Oddstone feature count inconsistency
-11. Add BLOCK_EVENT_LESSON.md or remove references
-12. Fix Oddstone recipe contradiction in DESIGN doc
+7. Add FURNACE_ARRAY_FRAME to ModTags.java *(gap documented 2026-03-13, code fix still needed)*
+8. ~~Add Known Issues #12, #13 to the Known Issues section~~ *DONE 2026-03-13*
+9. ~~Document EnderPearlPortalHandler in CODEBASE_REFERENCE~~ *DONE 2026-03-13*
+10. ~~Fix Oddstone feature count inconsistency~~ *DONE 2026-03-13 (settled on 6)*
+11. ~~Add BLOCK_EVENT_LESSON.md or remove references~~ *RESOLVED 2026-03-13 (file exists)*
+12. ~~Fix Oddstone recipe contradiction in DESIGN doc~~ *DONE 2026-03-13 (flagged as placeholder for removal)*
 
 ### Medium-term (as part of next feature work)
 13. Extract AbstractMachineBlock base class
 14. Implement frame activation batching/debouncing
 15. Replace fixed-point loops with BFS in metal conductor scanning
 16. Cache PortalGeometry in SavedData
-17. Update stickiness matrix in CODEBASE_REFERENCE
-18. Update frameable blocks count in docs
+17. ~~Update stickiness matrix in CODEBASE_REFERENCE~~ *DONE 2026-03-13 (expanded to full 14 rows)*
+18. ~~Update frameable blocks count in docs~~ *DONE 2026-03-13 (~290 -> ~310)*
 
 ### Long-term (architecture evolution)
 19. Consider declarative stickiness profiles
