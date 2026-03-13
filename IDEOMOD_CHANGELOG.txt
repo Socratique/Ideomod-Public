@@ -1,5 +1,63 @@
 # Ideomod Changelog
 
+## [2026-03-13b] Sympathetic Movement Bug Fix + Audit Code Fixes
+
+### BUG FIX: Sympathetic movement only worked at distance 2 or exact radius
+
+Oddstone sympathetic movement was broken for distances 3 through (radius-1).
+The regression was in PistonStructureResolverMixin's sympathetic search phase.
+After refactoring to use MovementScanHelper.scanSympathetic() (shared scan),
+the resolver code that adds found blocks to the push list used a broken check:
+
+  if (checkPos.equals(oddPos.relative(face, radius)) ||
+      checkPos.equals(oddPos.relative(face, 2)))
+
+This only matched oddstone at exactly the configured radius OR exactly distance
+2, skipping all distances in between. The scan itself found them correctly --
+they just never got added to the push list.
+
+Fix: Replace the distance check with proper direction derivation from position
+delta. New helper ideomod$getAxisDirection(from, to) extracts the cardinal
+direction between two axis-aligned positions, which is passed to addBlockLine.
+
+File: PistonStructureResolverMixin.java
+
+### Audit code fixes (items A-E, J, N, T from IDEOMOD_AUDIT_REPORT.md)
+
+1. (A) MachineConductorBlock.shouldSignal converted from instance boolean to
+   static ThreadLocal<Boolean>. Blocks are singletons in Minecraft -- the old
+   plain boolean was shared across all conductors in the world. Added try-finally
+   around the set(false)/set(true) pair to prevent stuck state on exception.
+   File: MachineConductorBlock.java
+
+2. (C) Defensive ThreadLocal reset in PistonStructureResolverMixin: if
+   ideomod$inBranching is already true at HEAD of addBranchingBlocks, warn
+   and reset (cleanup from previous failed run). Also resets call-pair toggle.
+   File: PistonStructureResolverMixin.java
+
+3. (D) Defensive ThreadLocal reset in PistonBaseBlockMixin: if pullTargetPos
+   is non-null at HEAD of triggerEvent, warn and clear before setting new value.
+   File: PistonBaseBlockMixin.java
+
+4. (E) OddstonePortalSavedData.unregisterPortal() fixed impossible && condition.
+   A single BlockPos cannot equal both address slots simultaneously. Rewrote
+   slot cleanup to use || with cleaner branch structure.
+   File: OddstonePortalSavedData.java
+
+5. (J) OddstoneConfig sympathetic radius cap tightened from max 32 to max 16.
+   Radius > 16 causes O(n^2) scanning over enormous volumes.
+   File: OddstoneConfig.java
+
+6. (N) All BUG10 debug logging in PistonStructureResolverMixin demoted from
+   INFO to DEBUG level. 19 log statements converted.
+   File: PistonStructureResolverMixin.java
+
+7. (T) Added FURNACE_ARRAY_FRAME TagKey constant to ModTags.java. The tag
+   existed as a JSON file but had no compile-time reference. FurnaceArrayDefinition
+   should be updated to use ModTags.FURNACE_ARRAY_FRAME instead of inline reference.
+   File: ModTags.java
+
+
 ## [2026-03-13] Post-Audit Documentation Cleanup
 
 Following a comprehensive codebase and documentation audit (IDEOMOD_AUDIT_REPORT.md),

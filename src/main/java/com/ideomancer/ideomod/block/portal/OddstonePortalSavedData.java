@@ -176,17 +176,18 @@ public class OddstonePortalSavedData extends SavedData {
         // Update address lookup
         BlockPos[] addressEntries = portalsByAddress.get(entry.address);
         if (addressEntries != null) {
-            if (pos.equals(addressEntries[0]) && pos.equals(addressEntries[1])) {
-                // Both entries are this pos (shouldn't happen but safety)
-                portalsByAddress.remove(entry.address);
-            } else if (pos.equals(addressEntries[0])) {
-                addressEntries[0] = addressEntries[1];
-                addressEntries[1] = null;
+            if (pos.equals(addressEntries[0]) || pos.equals(addressEntries[1])) {
+                // Clean up: remove our position from whichever slot(s) it's in
+                if (pos.equals(addressEntries[0])) {
+                    addressEntries[0] = addressEntries[1];
+                    addressEntries[1] = null;
+                } else {
+                    addressEntries[1] = null;
+                }
+                // If both slots are now null, remove the address entirely
                 if (addressEntries[0] == null) {
                     portalsByAddress.remove(entry.address);
                 }
-            } else if (pos.equals(addressEntries[1])) {
-                addressEntries[1] = null;
             }
         }
 

@@ -207,6 +207,14 @@ public abstract class PistonBaseBlockMixin {
             CallbackInfoReturnable<Boolean> cir) {
         // type 0 = extend, type 1 = retract, type 2 = retract (1-tick pulse)
         if (type == 1 || type == 2) {
+            // Defensive reset: if non-null from a previous failed run (exception
+            // thrown between HEAD and RETURN), warn and clear before setting new value.
+            BlockPos stale = ideomod$pullTargetPos.get();
+            if (stale != null) {
+                Ideomod.LOGGER.warn("[PistonBaseMixin] pullTargetPos was non-null ({}) at HEAD — " +
+                        "defensive reset from previous failed run", stale);
+                ideomod$pullTargetPos.set(null);
+            }
             Direction direction = Direction.from3DDataValue(data);
             BlockPos pullPos = pos.relative(direction, 2);
             ideomod$pullTargetPos.set(pullPos);

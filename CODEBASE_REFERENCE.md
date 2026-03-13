@@ -146,11 +146,10 @@ com.ideomancer.ideomod
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>
         \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
-                                         FRAMEABLE_BLOCKS tags.
-                                         NOTE: FURNACE_ARRAY_FRAME exists as JSON tag
-                                         but has no TagKey constant in ModTags.java --
-                                         referenced inline in FurnaceArrayDefinition.
-                                         Should be added as a compile-time constant.
+                                         FRAMEABLE_BLOCKS, FURNACE_ARRAY_FRAME tags.
+                                         NOTE: FurnaceArrayDefinition still uses
+                                         inline tag reference -- should be updated
+                                         to use ModTags.FURNACE_ARRAY_FRAME.
 ```
 
 ---
@@ -371,7 +370,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing). Note: FURNACE_ARRAY_FRAME tag exists as JSON (18 stone-family blocks) but has no TagKey constant in ModTags.java -- referenced inline in FurnaceArrayDefinition. Should be added for compile-time safety.
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 
 **ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 

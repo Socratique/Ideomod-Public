@@ -56,4 +56,13 @@ public class ModTags {
      */
     public static final TagKey<Block> FRAMEABLE_BLOCKS =
             BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "frameable_blocks"));
+
+    /**
+     * Stone-family blocks that form the frame around furnace array multiblocks.
+     * Data-driven via tag so datapacks can add/remove valid frame materials.
+     *
+     * Tag file: data/ideomod/tags/blocks/furnace_array_frame.json
+     */
+    public static final TagKey<Block> FURNACE_ARRAY_FRAME =
+            BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "furnace_array_frame"));
 }

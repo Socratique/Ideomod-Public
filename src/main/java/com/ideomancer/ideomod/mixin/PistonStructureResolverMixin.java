@@ -75,7 +75,15 @@ public abstract class PistonStructureResolverMixin {
 
     @Inject(method = "addBranchingBlocks", at = @At("HEAD"))
     private void ideomod$enterBranching(CallbackInfoReturnable<Boolean> cir) {
+        // Defensive reset: if flag is already true from a previous failed run
+        // (exception thrown between HEAD and TAIL), reset it first.
+        if (ideomod$inBranching.get()) {
+            com.ideomancer.ideomod.Ideomod.LOGGER.warn(
+                "[Ideomod] inBranching was already true at HEAD — defensive reset from previous failed run");
+        }
         ideomod$inBranching.set(true);
+        // Defensive reset for call-pair toggle too
+        ideomod$firstCanStickToCall.set(true);
     }
 
     @Inject(method = "addBranchingBlocks", at = @At("TAIL"))
@@ -101,12 +109,12 @@ public abstract class PistonStructureResolverMixin {
                 if (debugBe instanceof FramedBlockEntity debugFbe && debugFbe.hasInnerBlock()) {
                     innerInfo = debugFbe.getInnerBlockId().toString();
                 }
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 Feature5] addBlockLine called: pos={}, inner={}, isImmovable={}, inBranching={}, dir={}",
                     pos, innerInfo, isFramedImmovable, ideomod$inBranching.get(), dir);
             }
             if (isFramedImmovable) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 Feature5] RETURNING FALSE — immovable framed block at {}", pos);
                 cir.setReturnValue(false);
                 return;
@@ -126,17 +134,17 @@ public abstract class PistonStructureResolverMixin {
 
         if (grabberState.isStickyBlock()) {
             // BUG10: Log every branching grab attempt
-            com.ideomancer.ideomod.Ideomod.LOGGER.info(
+            com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                 "[BUG10 branching] Grab attempt: grabber={} at {}, target={} at {}, pushDir={}",
                 grabberState, grabberPos, neighborState, pos, this.pushDirection);
 
             // Standard directional check (covers real Odd Slime via registered rule)
             if (StickinessRules.isDirectionalGrabBlocked(grabberState, this.pushDirection)) {
                 if (ideomod$wouldFrameStickinessAllow(grabberState, neighborState)) {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 branching] Directional blocked but frame stickiness allows");
                 } else {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 branching] BLOCKED by directional rule");
                     cir.setReturnValue(true);
                     return;
@@ -146,10 +154,10 @@ public abstract class PistonStructureResolverMixin {
             // Framed Odd Slime directional check (not registered as a rule)
             if (ideomod$isFramedOddSlimeDirectionallyBlocked(grabberState)) {
                 if (ideomod$wouldFrameStickinessAllow(grabberState, neighborState)) {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 branching] Framed odd slime directional blocked but frame stickiness allows");
                 } else {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 branching] BLOCKED by framed odd slime directional rule");
                     cir.setReturnValue(true);
                     return;
@@ -158,14 +166,14 @@ public abstract class PistonStructureResolverMixin {
 
             // Standard grab immunity check
             if (StickinessRules.isGrabBlocked(grabberState, neighborState)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 branching] BLOCKED by grab immunity: grabber={}, target={}",
                     grabberState, neighborState);
                 cir.setReturnValue(true);
                 return;
             }
 
-            com.ideomancer.ideomod.Ideomod.LOGGER.info(
+            com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                 "[BUG10 branching] All checks PASSED — grab allowed");
         }
     }
@@ -182,13 +190,13 @@ public abstract class PistonStructureResolverMixin {
         ideomod$firstCanStickToCall.set(!isFirstCall);
 
         // BUG10: Log every canStickTo redirect call
-        com.ideomancer.ideomod.Ideomod.LOGGER.info(
+        com.ideomancer.ideomod.Ideomod.LOGGER.debug(
             "[BUG10 backward] canStickTo redirect: self={}, other={}, isFirstCall={}",
             self, other, isFirstCall);
 
         // First: respect the original canStickTo result
         if (!self.canStickTo(other)) {
-            com.ideomancer.ideomod.Ideomod.LOGGER.info(
+            com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                 "[BUG10 backward] canStickTo returned FALSE: self={}, other={}", self, other);
             if (isFirstCall) {
                 ideomod$firstCanStickToCall.set(true);
@@ -199,7 +207,7 @@ public abstract class PistonStructureResolverMixin {
         // --- Directional checks (apply on BOTH calls) ---
         if (StickinessRules.isDirectionalGrabBlocked(self, this.pushDirection)) {
             if (!ideomod$wouldFrameStickinessAllow(self, other)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 backward] BLOCKED by directional (self): self={}", self);
                 if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
@@ -207,7 +215,7 @@ public abstract class PistonStructureResolverMixin {
         }
         if (ideomod$isFramedOddSlimeDirectionallyBlocked(self)) {
             if (!ideomod$wouldFrameStickinessAllow(self, other)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 backward] BLOCKED by framed odd slime directional (self): self={}", self);
                 if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
@@ -215,7 +223,7 @@ public abstract class PistonStructureResolverMixin {
         }
         if (StickinessRules.isDirectionalGrabBlocked(other, this.pushDirection)) {
             if (!ideomod$wouldFrameStickinessAllow(other, self)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 backward] BLOCKED by directional (other): other={}", other);
                 if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
@@ -223,7 +231,7 @@ public abstract class PistonStructureResolverMixin {
         }
         if (ideomod$isFramedOddSlimeDirectionallyBlocked(other)) {
             if (!ideomod$wouldFrameStickinessAllow(other, self)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 backward] BLOCKED by framed odd slime directional (other): other={}", other);
                 if (isFirstCall) ideomod$firstCanStickToCall.set(true);
                 return false;
@@ -233,7 +241,7 @@ public abstract class PistonStructureResolverMixin {
         // --- Grab immunity (FIRST CALL ONLY) ---
         if (isFirstCall) {
             if (StickinessRules.isGrabBlocked(self, other)) {
-                com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                     "[BUG10 backward] BLOCKED by grab immunity (Call 1): self={}, other={}", self, other);
                 ideomod$firstCanStickToCall.set(true);
                 return false;
@@ -245,7 +253,7 @@ public abstract class PistonStructureResolverMixin {
             ideomod$firstCanStickToCall.set(true);
         }
 
-        com.ideomancer.ideomod.Ideomod.LOGGER.info(
+        com.ideomancer.ideomod.Ideomod.LOGGER.debug(
             "[BUG10 backward] canStickTo redirect PASSED: self={}, other={}, isFirstCall={}", self, other, isFirstCall);
         return true;
     }
@@ -319,21 +327,22 @@ public abstract class PistonStructureResolverMixin {
 
         for (BlockPos checkPos : allFound) {
             if (!this.toPush.contains(checkPos)) {
+                // Find which oddstone in toPush can see this one, and derive the direction
                 List<BlockPos> snapshot = new ArrayList<>(this.toPush);
                 for (BlockPos oddPos : snapshot) {
                     if (!MovementScanHelper.isOddstoneOrFramedOddstone(level, oddPos)) continue;
 
-                    for (Direction face : Direction.values()) {
-                        if (checkPos.equals(oddPos.relative(face, radius)) ||
-                            checkPos.equals(oddPos.relative(face, 2))) {
-                            boolean result = this.addBlockLine(checkPos, face);
-                            if (this.toPush.contains(checkPos)) {
-                                addedAny = true;
-                                break;
-                            }
+                    // Derive the axis-aligned direction from oddPos to checkPos.
+                    // Sympathetic links are always axis-aligned (the scan walks
+                    // along cardinal directions), so exactly one axis will differ.
+                    Direction linkDir = ideomod$getAxisDirection(oddPos, checkPos);
+                    if (linkDir != null) {
+                        boolean result = this.addBlockLine(checkPos, linkDir);
+                        if (this.toPush.contains(checkPos)) {
+                            addedAny = true;
+                            break;
                         }
                     }
-                    if (this.toPush.contains(checkPos)) break;
                 }
             }
         }
@@ -357,6 +366,34 @@ public abstract class PistonStructureResolverMixin {
         if (ideomod$hasImmovableFrameAnchor()) {
             cir.setReturnValue(false);
         }
+    }
+
+    // ====================================================================
+    // SYMPATHETIC LINK DIRECTION HELPER
+    // ====================================================================
+
+    /**
+     * Derives the cardinal Direction from 'from' to 'to', IF the two positions
+     * are axis-aligned (differ on exactly one axis). Returns null if not
+     * axis-aligned. Used by sympathetic movement to determine which direction
+     * to pass to addBlockLine when adding a found oddstone.
+     */
+    @Unique
+    private static Direction ideomod$getAxisDirection(BlockPos from, BlockPos to) {
+        int dx = to.getX() - from.getX();
+        int dy = to.getY() - from.getY();
+        int dz = to.getZ() - from.getZ();
+
+        // Exactly one axis must be nonzero for axis-aligned link
+        int nonZero = (dx != 0 ? 1 : 0) + (dy != 0 ? 1 : 0) + (dz != 0 ? 1 : 0);
+        if (nonZero != 1) return null;
+
+        if (dx > 0) return Direction.EAST;
+        if (dx < 0) return Direction.WEST;
+        if (dy > 0) return Direction.UP;
+        if (dy < 0) return Direction.DOWN;
+        if (dz > 0) return Direction.SOUTH;
+        return Direction.NORTH;
     }
 
     // ====================================================================
@@ -552,7 +589,7 @@ public abstract class PistonStructureResolverMixin {
                 // Check frame stickiness in both directions
                 if (ideomod$wouldFrameStickinessAllow(pushedState, neighborState)
                     || ideomod$wouldFrameStickinessAllow(neighborState, pushedState)) {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 Feature7] ANCHOR FOUND: immovable framed block at {} anchors group via {} at {}",
                         neighborPos, pushedState, pushedPos);
                     return true;
@@ -564,7 +601,7 @@ public abstract class PistonStructureResolverMixin {
                 if (MachineFrameBlock.isMachineFamily(pushedState.getBlock())
                     && neighborState.getBlock() instanceof IFrameBlock
                     && IFrameBlock.isActive(neighborState)) {
-                    com.ideomancer.ideomod.Ideomod.LOGGER.info(
+                    com.ideomancer.ideomod.Ideomod.LOGGER.debug(
                         "[BUG10 Feature7] ANCHOR FOUND: immovable framed block at {} anchors group via machine family at {}",
                         neighborPos, pushedPos);
                     return true;

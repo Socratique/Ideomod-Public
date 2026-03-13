@@ -17,13 +17,13 @@ Overall the codebase is impressively well-organized for a mod of this complexity
 
 ### 1.1 CRITICAL -- Thread Safety
 
-**A. MachineConductorBlock.shouldSignal is an instance boolean, not ThreadLocal**
+~~**A. MachineConductorBlock.shouldSignal is an instance boolean, not ThreadLocal**~~
 
-The `shouldSignal` field is a plain boolean on the block instance. Blocks in Minecraft are singletons -- there's one `MachineConductorBlock` object shared by every conductor in the world. If two conductors run `getIncomingSignalFromFace()` on different threads (e.g., during chunk loading or parallel neighbor updates), one thread could set `shouldSignal = false` while another is mid-scan, causing incorrect signal reads.
+~~The `shouldSignal` field is a plain boolean on the block instance. Blocks in Minecraft are singletons -- there's one `MachineConductorBlock` object shared by every conductor in the world. If two conductors run `getIncomingSignalFromFace()` on different threads (e.g., during chunk loading or parallel neighbor updates), one thread could set `shouldSignal = false` while another is mid-scan, causing incorrect signal reads.~~
 
-In vanilla, `RedStoneWireBlock.shouldSignal` has the same pattern and the same bug -- but vanilla only has one wire type. For us, this is a ticking time bomb as we add more conductor-like specializations.
+~~In vanilla, `RedStoneWireBlock.shouldSignal` has the same pattern and the same bug -- but vanilla only has one wire type. For us, this is a ticking time bomb as we add more conductor-like specializations.~~
 
-*Fix:* Change `shouldSignal` to a `ThreadLocal<Boolean>`, matching the pattern used successfully in `MachineTrackBlock.isUpdating` and `MachineSwapHelper.isSwapping`.
+*RESOLVED 2026-03-13: Converted to `static final ThreadLocal<Boolean>` with try-finally safety wrapper.*
 
 **B. FrameActivation.activatedVanillaMetals is a plain HashSet mutated without synchronization**
 
@@ -31,31 +31,31 @@ In vanilla, `RedStoneWireBlock.shouldSignal` has the same pattern and the same b
 
 *Fix:* Use `ConcurrentHashMap.newKeySet()` or swap to a fresh set atomically rather than clear-and-rebuild in place.
 
-**C. ThreadLocal cleanup gaps in PistonStructureResolverMixin**
+~~**C. ThreadLocal cleanup gaps in PistonStructureResolverMixin**~~
 
-`ideomod$inBranching` and `ideomod$firstCanStickToCall` are toggled at HEAD/TAIL injection points, but if an exception is thrown between HEAD and TAIL, the ThreadLocal never resets. Subsequent piston operations on that thread would see contaminated state, causing incorrect stickiness calculations. This could manifest as blocks sticking when they shouldn't, or vice versa.
+~~`ideomod$inBranching` and `ideomod$firstCanStickToCall` are toggled at HEAD/TAIL injection points, but if an exception is thrown between HEAD and TAIL, the ThreadLocal never resets. Subsequent piston operations on that thread would see contaminated state, causing incorrect stickiness calculations. This could manifest as blocks sticking when they shouldn't, or vice versa.~~
 
-*Fix:* The HEAD/TAIL pattern can't easily become try-finally in mixin world. The pragmatic fix is a "reset guard" at the top of the HEAD injection: if we're entering branching and the flag is already true, force-reset it first (defensive cleanup from a previous failed run).
+*RESOLVED 2026-03-13: Added defensive reset at HEAD of addBranchingBlocks -- if inBranching is already true, warns and resets. Also resets call-pair toggle at HEAD.*
 
-**D. ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos**
+~~**D. ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos**~~
 
-Same pattern: set before retraction logic, cleared at RETURN. If an exception occurs mid-retraction, the ThreadLocal retains a stale BlockPos, causing the next piston retraction to wrongly apply oddstone immunity to a position in the previous operation.
+~~Same pattern: set before retraction logic, cleared at RETURN. If an exception occurs mid-retraction, the ThreadLocal retains a stale BlockPos, causing the next piston retraction to wrongly apply oddstone immunity to a position in the previous operation.~~
 
-*Fix:* Add a defensive reset at the top of the SET method: if the ThreadLocal is non-null when we're about to set it, log a warning and clear it first.
+*RESOLVED 2026-03-13: Added defensive reset at HEAD of triggerEvent -- if pullTargetPos is non-null when entering, warns and clears before setting new value.*
 
 ---
 
 ### 1.2 HIGH -- Logic Bug
 
-**E. OddstonePortalSavedData.unregisterPortal() has an impossible condition**
+~~**E. OddstonePortalSavedData.unregisterPortal() has an impossible condition**~~
 
-In `unregisterPortal()`, the code checks:
+~~In `unregisterPortal()`, the code checks:~~
 ```
 if (pos.equals(addressEntries[0]) && pos.equals(addressEntries[1]))
 ```
-A single BlockPos cannot equal both slots simultaneously (they're different portal positions). This means the "both slots match" cleanup path never executes, leaving stale entries in `portalsByAddress`. Over time, this causes a memory leak as portals are created and destroyed.
+~~A single BlockPos cannot equal both slots simultaneously (they're different portal positions). This means the "both slots match" cleanup path never executes, leaving stale entries in `portalsByAddress`. Over time, this causes a memory leak as portals are created and destroyed.~~
 
-*Fix:* This should likely be `||` (or), not `&&` (and). Or it should be two separate conditional branches handling each slot independently.
+*RESOLVED 2026-03-13: Rewrote slot cleanup to use || with cleaner branch structure. Single pass checks both slots independently.*
 
 ---
 
@@ -91,11 +91,11 @@ Nearly every delegated method (mining, sound, friction, light, redstone, pathfin
 
 ### 1.4 MEDIUM -- Missing Validation
 
-**J. OddstoneConfig sympathetic radius is unbounded**
+~~**J. OddstoneConfig sympathetic radius is unbounded**~~
 
-If the config file is edited to set radius = 1000, the sympathetic scan will iterate across an enormous volume, causing a server hang. No cap is applied.
+~~If the config file is edited to set radius = 1000, the sympathetic scan will iterate across an enormous volume, causing a server hang. No cap is applied.~~
 
-*Fix:* `Math.min(Math.max(radius, 1), 16)` in the config loader.
+*RESOLVED 2026-03-13: Tightened cap from max 32 to max 16. `Math.max(1, Math.min(16, radius))` in parseConfig().*
 
 **K. MovingBlockEntityData key collision risk**
 
@@ -119,9 +119,11 @@ Keys are built by string concatenation: `dimensionKey + ":" + x + "," + y + "," 
 
 *Recommendation:* Extract an abstract `AbstractMachineBlock` base class with default implementations. Specializations only override `getMachineType()`, `canStickTo()`, and their unique behavior. This would cut ~200 lines of duplication and make adding new specializations a 30-line task instead of a 150-line task.
 
-**N. Debug logging left at INFO level**
+~~**N. Debug logging left at INFO level**~~
 
-PistonStructureResolverMixin contains `[BUG10]` logging at INFO level and MachineConductorBlock has debug logging comments. These should be removed or moved to DEBUG before any public release.
+~~PistonStructureResolverMixin contains `[BUG10]` logging at INFO level and MachineConductorBlock has debug logging comments. These should be removed or moved to DEBUG before any public release.~~
+
+*RESOLVED 2026-03-13: All 19 BUG10 INFO log statements in PistonStructureResolverMixin demoted to DEBUG.*
 
 **O. MachineFrameBlockEntity.inputFace is shared by all specializations**
 
@@ -163,13 +165,11 @@ PROXIMITY and PROXIMITY_WALLED exist as enum values but throw UnsupportedOperati
 
 *RESOLVED 2026-03-13: Added to package listings in both CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md.*
 
-**T. FURNACE_ARRAY_FRAME tag is missing from ModTags.java**
+~~**T. FURNACE_ARRAY_FRAME tag is missing from ModTags.java**~~
 
-Documentation lists 4 custom tags but ModTags.java only defines 3 TagKey constants (PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS, FRAMEABLE_BLOCKS). The FURNACE_ARRAY_FRAME tag exists as a JSON file and works fine (Minecraft loads tags from JSON regardless of Java constants), but it means there's no compile-time reference for it.
+~~Documentation lists 4 custom tags but ModTags.java only defines 3 TagKey constants (PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS, FRAMEABLE_BLOCKS). The FURNACE_ARRAY_FRAME tag exists as a JSON file and works fine (Minecraft loads tags from JSON regardless of Java constants), but it means there's no compile-time reference for it.~~
 
-*Fix:* Add `public static final TagKey<Block> FURNACE_ARRAY_FRAME = ...` to ModTags.java and use it in FurnaceArrayDefinition instead of an inline tag reference.
-
-*PARTIALLY RESOLVED 2026-03-13: Gap documented in CODEBASE_REFERENCE.md and IDEOMOD_DOCUMENTATION.md ModTags sections. Code fix (adding TagKey constant) still needed.*
+*RESOLVED 2026-03-13: TagKey constant added to ModTags.java. FurnaceArrayDefinition should be updated to use ModTags.FURNACE_ARRAY_FRAME instead of inline tag reference.*
 
 ### 2.4 Stale/Incomplete Information
 
@@ -293,15 +293,15 @@ Issues #12 (dust sees strong power through solid blocks) and #13 (base texture r
 ## SUMMARY: PRIORITY ACTION LIST
 
 ### Immediate (before next testing session)
-1. Fix `shouldSignal` thread safety in MachineConductorBlock
-2. Fix `unregisterPortal()` impossible condition in OddstonePortalSavedData
-3. Add sympathetic radius cap in OddstoneConfig
-4. Remove or demote BUG10 debug logging
+1. ~~Fix `shouldSignal` thread safety in MachineConductorBlock~~ *DONE 2026-03-13 (ThreadLocal + try-finally)*
+2. ~~Fix `unregisterPortal()` impossible condition in OddstonePortalSavedData~~ *DONE 2026-03-13 (&& -> || with cleaner cleanup)*
+3. ~~Add sympathetic radius cap in OddstoneConfig~~ *DONE 2026-03-13 (max 32 -> max 16)*
+4. ~~Remove or demote BUG10 debug logging~~ *DONE 2026-03-13 (19 INFO -> DEBUG)*
 
 ### Short-term (next few sessions)
-5. Add defensive ThreadLocal resets in PistonStructureResolverMixin
-6. Add defensive ThreadLocal reset in PistonBaseBlockMixin
-7. Add FURNACE_ARRAY_FRAME to ModTags.java *(gap documented 2026-03-13, code fix still needed)*
+5. ~~Add defensive ThreadLocal resets in PistonStructureResolverMixin~~ *DONE 2026-03-13 (inBranching + call-pair toggle)*
+6. ~~Add defensive ThreadLocal reset in PistonBaseBlockMixin~~ *DONE 2026-03-13 (pullTargetPos)*
+7. ~~Add FURNACE_ARRAY_FRAME to ModTags.java~~ *DONE 2026-03-13 (TagKey constant added; FurnaceArrayDefinition still uses inline ref)*
 8. ~~Add Known Issues #12, #13 to the Known Issues section~~ *DONE 2026-03-13*
 9. ~~Document EnderPearlPortalHandler in CODEBASE_REFERENCE~~ *DONE 2026-03-13*
 10. ~~Fix Oddstone feature count inconsistency~~ *DONE 2026-03-13 (settled on 6)*

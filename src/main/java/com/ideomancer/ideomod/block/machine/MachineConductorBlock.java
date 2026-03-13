@@ -82,8 +82,13 @@ public class MachineConductorBlock extends Block implements IMachineFamily, Enti
      *
      * Only affects getDirectSignal (strong power), NOT getSignal (weak power).
      * getSignal is already protected by the input face model.
+     *
+     * ThreadLocal because blocks in Minecraft are singletons — there is one
+     * MachineConductorBlock object shared by every conductor in the world.
+     * A plain boolean would race if two conductors run getIncomingSignalFromFace()
+     * on different threads (e.g., during chunk loading or parallel neighbor updates).
      */
-    private boolean shouldSignal = true;
+    private static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
 
     public MachineConductorBlock(Properties properties) {
         super(properties);
@@ -147,7 +152,7 @@ public class MachineConductorBlock extends Block implements IMachineFamily, Enti
      */
     @Override
     public boolean isSignalSource(BlockState state) {
-        return this.shouldSignal;
+        return shouldSignal.get();
     }
 
     /**
@@ -208,7 +213,7 @@ public class MachineConductorBlock extends Block implements IMachineFamily, Enti
      */
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!this.shouldSignal) return 0;
+        if (!shouldSignal.get()) return 0;
 
         int power = state.getValue(POWER);
         if (power == 0) return 0;
@@ -343,10 +348,13 @@ public class MachineConductorBlock extends Block implements IMachineFamily, Enti
             // of its faces has another Conductor — that Conductor's getDirectSignal
             // returns 0. This prevents Conductor→SolidBlock→Conductor power-through,
             // matching how vanilla dust can't power other dust through solid blocks.
-            this.shouldSignal = false;
-            int signal = level.getSignal(neighborPos, face);
-            this.shouldSignal = true;
-            return signal;
+            shouldSignal.set(false);
+            try {
+                int signal = level.getSignal(neighborPos, face);
+                return signal;
+            } finally {
+                shouldSignal.set(true);
+            }
         }
     }
 

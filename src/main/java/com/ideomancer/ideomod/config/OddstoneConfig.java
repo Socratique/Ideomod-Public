@@ -109,8 +109,10 @@ public class OddstoneConfig {
         // Read radius (default to 5 if missing)
         if (root.has("sympathetic_radius")) {
             sympatheticRadius = root.get("sympathetic_radius").getAsInt();
-            // Clamp to reasonable range
-            sympatheticRadius = Math.max(1, Math.min(32, sympatheticRadius));
+            // Clamp to safe range — radius > 16 causes O(n^2) scanning over
+            // enormous volumes. Even radius 16 is very generous (16 blocks of
+            // air between oddstone).
+            sympatheticRadius = Math.max(1, Math.min(16, sympatheticRadius));
         }
 
         // Read mob list
