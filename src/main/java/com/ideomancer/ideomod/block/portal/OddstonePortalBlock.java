@@ -41,6 +41,11 @@ import org.jetbrains.annotations.Nullable;
  * DEACTIVATION: portal blocks break (via updateShape) when any adjacent
  * frame or corner block is removed. onRemove unregisters the portal address.
  *
+ * PERFORMANCE: Portal geometry (interior dimensions) is cached in
+ * OddstonePortalSavedData at registration time. findPortalBounds()
+ * reads cached data first, only falling back to live PortalGeometry.detect()
+ * if the cache is missing (old saves, registration without level).
+ *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class OddstonePortalBlock extends Block {
@@ -176,7 +181,7 @@ public class OddstonePortalBlock extends Block {
         // -- Step 1: Find THIS portal's interior bounds --
         Direction.Axis thisAxis = portalState.getValue(AXIS);
         Direction thisHDir = PortalUtils.getHorizontalDir(thisAxis);
-        PortalBounds thisBounds = findPortalBounds(level, portalBlockPos, thisHDir);
+        PortalBounds thisBounds = findPortalBounds(level, portalBlockPos, thisHDir, entry);
 
         if (thisBounds == null) {
             simpleTeleport(level, player, partnerPos, partnerEntry);
@@ -216,17 +221,21 @@ public class OddstonePortalBlock extends Block {
         Direction.Axis partnerAxis = partnerEntry.getAxisAsEnum();
         Direction partnerHDir = PortalUtils.getHorizontalDir(partnerAxis);
 
-        // Find a portal block in the partner
-        BlockPos partnerPortalBlock = findAnyPortalBlock(level, partnerPos, partnerHDir);
-        if (partnerPortalBlock == null) {
-            simpleTeleport(level, player, partnerPos, partnerEntry);
-            return;
-        }
+        // Try cached geometry first, fall back to live scan
+        PortalBounds partnerBounds = findPortalBounds(level, null, partnerHDir, partnerEntry);
 
-        PortalBounds partnerBounds = findPortalBounds(level, partnerPortalBlock, partnerHDir);
         if (partnerBounds == null) {
-            simpleTeleport(level, player, partnerPos, partnerEntry);
-            return;
+            // Cached geometry missing — need to find a portal block for live scan
+            BlockPos partnerPortalBlock = findAnyPortalBlock(level, partnerPos, partnerHDir);
+            if (partnerPortalBlock == null) {
+                simpleTeleport(level, player, partnerPos, partnerEntry);
+                return;
+            }
+            partnerBounds = findPortalBoundsLive(level, partnerPortalBlock);
+            if (partnerBounds == null) {
+                simpleTeleport(level, player, partnerPos, partnerEntry);
+                return;
+            }
         }
 
         // -- Step 4: Map fractions to partner coordinates --
@@ -362,34 +371,78 @@ public class OddstonePortalBlock extends Block {
     }
 
     /**
-     * Finds the world-coordinate bounds of a portal's interior
-     * by scanning from a known portal block.
+     * Finds the world-coordinate bounds of a portal's interior.
+     * 
+     * Uses cached geometry from the PortalEntry if available (the fast path).
+     * Falls back to live PortalGeometry.detect() if no cache exists (old saves
+     * or registration without a level reference). The portalBlock parameter
+     * is only needed for the fallback path — pass null if you only want cached data.
+     * 
+     * @param level The world
+     * @param portalBlock A known portal block position (for live fallback), or null for cache-only
+     * @param hDir The horizontal direction of the portal
+     * @param entry The portal entry with potential cached geometry
+     * @return PortalBounds, or null if neither cache nor live scan succeeded
      */
     @Nullable
-    private PortalBounds findPortalBounds(Level level, BlockPos portalBlock, Direction hDir) {
-        // Use PortalGeometry to detect the portal dimensions
+    private PortalBounds findPortalBounds(Level level, @Nullable BlockPos portalBlock,
+                                           Direction hDir,
+                                           OddstonePortalSavedData.PortalEntry entry) {
+        // Fast path: use cached geometry from SavedData
+        if (entry.hasGeometry()) {
+            BlockPos bottomLeft = entry.getInteriorBottomLeft();
+            int width = entry.getInteriorWidth();
+            int height = entry.getInteriorHeight();
+            Direction.Axis axis = entry.getAxisAsEnum();
+
+            double minV = bottomLeft.getY();
+            double maxV = bottomLeft.getY() + height;
+
+            double minH, maxH, fixedCoord;
+            if (axis == Direction.Axis.X) {
+                minH = bottomLeft.getZ();
+                maxH = bottomLeft.getZ() + width;
+                fixedCoord = bottomLeft.getX();
+            } else {
+                minH = bottomLeft.getX();
+                maxH = bottomLeft.getX() + width;
+                fixedCoord = bottomLeft.getZ();
+            }
+
+            return new PortalBounds(minH, maxH, minV, maxV, fixedCoord);
+        }
+
+        // Slow path: live scan (for old saves without cached geometry)
+        if (portalBlock != null) {
+            return findPortalBoundsLive(level, portalBlock);
+        }
+
+        return null;
+    }
+
+    /**
+     * Live fallback: scans the portal frame to determine bounds.
+     * Used when cached geometry is not available (old saves, legacy registrations).
+     */
+    @Nullable
+    private PortalBounds findPortalBoundsLive(Level level, BlockPos portalBlock) {
         PortalGeometry geom = PortalGeometry.detect(level, portalBlock);
         if (geom == null) return null;
 
-        // Get the axis and dimensions
         Direction.Axis axis = geom.axis();
         BlockPos bottomLeft = geom.interiorBottomLeft();
         int width = geom.interiorWidth();
         int height = geom.interiorHeight();
 
-        // Calculate world-coordinate bounds
-        // The interior of a portal block at (x,y,z) occupies the full block space
         double minV = bottomLeft.getY();
         double maxV = bottomLeft.getY() + height;
 
         double minH, maxH, fixedCoord;
         if (axis == Direction.Axis.X) {
-            // Portal extends along Z
             minH = bottomLeft.getZ();
             maxH = bottomLeft.getZ() + width;
             fixedCoord = bottomLeft.getX();
         } else {
-            // Portal extends along X
             minH = bottomLeft.getX();
             maxH = bottomLeft.getX() + width;
             fixedCoord = bottomLeft.getZ();

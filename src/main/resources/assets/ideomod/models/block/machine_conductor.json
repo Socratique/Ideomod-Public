@@ -1,5 +1,6 @@
 {
   "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
   "textures": {
     "base": "ideomod:block/machine_conductor",
     "indicator": "ideomod:block/machine_conductor_indicator",
@@ -7,20 +8,20 @@
   },
   "elements": [
     {
-      "comment": "Base block - tintIndex 0 returns 0xFFFFFF (no tint, renders texture as-is)",
+      "comment": "Base block - no tintindex, renders texture as-is",
       "from": [0, 0, 0],
       "to": [16, 16, 16],
       "faces": {
-        "down":  { "texture": "#base", "cullface": "down",  "tintindex": 0 },
-        "up":    { "texture": "#base", "cullface": "up",    "tintindex": 0 },
-        "north": { "texture": "#base", "cullface": "north", "tintindex": 0 },
-        "south": { "texture": "#base", "cullface": "south", "tintindex": 0 },
-        "west":  { "texture": "#base", "cullface": "west",  "tintindex": 0 },
-        "east":  { "texture": "#base", "cullface": "east",  "tintindex": 0 }
+        "down":  { "texture": "#base", "cullface": "down" },
+        "up":    { "texture": "#base", "cullface": "up" },
+        "north": { "texture": "#base", "cullface": "north" },
+        "south": { "texture": "#base", "cullface": "south" },
+        "west":  { "texture": "#base", "cullface": "west" },
+        "east":  { "texture": "#base", "cullface": "east" }
       }
     },
     {
-      "comment": "Indicator overlay - tintIndex 1 colored by POWER level via color handler. Slightly larger than base to sit on top and avoid z-fighting.",
+      "comment": "Indicator overlay - tintIndex 1 colored by POWER level via color handler. Slightly larger than base to sit on top and avoid z-fighting. Transparent pixels rendered invisible by cutout render type.",
       "from": [-0.05, -0.05, -0.05],
       "to": [16.05, 16.05, 16.05],
       "faces": {

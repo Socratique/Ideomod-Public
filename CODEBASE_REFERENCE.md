@@ -217,13 +217,13 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
-**MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity. Visual: two-layer model with tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issues: dust sees strong power through solid blocks (#12), base texture renders black (#13).
+**MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 
 **Filter predicates**: `ODDSTONE_ONLY` (current), `ANY_MOVABLE` (future Arcane variants).
 
 ### 3. Portal System
 
-**Components**: OddstonePortalHandler (lifecycle) -> OddstonePortalFrameDetector (scanning) -> OddstonePortalSavedData (persistence) -> OddstonePortalBlock (teleportation). **PortalGeometry** record (`block/portal/PortalGeometry.java`) consolidates portal dimension scanning and frame iteration that was previously duplicated across 3+ files. Provides `detect()`, `forEachOddstonePosition()`, `parseAxis()`, `getFrameCorners()`.
+**Components**: OddstonePortalHandler (lifecycle + debug stick notifications) -> OddstonePortalFrameDetector (scanning) -> OddstonePortalSavedData (persistence + cached geometry) -> OddstonePortalBlock (teleportation). **PortalGeometry** record (`block/portal/PortalGeometry.java`) consolidates portal dimension scanning and frame iteration that was previously duplicated across 3+ files. Provides `detect()`, `forEachOddstonePosition()`, `parseAxis()`, `getFrameCorners()`.
 
 **Frame rules**: Rectangular frame of Oddstone blocks with corner blocks (crafted mineral blocks from PORTAL_CORNER_BLOCKS tag). Interior 3-19 blocks wide/tall. ALL Oddstone in frame must be redstone-powered.
 
@@ -237,7 +237,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **Break effects**: `PortalUtils.clearPortalBlocks()` uses `level.destroyBlock(pos, false)` for proper break particles and sound on all deactivation paths.
 
-**Registration**: `OddstonePortalSavedData` (per-dimension SavedData). Keyed by frame corner position. Serialized to NBT.
+**Registration**: `OddstonePortalSavedData` (per-dimension SavedData). Keyed by frame corner position. Serialized to NBT. Portal geometry (interior bottom-left, width, height) cached in PortalEntry at registration time — computed from FrameResult corners, avoids PortalGeometry.detect() during teleport. Old saves without cached geometry fall back to live detection.
 
 ### 4. Multiblock Structure Framework [WIP]
 
@@ -413,7 +413,8 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
 11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.
 12. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
-13. **Machine Conductor base texture renders black** -- Two-layer model JSON (base texture + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks instead of dual-element model. File: models/block/machine_conductor.json.
+~~13. **Machine Conductor base texture renders black**~~ -- FIXED 2026-03-14. Root cause: indicator overlay element used default "solid" render type, treating transparent pixels as opaque black. At power 0 the tinted overlay was a solid black shell hiding the base. Fix: added `"render_type": "minecraft:cutout"` to model JSON, removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.
+14. **Framed redstone blocks don't emit power on frame activation** -- When a framed redstone block transitions from inactive to active via the frame network, redstone neighbors are not notified. Block only starts emitting after receiving a redstone update from another component. Works fine if placed while frame is inactive. Fix: FrameActivation needs `level.updateNeighborsAt()` on active-state transitions for redstone sources. File: FrameActivation.java.
 
 ### Audit-Identified Issues (2026-03-13)
 

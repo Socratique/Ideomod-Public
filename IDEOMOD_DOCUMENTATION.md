@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-14 (Audit batch 2: IMMOVABLE_WHEN_FRAMED tag added, ModTags updated to 5 tags, Feature 4 now tag-based, FrameActivation thread safety note.)*
+*Last updated: 2026-03-14b (Portal geometry caching, inputFace reset on swap, Conductor render fix, portal debug stick notifications, new Known Issue #14.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -888,9 +888,10 @@ Corner block IDs are full registry names (e.g. `minecraft:diamond_block`).
 5. Tries both X and Z axis orientations
 6. Validates frame structure, checks ALL Oddstone powered, reads corner address
 7. Returns `FrameResult` with address, interior positions, frame positions, corners, axis
-8. Handler calls `OddstonePortalSavedData.registerPortal(address, pos, axis)`
-9. Registration returns: REGISTERED_UNLINKED (first portal), REGISTERED_LINKED (second with same address), FAILED_ADDRESS_FULL (address has a pair), FAILED_ALREADY_EXISTS (same position registered)
-10. On success: fills interior with `OddstonePortalBlock` states, plays flint-and-steel sound
+8. Handler computes interior geometry (bottom-left, width, height) from FrameResult corner positions
+9. Handler calls `OddstonePortalSavedData.registerPortal(address, pos, axis, interiorBL, width, height)` — geometry cached in PortalEntry
+10. Registration returns: REGISTERED_UNLINKED (first portal), REGISTERED_LINKED (second with same address), FAILED_ADDRESS_FULL (address has a pair), FAILED_ALREADY_EXISTS (same position registered)
+11. On success: fills interior with `OddstonePortalBlock` states, plays flint-and-steel sound
 
 ### Deactivation Strategy
 
@@ -1007,10 +1008,19 @@ The `isRelevantForAnyDefinition()` filter ensures only frame/core block placemen
 
 ### Debug Tooling
 
-**Structure Debug Stick** (`ModItems.STRUCTURE_DEBUG_STICK`): Hold in either hand. StructureManager sends color-coded chat messages:
+**Structure Debug Stick** (`ModItems.STRUCTURE_DEBUG_STICK`): Hold in either hand. Receives color-coded chat messages from both StructureManager and OddstonePortalHandler:
+
+Structure events (from StructureManager):
 - Green `[Structure] FORMED:` with type, position, core count
 - Red `[Structure] REMOVED:` with type, position
-- Zero overhead when nobody holds it (just a player list scan)
+
+Portal events (from OddstonePortalHandler):
+- Yellow `[Portal] ACTIVATED (unlinked)` with position, geometry (WxH), shortened address
+- Green `[Portal] ACTIVATED + LINKED` with position, partner position, geometry, address
+- Red `[Portal] FAILED: address full` with position
+- Red `[Portal] DEACTIVATED` with position and address
+
+Zero overhead when nobody holds it (just a player list scan).
 
 ### Adding a New Structure Type
 
@@ -1392,7 +1402,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
 | ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ |
 | 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
-| 13 | Machine Conductor base texture renders black | Visual bug | Two-layer model JSON (base + tinted indicator overlay) loads but base texture appears black despite file existing. Indicator overlay tints correctly. May need BESR approach like framed blocks. File: models/block/machine_conductor.json. |
+| ~~13~~ | ~~Machine Conductor base texture renders black~~ | ~~Visual bug~~ | ~~FIXED 2026-03-14. Root cause: indicator overlay used default "solid" render type, which renders transparent pixels as opaque black. The overlay's tintIndex 1 at power 0 produces color 0x000000, creating a fully opaque black shell. Fix: added `"render_type": "minecraft:cutout"` to model JSON. Also removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.~~ |
+| 14 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | When a framed redstone block transitions from inactive to active via the frame network, neighbors are not notified of the signal change. The block only starts emitting power after receiving a redstone update (e.g., from another redstone component updating). Works fine if placed while frame is inactive. Fix: FrameActivation needs to call `level.updateNeighborsAt(pos, block)` when a framed redstone source transitions active state. File: FrameActivation.java. |
 
 
 ## 15. CONVENTIONS & PATTERNS

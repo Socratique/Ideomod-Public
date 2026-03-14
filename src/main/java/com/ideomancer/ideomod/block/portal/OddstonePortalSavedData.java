@@ -33,11 +33,16 @@ import java.util.Map;
  * - pos: BlockPos (bottom-left corner of the frame, used as the reference point)
  * - partnerPos: BlockPos or null (position of linked partner, null if unlinked)
  * - axis: String ("X" or "Z") - which plane the portal is in
+ * - Cached geometry: interiorBottomLeft, interiorWidth, interiorHeight
+ *   (passed in at registration time from the frame detector, avoids
+ *   re-scanning during teleport)
  * 
  * RULES:
  * - An address can have at most 2 portals (a linked pair)
  * - If a portal tries to register an address that already has a pair, it fails
  * - When a portal is destroyed, it unregisters and frees the address
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class OddstonePortalSavedData extends SavedData {
 
@@ -45,6 +50,11 @@ public class OddstonePortalSavedData extends SavedData {
 
     /**
      * Represents a single registered portal.
+     * 
+     * Includes cached geometry data (interior bottom-left position, width, height)
+     * so that teleportation can calculate relative positions without re-scanning
+     * the portal frame every time. The geometry is passed in at registration
+     * time from the frame detector and discarded when the portal unregisters.
      */
     public static class PortalEntry {
         public final String address;
@@ -52,11 +62,30 @@ public class OddstonePortalSavedData extends SavedData {
         public final String axis; // "X" or "Z"
         @Nullable private BlockPos partnerPos;
 
+        // Cached geometry — passed in at registration, avoids PortalGeometry.detect() on teleport
+        @Nullable private BlockPos interiorBottomLeft;
+        private int interiorWidth;
+        private int interiorHeight;
+
         public PortalEntry(String address, BlockPos pos, String axis, @Nullable BlockPos partnerPos) {
             this.address = address;
             this.pos = pos;
             this.axis = axis;
             this.partnerPos = partnerPos;
+            this.interiorBottomLeft = null;
+            this.interiorWidth = 0;
+            this.interiorHeight = 0;
+        }
+
+        public PortalEntry(String address, BlockPos pos, String axis, @Nullable BlockPos partnerPos,
+                           @Nullable BlockPos interiorBottomLeft, int interiorWidth, int interiorHeight) {
+            this.address = address;
+            this.pos = pos;
+            this.axis = axis;
+            this.partnerPos = partnerPos;
+            this.interiorBottomLeft = interiorBottomLeft;
+            this.interiorWidth = interiorWidth;
+            this.interiorHeight = interiorHeight;
         }
 
         public boolean isLinked() {
@@ -74,6 +103,29 @@ public class OddstonePortalSavedData extends SavedData {
          */
         public net.minecraft.core.Direction.Axis getAxisAsEnum() {
             return PortalGeometry.parseAxis(this.axis);
+        }
+
+        // -- Cached geometry accessors --
+
+        @Nullable
+        public BlockPos getInteriorBottomLeft() {
+            return interiorBottomLeft;
+        }
+
+        public int getInteriorWidth() {
+            return interiorWidth;
+        }
+
+        public int getInteriorHeight() {
+            return interiorHeight;
+        }
+
+        /**
+         * Returns true if this entry has cached geometry data.
+         * False for entries loaded from old saves before caching was added.
+         */
+        public boolean hasGeometry() {
+            return interiorBottomLeft != null && interiorWidth > 0 && interiorHeight > 0;
         }
     }
 
@@ -100,15 +152,21 @@ public class OddstonePortalSavedData extends SavedData {
     }
 
     /**
-     * Attempts to register a new portal.
+     * Attempts to register a new portal with pre-computed geometry.
      * 
-     * @return RegisterResult indicating what happened:
-     *   REGISTERED_UNLINKED - Portal registered, no partner found
-     *   REGISTERED_LINKED   - Portal registered AND linked to existing partner
-     *   FAILED_ADDRESS_FULL - Address already has a linked pair, cannot register
-     *   FAILED_ALREADY_EXISTS - A portal is already registered at this position
+     * Geometry is passed directly from the frame detector (which already
+     * knows the interior dimensions from its scan). This avoids re-scanning
+     * the frame — and sidesteps the ordering problem where portal blocks
+     * don't exist yet at registration time.
+     * 
+     * @param interiorBottomLeft The bottom-left position of the portal interior
+     * @param interiorWidth      Interior width in blocks
+     * @param interiorHeight     Interior height in blocks
+     * @return RegisterResult indicating what happened
      */
-    public RegisterResult registerPortal(String address, BlockPos pos, String axis) {
+    public RegisterResult registerPortal(String address, BlockPos pos, String axis,
+                                          BlockPos interiorBottomLeft, int interiorWidth,
+                                          int interiorHeight) {
         // Check if there's already a portal at this position
         if (portalsByPosition.containsKey(pos)) {
             return RegisterResult.FAILED_ALREADY_EXISTS;
@@ -119,13 +177,14 @@ public class OddstonePortalSavedData extends SavedData {
 
         if (existing == null) {
             // First portal with this address - register as unlinked
-            PortalEntry entry = new PortalEntry(address, pos, axis, null);
+            PortalEntry entry = new PortalEntry(address, pos, axis, null,
+                    interiorBottomLeft, interiorWidth, interiorHeight);
             portalsByPosition.put(pos, entry);
             portalsByAddress.put(address, new BlockPos[]{pos, null});
             setDirty();
 
-            Ideomod.LOGGER.info("Portal registered at {} with address [{}] - unlinked",
-                    pos, address);
+            Ideomod.LOGGER.info("Portal registered at {} with address [{}] - unlinked (geometry: {}x{})",
+                    pos, address, interiorWidth, interiorHeight);
             return RegisterResult.REGISTERED_UNLINKED;
         }
 
@@ -141,7 +200,8 @@ public class OddstonePortalSavedData extends SavedData {
         PortalEntry partnerEntry = portalsByPosition.get(partnerPos);
 
         // Create our entry, linked to the partner
-        PortalEntry newEntry = new PortalEntry(address, pos, axis, partnerPos);
+        PortalEntry newEntry = new PortalEntry(address, pos, axis, partnerPos,
+                interiorBottomLeft, interiorWidth, interiorHeight);
         portalsByPosition.put(pos, newEntry);
 
         // Update partner to link back to us
@@ -152,14 +212,24 @@ public class OddstonePortalSavedData extends SavedData {
 
         setDirty();
 
-        Ideomod.LOGGER.info("Portal registered at {} with address [{}] - LINKED to partner at {}",
-                pos, address, partnerPos);
+        Ideomod.LOGGER.info("Portal registered at {} with address [{}] - LINKED to partner at {} (geometry: {}x{})",
+                pos, address, partnerPos, interiorWidth, interiorHeight);
         return RegisterResult.REGISTERED_LINKED;
+    }
+
+    /**
+     * Legacy overload without geometry. Used by old code paths or when
+     * geometry is unavailable. Teleportation will fall back to live
+     * PortalGeometry.detect() calls.
+     */
+    public RegisterResult registerPortal(String address, BlockPos pos, String axis) {
+        return registerPortal(address, pos, axis, null, 0, 0);
     }
 
     /**
      * Unregisters a portal (when its frame is broken or deactivated).
      * If it was linked, the partner becomes unlinked again.
+     * Cached geometry is discarded with the entry.
      */
     public void unregisterPortal(BlockPos pos) {
         PortalEntry entry = portalsByPosition.remove(pos);
@@ -228,6 +298,18 @@ public class OddstonePortalSavedData extends SavedData {
                 portalTag.putBoolean("linked", false);
             }
 
+            // Save cached geometry if present
+            if (entry.interiorBottomLeft != null) {
+                portalTag.putInt("iblX", entry.interiorBottomLeft.getX());
+                portalTag.putInt("iblY", entry.interiorBottomLeft.getY());
+                portalTag.putInt("iblZ", entry.interiorBottomLeft.getZ());
+                portalTag.putInt("iWidth", entry.interiorWidth);
+                portalTag.putInt("iHeight", entry.interiorHeight);
+                portalTag.putBoolean("hasGeom", true);
+            } else {
+                portalTag.putBoolean("hasGeom", false);
+            }
+
             portalList.add(portalTag);
         }
 
@@ -259,7 +341,22 @@ public class OddstonePortalSavedData extends SavedData {
                 );
             }
 
-            PortalEntry entry = new PortalEntry(address, pos, axis, partnerPos);
+            // Load cached geometry if present (backward-compatible with old saves)
+            BlockPos interiorBL = null;
+            int iWidth = 0;
+            int iHeight = 0;
+            if (portalTag.getBoolean("hasGeom")) {
+                interiorBL = new BlockPos(
+                        portalTag.getInt("iblX"),
+                        portalTag.getInt("iblY"),
+                        portalTag.getInt("iblZ")
+                );
+                iWidth = portalTag.getInt("iWidth");
+                iHeight = portalTag.getInt("iHeight");
+            }
+
+            PortalEntry entry = new PortalEntry(address, pos, axis, partnerPos,
+                    interiorBL, iWidth, iHeight);
             data.portalsByPosition.put(pos, entry);
 
             // Rebuild address index

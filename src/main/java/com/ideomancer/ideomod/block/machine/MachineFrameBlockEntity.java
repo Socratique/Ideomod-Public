@@ -27,9 +27,11 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Also stores an inputFace for redstone-active specializations (Conductor,
- * future Toggle/Pulser/Clock). The input face is the direction from which
- * signal is received; the block outputs on all other faces. Specializations
- * that don't use redstone (Track, Trolley, Frame) ignore this field.
+ * future Toggle/Pulser/Transformer/Arm). The input face is the direction
+ * from which signal is received; the block outputs on all other faces.
+ * Specializations that don't use redstone (Track, Trolley, Frame) ignore
+ * this field. inputFace is reset to null on every specialization swap to
+ * prevent stale directional data from leaking between specialization types.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -45,6 +47,10 @@ public class MachineFrameBlockEntity extends BlockEntity
      * The face from which this block receives redstone signal.
      * Null = no input (unpowered). Used by Conductor and future
      * redstone specializations. Signal is output on all faces EXCEPT this one.
+     *
+     * IMPORTANT: This field is reset to null whenever the specialization
+     * item changes (via triggerSwapCheck) to prevent stale directional
+     * data from a previous specialization affecting the new one.
      */
     @Nullable
     private Direction inputFace = null;
@@ -183,6 +189,12 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     private void triggerSwapCheck() {
+        // Clear stale directional data from the previous specialization.
+        // The new specialization will set its own inputFace when it first
+        // receives a signal. Without this reset, swapping e.g. Conductor -> Track
+        // -> Conductor would inherit the old Conductor's inputFace.
+        this.inputFace = null;
+
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));
         }

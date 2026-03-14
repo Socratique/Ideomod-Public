@@ -1,5 +1,83 @@
 # Ideomod Changelog
 
+## [2026-03-14b] Audit Fixes: Portal Geometry Caching, InputFace Reset, Conductor Render Fix, Portal Debug Stick
+
+### Audit fix #16: Portal geometry caching in SavedData
+
+Portal teleportation previously called PortalGeometry.detect() twice per teleport
+(once for source portal, once for destination) to determine interior dimensions.
+Each detection scans the portal frame edges.
+
+Fix: Interior geometry (bottom-left position, width, height) is now computed from
+the FrameResult's corner positions during portal activation and passed directly
+into OddstonePortalSavedData.registerPortal(). Cached in the PortalEntry and
+persisted to NBT. Teleportation reads cached values (zero block lookups).
+Falls back to live PortalGeometry.detect() for portals registered before this
+update (old saves without cached geometry).
+
+Challenge: Initial implementation tried to run PortalGeometry.detect() inside
+registerPortal(), but registration happens BEFORE portal blocks are filled into
+the interior. Detection needs existing portal blocks to scan from. Fixed by
+computing geometry from FrameResult corner positions instead of re-scanning.
+
+Files: OddstonePortalSavedData.java, OddstonePortalHandler.java, OddstonePortalBlock.java
+
+### Audit fix O/#21: InputFace reset on specialization swap
+
+The inputFace field on MachineFrameBlockEntity stores which face receives
+redstone signal (used by Conductor, future Arm/Transformer). Since all Machine
+Family blocks share the same block entity class, swapping specialization items
+left stale directional data. E.g. Conductor facing NORTH -> swap to Track ->
+swap back to Conductor -> inherits old NORTH inputFace.
+
+Fix: Added `this.inputFace = null;` at the top of triggerSwapCheck(). Every
+specialization swap starts with a clean directional slate. The new specialization
+sets its own inputFace when it first receives a signal.
+
+File: MachineFrameBlockEntity.java
+
+### Fix Issue #13: Machine Conductor base texture renders black
+
+Root cause identified: the indicator overlay element (tintIndex 1) extends
+slightly outside the base cube (-0.05 to 16.05) and was rendering as an opaque
+black shell at power 0 (POWER_COLORS[0] = 0x000000). The indicator texture has
+transparency, but the model used the default "solid" render type which treats
+transparent pixels as opaque black.
+
+Fix: Added `"render_type": "minecraft:cutout"` to the model JSON. Cutout render
+type discards transparent pixels, allowing the base texture to show through the
+indicator overlay. Also removed unnecessary tintindex from the base layer faces.
+
+File: assets/ideomod/models/block/machine_conductor.json
+
+### Portal debug stick notifications
+
+Added debug stick notifications to OddstonePortalHandler, matching the existing
+pattern from StructureManager. Players holding the Structure Debug Stick now
+see color-coded chat messages for portal events:
+
+- Yellow [Portal] ACTIVATED (unlinked) — position, geometry, shortened address
+- Green [Portal] ACTIVATED + LINKED — position, partner position, geometry, address
+- Red [Portal] FAILED: address full — position
+- Red [Portal] DEACTIVATED — position, address
+
+Address display shortened: "minecraft:iron_block,minecraft:diamond_block,..."
+becomes "iron,diamond,..." for readability.
+
+Files: OddstonePortalHandler.java
+
+### New Known Issue #14: Framed redstone blocks don't emit power on frame activation
+
+When a framed redstone block is activated via the frame network, it doesn't emit
+redstone power until it receives a redstone update (not a regular block/neighbor
+update). Works fine if placed while frame is already inactive. Root cause: frame
+activation changes block behavior but doesn't notify redstone neighbors. Fix:
+FrameActivation needs to call level.updateNeighborsAt() when a framed redstone
+source transitions between active/inactive states.
+
+Location: FrameActivation.java
+
+
 ## [2026-03-14] Audit Code Fixes Batch 2 (items B, K, L, P, #20)
 
 ### Audit fix B: FrameActivation.activatedVanillaMetals thread safety

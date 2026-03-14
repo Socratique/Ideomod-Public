@@ -69,6 +69,8 @@ This is the single biggest performance concern in the codebase. It won't cause i
 
 *Potential fix:* Mark the network as dirty and schedule a single recalculation for the end of the tick using `level.scheduleTick()` or a server tick event. This batches all changes in a single tick into one recalculation.
 
+*RESOLVED 2026-03-14: Root cause was missing `"render_type": "minecraft:cutout"` in model JSON. The indicator overlay's transparent pixels rendered as opaque black in the default "solid" render type, creating a black shell at power 0. Added cutout render type, removed unnecessary tintindex from base layer.*
+
 **G. PistonStructureResolverMixin.ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop**
 
 The vanilla metal conductor scanning repeatedly snapshots `toPush`, iterates all positions checking all 6 faces, and repeats until no new blocks are found. For a chain of 50 vanilla metals, this loops ~50 times with growing snapshot size. No iteration limit exists.
@@ -125,11 +127,13 @@ Nearly every delegated method (mining, sound, friction, light, redstone, pathfin
 
 *RESOLVED 2026-03-13: All 19 BUG10 INFO log statements in PistonStructureResolverMixin demoted to DEBUG.*
 
-**O. MachineFrameBlockEntity.inputFace is shared by all specializations**
+~~**O. MachineFrameBlockEntity.inputFace is shared by all specializations**~~
 
-The `inputFace` field lives on the shared block entity. If a future specialization (Toggle, Pulser) also needs directional I/O, it will collide with Conductor's inputFace. This isn't a bug today but is a landmine for future work.
+~~The `inputFace` field lives on the shared block entity. If a future specialization (Toggle, Pulser) also needs directional I/O, it will collide with Conductor's inputFace. This isn't a bug today but is a landmine for future work.~~
 
-*Recommendation:* When adding the next directional specialization, consider either (a) a Map<String, Direction> on the BE keyed by specialization name, or (b) specialization-specific BE subclasses.
+~~*Recommendation:* When adding the next directional specialization, consider either (a) a Map<String, Direction> on the BE keyed by specialization name, or (b) specialization-specific BE subclasses.~~
+
+*RESOLVED 2026-03-14: inputFace is now reset to null in triggerSwapCheck() on every specialization swap. Each specialization starts with a clean slate and sets its own inputFace when it first receives a signal. The shared field is safe because only one specialization is active at a time.*
 
 ~~**P. StructureDefinition ScanMode enum has stub values**~~
 
@@ -246,11 +250,13 @@ This converts both algorithms from O(n^2) to O(n) where n is the number of posit
 
 *RESOLVED 2026-03-14: Created `ideomod:immovable_when_framed` block tag with the three previously hardcoded blocks. PistonBaseBlockMixin now checks `innerState.is(ModTags.IMMOVABLE_WHEN_FRAMED)`. DestroySpeed == -1 fallback still runs for unlisted indestructible blocks. TagKey constant added to ModTags.java.*
 
-### 3.5 Portal Geometry Caching
+### ~~3.5 Portal Geometry Caching~~
 
-**Problem:** `OddstonePortalBlock.linkedTeleport()` calls `PortalGeometry.detect()` twice per teleport (once for source, once for destination). For large portals, each detection scans hundreds of block positions.
+~~**Problem:** `OddstonePortalBlock.linkedTeleport()` calls `PortalGeometry.detect()` twice per teleport (once for source, once for destination). For large portals, each detection scans hundreds of block positions.~~
 
-**Recommendation:** Cache PortalGeometry in OddstonePortalSavedData alongside the portal entry. Invalidate on deactivation. This eliminates redundant scans during teleportation.
+~~**Recommendation:** Cache PortalGeometry in OddstonePortalSavedData alongside the portal entry. Invalidate on deactivation. This eliminates redundant scans during teleportation.~~
+
+*RESOLVED 2026-03-14: Interior geometry (bottom-left, width, height) computed from FrameResult corners at registration time and cached in PortalEntry. Persisted to NBT. Teleportation reads cached values (zero block lookups). Falls back to live PortalGeometry.detect() for old saves.*
 
 ### 3.6 Long-Term: Event-Driven vs. Polling for Stickiness
 
@@ -272,21 +278,27 @@ This would replace scattered canStickTo implementations with declarative profile
 
 ## PART 4: MECHANICAL OBSERVATIONS
 
-### 4.1 Odd Slime Directional Stickiness Clarity
+### ~~4.1 Odd Slime Directional Stickiness Clarity~~
 
-Current behavior: Odd Slime only grabs when push direction matches its FACING. This is implemented cleanly but may be unintuitive to players. Consider whether a particle effect or visual cue on the "sticky face" would help communicate the mechanic (purely a design thought, not a code issue).
+~~Current behavior: Odd Slime only grabs when push direction matches its FACING. This is implemented cleanly but may be unintuitive to players. Consider whether a particle effect or visual cue on the "sticky face" would help communicate the mechanic (purely a design thought, not a code issue).~~
 
-### 4.2 Frame Activation Anti-Signal Power
+*RESOLVED 2026-03-14: Already addressed with a directional texture on the sticky face.*
 
-The anti-signal system (powered Machine Frames suppress activation) is powerful but has an asymmetry: Machine Frames are the ONLY blocks that emit anti-signal, while ALL Machine Family blocks emit activation. This means you can suppress a frame network by powering a single Machine Frame in the chain, but you can't suppress activation from a Track or Trolley. This is documented and intentional, but it creates a hierarchy where Machine Frame is both the universal connector AND the only suppressible block -- it does a lot of jobs.
+### ~~4.2 Frame Activation Anti-Signal Power~~
 
-### 4.3 Sympathetic Movement + Push Limit Interaction
+~~The anti-signal system (powered Machine Frames suppress activation) is powerful but has an asymmetry: Machine Frames are the ONLY blocks that emit anti-signal, while ALL Machine Family blocks emit activation. This means you can suppress a frame network by powering a single Machine Frame in the chain, but you can't suppress activation from a Track or Trolley. This is documented and intentional, but it creates a hierarchy where Machine Frame is both the universal connector AND the only suppressible block -- it does a lot of jobs.~~
 
-Sympathetic chains count toward the 12-block push limit. With radius 5, it's possible to create configurations where the 12-block limit is consumed entirely by sympathetic links, leaving no room for the actual payload. Players might find this frustrating if they build a sympathetic relay chain and discover it can't push anything. Consider whether sympathetic links should have their own separate limit, or whether the 12-block limit should be increased when sympathetic movement is involved.
+*RESOLVED 2026-03-14: Intentional design. Anti-signal is Machine Frame's unique function alongside being the universal connector.*
+
+### ~~4.3 Sympathetic Movement + Push Limit Interaction~~
+
+~~Sympathetic chains count toward the 12-block push limit. With radius 5, it's possible to create configurations where the 12-block limit is consumed entirely by sympathetic links, leaving no room for the actual payload. Players might find this frustrating if they build a sympathetic relay chain and discover it can't push anything. Consider whether sympathetic links should have their own separate limit, or whether the 12-block limit should be increased when sympathetic movement is involved.~~
+
+*RESOLVED 2026-03-14: Accepted as intended behavior. The push limit applies uniformly.*
 
 ### 4.4 Machine Conductor Known Issues Impact
 
-Issues #12 (dust sees strong power through solid blocks) and #13 (base texture renders black) are noted as known. Issue #12 in particular could cause confusing behavior for players who place redstone dust adjacent to conductors expecting normal signal behavior. If the Conductor is intended to eventually replace vanilla redstone in certain configurations, this will need a RedStoneWireBlock mixin to fix the strong-power-through-solids issue -- it's not something that can be fixed from the Conductor side alone.
+Issue #12 (dust sees strong power through solid blocks) is noted as known. ~~Issue #13 (base texture renders black)~~ was resolved 2026-03-14 — root cause was missing cutout render type on the two-layer model. Issue #12 could cause confusing behavior for players who place redstone dust adjacent to conductors expecting normal signal behavior. If the Conductor is intended to eventually replace vanilla redstone in certain configurations, this will need a RedStoneWireBlock mixin to fix the strong-power-through-solids issue -- it's not something that can be fixed from the Conductor side alone.
 
 ---
 
@@ -312,19 +324,24 @@ Issues #12 (dust sees strong power through solid blocks) and #13 (base texture r
 13. Extract AbstractMachineBlock base class
 14. Implement frame activation batching/debouncing
 15. Replace fixed-point loops with BFS in metal conductor scanning
-16. Cache PortalGeometry in SavedData
+16. ~~Cache PortalGeometry in SavedData~~ *DONE 2026-03-14 (geometry computed from FrameResult corners at registration, cached in PortalEntry, persisted to NBT)*
 17. ~~Update stickiness matrix in CODEBASE_REFERENCE~~ *DONE 2026-03-13 (expanded to full 14 rows)*
 18. ~~Update frameable blocks count in docs~~ *DONE 2026-03-13 (~290 -> ~310)*
 
 ### Long-term (architecture evolution)
 19. Consider declarative stickiness profiles
 20. ~~Consider tag-based immovable inner blocks~~ *DONE 2026-03-14 (IMMOVABLE_WHEN_FRAMED tag + ModTags constant + PistonBaseBlockMixin updated)*
-21. Plan inputFace field strategy for multiple directional specializations
+21. ~~Plan inputFace field strategy for multiple directional specializations~~ *DONE 2026-03-14 (inputFace reset to null on every specialization swap in triggerSwapCheck())*
 
 ### Resolved outside priority list (2026-03-14)
 - ~~(B) FrameActivation.activatedVanillaMetals thread safety~~ *DONE (volatile + atomic swap)*
 - ~~(K) MovingBlockEntityData key collision risk~~ *DONE (pipe + semicolon delimiters)*
 - ~~(L) StructureManager defensive copy~~ *DONE (HashSet wrapper)*
 - ~~(P) StructureDefinition ScanMode stub docs~~ *DONE (per-value javadoc)*
+- ~~(O) inputFace shared field landmine~~ *DONE (reset to null on specialization swap)*
+- ~~Issue #13 (conductor black texture)~~ *DONE (cutout render type + tintindex cleanup)*
+- ~~4.1 Odd Slime directional clarity~~ *DONE (directional texture already exists)*
+- ~~4.2 Anti-signal asymmetry~~ *Accepted as intentional design*
+- ~~4.3 Sympathetic push limit~~ *Accepted as intended behavior*
 
 Written by Claude, directed and guided by The Ideomancer.
