@@ -19,24 +19,42 @@ import java.util.Set;
  *
  * The definition does not know about any specific structure in the world.
  * It only describes the rules.
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class StructureDefinition {
 
     /**
      * Scan algorithm types. The StructureScanner dispatches based on this.
      *
-     * PATTERN — rigid shape where the scanner knows exactly what should be where.
-     *           Used by furnace array and similar fixed-frame structures.
+     * <p><strong>PATTERN</strong> — rigid shape where the scanner knows exactly
+     * what should be where. Used by furnace array and similar fixed-frame
+     * structures. <em>Fully implemented.</em></p>
      *
-     * PROXIMITY — freeform detection within a radius from the core, ignoring walls.
-     *             Used by enchanting table and similar open-area structures.
+     * <p><strong>PROXIMITY</strong> — freeform detection within a radius from
+     * the core, ignoring walls. Intended for enchanting table and similar
+     * open-area structures. <em>NOT YET IMPLEMENTED — using this value will
+     * cause StructureScanner to throw UnsupportedOperationException.</em></p>
      *
-     * PROXIMITY_WALLED — freeform detection that flood-fills through air and stops
-     *                     at walls. Used by brewery and similar room-based structures.
+     * <p><strong>PROXIMITY_WALLED</strong> — freeform detection that flood-fills
+     * through air and stops at walls. Intended for brewery and similar room-based
+     * structures. <em>NOT YET IMPLEMENTED — using this value will cause
+     * StructureScanner to throw UnsupportedOperationException.</em></p>
      */
     public enum ScanMode {
+        /** Fully implemented. Rigid shape matching. */
         PATTERN,
+
+        /**
+         * NOT YET IMPLEMENTED. Will throw UnsupportedOperationException if used.
+         * Planned for Phase 2: freeform radius scan ignoring walls.
+         */
         PROXIMITY,
+
+        /**
+         * NOT YET IMPLEMENTED. Will throw UnsupportedOperationException if used.
+         * Planned for Phase 2: flood-fill scan stopping at walls.
+         */
         PROXIMITY_WALLED
     }
 

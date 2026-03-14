@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-13 (Post-audit doc cleanup: expanded stickiness matrix, added EnderPearlPortalHandler, added Known Issues #12-#13, updated feature counts, noted FURNACE_ARRAY_FRAME tag gap.)*
+*Last updated: 2026-03-14 (Audit batch 2: B/K/L/P resolved, #20 IMMOVABLE_WHEN_FRAMED tag added, audit table updated.)*
 
 ---
 
@@ -146,7 +146,8 @@ com.ideomancer.ideomod
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>
         \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
-                                         FRAMEABLE_BLOCKS, FURNACE_ARRAY_FRAME tags.
+                                         FRAMEABLE_BLOCKS, FURNACE_ARRAY_FRAME,
+                                         IMMOVABLE_WHEN_FRAMED tags.
                                          NOTE: FurnaceArrayDefinition still uses
                                          inline tag reference -- should be updated
                                          to use ModTags.FURNACE_ARRAY_FRAME.
@@ -204,7 +205,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **IPistonMovable pipeline**: Opt-in block entity data preservation during piston moves. Implementing blocks: MachineFrameBlockEntity, FramedBlockEntity. Save phase: PistonBaseBlockMixin (vanilla pistons) or BlockMoveHelper step 2.5 (our systems). Both server-only. Transit: MovingBlockEntityData static ConcurrentHashMap. Restore: PistonMovingBlockEntityMixin via TWO paths -- tick() TAIL (normal 2-tick animation) and finalTick() TAIL (1-tick pulses). Single consumer pattern -- retrieve() is destructive.
 
-**PistonBaseBlockMixin**: Three features. (1) isPushable HEAD inject returns true for IPistonMovable block entities; also handles Oddstone pull immunity via position-specific ThreadLocal<BlockPos> — during retraction, only the directly pulled oddstone is immune, not oddstone elsewhere in group. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group + sympathetic scan for distant oddstone via scanSympathetic().
+**PistonBaseBlockMixin**: Four features. (1) isPushable HEAD inject returns true for IPistonMovable block entities; also handles Oddstone pull immunity via position-specific ThreadLocal<BlockPos> — during retraction, only the directly pulled oddstone is immune, not oddstone elsewhere in group. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group + sympathetic scan for distant oddstone via scanSympathetic(). (4) Framed block inner push reaction: checks `#ideomod:immovable_when_framed` tag (data-driven, extensible by datapacks) + destroySpeed == -1 fallback for bedrock-type blocks.
 
 **RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to 12 blocks. Delegates movement to BlockMoveHelper.
 
@@ -323,7 +324,7 @@ Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlac
 
 Registry IDs: `iron_framed_block`, `copper_framed_block`. Class: FramedBlock (implements IFrameBlock + EntityBlock).
 
-1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~19 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding, stepOn, fallOn, updateEntityAfterFallOn, entityInside all preserved. Speed/jump factor via EntityMovementMixin. Push reaction (immovable inners) via PistonBaseBlockMixin Feature 4 + Resolver Feature 5.
+1. **Inner block proxy**: FramedBlockEntity stores ResourceLocation. ~19 methods delegate to inner block's defaultBlockState(). Mining speed, sound, friction, light, redstone, pathfinding, stepOn, fallOn, updateEntityAfterFallOn, entityInside all preserved. Speed/jump factor via EntityMovementMixin. Push reaction (immovable inners) via PistonBaseBlockMixin Feature 4 (tag-based: `#ideomod:immovable_when_framed` + destroySpeed == -1 fallback) + Resolver Feature 5.
 2. **Two-layer rendering**: BESR (FramedBlockRenderer) uses BlockRenderDispatcher.renderSingleBlock() at 0.998 scale for epsilon inset. Handles multi-element models (slime), translucency (glass), tinting (grass), directional textures. JSON model draws frame overlay on top. Brightest-of-neighbors lighting.
 3. **FACING property** (DirectionProperty): Set from player look direction on placement. Transferred to inner block's orientation property during rendering.
 4. **INNER_STICKY property** (IntegerProperty 0-4): Maps to `StickyType` enum values (NONE=0, SLIME=1, HONEY=2, ODD_SLIME=3, ODDSTONE=4). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner().
@@ -370,7 +371,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 
 **ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 
@@ -420,15 +421,18 @@ The following issues were identified during a comprehensive codebase audit. See 
 
 | ID | Severity | Issue | Location |
 |----|----------|-------|----------|
-| A | Critical | MachineConductorBlock.shouldSignal is plain boolean, not ThreadLocal. Singleton block = shared state across all conductors. | MachineConductorBlock.java |
-| B | Critical | FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization. | FrameActivation.java |
-| C | Critical | ThreadLocal cleanup gaps in PistonStructureResolverMixin -- exception between HEAD/TAIL leaves contaminated state. | PistonStructureResolverMixin.java |
-| D | Critical | ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos -- same pattern as C. | PistonBaseBlockMixin.java |
-| E | High | OddstonePortalSavedData.unregisterPortal() uses && where || is needed -- impossible condition, causes memory leak. | OddstonePortalSavedData.java |
+| ~~A~~ | ~~Critical~~ | ~~MachineConductorBlock.shouldSignal is plain boolean, not ThreadLocal.~~ *FIXED 2026-03-13* | MachineConductorBlock.java |
+| ~~B~~ | ~~Critical~~ | ~~FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization.~~ *FIXED 2026-03-14 (volatile + atomic swap)* | FrameActivation.java |
+| ~~C~~ | ~~Critical~~ | ~~ThreadLocal cleanup gaps in PistonStructureResolverMixin.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
+| ~~D~~ | ~~Critical~~ | ~~ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos.~~ *FIXED 2026-03-13* | PistonBaseBlockMixin.java |
+| ~~E~~ | ~~High~~ | ~~OddstonePortalSavedData.unregisterPortal() uses && where || is needed.~~ *FIXED 2026-03-13* | OddstonePortalSavedData.java |
 | F | High | FrameActivation.recalculate() has no debouncing -- large networks cause lag during construction. | FrameActivation.java |
 | G | High | ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop. | PistonStructureResolverMixin.java |
 | H | High | MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration. | MovementScanHelper.java |
-| J | Medium | OddstoneConfig sympathetic radius is unbounded -- config edit to large value causes server hang. | OddstoneConfig.java |
-| N | Low | BUG10 debug logging left at INFO level. | PistonStructureResolverMixin.java |
+| ~~J~~ | ~~Medium~~ | ~~OddstoneConfig sympathetic radius is unbounded.~~ *FIXED 2026-03-13* | OddstoneConfig.java |
+| ~~K~~ | ~~Medium~~ | ~~MovingBlockEntityData key collision risk.~~ *FIXED 2026-03-14 (pipe delimiters)* | MovingBlockEntityData.java |
+| ~~L~~ | ~~Medium~~ | ~~StructureManager chunk iteration without defensive copy.~~ *FIXED 2026-03-14* | StructureManager.java |
+| ~~N~~ | ~~Low~~ | ~~BUG10 debug logging left at INFO level.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
+| ~~P~~ | ~~Low~~ | ~~StructureDefinition ScanMode stub values undocumented.~~ *FIXED 2026-03-14 (javadoc)* | StructureDefinition.java |
 
 Written by Claude, directed and guided by The Ideomancer.

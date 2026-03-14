@@ -1,5 +1,79 @@
 # Ideomod Changelog
 
+## [2026-03-14] Audit Code Fixes Batch 2 (items B, K, L, P, #20)
+
+### Audit fix B: FrameActivation.activatedVanillaMetals thread safety
+
+The `activatedVanillaMetals` set was a plain `HashSet<Long>` that was cleared
+and rebuilt in place during every `recalculate()` call. Concurrent reads from
+stickiness checks on different code paths (e.g., chunk loading, Forge parallel
+dispatch) could see a partially-rebuilt set.
+
+Fix: Changed to a volatile reference with atomic swap pattern. During
+recalculate(), a new set is built locally and swapped in at the end via
+`activatedVanillaMetals = Collections.unmodifiableSet(newSet)`. Readers
+always see a complete, consistent snapshot. The step 2 wipe no longer
+mutates the shared set — vanilla metals are replaced wholesale in step 6.
+
+File: FrameActivation.java
+
+### Audit fix K: MovingBlockEntityData key collision risk
+
+Keys were built as `dimension:x,y,z` using colons and commas. While vanilla
+dimension names don't contain these characters, modded dimensions theoretically
+could (e.g., `mymod:my:dimension`), creating ambiguous keys.
+
+Fix: Changed delimiter to pipe `|` between dimension and coordinates, semicolons
+`;` between coordinate components: `minecraft:overworld|0;64;0`. Neither pipe
+nor semicolon is valid in ResourceLocation strings, so collisions are impossible.
+
+Note: Any block entity data stored with the old format during a mid-animation
+piston move will not be retrievable after updating. In practice this only
+matters if a piston is mid-animation at the exact moment the mod JAR is swapped,
+which is not a realistic scenario.
+
+File: MovingBlockEntityData.java
+
+### Audit fix L: StructureManager defensive copy during block entity iteration
+
+`findAndScanNearbyCores()` iterated `chunk.getBlockEntities().keySet()` directly.
+If a chunk's block entity map was modified during iteration (possible during
+rapid block changes), a ConcurrentModificationException could occur.
+
+Fix: Wrapped in `new HashSet<>(chunk.getBlockEntities().keySet())` before
+iterating.
+
+File: StructureManager.java
+
+### Audit fix P: StructureDefinition ScanMode stub documentation
+
+PROXIMITY and PROXIMITY_WALLED enum values exist but throw
+UnsupportedOperationException if used. This could surprise someone who tries
+to use them in a new StructureDefinition.
+
+Fix: Added per-value javadoc on the ScanMode enum clearly stating which modes
+are implemented and which will throw. No runtime behavior change.
+
+File: StructureDefinition.java
+
+### Audit recommendation #20: Tag-based immovable inner blocks
+
+PistonBaseBlockMixin Feature 4 (framed block inner push reaction) previously
+hardcoded three specific blocks: obsidian, crying_obsidian, reinforced_deepslate.
+Adding new immovable-when-framed blocks required a code change.
+
+Fix: Created `ideomod:immovable_when_framed` block tag containing the three
+previously hardcoded blocks. PistonBaseBlockMixin now checks
+`innerState.is(ModTags.IMMOVABLE_WHEN_FRAMED)` instead of three separate
+`.is()` calls. The destroySpeed == -1 fallback (for bedrock-type blocks)
+still runs after the tag check.
+
+Other mods and datapacks can now add blocks to the tag without code changes.
+
+Files: ModTags.java, PistonBaseBlockMixin.java
+New file: data/ideomod/tags/blocks/immovable_when_framed.json
+
+
 ## [2026-03-13b] Sympathetic Movement Bug Fix + Audit Code Fixes
 
 ### BUG FIX: Sympathetic movement only worked at distance 2 or exact radius

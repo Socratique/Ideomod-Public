@@ -65,4 +65,21 @@ public class ModTags {
      */
     public static final TagKey<Block> FURNACE_ARRAY_FRAME =
             BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "furnace_array_frame"));
+
+    /**
+     * Blocks that should be immovable when wrapped inside a FramedBlock.
+     * PistonBaseBlockMixin checks this tag instead of hardcoding specific blocks.
+     *
+     * Default contents: obsidian, crying_obsidian, reinforced_deepslate.
+     * Other mods or datapacks can add their own immovable blocks.
+     *
+     * Note: The destroySpeed == -1 check (bedrock, barriers, etc.) still runs
+     * as a fallback for unlisted indestructible blocks. This tag is for blocks
+     * like obsidian that ARE destructible but should still be immovable.
+     *
+     * Tag file: data/ideomod/tags/blocks/immovable_when_framed.json
+     * (Audit item #20, added 2026-03-13)
+     */
+    public static final TagKey<Block> IMMOVABLE_WHEN_FRAMED =
+            BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "immovable_when_framed"));
 }

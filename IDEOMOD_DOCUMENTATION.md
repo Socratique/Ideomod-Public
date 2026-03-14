@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-13 (Post-audit doc cleanup: EnderPearlPortalHandler documented, Oddstone feature count settled at 6, ModTags FURNACE_ARRAY_FRAME gap noted, frameable blocks count updated to ~310, Known Issues #12/#13 formatted, stickiness matrix cross-ref added.)*
+*Last updated: 2026-03-14 (Audit batch 2: IMMOVABLE_WHEN_FRAMED tag added, ModTags updated to 5 tags, Feature 4 now tag-based, FrameActivation thread safety note.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -194,13 +194,14 @@ Two tabs:
 
 ### ModTags
 
-Four custom block tags, three with TagKey constants in ModTags.java:
+Five custom block tags, all with TagKey constants in ModTags.java:
 
 | Tag | Purpose | TagKey in ModTags? | JSON Location |
 |-----|---------|-------------------|---------------|
 | `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | YES | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
 | `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | YES | `data/ideomod/tags/blocks/redstone_components.json` |
-| `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | NO -- referenced inline in FurnaceArrayDefinition. Should be added to ModTags.java for compile-time safety. | `data/ideomod/tags/blocks/furnace_array_frame.json` |
+| `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | YES (added 2026-03-13). FurnaceArrayDefinition still uses inline ref — should be updated. | `data/ideomod/tags/blocks/furnace_array_frame.json` |
+| `IMMOVABLE_WHEN_FRAMED` | Blocks that should be immovable when wrapped in a FramedBlock. Used by PistonBaseBlockMixin Feature 4. Extensible by datapacks. DestroySpeed == -1 fallback still runs for unlisted indestructible blocks. | YES (added 2026-03-14) | `data/ideomod/tags/blocks/immovable_when_framed.json` |
 | `FRAMEABLE_BLOCKS` | Whitelist of blocks that can be wrapped in frames (~310 vanilla + 2 ideomod blocks) | YES | `data/ideomod/tags/blocks/frameable_blocks.json` |
 
 See section 13 for the full contents of each tag.
@@ -423,7 +424,7 @@ This is needed because ranged pistons pass the device's own position as `pistonP
 
 ### Feature 5: Framed Block Immovable Inner (HEAD of addBlockLine)
 
-When `addBlockLine` encounters a FramedBlock whose inner block would be immovable (obsidian, crying obsidian, reinforced deepslate, or destroySpeed -1), returns false to fail the entire resolve. This fires BEFORE the `inBranching` guard so it applies in ALL phases (line-building + branching).
+When `addBlockLine` encounters a FramedBlock whose inner block would be immovable (`#ideomod:immovable_when_framed` tag or destroySpeed -1), returns false to fail the entire resolve. This fires BEFORE the `inBranching` guard so it applies in ALL phases (line-building + branching).
 
 Needed because vanilla's `addBlockLine` returns TRUE (skip) when `isPushable` returns false. For blocks that ARE part of a sticky group via frame activation, skipping is wrong — the immovable block should anchor the group and prevent movement.
 
@@ -436,7 +437,7 @@ Post-gathering safety check. After all blocks have been collected into toPush (b
 This exists because vanilla's backward walk silently skips unpushable blocks (isPushable returns false -> walk stops, returns true). Feature 5 at HEAD of addBlockLine never fires for blocks the backward walk skips. Sideways grabs (branching) DO trigger Feature 5, so they work correctly. Feature 7 catches the backward walk gap.
 
 Conditions for anchor detection (ALL must be true):
-1. Neighbor is a FramedBlock with immovable inner (obsidian, crying obsidian, reinforced deepslate, destroySpeed -1)
+1. Neighbor is a FramedBlock with immovable inner (`#ideomod:immovable_when_framed` tag or destroySpeed -1)
 2. Neighbor is NOT already in toPush (those are handled by Feature 5)
 3. Neighbor is ACTIVE (inactive framed obsidian has no frame stickiness connection)
 4. Frame stickiness connects the neighbor to the group member (same material, cross-frame mediation via ideomod$wouldFrameStickinessAllow, or Machine Family adjacency)
@@ -588,7 +589,7 @@ Feature 1 -- isPushable override (HEAD inject, cancellable):
 Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons. Uses `MovementScanHelper` for efficient block state lookups. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
 
 Feature 4 -- Framed block immovable inner (in same HEAD inject):
-When a FramedBlock wraps an immovable inner block, isPushable returns false. Mirrors vanilla's hardcoded checks: `Blocks.OBSIDIAN`, `Blocks.CRYING_OBSIDIAN`, `Blocks.REINFORCED_DEEPSLATE` (via BlockState.is() for registry-safe comparison), plus `getDestroySpeed == -1.0f` for bedrock-type blocks. Runs BEFORE Feature 1's IPistonMovable check so framed obsidian is blocked despite having an IPistonMovable block entity. Includes diagnostic logging for both success and BE-lookup-failure cases. Key discovery: vanilla does NOT use PushReaction.BLOCK for obsidian — the initial implementation using PushReaction silently failed.
+When a FramedBlock wraps an immovable inner block, isPushable returns false. Uses the `#ideomod:immovable_when_framed` tag (data-driven, extensible by datapacks — default: obsidian, crying_obsidian, reinforced_deepslate), plus `getDestroySpeed == -1.0f` for bedrock-type blocks. Runs BEFORE Feature 1's IPistonMovable check so framed obsidian is blocked despite having an IPistonMovable block entity. Includes diagnostic logging for both success and BE-lookup-failure cases. Key discovery: vanilla does NOT use PushReaction.BLOCK for obsidian — the initial implementation using PushReaction silently failed.
 
 Feature 2 -- moveBlocks data save (HEAD inject):
 Saves IPistonMovable block entity data before vanilla destroys the block entities during the move. Server-only (critical -- see Bug 2 below).
@@ -668,7 +669,7 @@ When `recalculate()` is called:
 
 ### Vanilla Metal Activation Tracking
 
-Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains an ephemeral `Set<Long> activatedVanillaMetals` (packed BlockPos longs) rebuilt every recalculate().
+Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains a volatile `Set<Long> activatedVanillaMetals` (packed BlockPos longs) that is atomically swapped to a fresh immutable set at the end of each recalculate(). This ensures concurrent reads from stickiness checks always see a consistent snapshot (audit fix B, 2026-03-14).
 
 Public queries:
 - `isVanillaMetalActivated(BlockPos)` — is this vanilla metal connected to a machine source?
@@ -750,7 +751,7 @@ Static utility determining whether a block can be framed. Tag-driven whitelist: 
 | entityInside | Per-position | Future: bubble columns, cobweb slowdown |
 | getSpeedFactor | Via EntityMovementMixin | Soul sand 0.4, honey 0.4. Block method has no position param; mixin intercepts at Entity level. |
 | getJumpFactor | Via EntityMovementMixin | Honey 0.5. Same mixin approach as speed factor. |
-| getPistonPushReaction | Via PistonBaseBlockMixin | Obsidian/crying obsidian/reinforced deepslate/destroySpeed -1 = immovable. Checked in isPushable, not via PushReaction enum. |
+| getPistonPushReaction | Via PistonBaseBlockMixin | `#ideomod:immovable_when_framed` tag (obsidian/crying obsidian/reinforced deepslate) + destroySpeed -1 = immovable. Checked in isPushable, not via PushReaction enum. |
 
 **EntityMovementMixin** (`com.ideomancer.ideomod.mixin.EntityMovementMixin`):
 

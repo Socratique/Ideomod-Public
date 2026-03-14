@@ -26,6 +26,16 @@ import java.util.concurrent.ConcurrentHashMap;
  * it overwrites the server's valid data. This was the cause of the
  * "client overwrites server" bug.
  *
+ * KEY FORMAT (Audit #K):
+ * ======================
+ * Keys use pipe '|' delimiters between dimension and coordinates, and
+ * semicolons ';' between coordinate components:
+ *   "minecraft:overworld|0;64;0"
+ * Previously used ":" and "," which could collide with modded dimension
+ * names containing those characters (e.g., "mymod:my:dimension").
+ * Pipe and semicolon are not valid in ResourceLocation strings, so
+ * collisions are impossible.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class MovingBlockEntityData {
@@ -53,7 +63,13 @@ public class MovingBlockEntityData {
         return pendingData.containsKey(makeKey(dimensionKey, pos));
     }
 
+    /**
+     * Build a unique key from dimension + position.
+     * Uses '|' between dimension and coords, ';' between x/y/z.
+     * Neither character is valid in ResourceLocation strings, so
+     * no modded dimension name can create ambiguous keys.
+     */
     private static String makeKey(String dimensionKey, BlockPos pos) {
-        return dimensionKey + ":" + pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        return dimensionKey + "|" + pos.getX() + ";" + pos.getY() + ";" + pos.getZ();
     }
 }

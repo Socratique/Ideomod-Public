@@ -25,11 +25,11 @@ Overall the codebase is impressively well-organized for a mod of this complexity
 
 *RESOLVED 2026-03-13: Converted to `static final ThreadLocal<Boolean>` with try-finally safety wrapper.*
 
-**B. FrameActivation.activatedVanillaMetals is a plain HashSet mutated without synchronization**
+~~**B. FrameActivation.activatedVanillaMetals is a plain HashSet mutated without synchronization**~~
 
-`activatedVanillaMetals` is a `static HashSet<Long>` that gets cleared and rebuilt during every `recalculate()` call, but queried by `isVanillaMetalActivated()` which could be called from stickiness checks on a different code path. While Minecraft is mostly single-threaded, chunk loading and Forge parallel dispatch create edge cases.
+~~`activatedVanillaMetals` is a `static HashSet<Long>` that gets cleared and rebuilt during every `recalculate()` call, but queried by `isVanillaMetalActivated()` which could be called from stickiness checks on a different code path. While Minecraft is mostly single-threaded, chunk loading and Forge parallel dispatch create edge cases.~~
 
-*Fix:* Use `ConcurrentHashMap.newKeySet()` or swap to a fresh set atomically rather than clear-and-rebuild in place.
+*RESOLVED 2026-03-14: Changed to volatile reference with atomic swap. New set built locally during recalculate(), swapped in atomically at the end. Readers always see a consistent snapshot.*
 
 ~~**C. ThreadLocal cleanup gaps in PistonStructureResolverMixin**~~
 
@@ -97,17 +97,17 @@ Nearly every delegated method (mining, sound, friction, light, redstone, pathfin
 
 *RESOLVED 2026-03-13: Tightened cap from max 32 to max 16. `Math.max(1, Math.min(16, radius))` in parseConfig().*
 
-**K. MovingBlockEntityData key collision risk**
+~~**K. MovingBlockEntityData key collision risk**~~
 
-Keys are built by string concatenation: `dimensionKey + ":" + x + "," + y + "," + z`. While dimension names in vanilla don't contain colons or commas, modded dimensions could theoretically create collisions.
+~~Keys are built by string concatenation: `dimensionKey + ":" + x + "," + y + "," + z`. While dimension names in vanilla don't contain colons or commas, modded dimensions could theoretically create collisions.~~
 
-*Fix:* Use a proper delimiter or a compound key object. Low urgency since the collision scenario is extremely unlikely.
+*RESOLVED 2026-03-14: Changed delimiter to pipe '|' between dimension and coords, semicolons ';' between x/y/z. Neither character is valid in ResourceLocation strings.*
 
-**L. StructureManager chunk iteration during block entity search**
+~~**L. StructureManager chunk iteration during block entity search**~~
 
-`getBlockEntities().keySet()` is iterated without a defensive copy. If a chunk is modified during iteration (unlikely but possible during rapid block changes), a ConcurrentModificationException could occur.
+~~`getBlockEntities().keySet()` is iterated without a defensive copy. If a chunk is modified during iteration (unlikely but possible during rapid block changes), a ConcurrentModificationException could occur.~~
 
-*Fix:* `new HashSet<>(chunk.getBlockEntities().keySet())` before iterating.
+*RESOLVED 2026-03-14: Wrapped in `new HashSet<>(chunk.getBlockEntities().keySet())` before iterating.*
 
 ---
 
@@ -131,11 +131,11 @@ The `inputFace` field lives on the shared block entity. If a future specializati
 
 *Recommendation:* When adding the next directional specialization, consider either (a) a Map<String, Direction> on the BE keyed by specialization name, or (b) specialization-specific BE subclasses.
 
-**P. StructureDefinition ScanMode enum has stub values**
+~~**P. StructureDefinition ScanMode enum has stub values**~~
 
-PROXIMITY and PROXIMITY_WALLED exist as enum values but throw UnsupportedOperationException if used. This could surprise someone who tries to use them.
+~~PROXIMITY and PROXIMITY_WALLED exist as enum values but throw UnsupportedOperationException if used. This could surprise someone who tries to use them.~~
 
-*Recommendation:* Either remove the stubs until implemented, or add a clear `@Deprecated` annotation / javadoc warning.
+*RESOLVED 2026-03-14: Added per-value javadoc clearly stating which modes are implemented and which will throw UnsupportedOperationException.*
 
 ---
 
@@ -242,9 +242,9 @@ This converts both algorithms from O(n^2) to O(n) where n is the number of posit
 
 ### 3.4 Consider a Tag for Immovable Inner Blocks
 
-**Problem:** PistonBaseBlockMixin hardcodes OBSIDIAN, CRYING_OBSIDIAN, REINFORCED_DEEPSLATE as immovable inners. The destroySpeed == -1 check catches most cases, but modded blocks with custom push reactions won't be caught.
+~~**Problem:** PistonBaseBlockMixin hardcodes OBSIDIAN, CRYING_OBSIDIAN, REINFORCED_DEEPSLATE as immovable inners. The destroySpeed == -1 check catches most cases, but modded blocks with custom push reactions won't be caught.~~
 
-**Recommendation:** Create an `ideomod:immovable_when_framed` block tag. This lets datapacks and other mods declare blocks that should be immovable inside frames, without code changes. Fall back to the destroySpeed check for unlisted blocks.
+*RESOLVED 2026-03-14: Created `ideomod:immovable_when_framed` block tag with the three previously hardcoded blocks. PistonBaseBlockMixin now checks `innerState.is(ModTags.IMMOVABLE_WHEN_FRAMED)`. DestroySpeed == -1 fallback still runs for unlisted indestructible blocks. TagKey constant added to ModTags.java.*
 
 ### 3.5 Portal Geometry Caching
 
@@ -318,7 +318,13 @@ Issues #12 (dust sees strong power through solid blocks) and #13 (base texture r
 
 ### Long-term (architecture evolution)
 19. Consider declarative stickiness profiles
-20. Consider tag-based immovable inner blocks
+20. ~~Consider tag-based immovable inner blocks~~ *DONE 2026-03-14 (IMMOVABLE_WHEN_FRAMED tag + ModTags constant + PistonBaseBlockMixin updated)*
 21. Plan inputFace field strategy for multiple directional specializations
+
+### Resolved outside priority list (2026-03-14)
+- ~~(B) FrameActivation.activatedVanillaMetals thread safety~~ *DONE (volatile + atomic swap)*
+- ~~(K) MovingBlockEntityData key collision risk~~ *DONE (pipe + semicolon delimiters)*
+- ~~(L) StructureManager defensive copy~~ *DONE (HashSet wrapper)*
+- ~~(P) StructureDefinition ScanMode stub docs~~ *DONE (per-value javadoc)*
 
 Written by Claude, directed and guided by The Ideomancer.

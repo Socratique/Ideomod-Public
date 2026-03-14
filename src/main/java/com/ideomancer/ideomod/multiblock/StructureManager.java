@@ -55,6 +55,8 @@ import java.util.UUID;
  * Block placed/broken → check chunk index for nearby structures → rescan affected
  *                     → check if placed block is a core → try new formation
  *                     → check if placed block is frame material → search nearby for cores → try formation
+ *
+ * Written by Claude, directed and guided by The Ideomancer.
  */
 public class StructureManager extends SavedData {
 
@@ -434,6 +436,10 @@ public class StructureManager extends SavedData {
      *
      * Both are cheap: block entity maps have ~0-10 entries per chunk,
      * and the tracked set only contains event-placed cores.
+     *
+     * AUDIT FIX #L: Block entity keySet is now defensively copied before
+     * iteration to prevent ConcurrentModificationException if a chunk is
+     * modified during iteration (unlikely but possible during rapid changes).
      */
     private void findAndScanNearbyCores(BlockPos changedPos, ServerLevel level) {
         int radius = CORE_SEARCH_RADIUS;
@@ -451,8 +457,12 @@ public class StructureManager extends SavedData {
             for (int cz = minCZ; cz <= maxCZ; cz++) {
                 if (!level.hasChunk(cx, cz)) continue;
 
-                var chunk = level.getChunk(cx, cz);
-                for (BlockPos bePos : chunk.getBlockEntities().keySet()) {
+                var chunkData = level.getChunk(cx, cz);
+                // Defensive copy: prevents ConcurrentModificationException if
+                // chunk's block entity map is modified during iteration.
+                // (Audit item #L, fixed 2026-03-13)
+                Set<BlockPos> bePositions = new HashSet<>(chunkData.getBlockEntities().keySet());
+                for (BlockPos bePos : bePositions) {
                     if (Math.abs(bePos.getX() - changedPos.getX()) > radius) continue;
                     if (Math.abs(bePos.getY() - changedPos.getY()) > radius) continue;
                     if (Math.abs(bePos.getZ() - changedPos.getZ()) > radius) continue;

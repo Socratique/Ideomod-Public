@@ -8,6 +8,7 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.config.OddstoneConfig;
+import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -82,14 +83,10 @@ import java.util.Set;
  * FEATURE 4: FRAMED BLOCK INNER PUSH REACTION (isPushable)
  * =========================================================
  * When a FramedBlock wraps an immovable inner block (e.g., obsidian),
- * the framed version should also be immovable. Vanilla doesn't use
- * PushReaction for this — it hardcodes specific blocks (obsidian,
- * crying obsidian, reinforced deepslate) and checks getDestroySpeed
- * == -1 for bedrock-type blocks. We mirror those exact checks on the
- * inner block.
- *
- * This makes framed obsidian behave like real obsidian for piston purposes,
- * and automatically handles any future whitelisted block with -1 destroy speed.
+ * the framed version should also be immovable. Uses the
+ * ideomod:immovable_when_framed tag for data-driven extensibility
+ * (Audit item #20), plus the destroySpeed == -1 fallback for
+ * bedrock-type blocks.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -137,11 +134,9 @@ public abstract class PistonBaseBlockMixin {
 
         // --- Feature 4: Framed block inner push reaction ---
         // If the block is a FramedBlock, check if the inner block would be
-        // immovable. Vanilla doesn't use PushReaction.BLOCK for this — it
-        // hardcodes specific blocks (obsidian, crying_obsidian, reinforced
-        // deepslate) and checks getDestroySpeed == -1 (bedrock etc.).
-        // We mirror that logic: check if the inner block's default state
-        // would fail vanilla's own isPushable checks.
+        // immovable. Uses the ideomod:immovable_when_framed tag for
+        // data-driven extensibility, plus destroySpeed == -1 for bedrock-type
+        // blocks. (Audit item #20: replaced hardcoded block checks with tag.)
         //
         // This runs BEFORE the Feature 1 IPistonMovable check so that
         // framed obsidian is correctly blocked even though FramedBlockEntity
@@ -150,18 +145,16 @@ public abstract class PistonBaseBlockMixin {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof FramedBlockEntity fbe && fbe.hasInnerBlock()) {
                 BlockState innerState = fbe.getInnerDefaultState();
-                // Mirror vanilla isPushable: hardcoded immovable blocks
-                // Using is() for registry-safe comparison
-                if (innerState.is(net.minecraft.world.level.block.Blocks.OBSIDIAN)
-                        || innerState.is(net.minecraft.world.level.block.Blocks.CRYING_OBSIDIAN)
-                        || innerState.is(net.minecraft.world.level.block.Blocks.REINFORCED_DEEPSLATE)) {
+                // Tag-based immovable check (replaces hardcoded obsidian/crying_obsidian/
+                // reinforced_deepslate). Datapacks and other mods can extend this tag.
+                if (innerState.is(ModTags.IMMOVABLE_WHEN_FRAMED)) {
                     Ideomod.LOGGER.debug("[PistonBaseMixin] Framed block immovable: " +
-                            "inner block {} is hardcoded immovable at {}",
+                            "inner block {} is in immovable_when_framed tag at {}",
                             fbe.getInnerBlockId(), pos);
                     cir.setReturnValue(false);
                     return;
                 }
-                // Mirror vanilla isPushable: indestructible blocks (bedrock, etc.)
+                // Fallback: indestructible blocks (bedrock, barriers, etc.)
                 if (innerState.getDestroySpeed(level, pos) == -1.0f) {
                     Ideomod.LOGGER.debug("[PistonBaseMixin] Framed block immovable: " +
                             "inner block {} has destroy speed -1 at {}",

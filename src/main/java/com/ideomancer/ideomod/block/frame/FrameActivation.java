@@ -8,6 +8,7 @@ import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 
 /**
@@ -46,7 +47,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *    activated, it passes ALL materials (universal bridge).
  *
  * 3. VANILLA METAL BLOCKS: No ACTIVE property. Activation tracked in
- *    ephemeral Map<Long, Integer> rebuilt every recalculate(). Conduct
+ *    ephemeral Set<Long> rebuilt every recalculate(). Conduct
  *    for their material only. Queryable via isVanillaMetalActivated(pos).
  *
  * THE ALGORITHM:
@@ -65,6 +66,14 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
  *    no anti-signal.
  *
+ * THREAD SAFETY (Audit #B):
+ * =========================
+ * activatedVanillaMetals uses volatile reference swapping rather than
+ * clear-and-rebuild on a shared mutable set. During recalculate(), a new
+ * set is built locally and then atomically swapped in. Readers always see
+ * a consistent snapshot. This prevents stale reads during concurrent
+ * stickiness checks on different code paths (e.g., chunk loading).
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class FrameActivation {
@@ -82,8 +91,14 @@ public class FrameActivation {
      * Ephemeral set of activated vanilla metal positions (packed longs).
      * Rebuilt every recalculate(). Vanilla blocks have no ACTIVE property,
      * so we track them here.
+     *
+     * THREAD SAFETY: This is a volatile reference that gets atomically swapped
+     * to a new set during recalculate(). Readers see a consistent snapshot.
+     * Previously was a plain HashSet that was cleared and rebuilt in place,
+     * risking stale/partial reads from concurrent stickiness checks.
+     * (Audit item #B, fixed 2026-03-13)
      */
-    private static final Set<Long> activatedVanillaMetals = new HashSet<>();
+    private static volatile Set<Long> activatedVanillaMetals = Collections.emptySet();
 
     /**
      * Query whether a vanilla metal block at the given position is
@@ -123,13 +138,15 @@ public class FrameActivation {
         if (network.isEmpty()) return;
 
         // Step 2: Wipe all activation states
+        // Build a local set of vanilla metal positions to remove, then swap atomically
+        Set<Long> currentVanillaMetals = activatedVanillaMetals;
         for (BlockPos pos : network) {
             BlockState state = level.getBlockState(pos);
             if (state.getBlock() instanceof IFrameBlock && isActive(state)) {
                 level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, false),
                         Block.UPDATE_CLIENTS);
             }
-            activatedVanillaMetals.remove(pos.asLong());
+            // Vanilla metals: we'll build a fresh set below, no need to remove individually
         }
 
         // Step 3: Find all Machine Blocks adjacent to any network block
@@ -145,6 +162,8 @@ public class FrameActivation {
         }
 
         if (machineSources.isEmpty()) {
+            // No sources found — ensure vanilla metals are cleared
+            activatedVanillaMetals = Collections.emptySet();
             Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, no sources",
                     changePos, network.size());
             return;
@@ -191,6 +210,9 @@ public class FrameActivation {
         }
 
         // Step 6: Apply — activate blocks that have signal and no anti-signal
+        // Build new vanilla metal set locally, then swap atomically
+        Set<Long> newVanillaMetals = new HashSet<>();
+
         for (BlockPos pos : network) {
             long packed = pos.asLong();
             int activation = activationStrength.getOrDefault(packed, 0);
@@ -208,10 +230,13 @@ public class FrameActivation {
                 // Already wiped to false in step 2, so no else needed
             } else if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
                 if (shouldActivate) {
-                    activatedVanillaMetals.add(packed);
+                    newVanillaMetals.add(packed);
                 }
             }
         }
+
+        // Atomic swap: readers now see the complete new set
+        activatedVanillaMetals = Collections.unmodifiableSet(newVanillaMetals);
 
         Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, sources={}, powered={}",
                 changePos, network.size(), machineSources.size(),
