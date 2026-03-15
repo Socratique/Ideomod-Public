@@ -8,6 +8,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachinePipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrolleyBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
@@ -165,6 +166,17 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Pipe: push-only item transport. FILLED blockstate drives texture swap.
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
+    public static final RegistryObject<Block> MACHINE_PIPE = BLOCKS.register("machine_pipe",
+            () -> new MachinePipeBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
             ));
 

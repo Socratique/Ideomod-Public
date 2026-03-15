@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, machine GUI sync fix, Conductor texture fix noted.)*
+*Last updated: 2026-03-15d (Machine Pipe specialization implemented. Unified dynamic GUI system. ideomod_gui.png spritesheet.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -271,7 +271,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Powered Rail | Track | MachineTrackBlock | TRACK | [DONE] |
 | Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
 | Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [WIP] |
-| Hopper | Pipe | TBD | PIPE | [IDEA] |
+| Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Comparator | Repeater | TBD | REPEATER | [IDEA] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
@@ -291,19 +291,21 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
 | Piston data preservation | [DONE] | All specializations implement IPistonMovable via shared block entity. |
 | AbstractMachineBlock | [DONE] | Shared base class for all Machine Family blocks. Default lifecycle, GUI, drops, stickiness. MachineFrameBlock/MachineTrolleyBlock ~20 lines each. |
+| Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 151px height. |
+| Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
 
 ---
 
 ### Machine Specializations [WIP]
-> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block sharing MachineFrameBlockEntity. Track and Trolley are implemented; remaining specializations are designed but not yet built.
+> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, and Pipe are implemented; remaining specializations are designed but not yet built.
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
 **Machine Conductor:** [WIP]
 Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin). ~~Base texture renders black~~ (FIXED 2026-03-14, cutout render type).
 
-**Machine Pipe:** [IDEA]
-Directional item transport. Pushes items one block in facing direction per redstone pulse.
+**Machine Pipe:** [DONE]
+Push-only item transport. Hopper specialization item. Own BE subclass (MachinePipeBlockEntity) with transit slot (1 stack, slot 1), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FILLED BooleanProperty drives texture swap. No pulling -- items enter via player hand, hopper, or pipe-to-pipe push. Redstone locks the pipe (powered = frozen). Output priority relative to input face: forward, right, left, up, down. Round-robin resets on input face change. Pipe-to-pipe push notifies receiver of input face. Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator reads transit slot fullness. ThreadLocal pendingInputFace in WorldlyContainer bridges face parameter to setItem for automation input tracking.
 
 **Machine Track:** [DONE]
 Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.

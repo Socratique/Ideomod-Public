@@ -19,5 +19,6 @@
   "ideomod.container.machine_frame": "Machine Frame",
   "ideomod.container.enhanced_furnace": "Enhanced Furnace",
   "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
-  "ideomod.container.enhanced_smoker": "Enhanced Smoker"
+  "ideomod.container.enhanced_smoker": "Enhanced Smoker",
+  "block.ideomod.machine_pipe": "Machine Pipe"
 }

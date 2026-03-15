@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block.machine;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
@@ -17,9 +18,16 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * at the position, and next time the menu reads a slot it just finds the
  * new block entity sitting there.
  *
- * If no valid block entity exists at the position (block was destroyed,
- * chunk unloaded, etc.), methods return safe defaults (empty slots, invalid
- * for interaction) and stillValid() returns false, which closes the GUI.
+ * DYNAMIC SLOT SUPPORT:
+ * =====================
+ * Reports 2 slots. Slot 0 (specialization) works with any Machine Family BE.
+ * Slot 1 (transit) only works when the BE is a MachinePipeBlockEntity.
+ * When the BE is a standard MachineFrameBlockEntity, slot 1 returns empty
+ * and is non-interactable. This lets the unified menu show/hide the transit
+ * slot dynamically without closing the GUI on specialization swaps.
+ *
+ * When a player inserts an item into slot 1 via GUI, this is treated as
+ * input from Direction.UP (top of block) for the pipe's round-robin system.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -35,11 +43,26 @@ public class PositionBoundContainer implements Container {
 
     /**
      * Look up the current block entity at our position.
-     * Returns null if not present or not a MachineFrameBlockEntity.
+     * Returns null if not present or not a MachineFrameBlockEntity (or subclass).
      */
     private MachineFrameBlockEntity getBE() {
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachineFrameBlockEntity mfbe ? mfbe : null;
+    }
+
+    /**
+     * Get the pipe-specific BE, or null if the block is not a pipe.
+     */
+    private MachinePipeBlockEntity getPipeBE() {
+        BlockEntity be = level.getBlockEntity(pos);
+        return be instanceof MachinePipeBlockEntity pipe ? pipe : null;
+    }
+
+    /**
+     * Check if the current BE is a pipe (has transit slot).
+     */
+    public boolean isPipe() {
+        return getPipeBE() != null;
     }
 
     // ========================================================================
@@ -48,7 +71,7 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public int getContainerSize() {
-        return 1; // Always 1 — all machine blocks have a single slot
+        return 2; // Always 2 — slot 1 is no-op when not a pipe
     }
 
     @Override
@@ -59,24 +82,47 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public ItemStack getItem(int slot) {
+        if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
+            MachinePipeBlockEntity pipe = getPipeBE();
+            return pipe != null ? pipe.getTransitItem() : ItemStack.EMPTY;
+        }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getItem(slot) : ItemStack.EMPTY;
     }
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
+        if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
+            MachinePipeBlockEntity pipe = getPipeBE();
+            return pipe != null ? pipe.removeItem(slot, amount) : ItemStack.EMPTY;
+        }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.removeItem(slot, amount) : ItemStack.EMPTY;
     }
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
+        if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
+            MachinePipeBlockEntity pipe = getPipeBE();
+            return pipe != null ? pipe.removeItemNoUpdate(slot) : ItemStack.EMPTY;
+        }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.removeItemNoUpdate(slot) : ItemStack.EMPTY;
     }
 
     @Override
     public void setItem(int slot, ItemStack stack) {
+        if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
+            MachinePipeBlockEntity pipe = getPipeBE();
+            if (pipe != null) {
+                pipe.setItem(slot, stack);
+                // Player GUI insertion into transit slot = input from top
+                if (!stack.isEmpty()) {
+                    pipe.onItemReceived(Direction.UP);
+                }
+            }
+            return;
+        }
         MachineFrameBlockEntity be = getBE();
         if (be != null) be.setItem(slot, stack);
     }
@@ -102,7 +148,7 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public int getMaxStackSize() {
-        return 1;
+        return 64; // Transit slot allows 64; spec slot enforces 1 via Slot subclass
     }
 
     @Override
@@ -119,6 +165,10 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
+        if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
+            // Transit slot only accepts items when the BE is a pipe
+            return getPipeBE() != null;
+        }
         MachineFrameBlockEntity be = getBE();
         return be != null && be.canPlaceItem(slot, stack);
     }

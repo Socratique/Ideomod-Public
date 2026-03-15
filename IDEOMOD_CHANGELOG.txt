@@ -1,5 +1,145 @@
 # Ideomod Changelog
 
+## [2026-03-15d] Machine Pipe Specialization -- Full Implementation
+
+Machine Pipe is the first specialization with its own block entity subclass,
+a ticking item transport system, and dynamic GUI slot management.
+
+### New Files
+
+**MachinePipeBlock.java** (block/machine/):
+  Extends AbstractMachineBlock. MachineType.PIPE. FILLED BooleanProperty
+  drives texture swap (empty vs filled). Server-side ticker pushes items at
+  hopper speed (8 ticks). Push-only design (no pulling). Redstone locks the
+  pipe (powered = frozen, like vanilla hoppers). Round-robin output selection
+  relative to input face. Comparator output based on transit slot fullness.
+
+**MachinePipeBlockEntity.java** (block/machine/):
+  Extends MachineFrameBlockEntity. Has its own BlockEntityType (MACHINE_PIPE).
+  Adds: transit slot (slot 1, max stack 64), transfer cooldown, round-robin
+  index, last input face tracking. ThreadLocal pendingInputFace bridges the
+  WorldlyContainer face parameter to setItem() for hopper/automation input
+  tracking. Forge IItemHandler capability for automation interaction.
+
+### Modified Files
+
+**MachineFrameBlockEntity.java**: Added protected constructor accepting
+  BlockEntityType for subclass support. Public constructor delegates to it.
+
+**PositionBoundContainer.java**: Now handles both 1-slot and 2-slot BEs.
+  Exposes 2 slots always (container size = 2). Slot 0 works with any
+  MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity
+  when present, returns empty otherwise. isPipe() method for live checking.
+
+**MachineFrameMenu.java**: Unified menu for all Machine Family blocks.
+  Always creates 2 block slots: SpecSlot (max 1) and TransitSlot. TransitSlot
+  overrides isActive()/mayPlace()/mayPickup() to be non-interactable when BE
+  is not a pipe. Fixed content height (CONTENT_HEIGHT=53) for all machines --
+  GUI is always 151px tall. Dynamic player inventory Y positioning based on
+  content height. Slot indices: 0=spec, 1=transit, 2-37=player inv.
+
+**MachineFrameScreen.java** (client/gui/): Now renders dynamically from
+  ideomod_gui.png spritesheet instead of a single pre-baked texture. Assembles
+  GUI from: top border strip, content area (edges + background + slot tiles),
+  player inventory section, bottom border strip. Transit slot tile only
+  rendered when isPipe() returns true. Fixed 151px height for all machines.
+
+**MachineSwapHelper.java**: Added Hopper -> MACHINE_PIPE mapping.
+**ModBlocks.java**: Added MACHINE_PIPE registration.
+**ModItems.java**: Added MACHINE_PIPE item registration.
+**ModBlockEntities.java**: Added MACHINE_PIPE BE type (separate from MACHINE_FRAME).
+**ModCreativeTabs.java**: Added MACHINE_PIPE to creative tab (pre-loaded).
+**Ideomod.java**: Removed pipe-specific screen registration (unified menu).
+**ModMenuTypes.java**: Removed MACHINE_PIPE (unified menu uses MACHINE_FRAME).
+
+### Deleted Files
+
+  MachinePipeMenu.java, MachinePipeScreen.java, PipePositionBoundContainer.java
+  -- All merged into the unified MachineFrameMenu/Screen/PositionBoundContainer.
+  textures/gui/machine_frame.png, textures/gui/machine_pipe.png
+  -- Replaced by ideomod_gui.png spritesheet.
+
+### New Assets
+
+  blockstates/machine_pipe.json (FILLED variants)
+  models/block/machine_pipe.json, machine_pipe_filled.json
+  models/item/machine_pipe.json
+  textures/block/machine_pipe.png, machine_pipe_filled.png (placeholder)
+  textures/gui/ideomod_gui.png (general-purpose GUI spritesheet)
+  data/loot_tables/blocks/machine_pipe.json
+  en_us.json: "block.ideomod.machine_pipe": "Machine Pipe"
+  pickaxe.json: added "ideomod:machine_pipe"
+
+### Machine Pipe Behaviour
+
+- Specialization item: Hopper in Machine Frame GUI slot
+- Transit slot: 1 stack capacity (64), visible in GUI when pipe
+- Push only, no pull. Items enter via player hand, hopper, or pipe push.
+- Transfer rate: 1 item every 8 ticks (hopper speed)
+- Redstone locking: powered = frozen (like vanilla hoppers)
+- Output priority (relative to input face): forward, right, left, up, down
+- Round-robin across valid outputs. Resets when input face changes.
+- Player hand insertion = input from UP. Hopper input tracked via
+  ThreadLocal pendingInputFace in canPlaceItemThroughFace -> setItem.
+- Pipe-to-pipe push calls onItemReceived() on receiving pipe to set its
+  input face correctly, preventing push-back to sender.
+- FILLED blockstate drives texture swap. Guarded against firing during
+  block removal (MachineSwapHelper.isSwapping check) to prevent re-placing.
+- Piston movement: movedByPiston guard in onRemove prevents transit item
+  duplication. Items preserved via IPistonMovable save/loadMovementData.
+  Minimum cooldown (TRANSFER_COOLDOWN) enforced after piston landing.
+- Comparator output: scales transit slot fullness to 0-15.
+
+### GUI System Overhaul
+
+All Machine Family blocks now use a single unified GUI system:
+- One menu type (MACHINE_FRAME), one screen class, one container class
+- GUI always 151px tall (fixed CONTENT_HEIGHT=53)
+- Transit slot dynamically enabled/disabled based on isPipe()
+- TransitSlot.isActive() returns false for non-pipe => slot invisible
+- GUI survives specialization swaps without closing (PositionBoundContainer
+  resolves to any MachineFrameBlockEntity subclass)
+- Dynamic title reads block name each frame
+
+### GUI Spritesheet (ideomod_gui.png)
+
+General-purpose 256x256 spritesheet for all Ideomod GUIs.
+Generated from clean Minecraft GUI color values (no source image artifacts).
+
+  Slot tile:     (0,0)   18x18
+  Left edge:     (0,18)  4x1   tileable vertically
+  Right edge:    (4,18)  4x1   tileable vertically
+  BG fill:       (8,18)  1x1   rgb(198,198,198)
+  Player inv:    (0,20)  176x90
+  Top border:    (0,110) 176x4
+  Bottom border: (0,114) 176x4
+
+Assembly formula: height = 4 + contentH + 90 + 4 = contentH + 98
+Menu slot positions: inv Y = 4 + contentH + 12, hotbar Y = 4 + contentH + 70
+
+### Challenges Resolved
+
+1. Push-back bug: receiving pipe didn't know input face. Fix: tryPushItem
+   calls onItemReceived() on target pipe after successful push.
+2. Block not breaking (onRemove re-placing block): updateFilledState called
+   level.setBlock during removal. Fix: guard with isSwapping check, use
+   removeItemNoUpdate in onRemove instead of setTransitItem.
+3. GUI kick on swap: separate menu types meant swap changed BE class,
+   container couldn't find expected type. Fix: unified menu/container system
+   with parent-class-based getBE() lookup.
+4. Hopper input face not tracked: WorldlyContainer.canPlaceItemThroughFace
+   knows the direction but setItem doesn't. Fix: ThreadLocal pendingInputFace
+   bridges the two methods.
+5. Piston item duplication: onRemove dropped transit item during piston move,
+   then loadMovementData restored it. Fix: movedByPiston guard in onRemove.
+6. GUI height mismatch on swap: slot positions fixed at construction but
+   screen height changed. Fix: fixed 151px height for all machines.
+7. GUI texture artifacts: source image was JPEG (lossy compression noise).
+   Fix: generate spritesheet from known Minecraft color constants.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-15c] Removed REDSTONE_COMPONENTS Tag (Redundant)
 
 The REDSTONE_COMPONENTS block tag was originally created to whitelist which

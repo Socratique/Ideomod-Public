@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15b (Removed REDSTONE_COMPONENTS tag -- redundant after Track redstone isolation + Conductor block. Tracks now accept signal from any vanilla source via level.getSignal().)*
+*Last updated: 2026-03-15d (Machine Pipe specialization. Unified dynamic GUI. ideomod_gui.png spritesheet. MachinePipeBlockEntity subclass BE.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -82,6 +82,9 @@ com.ideomancer.ideomod
   |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
   |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
+  |     |     |                                Protected constructor for subclass BE types.
+  |     |     |-- MachinePipeBlock.java        Pipe specialization. Push-only item transport + ticker.
+  |     |     |-- MachinePipeBlockEntity.java  Pipe BE subclass. Transit slot + cooldown + round-robin.
   |     |     |                                Client sync: getUpdatePacket(), getUpdateTag(), syncToClients().
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
@@ -112,7 +115,7 @@ com.ideomancer.ideomod
   |     |-- ModColorHandlers.java        Block/item color tinting (tintIndex system)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |     |-- gui/
-  |     |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |     \-- MachineFrameScreen.java      Dynamic GUI screen for all Machine Family (spritesheet)
   |     \-- render/
   |           |-- FramedBlockRenderer.java     BESR for framed blocks (inner texture at rest)
   |           |-- FramedBlockItemModel.java    Custom BakedModel for framed items (inner texture in inventory)
@@ -176,6 +179,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
 | `machine_conductor` | MachineConductorBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + vanilla redstone signal (0-15). |
+| `machine_pipe` | MachinePipeBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. FILLED BooleanProperty. Own BE type (MACHINE_PIPE). Ticker for item transfer. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -185,7 +189,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItem: `MACHINE_CONDUCTOR` for MachineConductorBlock.
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock.
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
@@ -194,7 +198,7 @@ Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `sta
 ### ModCreativeTabs
 
 Two tabs:
-- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Iron Frame, Copper Frame, Structure Debug Stick).
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
 - `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
@@ -554,7 +558,7 @@ Opt-in interface for block entities that need to preserve data through piston mo
 - `CompoundTag saveMovementData()` -- serialize data before move. Return null to skip.
 - `void loadMovementData(CompoundTag data)` -- restore data after move.
 
-**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory via ContainerHelper), FramedBlockEntity (saves/loads inner block ResourceLocation).
+**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory via ContainerHelper; protected constructor for subclass BE types), MachinePipeBlockEntity (extends MachineFrameBlockEntity; transit slot + cooldown + round-robin + IItemHandler capability), FramedBlockEntity (saves/loads inner block ResourceLocation).
 
 **Data registry** (`MovingBlockEntityData`):
 - Static `ConcurrentHashMap<String, CompoundTag>` keyed by `"dimension:x,y,z"` at DESTINATION.
@@ -1072,7 +1076,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 | Feature | Implementation |
 |---------|---------------|
 | **Universal stickiness** | MachineType.FRAME sticks to ALL machine types via `canStickToMachineType()`. Also sticks to Frame Family (active) and is permissive to slime/honey/odd_slime (grab immunity blocks reverse). |
-| **Block entity with GUI** | Shares MachineFrameBlockEntity with all specializations. PositionBoundContainer keeps GUI open across swaps. Right-click opens universal machine GUI. |
+| **Block entity with GUI** | Most machine blocks share MachineFrameBlockEntity. Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. GUI renders from ideomod_gui.png spritesheet (151px fixed height). |
 | **Specialization swap** | When slot contents change, MachineSwapHelper.checkAndSwap() determines target block from item registry. Block replaced in-world, item transferred to new BE via setItemDirect(). |
 | **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Frame emits anti-signal. All other specializations always activate. |
 | **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.markDirty(). |
@@ -1087,7 +1091,13 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 **MachineSwapHelper**: Central swap utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley). `checkAndSwap()` with isSwapping ThreadLocal guard. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
-**PositionBoundContainer**: Container backed by Level + BlockPos. Every method call does `level.getBlockEntity(pos)` and forwards to the current MachineFrameBlockEntity. Survives block swaps automatically. Used by MachineFrameMenu on both server and client sides.
+**PositionBoundContainer**: Container backed by Level + BlockPos. Every method call does `level.getBlockEntity(pos)` and forwards to the current MachineFrameBlockEntity (or subclass). Reports container size 2: slot 0 works with any MachineFrameBlockEntity, slot 1 delegates to MachinePipeBlockEntity when present (returns empty otherwise). isPipe() method enables live checking. Used by MachineFrameMenu on both server and client sides. Survives block swaps automatically.
+
+**MachineFrameMenu**: Unified menu for all Machine Family blocks. Two custom slot types: SpecSlot (max 1) and TransitSlot. TransitSlot overrides isActive()/mayPlace()/mayPickup() to disable when BE is not a pipe. Fixed CONTENT_HEIGHT (53px) for all machines. Player inventory Y = 4 + 53 + 12 = 69. Hotbar Y = 4 + 53 + 70 = 127. Total GUI height = 151px always.
+
+**MachineFrameScreen**: Renders GUI dynamically from ideomod_gui.png spritesheet (256x256). Assembly: top border (0,110 176x4) + content area (edges + BG fill + slot tiles) + player inv section (0,20 176x90) + bottom border (0,114 176x4). Slot tile at (0,0 18x18). Transit slot tile only rendered when isPipe(). Dynamic title reads block name each frame.
+
+**ideomod_gui.png spritesheet** (`textures/gui/`): General-purpose GUI spritesheet for all Ideomod GUIs. Clean pixel-perfect rendering from known Minecraft color constants (BG=198, slot=139, dark=55, white=255). Layout: slot tile (0,0) 18x18, left edge (0,18) 4x1, right edge (4,18) 4x1, BG fill (8,18) 1x1, player inv (0,20) 176x90, top border (0,110) 176x4, bottom border (0,114) 176x4. Reusable for future GUIs (enchanting catalyst slot, engine fuel slot, etc).
 
 ### Machine Track -- Isolated Redstone + Trolley Push
 
@@ -1130,6 +1140,38 @@ Frame activation: Always emits activation (strength 15). Never suppresses.
 **Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Squared curve gradient: POWER 0 = black, 1-15 = dim-to-bright red.
 
 **Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). ~~(2) Base texture renders black (issue #13 -- FIXED 2026-03-14, cutout render type).~~
+
+### Machine Pipe -- Push-Only Item Transport
+
+Registry ID: `machine_pipe`. Class: MachinePipeBlock extends AbstractMachineBlock. `MachineType.PIPE`.
+
+Non-directional Machine Family block. Own BE subclass: MachinePipeBlockEntity (BlockEntityType: MACHINE_PIPE). Extends MachineFrameBlockEntity with transit slot (slot 1, max 64), transfer cooldown (8 ticks), round-robin index, last input face, and Forge IItemHandler capability.
+
+| Property | Value |
+|----------|-------|
+| **Block entity** | MachinePipeBlockEntity extends MachineFrameBlockEntity |
+| **BE type** | ModBlockEntities.MACHINE_PIPE (separate from MACHINE_FRAME) |
+| **Specialization item** | Hopper |
+| **Blockstate properties** | FILLED (BooleanProperty) |
+| **Container size** | 2 (slot 0 = specialization, slot 1 = transit) |
+
+**Behaviour**: Push-only item transport at hopper speed (1 item per 8 ticks). No pulling. Items enter via player hand (input face = UP), hopper/automation (face tracked via ThreadLocal pendingInputFace), or pipe-to-pipe push (sender calls onItemReceived on receiver). Redstone signal locks the pipe (no transfers while powered, like vanilla hoppers).
+
+**Output priority** (relative to input face): forward (opposite), right, left, up, down. Round-robin cycles through valid outputs, skipping faces with no valid receiver. Resets when input face changes. For vertical input (UP/DOWN), NORTH is the reference anchor for right/left.
+
+**FILLED blockstate**: Set to true when transit slot has items, drives texture swap between machine_pipe and machine_pipe_filled models. updateFilledState() guarded with MachineSwapHelper.isSwapping() check to prevent re-placing block during removal.
+
+**Piston safety**: onRemove checks movedByPiston -- skips transit item drop when moved by piston (items preserved via IPistonMovable save/loadMovementData). loadMovementData enforces minimum TRANSFER_COOLDOWN after piston landing to prevent immediate push at new position.
+
+**Automation interaction**: WorldlyContainer exposes only transit slot (slot 1) to external faces. Specialization slot (0) is GUI-only. canPlaceItemThroughFace records the insertion direction in a ThreadLocal which setItem reads to call onItemReceived with the correct face.
+
+**Comparator output**: Scales transit slot fullness to 0-15. Empty = 0, any items = 1-15 proportional to stack size.
+
+**GUI**: Uses unified MachineFrameMenu with dynamic TransitSlot. TransitSlot.isActive() returns true only when BE is MachinePipeBlockEntity. Screen renders slot tile at (79,37) only when isPipe().
+
+Stickiness: MachineType.PIPE -- sticks to other Pipes + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
 
 ---
 

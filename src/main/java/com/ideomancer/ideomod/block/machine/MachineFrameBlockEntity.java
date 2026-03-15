@@ -60,7 +60,16 @@ public class MachineFrameBlockEntity extends BlockEntity
     private Direction inputFace = null;
 
     public MachineFrameBlockEntity(BlockPos pos, BlockState state) {
-        super(ModBlockEntities.MACHINE_FRAME.get(), pos, state);
+        this(ModBlockEntities.MACHINE_FRAME.get(), pos, state);
+    }
+
+    /**
+     * Protected constructor for subclasses (e.g. MachinePipeBlockEntity)
+     * that need to register with their own BlockEntityType.
+     */
+    protected MachineFrameBlockEntity(net.minecraft.world.level.block.entity.BlockEntityType<?> type,
+                                       BlockPos pos, BlockState state) {
+        super(type, pos, state);
     }
 
     // ========================================================================

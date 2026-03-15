@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachinePipeBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraftforge.registries.DeferredRegister;
 import net.minecraftforge.registries.ForgeRegistries;
@@ -32,6 +33,18 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_TRACK.get(),
                             ModBlocks.MACHINE_TROLLEY.get(),
                             ModBlocks.MACHINE_CONDUCTOR.get()
+                    ).build(null));
+
+    /**
+     * Machine Pipe block entity type. Separate from MACHINE_FRAME because
+     * the pipe has a transit slot, ticker, and pipe-specific NBT.
+     * Only used by MachinePipeBlock.
+     */
+    public static final RegistryObject<BlockEntityType<MachinePipeBlockEntity>> MACHINE_PIPE =
+            BLOCK_ENTITIES.register("machine_pipe",
+                    () -> BlockEntityType.Builder.of(
+                            MachinePipeBlockEntity::new,
+                            ModBlocks.MACHINE_PIPE.get()
                     ).build(null));
 
     /**

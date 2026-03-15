@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15b (Removed REDSTONE_COMPONENTS tag -- redundant after Track redstone isolation + Conductor block.)*
+*Last updated: 2026-03-15d (Machine Pipe specialization. Unified dynamic GUI. ideomod_gui.png spritesheet.)*
 
 ---
 
@@ -60,14 +60,18 @@ com.ideomancer.ideomod
   |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
   |     |     |                                Client sync via syncToClients() after swap.
-  |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
+  |     |     |-- PositionBoundContainer.java  Position-bound Container. 2 slots. Auto-resolves to
+  |     |     |                                current BE. Slot 1 -> MachinePipeBlockEntity. isPipe().
   |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
-  |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync
+  |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync.
+  |     |     |                                Protected constructor for subclass BE types.
   |     |     |                                (getUpdatePacket, getUpdateTag, syncToClients).
-  |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
+  |     |     |-- MachineFrameMenu.java        Unified menu. SpecSlot + TransitSlot. Fixed 151px height.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
-  |     |     \-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR.
+  |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR.
+  |     |     |-- MachinePipeBlock.java        Extends AbstractMachineBlock. MachineType.PIPE. Ticker + push.
+  |     |     \-- MachinePipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type. Transit slot.
   |     |                                      Custom redstone wire. Input/output face model.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -104,7 +108,7 @@ com.ideomancer.ideomod
   |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |     |-- gui/
-  |     |     \-- MachineFrameScreen.java      GUI screen for Machine Frame
+  |     |     \-- MachineFrameScreen.java      Dynamic GUI from ideomod_gui.png spritesheet. All machines.
   |     \-- render/
   |           |-- FramedBlockRenderer.java    BESR for framed blocks (renderSingleBlock with facing transfer)
   |           |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
@@ -148,10 +152,12 @@ com.ideomancer.ideomod
         |-- ModCommands.java             /judgement command (Forge event bus)
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
-        |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>
-        \-- ModTags.java                 PORTAL_CORNER_BLOCKS, REDSTONE_COMPONENTS,
-                                         FRAMEABLE_BLOCKS, FURNACE_ARRAY_FRAME,
-                                         IMMOVABLE_WHEN_FRAMED tags.
+        |                                MACHINE_FRAME (shared), MACHINE_PIPE (pipe subclass),
+        |                                FRAMED_BLOCK (shared iron/copper).
+        |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
+        |                                (unified for all machine types).
+        \-- ModTags.java                 PORTAL_CORNER_BLOCKS, FRAMEABLE_BLOCKS,
+                                         FURNACE_ARRAY_FRAME, IMMOVABLE_WHEN_FRAMED tags.
                                          NOTE: FurnaceArrayDefinition still uses
                                          inline tag reference -- should be updated
                                          to use ModTags.FURNACE_ARRAY_FRAME.
@@ -223,6 +229,8 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 
+**MachinePipeBlock**: Push-only item transport. Own BE subclass (MachinePipeBlockEntity, BlockEntityType MACHINE_PIPE). FILLED BooleanProperty drives texture. Server ticker pushes 1 item per 8 ticks via IItemHandler capability. Round-robin output relative to input face (forward, right, left, up, down). Redstone locks. No pulling. Input face tracked via: player GUI = UP, hopper/automation = ThreadLocal pendingInputFace in canPlaceItemThroughFace, pipe-to-pipe = onItemReceived() called by sender. Piston safety: movedByPiston guard in onRemove prevents duplication; minimum cooldown in loadMovementData prevents immediate push after landing. updateFilledState guarded against isSwapping. Comparator output scales transit fullness.
+
 **Filter predicates**: `ODDSTONE_ONLY` (current), `ANY_MOVABLE` (future Arcane variants).
 
 ### 3. Portal System
@@ -281,18 +289,18 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 ### 6. Machine Frame (universal connector + Machine Family base)
 
-Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachineBlock**. All Machine Family blocks extend AbstractMachineBlock (shared lifecycle, GUI, drops, stickiness, frame activation via markDirty()). MachineType.FRAME (universal connector). Specializations: MachineTrackBlock (TRACK), MachineTrolleyBlock (TROLLEY), MachineConductorBlock (CONDUCTOR).
+Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachineBlock**. All Machine Family blocks extend AbstractMachineBlock (shared lifecycle, GUI, drops, stickiness, frame activation via markDirty()). MachineType.FRAME (universal connector). Specializations: MachineTrackBlock (TRACK), MachineTrolleyBlock (TROLLEY), MachineConductorBlock (CONDUCTOR), MachinePipeBlock (PIPE, own BE subclass).
 
 1. **Universal stickiness**: MachineType.FRAME sticks to ALL machine types. canStickTo delegates to `IMachineFamily.canMachineFamilyStickTo(MachineType.FRAME, other)`. Permissive to slime/honey/odd_slime (grab immunity handles restriction).
-2. **Block entity with GUI**: All machine blocks share MachineFrameBlockEntity (single item slot). PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes.
+2. **Block entity with GUI**: Most machine blocks share MachineFrameBlockEntity (single item slot). Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes. GUI renders from ideomod_gui.png spritesheet (151px fixed height).
 3. **Anti-signal emission**: Only Machine Frame suppresses frame networks (powered = anti-signal). All other specializations always activate.
 4. **Drop preservation**: getDrops() override -- conditional BlockEntityTag only when slot has content. getCloneItemStack() uses registry-based createCloneStack() (client-safe).
 
 **IMachineFamily interface** (`block/machine/IMachineFamily.java`): Provides `getMachineType()` and static `canMachineFamilyStickTo(MachineType, BlockState)`. Type check: FRAME sticks to everything, specializations stick to same-type + FRAME. Frame Family requires active. Slime types permissive.
 
-**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
-**PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Every method call resolves to current BE at position. Menu uses this on both server and client. Survives block swaps without close/reopen.
+**PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Reports 2 slots. Slot 0 resolves to any MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity (returns empty for non-pipes). isPipe() for live type checking. Survives block swaps without close/reopen.
 
 **Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- MachineTrackBlock only.
 
@@ -359,6 +367,10 @@ Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 
 
 Non-directional Machine Family block. No active behavior. Pushed by Tracks, carries anything stuck to it. Does NOT conduct redstone.
 
+### 9b. Machine Pipe (push-only item transport)
+
+Non-directional Machine Family block. Own BE subclass (MachinePipeBlockEntity, BlockEntityType MACHINE_PIPE). FILLED BooleanProperty drives texture swap. Server ticker pushes 1 item per 8 ticks to adjacent containers via IItemHandler. Round-robin output relative to input face (forward, right, left, up, down). Redstone locks (powered = frozen). No pulling. Input face tracked via: player GUI = UP, hopper/automation = ThreadLocal pendingInputFace, pipe-to-pipe = onItemReceived(). Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator output scales transit fullness (0-15).
+
 ### 10. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
@@ -371,9 +383,9 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
 
-**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR and MACHINE_PIPE. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 

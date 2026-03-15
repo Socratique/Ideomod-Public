@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "filled=false": { "model": "ideomod:block/machine_pipe" },
+    "filled=true":  { "model": "ideomod:block/machine_pipe_filled" }
+  }
+}

@@ -222,8 +222,7 @@
 |     |  |  |     +-- frameable_blocks.json
 |     |  |  |     +-- furnace_array_frame.json
 |     |  |  |     +-- immovable_when_framed.json
-|     |  |  |     +-- portal_corner_blocks.json
-|     |  |  |     \\-- redstone_components.json
+|     |  |  |     \\-- portal_corner_blocks.json
 |     |  |  \\-- worldgen
 |     |  |     +-- world_preset
 |     |  |     \\-- chunky_geology_settings.json
