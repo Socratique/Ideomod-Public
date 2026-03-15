@@ -1,5 +1,96 @@
 # Ideomod Changelog
 
+## [2026-03-15] Architecture Cleanup, Performance, & Bug Fixes
+
+### Audit #13: AbstractMachineBlock base class extraction
+
+Extracted AbstractMachineBlock as a shared base class for all Machine Family blocks.
+Default implementations cover: use() (GUI open), newBlockEntity(), getRenderShape(),
+isStickyBlock(), canStickTo(), onPlace()/onRemove()/neighborChanged() (frame activation
+lifecycle via markDirty()), setPlacedBy() (specialization swap on placement), getDrops(),
+getCloneItemStack(). MachineFrameBlock and MachineTrolleyBlock reduced to ~20 lines each,
+overriding only getMachineType(). MachineConductorBlock and MachineTrackBlock override
+lifecycle hooks for their unique redstone/push behavior. New specializations are now a
+~20-line task.
+
+Files created: AbstractMachineBlock.java
+Files rewritten: MachineFrameBlock.java, MachineTrolleyBlock.java,
+                 MachineConductorBlock.java, MachineTrackBlock.java
+
+### Audit #14: Frame activation batching/debouncing
+
+Replaced immediate recalculate() calls with a dirty-mark + end-of-tick processing system.
+All block lifecycle hooks (onPlace, onRemove, neighborChanged) now call
+FrameActivation.markDirty(level, pos) instead of recalculate() directly. Dirty positions
+are stored per-dimension in a ConcurrentHashMap<ServerLevel, Set<BlockPos>>. At end of
+each server tick, FrameActivation.TickHandler (registered on Forge event bus via
+TickEvent.ServerTickEvent(Phase.END)) calls processDirtyNetworks(), which discovers
+connected networks from dirty positions, deduplicates overlapping positions, and runs one
+recalculation per unique network. Placing 50 frame blocks now triggers 1 recalculation
+instead of 50.
+
+Added flushIfDirty(Level) for time-critical paths (piston resolution) that need fresh
+activation state before the tick ends. Called at HEAD of PistonStructureResolver.resolve().
+
+Files modified: FrameActivation.java (major rewrite), FrameBlock.java, FramedBlock.java,
+                Ideomod.java, PistonStructureResolverMixin.java
+Inner class created: FrameActivation.TickHandler
+
+### Audit #15: BFS frontier queues replacing O(n^2) fixed-point loops
+
+Replaced O(n^2) fixed-point loops with single-pass BFS in two algorithms:
+
+ideomod$addVanillaMetalConductors() in PistonStructureResolverMixin: Seeds frontier with
+initial toPush positions. Each position processed once via processed HashSet. 256-iteration
+safety cap. Complexity reduced from O(n^2) to O(n).
+
+scanSympathetic() in MovementScanHelper: Seeds frontier with oddstone blocks from start
+set. Uses found.add() return value to detect new discoveries. Complexity reduced from
+O(n^2) to O(n).
+
+Files modified: PistonStructureResolverMixin.java, MovementScanHelper.java
+
+### Bug fix: Machine Frame GUI item invisible after specialization swap
+
+When swapping specialization items in the machine block GUI, the new item was invisible
+in the slot until the GUI was reloaded. Root cause: MachineFrameBlockEntity lacked client
+sync methods. When level.setBlock() fires during a swap, the client creates a new empty
+BE but never receives the item data.
+
+Fix: Implemented getUpdatePacket(), getUpdateTag(), and syncToClients() on
+MachineFrameBlockEntity, with syncToClients() called after setItemDirect() in the swap
+flow.
+
+Files modified: MachineFrameBlockEntity.java, MachineSwapHelper.java
+
+### Known Bug #15: Vanilla metal first-push failure after frame network change
+
+When vanilla iron/copper blocks participate in a frame network, modifications to the
+network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail
+to "grab" adjacent frames on the first piston push after the change. Works correctly on
+the second push.
+
+Reproduction: Piston(up) -> machine block -> iron frame -> iron block -> row of iron
+frames. Break a frame in the middle of the row (not at the end). Push piston -- iron
+block doesn't grab. Push again -- it works. Also reproduces when iron block directly
+touches machine frame -- machine frame doesn't grab iron on first push after network
+change.
+
+Attempted fixes:
+1. flushIfDirty() at TAIL of addBranchingBlocks -- failed because by TAIL, vanilla has
+   already checked isStickyBlock() and canStickTo() with stale ACTIVE=false states.
+2. flushIfDirty() at HEAD of resolve() -- still fails. Root cause unclear.
+
+Suspected areas: activatedVanillaMetals global set management across multiple networks,
+timing between block removal neighbor cascades and piston resolution within the same
+tick, possible fidelity gap in the FrameActivation rewrite vs. original behavior.
+
+Deferred to a future session.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-03-14b] Audit Fixes: Portal Geometry Caching, InputFace Reset, Conductor Render Fix, Portal Debug Stick
 
 ### Audit fix #16: Portal geometry caching in SavedData

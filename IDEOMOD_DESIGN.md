@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-13 (Post-audit cleanup: Oddstone recipe placeholder flagged for removal, pull immunity status clarified as [DONE].)*
+*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, machine GUI sync fix, Conductor texture fix noted.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -256,7 +256,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Property | Value |
 |----------|-------|
 | ID | `machine_block` |
-| Class | MachineFrameBlock |
+| Class | MachineFrameBlock (extends AbstractMachineBlock) |
 | Hardness | 5.0 / Blast 6.0 |
 | Tool | Pickaxe |
 | Type | Block Entity (single item slot, shared by all specializations) |
@@ -287,9 +287,10 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Anti-signal emission | [DONE] | Only Machine Frames emit anti-signal. All other Machine Family blocks always emit activation. |
 | Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15). Machine Frames only when unpowered; specializations always. |
 | Item slot + GUI | [DONE] | All machine blocks share MachineFrameBlockEntity. Right-click opens GUI. Insert item to specialize, remove to de-specialize. Any item accepted; only mapped items trigger swap. |
-| Block swap system | [DONE] | MachineSwapHelper central utility. PositionBoundContainer keeps GUI open across swaps. |
+| Block swap system | [DONE] | MachineSwapHelper central utility. PositionBoundContainer keeps GUI open across swaps. Client sync via syncToClients() after swap. |
 | Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
 | Piston data preservation | [DONE] | All specializations implement IPistonMovable via shared block entity. |
+| AbstractMachineBlock | [DONE] | Shared base class for all Machine Family blocks. Default lifecycle, GUI, drops, stickiness. MachineFrameBlock/MachineTrolleyBlock ~20 lines each. |
 
 ---
 
@@ -299,7 +300,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
 **Machine Conductor:** [WIP]
-Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin), base texture renders black (needs renderer investigation).
+Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin). ~~Base texture renders black~~ (FIXED 2026-03-14, cutout render type).
 
 **Machine Pipe:** [IDEA]
 Directional item transport. Pushes items one block in facing direction per redstone pulse.
@@ -384,7 +385,7 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | INNER_STICKY property | [DONE] | IntegerProperty 0-4 (none/slime/honey/odd_slime/oddstone). Synced from inner block type by FramedBlockEntity.updateBlockstateFromInner(). |
 | Piston transit rendering | [DONE] | Client-side mixin renders inner block during 2-tick piston animation. Brightest-of-neighbors light sampling blended by progress. FrameTransitInfo carries facing + innerSticky. |
 | Item/inventory rendering | [DONE] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. Translucent inners render opaque (cosmetic limitation). |
-| Machine-activated stickiness | [DONE] | Uses Frame Activation system (redstone-style wipe-and-rebuild). BooleanProperty ACTIVE set by FrameActivation.recalculate(). Implements IFrameBlock interface. isStickyBlock() ACTIVE-gated for frame stickiness. |
+| Machine-activated stickiness | [DONE] | Uses Frame Activation system (redstone-style batched wipe-and-rebuild (markDirty + end-of-tick processing)). BooleanProperty ACTIVE set by FrameActivation.markDirty(). Implements IFrameBlock interface. isStickyBlock() ACTIVE-gated for frame stickiness. |
 | Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional), Framed Oddstone grabs all slime types + oddstone (universal grabber). Grab immunity Rules 1 and 4 have carve-outs for matching inner types and oddstone universal grabber. |
 | Material exclusivity | [DONE] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
 | Base behavior preservation | [DONE] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
@@ -466,7 +467,7 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Decorative transparency | [DONE] | Renders with transparent interior. RenderType.cutout() registered in clientSetup(). noOcclusion() in block properties. Inside-face rendering via inverted cuboid element in JSON models. |
-| Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.recalculate() -- redstone-style wipe-and-rebuild from Machine Block sources. |
+| Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.markDirty() -- redstone-style batched wipe-and-rebuild (markDirty + end-of-tick processing) from Machine Block sources. |
 | Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
 | Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
 | Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Cross-material stops propagation unless via mediator. Anti-signal suppression via redstone-powered Machine Frames only. |
@@ -477,7 +478,7 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 
 **Activation model (redstone-style signal strength with anti-signal suppression):**
 Frames are passive like redstone dust. They never decide their own activation state.
-All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.recalculate(pos).
+All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.markDirty(level, pos).
 1. DISCOVER: BFS from change point through all connected conductors (any material, active or not)
 2. WIPE: Set all discovered IFrameBlocks to active=false, clear vanilla metal activation set
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
@@ -485,7 +486,7 @@ All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.re
 5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone level, decaying by 1. Binary override.
 6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
 
-Machine Blocks also call FrameActivation.recalculate() in their own lifecycle hooks.
+Machine Blocks also call FrameActivation.markDirty() in their own lifecycle hooks.
 Redstone input changes trigger via neighborChanged automatically.
 
 **Stickiness matrix (when active, requires active on BOTH sides for frame-to-frame):**

@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod;
 
+import com.ideomancer.ideomod.block.frame.FrameActivation;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
@@ -86,6 +87,7 @@ public class Ideomod {
         registerStructureDefinitions();
         registerStructureEventHandlers();
         registerPortalEventHandlers();
+        registerFrameActivationTickHandler();
         LOGGER.info("Ideomod common setup complete!");
     }
 
@@ -236,6 +238,17 @@ public class Ideomod {
     private void registerStructureEventHandlers() {
         MinecraftForge.EVENT_BUS.register(new StructureManager.EventHandler());
         LOGGER.info("Registered structure event handlers");
+    }
+
+    /**
+     * Registers the frame activation tick handler for end-of-tick batching.
+     * This ensures all frame activation changes in a tick are batched into
+     * a single recalculation per network, instead of one per block change.
+     * (Audit item #14)
+     */
+    private void registerFrameActivationTickHandler() {
+        MinecraftForge.EVENT_BUS.register(new FrameActivation.TickHandler());
+        LOGGER.info("Registered frame activation tick handler");
     }
 
     /**

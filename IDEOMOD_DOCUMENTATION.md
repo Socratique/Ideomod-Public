@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-14b (Portal geometry caching, inputFace reset on swap, Conductor render fix, portal debug stick notifications, new Known Issue #14.)*
+*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Known Issue #15.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -63,7 +63,8 @@ com.ideomancer.ideomod
   |     |     |-- FrameMaterial.java           Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry.
   |     |     |-- FrameBlock.java              Base frame block. BooleanProperty ACTIVE + WATERLOGGED.
   |     |     |                                Implements SimpleWaterloggedBlock. Passive conductor.
-  |     |     |-- FrameActivation.java         Static utility: wipe-and-rebuild activation for frame networks.
+  |     |     |-- FrameActivation.java         Static utility: batched activation for frame networks.
+  |     |     |                                markDirty() + end-of-tick processing via TickHandler.
   |     |     |-- FrameabilityHelper.java      Static checks for whether a block can be framed
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
   |     |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
@@ -73,15 +74,19 @@ com.ideomancer.ideomod
   |     |-- machine/
   |     |     |-- IMachineFamily.java          Interface: getMachineType() + canMachineFamilyStickTo(type, state).
   |     |     |-- MachineType.java             Enum: FRAME, TRACK, TROLLEY, etc. canStickToMachineType().
+  |     |     |-- AbstractMachineBlock.java    Base class for all Machine Family blocks. Shared lifecycle,
+  |     |     |                                GUI, drops, stickiness, frame activation markDirty().
   |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
+  |     |     |                                Client sync via syncToClients() after swap.
   |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
-  |     |     |-- MachineFrameBlock.java       MachineType.FRAME. Universal connector. EntityBlock + GUI.
+  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
+  |     |     |                                Client sync: getUpdatePacket(), getUpdateTag(), syncToClients().
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
-  |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
-  |     |     |-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
-  |     |     \-- MachineConductorBlock.java   MachineType.CONDUCTOR. EntityBlock + GUI + redstone wire.
+  |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
+  |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
+  |     |     \-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR. Custom redstone.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -632,7 +637,9 @@ The Frame Activation system controls when Frame Blocks and Framed Blocks become 
 
 ### Architecture
 
-**FrameActivation.java** is a static utility class with one public method: `recalculate(Level, BlockPos)`. This is called by all lifecycle hooks on both Machine Blocks and Frame Blocks (onPlace, onRemove, neighborChanged). Redstone input changes on Machine Blocks trigger via neighborChanged automatically.
+**FrameActivation.java** is a static utility class with a batched activation model. All block lifecycle hooks (onPlace, onRemove, neighborChanged) call `markDirty(Level, BlockPos)` which queues the position for end-of-tick processing. At the end of each server tick, `FrameActivation.TickHandler` (registered on Forge event bus via `TickEvent.ServerTickEvent(Phase.END)`) calls `processDirtyNetworks()`, which discovers connected networks from dirty positions, deduplicates overlapping positions, and runs one `recalculate()` per unique network. For time-critical paths (piston resolution), `flushIfDirty(Level)` immediately drains the dirty queue for that dimension.
+
+Public API: `markDirty(Level, BlockPos)` (primary entry point for all callers), `flushIfDirty(Level)` (for piston resolver), `processDirtyNetworks()` (called by TickHandler). Internal: `recalculate(Level, BlockPos)` is package-private.
 
 ### Signal Strength Model
 
@@ -690,12 +697,16 @@ Frame-family stickiness requires activation on BOTH sides:
 |------|------|
 | `IFrameBlock` | Interface. Marker for Frame Family blocks. Provides `getFrameMaterial()`. Has static `isActive(BlockState)` helper. |
 | `FrameMaterial` | Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry, miningTimeModifier. `fromVanillaBlock()`, `toConductorValue()`, `fromConductorValue()` for conductor mapping. |
-| `FrameBlock` | Base block class. ACTIVE + WATERLOGGED properties. `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.recalculate()`. |
-| `FrameActivation` | Static utility. `recalculate()` is the single entry point. Signal strength propagation, anti-signal suppression, vanilla metal tracking. Public queries: `isVanillaMetalActivated()`, `isActivatedConductor()`, `isActive()`, `isFrameFamily()`, `getFrameMaterial()`. |
+| `FrameBlock` | Base block class. ACTIVE + WATERLOGGED properties. `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.markDirty()`. |
+| `FrameActivation` | Static utility. `markDirty()` is the primary entry point (batched). `recalculate()` is package-private. End-of-tick processing via `TickHandler`. `flushIfDirty()` for piston resolver. Signal strength propagation, anti-signal suppression, vanilla metal tracking. Public queries: `isVanillaMetalActivated()`, `isActivatedConductor()`, `isActive()`, `isFrameFamily()`, `getFrameMaterial()`. |
 
 ### Performance
 
 Networks are bounded by signal decay (max 15 blocks from source). Propagation touches each position at most twice per signal type (activation + anti). For a 15-frame chain this is ~30 setBlock calls. The BFS uses `bestQueued` tracking to avoid re-processing positions with weaker signals.
+
+**Batching**: The `markDirty()` + end-of-tick pattern means placing 50 frame blocks triggers 1 network recalculation instead of 50. Dirty positions are stored per-dimension in `ConcurrentHashMap<ServerLevel, Set<BlockPos>>` with `ConcurrentHashMap.newKeySet()`. `processDirtyNetworks()` discovers connected networks from dirty positions and deduplicates — if 10 dirty positions all belong to the same network, only 1 recalculation runs.
+
+**Piston resolution**: `flushIfDirty(Level)` is called at HEAD of `PistonStructureResolver.resolve()` to ensure activation states are up-to-date before stickiness checks run. This is a targeted drain for the current dimension only.
 
 ### Rendering
 
@@ -1047,9 +1058,13 @@ Zero overhead when nobody holds it (just a player list scan).
 | **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. Uses `StickyType.of()` for classification and `StickyType.ODDSTONE.canGrab()` for grab decisions. Reverse grabs blocked by immunity rules 1-3. |
 | **Portal frame** | `neighborChanged()` delegates to `OddstonePortalHandler.onNeighborChanged()`. `onRemove()` delegates to `OddstonePortalHandler.onBlockRemoved()`. |
 
+### AbstractMachineBlock -- Shared Base Class
+
+All Machine Family blocks extend `AbstractMachineBlock`, which extends `Block` and implements `EntityBlock` and `IMachineFamily`. Provides default implementations for: `use()` (GUI open), `newBlockEntity()`, `getRenderShape(ENTITYBLOCK_ANIMATED)`, `isStickyBlock(true)`, `canStickTo()` (delegates to `IMachineFamily.canMachineFamilyStickTo()`), `onPlace()`/`onRemove()`/`neighborChanged()` (with `FrameActivation.markDirty()`), `setPlacedBy()` (specialization swap from item NBT), `getDrops()` (conditional BlockEntityTag), `getCloneItemStack()` (registry-based middle-click). Subclasses override only `getMachineType()` for simple specializations, or override lifecycle methods for unique behavior (redstone, push scheduling).
+
 ### Machine Frame -- Universal Connector + Machine Family Base
 
-Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock. Implements `IMachineFamily` with `MachineType.FRAME`.
+Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock extends AbstractMachineBlock. `MachineType.FRAME`.
 
 | Feature | Implementation |
 |---------|---------------|
@@ -1057,7 +1072,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 | **Block entity with GUI** | Shares MachineFrameBlockEntity with all specializations. PositionBoundContainer keeps GUI open across swaps. Right-click opens universal machine GUI. |
 | **Specialization swap** | When slot contents change, MachineSwapHelper.checkAndSwap() determines target block from item registry. Block replaced in-world, item transferred to new BE via setItemDirect(). |
 | **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Frame emits anti-signal. All other specializations always activate. |
-| **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.recalculate(). |
+| **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.markDirty(). |
 | **Drop preservation** | getDrops() adds BlockEntityTag only when slot has content. Empty frames drop tagless. getCloneItemStack() uses registry-based createCloneStack() (client-safe). |
 | **Piston movement** | PushReaction.NORMAL. IPistonMovable preserves slot contents through all move types. |
 
@@ -1073,23 +1088,23 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 ### Machine Track -- Isolated Redstone + Trolley Push
 
-Registry ID: `machine_track`. Class: MachineTrackBlock. Implements `IMachineFamily` with `MachineType.TRACK` + `EntityBlock`.
+Registry ID: `machine_track`. Class: MachineTrackBlock extends AbstractMachineBlock. `MachineType.TRACK`.
 
 Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing powered rail in slot). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). On rising edge, pushes ALL adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style movement.
 
 Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
 
-Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.recalculate().
+Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.markDirty().
 
 ### Machine Trolley -- Passive Cargo Carrier
 
-Registry ID: `machine_trolley`. Class: MachineTrolleyBlock. Implements `IMachineFamily` with `MachineType.TROLLEY` + `EntityBlock`.
+Registry ID: `machine_trolley`. Class: MachineTrolleyBlock extends AbstractMachineBlock. `MachineType.TROLLEY`. ~20 lines.
 
 Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing minecart in slot). No active behavior -- pure cargo. Pushed by Tracks. Stickiness: MachineType.TROLLEY -- sticks to other Trolleys + Machine Frames + Frame Family (active). Does NOT stick to Tracks. Frame activation: always emits (strength 15).
 
 ### Machine Conductor -- Solid-Block Redstone Wire
 
-Registry ID: `machine_conductor`. Class: MachineConductorBlock. Implements `IMachineFamily` with `MachineType.CONDUCTOR` + `EntityBlock`.
+Registry ID: `machine_conductor`. Class: MachineConductorBlock extends AbstractMachineBlock. `MachineType.CONDUCTOR`.
 
 Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1 per block). Connects to vanilla redstone components on all 6 faces. Outputs weak power (getSignal) and strong power (getDirectSignal) on all faces except the input face.
 
@@ -1111,13 +1126,13 @@ Frame activation: Always emits activation (strength 15). Never suppresses.
 
 **Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Squared curve gradient: POWER 0 = black, 1-15 = dim-to-bright red.
 
-**Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). (2) Base texture renders black (issue #13 -- model/renderer investigation needed).
+**Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). ~~(2) Base texture renders black (issue #13 -- FIXED 2026-03-14, cutout render type).~~
 
 ---
 
 ### Frame Blocks (Iron Frame, Copper Frame)
 
-Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock` and `SimpleWaterloggedBlock`. `BooleanProperty ACTIVE` (default false). `BooleanProperty WATERLOGGED` (default false, auto-set when placed in water). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.recalculate()`. See section 6b for the activation algorithm.
+Transparent decorative blocks with activation-based stickiness. Implements `IFrameBlock` and `SimpleWaterloggedBlock`. `BooleanProperty ACTIVE` (default false). `BooleanProperty WATERLOGGED` (default false, auto-set when placed in water). `isStickyBlock()` returns ACTIVE value. All lifecycle hooks delegate to `FrameActivation.markDirty()`. See section 6b for the activation algorithm.
 
 | Feature | Implementation |
 |---------|---------------|
@@ -1404,6 +1419,7 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
 | ~~13~~ | ~~Machine Conductor base texture renders black~~ | ~~Visual bug~~ | ~~FIXED 2026-03-14. Root cause: indicator overlay used default "solid" render type, which renders transparent pixels as opaque black. The overlay's tintIndex 1 at power 0 produces color 0x000000, creating a fully opaque black shell. Fix: added `"render_type": "minecraft:cutout"` to model JSON. Also removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.~~ |
 | 14 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | When a framed redstone block transitions from inactive to active via the frame network, neighbors are not notified of the signal change. The block only starts emitting power after receiving a redstone update (e.g., from another redstone component updating). Works fine if placed while frame is inactive. Fix: FrameActivation needs to call `level.updateNeighborsAt(pos, block)` when a framed redstone source transitions active state. File: FrameActivation.java. |
+| 15 | Vanilla metal first-push failure after frame network change | Movement bug | When vanilla iron/copper blocks participate in a frame network, modifications to the network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail to grab adjacent frames on the first piston push. Works correctly on the second push. Reproduction: piston(up) -> machine block -> iron frame -> iron block -> row of iron frames; break a frame in middle of row; push piston -- iron block doesn't grab; push again -- works. Also reproduces when iron block directly touches machine frame. Two fix attempts failed: (1) flushIfDirty at TAIL of addBranchingBlocks -- too late, vanilla already checked stale states; (2) flushIfDirty at HEAD of resolve -- still fails. Suspected areas: activatedVanillaMetals global set management, timing between neighbor cascades and piston resolution, possible FrameActivation rewrite fidelity gap. File: FrameActivation.java, PistonStructureResolverMixin.java. |
 
 
 ## 15. CONVENTIONS & PATTERNS

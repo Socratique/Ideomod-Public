@@ -3,9 +3,12 @@ package com.ideomancer.ideomod.block.frame;
 import com.ideomancer.ideomod.Ideomod;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraftforge.event.TickEvent;
+import net.minecraftforge.eventbus.api.SubscribeEvent;
 
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -66,6 +69,15 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
  *    no anti-signal.
  *
+ * BATCHING (Audit #14):
+ * =====================
+ * Instead of running recalculate() immediately on every block change,
+ * callers use markDirty(level, pos) which queues the position. At the
+ * end of each server tick, processDirtyNetworks() runs one recalculation
+ * per connected dirty network. This batches all changes in a tick into
+ * a single pass — placing 50 frame blocks triggers 1 recalculation
+ * instead of 50.
+ *
  * THREAD SAFETY (Audit #B):
  * =========================
  * activatedVanillaMetals uses volatile reference swapping rather than
@@ -82,6 +94,127 @@ public class FrameActivation {
      * Maximum activation signal strength. Matches redstone's max of 15.
      */
     public static final int MAX_SIGNAL_STRENGTH = 15;
+
+    // ========================================================================
+    // DIRTY NETWORK BATCHING (Audit #14)
+    // ========================================================================
+
+    /**
+     * Dirty positions queued for recalculation, keyed by dimension.
+     * Multiple positions in the same network will be discovered and merged
+     * during processDirtyNetworks(). ConcurrentHashMap for safe access
+     * from potential parallel forge event dispatch.
+     */
+    private static final Map<ServerLevel, Set<BlockPos>> dirtyPositions = new ConcurrentHashMap<>();
+
+    /**
+     * Marks a position as needing frame activation recalculation.
+     * The actual recalculation is deferred to the end of the server tick,
+     * batching all changes in a single tick into one pass per network.
+     *
+     * This is the primary entry point for all block lifecycle hooks
+     * (onPlace, onRemove, neighborChanged) that previously called
+     * recalculate() directly.
+     */
+    public static void markDirty(Level level, BlockPos pos) {
+        if (level.isClientSide()) return;
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        dirtyPositions.computeIfAbsent(serverLevel, k -> ConcurrentHashMap.newKeySet())
+                      .add(pos.immutable());
+    }
+
+    /**
+     * Processes all dirty positions, running one recalculation per connected
+     * network. Called at the end of each server tick.
+     *
+     * Algorithm:
+     * 1. Drain the dirty set for each dimension
+     * 2. For each dirty position, discover its network (BFS)
+     * 3. Remove all positions in that network from the remaining dirty set
+     *    (they'll be covered by this single recalculation)
+     * 4. Run recalculate() once for the network
+     */
+    public static void processDirtyNetworks() {
+        for (Map.Entry<ServerLevel, Set<BlockPos>> entry : dirtyPositions.entrySet()) {
+            ServerLevel level = entry.getKey();
+            Set<BlockPos> dirty = entry.getValue();
+
+            if (dirty.isEmpty()) continue;
+
+            // Drain the set — take a snapshot and clear
+            Set<BlockPos> pending = new HashSet<>(dirty);
+            dirty.clear();
+
+            // Process each dirty position, deduplicating by network
+            while (!pending.isEmpty()) {
+                BlockPos changePos = pending.iterator().next();
+                pending.remove(changePos);
+
+                // Discover the network from this position
+                Set<BlockPos> network = discoverNetwork(level, changePos);
+
+                // Remove all network positions from pending (they share a network)
+                pending.removeAll(network);
+
+                // Also remove direct neighbors of the change point (they triggered
+                // from the same event and the network covers them)
+                for (Direction dir : Direction.values()) {
+                    pending.remove(changePos.relative(dir));
+                }
+
+                // Run one recalculation for this entire network
+                recalculate(level, changePos);
+            }
+        }
+    }
+
+    /**
+     * Immediately flushes any pending dirty positions for the given level.
+     * Call this before any code that reads activation state and cannot
+     * tolerate stale data (e.g., piston structure resolution).
+     *
+     * This preserves the performance benefit of batching for normal gameplay
+     * (construction, redstone updates) while ensuring correctness for
+     * time-critical reads like piston moves.
+     */
+    public static void flushIfDirty(Level level) {
+        if (level.isClientSide()) return;
+        if (!(level instanceof ServerLevel serverLevel)) return;
+
+        Set<BlockPos> dirty = dirtyPositions.get(serverLevel);
+        if (dirty == null || dirty.isEmpty()) return;
+
+        // Drain and process
+        Set<BlockPos> pending = new HashSet<>(dirty);
+        dirty.clear();
+
+        while (!pending.isEmpty()) {
+            BlockPos changePos = pending.iterator().next();
+            pending.remove(changePos);
+
+            Set<BlockPos> network = discoverNetwork(serverLevel, changePos);
+            pending.removeAll(network);
+            for (Direction dir : Direction.values()) {
+                pending.remove(changePos.relative(dir));
+            }
+
+            recalculate(serverLevel, changePos);
+        }
+    }
+
+    /**
+     * Forge event handler for end-of-tick processing.
+     * Register an instance of this on MinecraftForge.EVENT_BUS.
+     */
+    public static class TickHandler {
+        @SubscribeEvent
+        public void onServerTick(TickEvent.ServerTickEvent event) {
+            if (event.phase == TickEvent.Phase.END) {
+                processDirtyNetworks();
+            }
+        }
+    }
 
     // ========================================================================
     // VANILLA METAL ACTIVATION TRACKING
@@ -123,14 +256,15 @@ public class FrameActivation {
     }
 
     // ========================================================================
-    // THE ONE PUBLIC METHOD
+    // RECALCULATE (internal — called by processDirtyNetworks)
     // ========================================================================
 
     /**
-     * Called when anything changes that might affect frame activation.
      * Full wipe-and-rebuild with signal strength propagation.
+     * Called internally by processDirtyNetworks(). External callers should
+     * use markDirty() to batch changes.
      */
-    public static void recalculate(Level level, BlockPos changePos) {
+    static void recalculate(Level level, BlockPos changePos) {
         if (level.isClientSide()) return;
 
         // Step 1: Discover the entire conductor network
@@ -138,15 +272,12 @@ public class FrameActivation {
         if (network.isEmpty()) return;
 
         // Step 2: Wipe all activation states
-        // Build a local set of vanilla metal positions to remove, then swap atomically
-        Set<Long> currentVanillaMetals = activatedVanillaMetals;
         for (BlockPos pos : network) {
             BlockState state = level.getBlockState(pos);
             if (state.getBlock() instanceof IFrameBlock && isActive(state)) {
                 level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, false),
                         Block.UPDATE_CLIENTS);
             }
-            // Vanilla metals: we'll build a fresh set below, no need to remove individually
         }
 
         // Step 3: Find all Machine Blocks adjacent to any network block
@@ -170,13 +301,6 @@ public class FrameActivation {
         }
 
         // Step 4: Propagate activation signal from machines
-        // Each position maps to its maximum received signal strength.
-        //
-        // SUPPRESSION RULE: Only MachineFrameBlock can suppress frame networks.
-        // All other Machine Family blocks (Track, Trolley, future specializations)
-        // ALWAYS emit activation regardless of their redstone state. This prevents
-        // Track redstone conduction, Clock pulses, Repeater signals, etc. from
-        // accidentally deactivating frame networks they're adjacent to.
         Map<Long, Integer> activationStrength = new HashMap<>();
 
         for (BlockPos machinePos : machineSources) {
@@ -184,13 +308,11 @@ public class FrameActivation {
             boolean isMachineFrame = machineState.getBlock() instanceof MachineFrameBlock;
 
             if (isMachineFrame) {
-                // Machine Frame: only emits activation when NOT receiving redstone
                 int redstonePower = level.getBestNeighborSignal(machinePos);
                 if (redstonePower == 0) {
                     propagateSignal(level, machinePos, MAX_SIGNAL_STRENGTH, activationStrength);
                 }
             } else {
-                // All other Machine Family blocks: always emit activation
                 propagateSignal(level, machinePos, MAX_SIGNAL_STRENGTH, activationStrength);
             }
         }
@@ -204,13 +326,11 @@ public class FrameActivation {
 
             int redstonePower = level.getBestNeighborSignal(machinePos);
             if (redstonePower > 0) {
-                // Powered Machine Frame: emit anti-signal at redstone strength
                 propagateSignal(level, machinePos, redstonePower, antiStrength);
             }
         }
 
         // Step 6: Apply — activate blocks that have signal and no anti-signal
-        // Build new vanilla metal set locally, then swap atomically
         Set<Long> newVanillaMetals = new HashSet<>();
 
         for (BlockPos pos : network) {
@@ -227,7 +347,6 @@ public class FrameActivation {
                     level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, true),
                             Block.UPDATE_CLIENTS);
                 }
-                // Already wiped to false in step 2, so no else needed
             } else if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
                 if (shouldActivate) {
                     newVanillaMetals.add(packed);
@@ -272,8 +391,6 @@ public class FrameActivation {
         if (startStrength <= 0) return;
 
         Queue<SignalEntry> queue = new ArrayDeque<>();
-        // Track the best strength we've queued for each position to avoid
-        // re-processing with weaker signals
         Map<Long, Integer> bestQueued = new HashMap<>();
 
         EnumSet<FrameMaterial> allMaterials = EnumSet.allOf(FrameMaterial.class);
@@ -302,8 +419,6 @@ public class FrameActivation {
 
             long packed = current.asLong();
 
-            // Skip if we've already processed this position with equal or
-            // better strength (from a different source or path)
             int recorded = strengthMap.getOrDefault(packed, 0);
             if (recorded >= strength) continue;
 
@@ -335,8 +450,6 @@ public class FrameActivation {
                 BlockPos neighborPos = current.relative(dir);
                 long neighborPacked = neighborPos.asLong();
 
-                // Only queue if this would be a stronger signal than what
-                // we've already queued for this neighbor
                 if (!bestQueued.containsKey(neighborPacked) || bestQueued.get(neighborPacked) < nextStrength) {
                     BlockState neighborState = level.getBlockState(neighborPos);
                     if (isConductor(neighborState)) {

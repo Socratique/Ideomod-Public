@@ -22,7 +22,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 /**
  * Base class for empty Frame Blocks (Iron Frame, Copper Frame).
  *
- * Passive activation: all lifecycle events call FrameActivation.recalculate()
+ * Passive activation: all lifecycle events call FrameActivation.markDirty()
  * which does a full network wipe-and-rebuild from Machine Block sources.
  * Frames never decide their own activation state.
  *
@@ -162,7 +162,7 @@ public class FrameBlock extends Block implements IFrameBlock, SimpleWaterloggedB
                          BlockState oldState, boolean movedByPiston) {
         super.onPlace(state, level, pos, oldState, movedByPiston);
         if (!level.isClientSide() && !state.is(oldState.getBlock())) {
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
     }
 
@@ -170,7 +170,7 @@ public class FrameBlock extends Block implements IFrameBlock, SimpleWaterloggedB
     public void onRemove(BlockState state, Level level, BlockPos pos,
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && !movedByPiston) {
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -180,7 +180,7 @@ public class FrameBlock extends Block implements IFrameBlock, SimpleWaterloggedB
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
         if (!level.isClientSide()) {
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
     }
 

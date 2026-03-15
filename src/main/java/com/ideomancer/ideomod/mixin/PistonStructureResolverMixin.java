@@ -63,6 +63,14 @@ public abstract class PistonStructureResolverMixin {
 
     @Inject(method = "resolve", at = @At("HEAD"))
     private void ideomod$redirectStartPos(CallbackInfoReturnable<Boolean> cir) {
+        // Flush any pending frame activation changes BEFORE the resolver
+        // reads any blockstate. Without this, frames activated by markDirty()
+        // during the current tick would still show ACTIVE=false during the
+        // resolver's addBlockLine and addBranchingBlocks phases, causing
+        // vanilla to skip them for stickiness checks. The second push would
+        // work because end-of-tick processing catches up. (Bug fix)
+        com.ideomancer.ideomod.block.frame.FrameActivation.flushIfDirty(this.level);
+
         BlockPos target = RangedPistonFlags.getTarget();
         if (target != null) {
             this.startPos = target;
@@ -311,6 +319,10 @@ public abstract class PistonStructureResolverMixin {
 
     @Inject(method = "addBranchingBlocks", at = @At("TAIL"), cancellable = true)
     private void ideomod$sympatheticSearch(CallbackInfoReturnable<Boolean> cir) {
+        // NOTE: flushIfDirty is called at resolve() HEAD, not here.
+        // It must run BEFORE vanilla's addBranchingBlocks checks isStickyBlock()
+        // and canStickTo(), not after. See ideomod$redirectStartPos.
+
         // --- Feature 6: Vanilla metal block frame family stickiness ---
         // Vanilla iron/copper blocks have isStickyBlock()=false, so the resolver
         // never checks their neighbors for sticking. We manually scan them here:
@@ -402,7 +414,7 @@ public abstract class PistonStructureResolverMixin {
 
     /**
      * Scans blocks in toPush for vanilla metal conductor connections.
-     * Works BIDIRECTIONALLY:
+     * Works BIDIRECTIONALLY using a BFS frontier queue:
      *
      * 1. Finds vanilla iron/copper blocks adjacent to frame family members
      *    already in toPush, and adds them.
@@ -412,60 +424,71 @@ public abstract class PistonStructureResolverMixin {
      * This handles chains like: frame → iron_block → iron_block → frame
      * where the vanilla blocks bridge between frame family members.
      *
-     * Loops until no new blocks are found (handles arbitrary chain lengths).
+     * Uses a frontier queue instead of snapshot-and-rescan: when a new block
+     * is added, only its neighbors are checked next, giving O(n) instead of
+     * O(n²) for chains of n vanilla metals. (Audit item #15)
      *
      * @return true if any blocks were added to toPush
      */
     @Unique
     private boolean ideomod$addVanillaMetalConductors() {
         boolean addedAny = false;
-        boolean changed = true;
 
-        while (changed) {
-            changed = false;
-            List<BlockPos> snapshot = new ArrayList<>(this.toPush);
+        // Seed the frontier with all current toPush positions
+        java.util.Queue<BlockPos> frontier = new java.util.ArrayDeque<>(this.toPush);
+        java.util.Set<Long> processed = new java.util.HashSet<>();
+        // Safety cap to prevent runaway iteration
+        int maxIterations = 256;
+        int iterations = 0;
 
-            for (BlockPos pushedPos : snapshot) {
-                BlockState pushedState = this.level.getBlockState(pushedPos);
+        while (!frontier.isEmpty() && iterations < maxIterations) {
+            iterations++;
+            BlockPos pushedPos = frontier.poll();
+            long packedPos = pushedPos.asLong();
 
-                // --- Direction A: pushed block is a frame family member,
-                //     find adjacent vanilla metals to pull in ---
-                if (ideomod$isVanillaMetalStickyNeighbor(pushedState)) {
-                    for (Direction dir : Direction.values()) {
-                        BlockPos neighborPos = pushedPos.relative(dir);
-                        if (this.toPush.contains(neighborPos)) continue;
+            // Skip if already processed from the frontier
+            if (!processed.add(packedPos)) continue;
 
-                        BlockState neighborState = this.level.getBlockState(neighborPos);
-                        FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
-                        if (neighborMat == null) continue;
+            BlockState pushedState = this.level.getBlockState(pushedPos);
 
-                        if (ideomod$shouldVanillaMetalStick(neighborMat, pushedState, neighborPos)) {
-                            boolean result = this.addBlockLine(neighborPos, dir);
-                            if (this.toPush.contains(neighborPos)) {
-                                addedAny = true;
-                                changed = true;
-                            }
+            // --- Direction A: pushed block is a frame family member,
+            //     find adjacent vanilla metals to pull in ---
+            if (ideomod$isVanillaMetalStickyNeighbor(pushedState)) {
+                for (Direction dir : Direction.values()) {
+                    BlockPos neighborPos = pushedPos.relative(dir);
+                    if (this.toPush.contains(neighborPos)) continue;
+
+                    BlockState neighborState = this.level.getBlockState(neighborPos);
+                    FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
+                    if (neighborMat == null) continue;
+
+                    if (ideomod$shouldVanillaMetalStick(neighborMat, pushedState, neighborPos)) {
+                        this.addBlockLine(neighborPos, dir);
+                        if (this.toPush.contains(neighborPos)) {
+                            addedAny = true;
+                            // Newly added — check ITS neighbors next
+                            frontier.add(neighborPos);
                         }
                     }
                 }
+            }
 
-                // --- Direction B: pushed block is a vanilla metal,
-                //     find adjacent frame family members to pull in ---
-                FrameMaterial pushedMetal = FrameMaterial.fromVanillaBlock(pushedState.getBlock());
-                if (pushedMetal != null) {
-                    for (Direction dir : Direction.values()) {
-                        BlockPos neighborPos = pushedPos.relative(dir);
-                        if (this.toPush.contains(neighborPos)) continue;
+            // --- Direction B: pushed block is a vanilla metal,
+            //     find adjacent frame family members to pull in ---
+            FrameMaterial pushedMetal = FrameMaterial.fromVanillaBlock(pushedState.getBlock());
+            if (pushedMetal != null) {
+                for (Direction dir : Direction.values()) {
+                    BlockPos neighborPos = pushedPos.relative(dir);
+                    if (this.toPush.contains(neighborPos)) continue;
 
-                        BlockState neighborState = this.level.getBlockState(neighborPos);
+                    BlockState neighborState = this.level.getBlockState(neighborPos);
 
-                        // Check: is this neighbor a block that vanilla metal should stick to?
-                        if (ideomod$shouldVanillaMetalGrabNeighbor(pushedMetal, neighborState, pushedPos)) {
-                            boolean result = this.addBlockLine(neighborPos, dir);
-                            if (this.toPush.contains(neighborPos)) {
-                                addedAny = true;
-                                changed = true;
-                            }
+                    if (ideomod$shouldVanillaMetalGrabNeighbor(pushedMetal, neighborState, pushedPos)) {
+                        this.addBlockLine(neighborPos, dir);
+                        if (this.toPush.contains(neighborPos)) {
+                            addedAny = true;
+                            // Newly added — check ITS neighbors next
+                            frontier.add(neighborPos);
                         }
                     }
                 }

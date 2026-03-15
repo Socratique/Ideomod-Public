@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-14 (Audit batch 2: B/K/L/P resolved, #20 IMMOVABLE_WHEN_FRAMED tag added, audit table updated.)*
+*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Known Issue #15.)*
 
 ---
 
@@ -43,9 +43,9 @@ com.ideomancer.ideomod
   |     |     |                                Machine Family, slime/honey/odd_slime permissive,
   |     |     |                                FramedBlock(INNER_STICKY>0) permissive. Cross-material
   |     |     |                                IFrameBlock falls through (no short-circuit).
-  |     |     |-- FrameActivation.java         Static utility: signal-based activation with strength
-  |     |     |                                decay (0-15) and anti-signal suppression. Tracks
-  |     |     |                                vanilla metal activation. Single BFS with material flow.
+  |     |     |-- FrameActivation.java         Static utility: batched signal-based activation.
+  |     |     |                                markDirty() + end-of-tick TickHandler. flushIfDirty()
+  |     |     |                                for piston resolver. Vanilla metal tracking.
   |     |     |-- FrameabilityHelper.java      Tag-driven whitelist for frameable blocks (#ideomod:frameable_blocks)
   |     |     |-- FramedBlock.java             IFrameBlock + EntityBlock proxy for inner block
   |     |     |-- FramedBlockEntity.java       Stores inner block ResourceLocation. IPistonMovable.
@@ -55,16 +55,20 @@ com.ideomancer.ideomod
   |     |-- machine/
   |     |     |-- IMachineFamily.java          Interface: getMachineType() + canMachineFamilyStickTo(type, state).
   |     |     |-- MachineType.java             Enum: FRAME, TRACK, TROLLEY, etc. canStickToMachineType().
+  |     |     |-- AbstractMachineBlock.java    Base class for all Machine Family blocks. Shared lifecycle,
+  |     |     |                                GUI, drops, stickiness, frame activation markDirty().
   |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
+  |     |     |                                Client sync via syncToClients() after swap.
   |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
-  |     |     |-- MachineFrameBlock.java       MachineType.FRAME. Universal connector. EntityBlock + GUI.
-  |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
+  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
+  |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync
+  |     |     |                                (getUpdatePacket, getUpdateTag, syncToClients).
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
-  |     |     |-- MachineTrackBlock.java       MachineType.TRACK. EntityBlock + GUI + Trolley push.
-  |     |     |-- MachineTrolleyBlock.java     MachineType.TROLLEY. EntityBlock + GUI + passive cargo.
-  |     |     \-- MachineConductorBlock.java   MachineType.CONDUCTOR. Solid-block redstone wire.
-  |     |                                      Input/output face model. EntityBlock + GUI.
+  |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
+  |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
+  |     |     \-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR.
+  |     |                                      Custom redstone wire. Input/output face model.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -277,7 +281,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 ### 6. Machine Frame (universal connector + Machine Family base)
 
-Registry ID: `machine_block`. Class: MachineFrameBlock. Implements **IMachineFamily** with **MachineType.FRAME** (as do MachineTrackBlock with TRACK and MachineTrolleyBlock with TROLLEY).
+Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachineBlock**. All Machine Family blocks extend AbstractMachineBlock (shared lifecycle, GUI, drops, stickiness, frame activation via markDirty()). MachineType.FRAME (universal connector). Specializations: MachineTrackBlock (TRACK), MachineTrolleyBlock (TROLLEY), MachineConductorBlock (CONDUCTOR).
 
 1. **Universal stickiness**: MachineType.FRAME sticks to ALL machine types. canStickTo delegates to `IMachineFamily.canMachineFamilyStickTo(MachineType.FRAME, other)`. Permissive to slime/honey/odd_slime (grab immunity handles restriction).
 2. **Block entity with GUI**: All machine blocks share MachineFrameBlockEntity (single item slot). PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes.
@@ -292,13 +296,13 @@ Registry ID: `machine_block`. Class: MachineFrameBlock. Implements **IMachineFam
 
 **Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- MachineTrackBlock only.
 
-**Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.recalculate(level, pos)` to trigger frame network wipe-and-rebuild.
+**Frame activation**: onPlace/onRemove/neighborChanged all call `FrameActivation.markDirty(level, pos)` to queue frame network recalculation at end-of-tick. Piston resolver calls `flushIfDirty(level)` at HEAD of resolve() for immediate processing.
 
 ### 7. Frame Blocks (activation-based stickiness)
 
 Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrameBlock, SimpleWaterloggedBlock).
 
-1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.recalculate()`. Machine Blocks are the signal source. Signal strength 15, decays by 1 per conductor. Max range 15 blocks.
+1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.markDirty()`. Machine Blocks are the signal source. Signal strength 15, decays by 1 per conductor. Max range 15 blocks.
 2. **Material exclusivity**: canStickTo returns true for same-material IFrameBlock **only when neighbor is also active** (`IFrameBlock.isActive(other)`). Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. Also permissive to: Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, FramedBlock with INNER_STICKY>0.
 3. **Cross-frame mediation**: canStickTo recognizes FramedBlock neighbors with INNER_CONDUCTOR matching this frame's material. E.g., iron frame sticks to copper-framed iron block.
 4. **Vanilla metal conductors**: canStickTo returns true for same-material vanilla metal blocks (iron_block, copper_block).
@@ -315,7 +319,7 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 
 Max range: 15 blocks from source. Public queries: `isVanillaMetalActivated(pos)`, `isActivatedConductor(state, pos)`, `isActive(state)`.
 
-Called by: MachineFrameBlock.onPlace/onRemove/neighborChanged, FrameBlock.onPlace/onRemove/neighborChanged. Redstone input changes trigger via neighborChanged automatically. Single entry point: `FrameActivation.recalculate(level, pos)`.
+Called by: All Machine Family blocks (via AbstractMachineBlock) and FrameBlock onPlace/onRemove/neighborChanged. Redstone input changes trigger via neighborChanged automatically. Primary entry point: `FrameActivation.markDirty(level, pos)`. Internal: `recalculate()` is package-private, called by `processDirtyNetworks()` and `flushIfDirty()`.
 
 **Rendering**: RenderType.cutout() registered in Ideomod.clientSetup(). noOcclusion() in block properties. Transparent interior pixels render correctly.
 
@@ -391,7 +395,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **Stickiness rule pattern**: `canStickTo` = permissive (allow both directions), `StickinessRules` = restrictive (block specific grabbers). Never express one-way behavior in canStickTo alone.
 
-**Frame activation pattern**: All lifecycle hooks call `FrameActivation.recalculate()`. Single entry point, wipe-and-rebuild, no incremental logic. Machine Blocks are sources, frames are passive conductors.
+**Frame activation pattern**: All lifecycle hooks call `FrameActivation.markDirty()`. End-of-tick batching via `TickHandler` (registered on Forge event bus). `flushIfDirty()` for piston resolver. Wipe-and-rebuild per unique network, no incremental logic. Machine Blocks are sources, frames are passive conductors.
 
 **Multiblock definitions**: Extend StructureDefinition, register with StructureManager in commonSetup(). Use block tags for frame/component blocks. Scanner normalizes bounds and core positions.
 
@@ -415,6 +419,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 12. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
 ~~13. **Machine Conductor base texture renders black**~~ -- FIXED 2026-03-14. Root cause: indicator overlay element used default "solid" render type, treating transparent pixels as opaque black. At power 0 the tinted overlay was a solid black shell hiding the base. Fix: added `"render_type": "minecraft:cutout"` to model JSON, removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.
 14. **Framed redstone blocks don't emit power on frame activation** -- When a framed redstone block transitions from inactive to active via the frame network, redstone neighbors are not notified. Block only starts emitting after receiving a redstone update from another component. Works fine if placed while frame is inactive. Fix: FrameActivation needs `level.updateNeighborsAt()` on active-state transitions for redstone sources. File: FrameActivation.java.
+15. **Vanilla metal first-push failure after frame network change** -- When vanilla iron/copper blocks participate in a frame network, modifications to the network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail to grab adjacent frames on the first piston push. Works correctly on the second push. Reproduction: piston(up) -> machine block -> iron frame -> iron block -> row of iron frames; break frame in middle of row; push piston -- iron doesn't grab; push again -- works. Also reproduces when iron touches machine frame directly. Two fix attempts failed: (1) flushIfDirty at TAIL of addBranchingBlocks (too late); (2) flushIfDirty at HEAD of resolve (still fails). Suspected: activatedVanillaMetals set management, timing between neighbor cascades and piston resolution, possible FrameActivation rewrite fidelity gap. Files: FrameActivation.java, PistonStructureResolverMixin.java.
 
 ### Audit-Identified Issues (2026-03-13)
 
@@ -427,9 +432,9 @@ The following issues were identified during a comprehensive codebase audit. See 
 | ~~C~~ | ~~Critical~~ | ~~ThreadLocal cleanup gaps in PistonStructureResolverMixin.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
 | ~~D~~ | ~~Critical~~ | ~~ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos.~~ *FIXED 2026-03-13* | PistonBaseBlockMixin.java |
 | ~~E~~ | ~~High~~ | ~~OddstonePortalSavedData.unregisterPortal() uses && where || is needed.~~ *FIXED 2026-03-13* | OddstonePortalSavedData.java |
-| F | High | FrameActivation.recalculate() has no debouncing -- large networks cause lag during construction. | FrameActivation.java |
-| G | High | ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop. | PistonStructureResolverMixin.java |
-| H | High | MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration. | MovementScanHelper.java |
+| ~~F~~ | ~~High~~ | ~~FrameActivation.recalculate() has no debouncing.~~ *FIXED 2026-03-15 (markDirty + TickHandler batching)* | FrameActivation.java |
+| ~~G~~ | ~~High~~ | ~~ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop.~~ *FIXED 2026-03-15 (BFS frontier queue)* | PistonStructureResolverMixin.java |
+| ~~H~~ | ~~High~~ | ~~MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration.~~ *FIXED 2026-03-15 (BFS frontier queue)* | MovementScanHelper.java |
 | ~~J~~ | ~~Medium~~ | ~~OddstoneConfig sympathetic radius is unbounded.~~ *FIXED 2026-03-13* | OddstoneConfig.java |
 | ~~K~~ | ~~Medium~~ | ~~MovingBlockEntityData key collision risk.~~ *FIXED 2026-03-14 (pipe delimiters)* | MovingBlockEntityData.java |
 | ~~L~~ | ~~Medium~~ | ~~StructureManager chunk iteration without defensive copy.~~ *FIXED 2026-03-14* | StructureManager.java |

@@ -183,6 +183,7 @@ public final class MachineSwapHelper {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineFrameBlockEntity machineEntity) {
                 machineEntity.setItemDirect(newItem.copy());
+                machineEntity.syncToClients();
             }
         } finally {
             isSwapping.set(false);

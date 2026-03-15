@@ -61,27 +61,25 @@ if (pos.equals(addressEntries[0]) && pos.equals(addressEntries[1]))
 
 ### 1.3 HIGH -- Performance
 
-**F. FrameActivation.recalculate() has no debouncing**
+~~**F. FrameActivation.recalculate() has no debouncing**~~
 
-Every `neighborChanged`, `onPlace`, and `onRemove` call triggers a full network wipe-and-rebuild. Placing 50 frame blocks in sequence triggers 50 complete BFS recalculations, each discovering the same growing network. For a 15-block-radius network, each recalculation visits hundreds of positions.
+~~Every `neighborChanged`, `onPlace`, and `onRemove` call triggers a full network wipe-and-rebuild. Placing 50 frame blocks in sequence triggers 50 complete BFS recalculations, each discovering the same growing network. For a 15-block-radius network, each recalculation visits hundreds of positions.~~
 
-This is the single biggest performance concern in the codebase. It won't cause issues in small builds, but a player who builds a large frame network will see noticeable lag during construction.
+~~This is the single biggest performance concern in the codebase. It won't cause issues in small builds, but a player who builds a large frame network will see noticeable lag during construction.~~
 
-*Potential fix:* Mark the network as dirty and schedule a single recalculation for the end of the tick using `level.scheduleTick()` or a server tick event. This batches all changes in a single tick into one recalculation.
+*RESOLVED 2026-03-15: Implemented end-of-tick batching via `markDirty()` + `FrameActivation.TickHandler`. All block lifecycle hooks now call `markDirty(level, pos)` instead of `recalculate()` directly. At the end of each server tick, `processDirtyNetworks()` drains the dirty set, discovers connected networks, deduplicates overlapping positions, and runs one recalculation per unique network. Placing 50 frame blocks now triggers 1 recalculation instead of 50.*
 
-*RESOLVED 2026-03-14: Root cause was missing `"render_type": "minecraft:cutout"` in model JSON. The indicator overlay's transparent pixels rendered as opaque black in the default "solid" render type, creating a black shell at power 0. Added cutout render type, removed unnecessary tintindex from base layer.*
+~~**G. PistonStructureResolverMixin.ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop**~~
 
-**G. PistonStructureResolverMixin.ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop**
+~~The vanilla metal conductor scanning repeatedly snapshots `toPush`, iterates all positions checking all 6 faces, and repeats until no new blocks are found. For a chain of 50 vanilla metals, this loops ~50 times with growing snapshot size. No iteration limit exists.~~
 
-The vanilla metal conductor scanning repeatedly snapshots `toPush`, iterates all positions checking all 6 faces, and repeats until no new blocks are found. For a chain of 50 vanilla metals, this loops ~50 times with growing snapshot size. No iteration limit exists.
+*RESOLVED 2026-03-15: Replaced with BFS frontier queue. Initial toPush positions seed the frontier. Each position is processed once (tracked via `processed` set). Newly added blocks go back into the frontier for neighbor checking. Added 256-iteration safety cap. Complexity reduced from O(n²) to O(n).*
 
-*Fix:* Replace with a single BFS pass that tracks a frontier of newly-added positions, only checking their neighbors. Add a max iteration cap (e.g., 64) as a safety valve.
+~~**H. MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration**~~
 
-**H. MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration**
+~~The sympathetic scan creates a new ArrayList snapshot each pass, re-iterating all known oddstone positions and checking all 6 faces at all distances. With radius 5, each oddstone checks 30 positions per pass. With 12 oddstones chaining, worst case is ~360 checks per pass times multiple passes.~~
 
-The sympathetic scan creates a new ArrayList snapshot each pass, re-iterating all known oddstone positions and checking all 6 faces at all distances. With radius 5, each oddstone checks 30 positions per pass. With 12 oddstones chaining, worst case is ~360 checks per pass times multiple passes.
-
-*Fix:* Use a BFS queue approach -- when a new oddstone is found, only check ITS neighbors next pass, not the entire accumulated set.
+*RESOLVED 2026-03-15: Replaced with BFS frontier queue. Oddstone blocks from the start set seed the frontier. Each discovered oddstone is added to the frontier for transitive scanning. `found.add()` returns false for duplicates, naturally preventing re-processing. Complexity reduced from O(n²) to O(n).*
 
 **I. FramedBlock does redundant block entity lookups**
 
@@ -115,11 +113,11 @@ Nearly every delegated method (mining, sound, friction, light, redstone, pathfin
 
 ### 1.5 LOW -- Code Quality
 
-**M. Machine blocks have extensive code duplication**
+~~**M. Machine blocks have extensive code duplication**~~
 
-`use()`, `getDrops()`, `getCloneItemStack()`, `newBlockEntity()`, and lifecycle hooks are nearly identical across MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock, and MachineConductorBlock. Each new specialization copies all of these.
+~~`use()`, `getDrops()`, `getCloneItemStack()`, `newBlockEntity()`, and lifecycle hooks are nearly identical across MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock, and MachineConductorBlock. Each new specialization copies all of these.~~
 
-*Recommendation:* Extract an abstract `AbstractMachineBlock` base class with default implementations. Specializations only override `getMachineType()`, `canStickTo()`, and their unique behavior. This would cut ~200 lines of duplication and make adding new specializations a 30-line task instead of a 150-line task.
+*RESOLVED 2026-03-15: Extracted `AbstractMachineBlock` base class with default implementations of: `use()` (GUI), `newBlockEntity()`, `getRenderShape()`, `isStickyBlock()`, `canStickTo()`, `onPlace()`/`onRemove()`/`neighborChanged()` (with FrameActivation.markDirty()), `setPlacedBy()` (specialization swap), `getDrops()`, `getCloneItemStack()`. MachineFrameBlock and MachineTrolleyBlock reduced to ~20 lines each. MachineConductorBlock and MachineTrackBlock override only their unique lifecycle/redstone logic. New specializations are now a ~20-line task.*
 
 ~~**N. Debug logging left at INFO level**~~
 
@@ -205,44 +203,17 @@ Nearly every delegated method (mining, sound, friction, light, redstone, pathfin
 
 ## PART 3: ARCHITECTURAL RECOMMENDATIONS
 
-### 3.1 Introduce an Abstract Machine Block Base Class
+### ~~3.1 Introduce an Abstract Machine Block Base Class~~
 
-**Problem:** Every machine specialization duplicates ~150 lines of boilerplate (GUI opening, drop handling, clone stack, block entity creation, canStickTo delegation, lifecycle hooks calling FrameActivation).
+*RESOLVED 2026-03-15: Created `AbstractMachineBlock extends Block implements EntityBlock, IMachineFamily` with default implementations of all shared behavior. MachineFrameBlock, MachineTrolleyBlock reduced to ~20 lines. MachineConductorBlock, MachineTrackBlock override only unique redstone/lifecycle logic. New specializations are now a ~20-line task.*
 
-**Recommendation:** Create `AbstractMachineBlock extends Block implements EntityBlock, IMachineFamily` with:
-- Default `use()` (open GUI)
-- Default `getDrops()` (conditional NBT)
-- Default `getCloneItemStack()` (registry-based)
-- Default `newBlockEntity()` (return MachineFrameBlockEntity)
-- Default `onPlace/onRemove/neighborChanged` (call FrameActivation)
-- Default `isStickyBlock()` (return true)
-- Default `canStickTo()` (delegate to canMachineFamilyStickTo + permissive entries)
-- Abstract `getMachineType()`
+### ~~3.2 Batch Frame Activation Recalculations~~
 
-Specializations then only override their unique behavior. This cuts the work for each new specialization from ~150 lines to ~30 lines and eliminates the "fix it in 4+ places" problem.
+*RESOLVED 2026-03-15: Implemented dirty network batching. `markDirty(level, pos)` queues positions per-dimension in a ConcurrentHashMap. `FrameActivation.TickHandler` processes at end of each server tick via `TickEvent.ServerTickEvent(Phase.END)`. Discovers connected networks to deduplicate overlapping dirty positions. One recalculation per unique network per tick.*
 
-### 3.2 Batch Frame Activation Recalculations
+### ~~3.3 Replace Fixed-Point Loops with BFS Queues~~
 
-**Problem:** Frame activation is wipe-and-rebuild, triggered per-block-change. Large networks recalculate completely on every single block placed or broken.
-
-**Recommendation:** Implement a "dirty network" system:
-1. When a block change triggers recalculation, instead of running immediately, add the change position to a `Set<BlockPos> dirtyPositions`.
-2. At the end of the server tick (via `TickEvent.ServerTickEvent`), run one recalculation per dirty network.
-3. This naturally batches all changes in a tick into a single pass.
-
-This is the same pattern vanilla redstone uses (schedule updates rather than process immediately) and would dramatically reduce lag during construction.
-
-### 3.3 Replace Fixed-Point Loops with BFS Queues
-
-**Problem:** Both `ideomod$addVanillaMetalConductors` (mixin) and `scanSympathetic` (MovementScanHelper) use snapshot-and-rescan loops that are O(n^2) in the worst case.
-
-**Recommendation:** Refactor both to use a proper BFS queue:
-- Maintain a `Queue<BlockPos> frontier` of newly-discovered positions
-- Each iteration, only check the frontier's neighbors
-- Move checked positions to a `visited` set
-- Continue until frontier is empty
-
-This converts both algorithms from O(n^2) to O(n) where n is the number of positions in the result. The code would also be simpler and easier to reason about.
+*RESOLVED 2026-03-15: Both algorithms converted to BFS frontier queues. `ideomod$addVanillaMetalConductors`: seeds frontier with initial toPush, processes each position once via `processed` HashSet, adds newly discovered blocks back to frontier. 256-iteration safety cap. `scanSympathetic`: seeds frontier with oddstone blocks from start set, uses `found.add()` return value to detect new discoveries. Both reduced from O(n²) to O(n).*
 
 ### 3.4 Consider a Tag for Immovable Inner Blocks
 
@@ -321,12 +292,15 @@ Issue #12 (dust sees strong power through solid blocks) is noted as known. ~~Iss
 12. ~~Fix Oddstone recipe contradiction in DESIGN doc~~ *DONE 2026-03-13 (flagged as placeholder for removal)*
 
 ### Medium-term (as part of next feature work)
-13. Extract AbstractMachineBlock base class
-14. Implement frame activation batching/debouncing
-15. Replace fixed-point loops with BFS in metal conductor scanning
+13. ~~Extract AbstractMachineBlock base class~~ *DONE 2026-03-15 (AbstractMachineBlock with shared lifecycle, GUI, drops, stickiness; 4 blocks refactored)*
+14. ~~Implement frame activation batching/debouncing~~ *DONE 2026-03-15 (markDirty() + TickHandler end-of-tick processing; all callers updated)*
+15. ~~Replace fixed-point loops with BFS in metal conductor scanning~~ *DONE 2026-03-15 (BFS frontier in addVanillaMetalConductors + scanSympathetic; O(n²) → O(n))*
 16. ~~Cache PortalGeometry in SavedData~~ *DONE 2026-03-14 (geometry computed from FrameResult corners at registration, cached in PortalEntry, persisted to NBT)*
 17. ~~Update stickiness matrix in CODEBASE_REFERENCE~~ *DONE 2026-03-13 (expanded to full 14 rows)*
 18. ~~Update frameable blocks count in docs~~ *DONE 2026-03-13 (~290 -> ~310)*
+
+### Known Bugs (discovered during implementation)
+KB-1. **Vanilla metal first-push failure after frame network change** -- When vanilla iron/copper blocks participate in a frame network, modifications to the network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail to "grab" adjacent frames on the first piston push. Works correctly on the second push. See Known Issue #15 in IDEOMOD_DOCUMENTATION.md and CODEBASE_REFERENCE.md for full details and reproduction steps.
 
 ### Long-term (architecture evolution)
 19. Consider declarative stickiness profiles

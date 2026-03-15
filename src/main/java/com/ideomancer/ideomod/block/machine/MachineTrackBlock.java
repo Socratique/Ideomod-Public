@@ -4,37 +4,24 @@ import com.ideomancer.ideomod.block.frame.FrameActivation;
 import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
-import net.minecraft.world.entity.LivingEntity;
-import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.EntityBlock;
-import net.minecraft.world.level.block.RenderShape;
-import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import net.minecraft.world.level.storage.loot.LootParams;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.HitResult;
-import net.minecraftforge.network.NetworkHooks;
-import org.jetbrains.annotations.Nullable;
 import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
-
-import java.util.List;
 
 /**
  * Machine Track -- pushes adjacent Machine Trolleys on redstone signal.
  *
+ * Overrides lifecycle hooks from AbstractMachineBlock to add isolated
+ * redstone power tracking and Trolley push scheduling.
+ *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
-public class MachineTrackBlock extends Block implements EntityBlock, IMachineFamily {
+public class MachineTrackBlock extends AbstractMachineBlock {
 
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
     private static final int EVENT_PUSH = 0;
@@ -53,36 +40,6 @@ public class MachineTrackBlock extends Block implements EntityBlock, IMachineFam
     @Override
     public MachineType getMachineType() { return MachineType.TRACK; }
 
-    @Nullable
-    @Override
-    public BlockEntity newBlockEntity(BlockPos pos, BlockState state) {
-        return new MachineFrameBlockEntity(pos, state);
-    }
-
-    @Override
-    public RenderShape getRenderShape(BlockState state) { return RenderShape.MODEL; }
-
-    @Override
-    public InteractionResult use(BlockState state, Level level, BlockPos pos,
-                                  Player player, InteractionHand hand, BlockHitResult hit) {
-        if (level.isClientSide()) return InteractionResult.SUCCESS;
-        BlockEntity be = level.getBlockEntity(pos);
-        if (be instanceof MachineFrameBlockEntity machineFrame) {
-            if (player instanceof ServerPlayer serverPlayer) {
-                NetworkHooks.openScreen(serverPlayer, machineFrame, pos);
-            }
-        }
-        return InteractionResult.CONSUME;
-    }
-
-    @Override
-    public boolean isStickyBlock(BlockState state) { return true; }
-
-    @Override
-    public boolean canStickTo(BlockState state, BlockState other) {
-        return IMachineFamily.canMachineFamilyStickTo(MachineType.TRACK, other);
-    }
-
     @Override
     public boolean isSignalSource(BlockState state) { return false; }
 
@@ -93,7 +50,7 @@ public class MachineTrackBlock extends Block implements EntityBlock, IMachineFam
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) { return 0; }
 
     // ========================================================================
-    // LIFECYCLE
+    // LIFECYCLE (overrides base for Track-specific redstone + push logic)
     // ========================================================================
 
     @Override
@@ -113,7 +70,7 @@ public class MachineTrackBlock extends Block implements EntityBlock, IMachineFam
             }
             if (oldPower == 0 && newPower > 0) scheduleAllPushes(level, pos, newPower);
         }
-        FrameActivation.recalculate(level, pos);
+        FrameActivation.markDirty(level, pos);
     }
 
     @Override
@@ -121,7 +78,7 @@ public class MachineTrackBlock extends Block implements EntityBlock, IMachineFam
         if (!level.isClientSide() && !oldState.is(this)) {
             updatePowerState(level, pos, state);
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
     }
 
@@ -129,45 +86,9 @@ public class MachineTrackBlock extends Block implements EntityBlock, IMachineFam
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && !level.isClientSide()) {
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
-    }
-
-    @Override
-    public void setPlacedBy(Level level, BlockPos pos, BlockState state,
-                             @Nullable LivingEntity placer, ItemStack stack) {
-        super.setPlacedBy(level, pos, state, placer, stack);
-        if (!level.isClientSide()) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof MachineFrameBlockEntity machineEntity) {
-                ItemStack stored = machineEntity.getSpecializationItem();
-                if (!stored.isEmpty()) MachineSwapHelper.checkAndSwap(level, pos, stored);
-            }
-        }
-    }
-
-    // ========================================================================
-    // DROPS + CLONE
-    // ========================================================================
-
-    @Override
-    public List<ItemStack> getDrops(BlockState state, LootParams.Builder builder) {
-        List<ItemStack> drops = super.getDrops(state, builder);
-        if (MachineSwapHelper.isSwapping()) return drops;
-        BlockEntity be = builder.getOptionalParameter(
-                net.minecraft.world.level.storage.loot.parameters.LootContextParams.BLOCK_ENTITY);
-        if (be instanceof MachineFrameBlockEntity me && !me.getSpecializationItem().isEmpty()) {
-            drops.clear();
-            drops.add(MachineSwapHelper.createDrop(this, me));
-        }
-        return drops;
-    }
-
-    @Override
-    public ItemStack getCloneItemStack(BlockState state, HitResult target,
-                                        BlockGetter level, BlockPos pos, Player player) {
-        return MachineSwapHelper.createCloneStack(this);
     }
 
     // ========================================================================

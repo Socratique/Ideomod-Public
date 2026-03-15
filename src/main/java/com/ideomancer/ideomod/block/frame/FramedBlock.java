@@ -616,7 +616,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                 fbe.updateBlockstateFromInner();
             }
             if (!state.is(oldState.getBlock())) {
-                FrameActivation.recalculate(level, pos);
+                FrameActivation.markDirty(level, pos);
             }
         }
     }
@@ -625,7 +625,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public void onRemove(BlockState state, Level level, BlockPos pos,
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock()) && !movedByPiston) {
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
@@ -635,7 +635,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
         if (!level.isClientSide()) {
-            FrameActivation.recalculate(level, pos);
+            FrameActivation.markDirty(level, pos);
         }
     }
 

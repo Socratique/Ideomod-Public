@@ -71,44 +71,43 @@ public class MovementScanHelper {
      * Scans for all Oddstone/Framed Oddstone blocks reachable from startPositions
      * via sympathetic links (line-of-sight at range, following first hit only).
      *
-     * Iterates while new blocks are found, building transitive chains:
-     * oddstone A sees oddstone B at range, then B sees C, and so on.
+     * Uses a BFS frontier queue: when a new oddstone is found, only its
+     * neighbors are checked next, not the entire accumulated set. This
+     * converts the algorithm from O(n²) to O(n) where n is the number of
+     * oddstones in the chain. (Audit item #15)
      */
     public static Set<BlockPos> scanSympathetic(Level level, Set<BlockPos> startPositions, int radius) {
         Set<BlockPos> found = new HashSet<>(startPositions);
 
         if (radius <= 1) return found;
 
-        java.util.List<BlockPos> snapshot = new java.util.ArrayList<>(found);
-        boolean foundNew = true;
+        // Seed the frontier with oddstone blocks from the start set
+        java.util.Queue<BlockPos> frontier = new java.util.ArrayDeque<>();
+        for (BlockPos pos : startPositions) {
+            if (isOddstoneOrFramedOddstone(level, pos)) {
+                frontier.add(pos);
+            }
+        }
 
-        while (foundNew) {
-            foundNew = false;
-            java.util.List<BlockPos> newFound = new java.util.ArrayList<>();
+        while (!frontier.isEmpty()) {
+            BlockPos oddPos = frontier.poll();
 
-            for (BlockPos oddPos : snapshot) {
-                if (!isOddstoneOrFramedOddstone(level, oddPos)) continue;
+            for (Direction face : Direction.values()) {
+                for (int dist = 2; dist <= radius; dist++) {
+                    BlockPos checkPos = oddPos.relative(face, dist);
+                    BlockState checkState = level.getBlockState(checkPos);
 
-                for (Direction face : Direction.values()) {
-                    for (int dist = 2; dist <= radius; dist++) {
-                        BlockPos checkPos = oddPos.relative(face, dist);
-                        BlockState checkState = level.getBlockState(checkPos);
-
-                        if (isOddstoneOrFramedOddstone(level, checkPos)) {
-                            if (!found.contains(checkPos)) {
-                                found.add(checkPos);
-                                newFound.add(checkPos);
-                                foundNew = true;
-                            }
-                            break;
+                    if (isOddstoneOrFramedOddstone(level, checkPos)) {
+                        if (found.add(checkPos)) {
+                            // Newly discovered — add to frontier for transitive scan
+                            frontier.add(checkPos);
                         }
-
-                        if (!checkState.isAir()) break;
+                        break;
                     }
+
+                    if (!checkState.isAir()) break;
                 }
             }
-
-            snapshot = newFound;
         }
 
         return found;

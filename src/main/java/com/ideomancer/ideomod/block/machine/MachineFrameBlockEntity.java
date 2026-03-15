@@ -6,6 +6,9 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.protocol.Packet;
+import net.minecraft.network.protocol.game.ClientGamePacketListener;
+import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
 import net.minecraft.world.ContainerHelper;
 import net.minecraft.world.MenuProvider;
 import net.minecraft.world.WorldlyContainer;
@@ -13,6 +16,7 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
@@ -97,6 +101,46 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
         } else {
             this.inputFace = null;
+        }
+    }
+
+    // ========================================================================
+    // CLIENT SYNC
+    // ========================================================================
+
+    /**
+     * Creates the packet sent to clients when the BE needs syncing.
+     * Vanilla calls this when level.sendBlockUpdated() is invoked.
+     */
+    @Override
+    public Packet<ClientGamePacketListener> getUpdatePacket() {
+        return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    /**
+     * Provides the NBT data to include in the sync packet.
+     * Same as save data — sends items and inputFace to clients.
+     */
+    @Override
+    public CompoundTag getUpdateTag() {
+        CompoundTag tag = super.getUpdateTag();
+        ContainerHelper.saveAllItems(tag, this.items, true);
+        if (this.inputFace != null) {
+            tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
+        }
+        return tag;
+    }
+
+    /**
+     * Notifies clients that this BE's data has changed.
+     * Called after setItemDirect() in the swap flow and after any
+     * other data change that clients need to see.
+     */
+    public void syncToClients() {
+        if (this.level != null && !this.level.isClientSide()) {
+            this.level.sendBlockUpdated(this.worldPosition,
+                    this.getBlockState(), this.getBlockState(),
+                    Block.UPDATE_CLIENTS);
         }
     }
 
