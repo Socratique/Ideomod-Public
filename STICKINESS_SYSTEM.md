@@ -84,7 +84,7 @@ The `StickyType` enum (`block/movement/StickyType.java`) centralizes all sticky 
 
 The `MachineType` enum (`block/machine/MachineType.java`) identifies each Machine Family specialization for stickiness grouping.
 
-**Values:** FRAME, TRACK, TROLLEY, CONDUCTOR, PIPE, REPEATER, CLOCK, PULSER, TOGGLE, PISTON, STICKY_PISTON.
+**Values:** FRAME, TRACK, TROLLEY, CONDUCTOR, PIPE, FLUID_PIPE, REPEATER, CLOCK, PULSER, TOGGLE, PISTON, STICKY_PISTON.
 
 **Key method:** `canStickToMachineType(MachineType other)` -- FRAME sticks to everything, all others stick to same-type + FRAME only.
 

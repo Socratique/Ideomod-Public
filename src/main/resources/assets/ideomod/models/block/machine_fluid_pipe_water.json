@@ -1,0 +1,37 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "outer": "ideomod:block/machine_fluid_pipe",
+    "inner": "minecraft:block/water_still",
+    "particle": "ideomod:block/machine_fluid_pipe"
+  },
+  "elements": [
+    {
+      "comment": "Inner cuboid - water texture with tintindex 0 for blue colour tint. Vanilla water_still is greyscale; the colour handler applies the biome water colour.",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "down":  { "texture": "#inner", "cullface": "down",  "tintindex": 0 },
+        "up":    { "texture": "#inner", "cullface": "up",    "tintindex": 0 },
+        "north": { "texture": "#inner", "cullface": "north", "tintindex": 0 },
+        "south": { "texture": "#inner", "cullface": "south", "tintindex": 0 },
+        "west":  { "texture": "#inner", "cullface": "west",  "tintindex": 0 },
+        "east":  { "texture": "#inner", "cullface": "east",  "tintindex": 0 }
+      }
+    },
+    {
+      "comment": "Outer cuboid - pipe texture with transparent window.",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "down":  { "texture": "#outer", "cullface": "down" },
+        "up":    { "texture": "#outer", "cullface": "up" },
+        "north": { "texture": "#outer", "cullface": "north" },
+        "south": { "texture": "#outer", "cullface": "south" },
+        "west":  { "texture": "#outer", "cullface": "west" },
+        "east":  { "texture": "#outer", "cullface": "east" }
+      }
+    }
+  ]
+}

@@ -1,5 +1,76 @@
 # Ideomod Changelog
 
+## [2026-03-15e] Machine Fluid Pipe Specialization -- Full Implementation
+
+Machine Fluid Pipe is the second specialization with its own block entity subclass,
+a fluid vacuum/deposit system, and IFluidHandler capability for mod interop.
+
+### New Files
+
+**FluidType.java** (block/machine/):
+  StringRepresentable enum: EMPTY, WATER, LAVA. Used as blockstate property value
+  and internal fluid state tracking. Drives model variant selection.
+
+**MachineFluidPipeBlock.java** (block/machine/):
+  Extends AbstractMachineBlock. MachineType.FLUID_PIPE. FLUID_TYPE EnumProperty
+  drives inner cuboid texture (empty/water/lava). Server-side ticker manages
+  pull (when redstone powered) and push (auto, like item pipe). Redstone behavior
+  is OPPOSITE of item pipe: powered = actively pulling (pump metaphor).
+  Deposits fluid into air blocks or cauldrons when no pipe target available.
+  Water+lava collision replaces bucket with obsidian, triggering auto-revert
+  to Machine Frame via existing swap system. Comparator output: 0=empty, 15=fluid.
+  Light level 10 when containing lava (reduced from 15 for small window surface).
+
+**MachineFluidPipeBlockEntity.java** (block/machine/):
+  Extends MachineFrameBlockEntity. Has its own BlockEntityType (MACHINE_FLUID_PIPE).
+  Adds: fluid type tracking (FluidType enum), transfer cooldown (8 ticks),
+  round-robin index, last input face. setFluidType() swaps bucket item in slot 0
+  to match fluid state (EMPTY->bucket, WATER->water_bucket, LAVA->lava_bucket)
+  via setItemDirect() to avoid triggering swap check. Forge IFluidHandler
+  capability: reports 1000mB capacity, accepts water/lava, maps to internal
+  FluidType state. handleFluidCollision() replaces bucket with obsidian on
+  water+lava contact.
+
+### Modified Files
+
+**MachineType.java**: Added FLUID_PIPE enum value.
+**MachineSwapHelper.java**: Added Items.BUCKET -> MACHINE_FLUID_PIPE mapping.
+**ModBlocks.java**: Added MACHINE_FLUID_PIPE registration with lightLevel predicate
+  (LAVA=10, else 0).
+**ModItems.java**: Added MACHINE_FLUID_PIPE item registration.
+**ModBlockEntities.java**: Added MACHINE_FLUID_PIPE BE type (separate from MACHINE_FRAME).
+**ModCreativeTabs.java**: Added MACHINE_FLUID_PIPE to creative tab (pre-loaded).
+**ModColorHandlers.java**: Added fluid pipe block color handler. tintIndex 0 on
+  water model inner cuboid returns biome water color (BiomeColors.getAverageWaterColor)
+  or default blue 0x3F76E4 fallback. Item color handler returns white (no tint).
+
+### Resource Files
+
+**blockstates/machine_fluid_pipe.json**: Three variants (fluid_type=empty/water/lava).
+**models/block/machine_fluid_pipe_empty.json**: Dual-cuboid model with cutout render
+  type. Inner cuboid (0.05 inset) uses dark grey texture. Outer cuboid uses pipe
+  texture with 4x4 transparent window.
+**models/block/machine_fluid_pipe_water.json**: Same dual-cuboid. Inner uses
+  minecraft:block/water_still with tintindex 0 for biome water color.
+**models/block/machine_fluid_pipe_lava.json**: Same dual-cuboid. Inner uses
+  minecraft:block/lava_still (no tint needed, lava texture is pre-colored).
+**models/item/machine_fluid_pipe.json**: Parents empty block model.
+**loot_tables/blocks/machine_fluid_pipe.json**: Standard self-drop.
+**textures/block/machine_fluid_pipe_inner_empty.png**: 16x16 solid dark grey (#303030).
+
+### Challenges & Fixes
+
+1. **Grey water texture**: water_still.png is greyscale -- vanilla applies biome tint
+   at render time. Fixed by adding tintindex:0 to inner cuboid faces in water model
+   + registering block color handler in ModColorHandlers.
+2. **Missing bucket in slot**: Swap wasn't firing because MachineSwapHelper.java
+   hadn't been replaced with the version containing the bucket mapping.
+3. **Bucket not updating with fluid state**: setFluidType() now swaps slot 0 item
+   to water_bucket/lava_bucket/bucket via setItemDirect() (avoids swap check).
+4. **Lava light emission**: Added lightLevel predicate to ModBlocks registration.
+   Level 10 (reduced from lava's 15 for small window surface area).
+
+
 ## [2026-03-15d] Machine Pipe Specialization -- Full Implementation
 
 Machine Pipe is the first specialization with its own block entity subclass,

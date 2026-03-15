@@ -14,6 +14,7 @@
     "ideomod:copper_frame",
     "ideomod:iron_framed_block",
     "ideomod:copper_framed_block",
-    "ideomod:machine_pipe"
+    "ideomod:machine_pipe",
+    "ideomod:machine_fluid_pipe"
   ]
 }

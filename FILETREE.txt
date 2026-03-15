@@ -24,6 +24,8 @@
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
+|  |           |  |  +-- MachinePipeBlock.java
+|  |           |  |  +-- MachinePipeBlockEntity.java
 |  |           |  |  +-- MachineSwapHelper.java
 |  |           |  |  +-- MachineTrackBlock.java
 |  |           |  |  +-- MachineTrolleyBlock.java
@@ -112,6 +114,7 @@
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
 |     |     |  +-- machine_conductor.json
+|     |     |  +-- machine_pipe.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
@@ -136,6 +139,8 @@
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
 |     |     |  |  +-- machine_conductor.json
+|     |     |  |  +-- machine_pipe.json
+|     |     |  |  +-- machine_pipe_filled.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
@@ -153,6 +158,7 @@
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
 |     |     |     +-- machine_conductor.json
+|     |     |     +-- machine_pipe.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
@@ -175,6 +181,8 @@
 |     |        |  +-- machine_block.png
 |     |        |  +-- machine_conductor.png
 |     |        |  +-- machine_conductor_indicator.png
+|     |        |  +-- machine_pipe.png
+|     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
@@ -189,7 +197,7 @@
 |     |        |  +-- oddstone_repulser_side.png
 |     |        |  \\-- oddstone1.png
 |     |        \\-- gui
-|     |           \\-- machine_frame.png
+|     |           \\-- ideomod_gui.png
 |     +-- data
 |     |  +-- ideomod
 |     |  |  +-- loot_tables
@@ -226,6 +234,9 @@
 |     |  |  \\-- worldgen
 |     |  |     +-- world_preset
 |     |  |     \\-- chunky_geology_settings.json
+|     |  +-- loot_tables
+|     |  |  \\-- blocks
+|     |  |     \\-- machine_pipe.json
 |     |  \\-- minecraft
 |     |     \\-- tags
 |     |        +-- blocks

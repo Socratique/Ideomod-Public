@@ -7,6 +7,7 @@ import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
+import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
@@ -178,6 +179,20 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Fluid Pipe: fluid vacuum and depositor. FLUID_TYPE blockstate
+    // drives inner cuboid texture (empty/water/lava).
+    // Light level 10 when containing lava (reduced from 15 -- less exposed surface).
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
+    public static final RegistryObject<Block> MACHINE_FLUID_PIPE = BLOCKS.register("machine_fluid_pipe",
+            () -> new MachineFluidPipeBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+                    .lightLevel(state -> state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == com.ideomancer.ideomod.block.machine.FluidType.LAVA ? 10 : 0)
             ));
 
     // ========================================================================

@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "fluid_type=empty": { "model": "ideomod:block/machine_fluid_pipe_empty" },
+    "fluid_type=water": { "model": "ideomod:block/machine_fluid_pipe_water" },
+    "fluid_type=lava":  { "model": "ideomod:block/machine_fluid_pipe_lava" }
+  }
+}

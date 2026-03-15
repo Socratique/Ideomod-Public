@@ -63,6 +63,7 @@ public final class MachineSwapHelper {
         itemToBlock.put(Items.MINECART,     () -> ModBlocks.MACHINE_TROLLEY.get());
         itemToBlock.put(Items.REDSTONE,     () -> ModBlocks.MACHINE_CONDUCTOR.get());
         itemToBlock.put(Items.HOPPER,       () -> ModBlocks.MACHINE_PIPE.get());
+        itemToBlock.put(Items.BUCKET,       () -> ModBlocks.MACHINE_FLUID_PIPE.get());
 
         // Future specializations:
         // itemToBlock.put(Items.COMPARATOR,      () -> ModBlocks.MACHINE_REPEATER.get());

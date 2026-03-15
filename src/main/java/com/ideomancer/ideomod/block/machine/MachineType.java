@@ -24,6 +24,9 @@ public enum MachineType {
     /** Machine Pipe -- directional item transport. */
     PIPE,
 
+    /** Machine Fluid Pipe -- fluid vacuum and depositor. */
+    FLUID_PIPE,
+
     /** Machine Track -- pushes adjacent Trolleys on redstone signal. */
     TRACK,
 

@@ -54,6 +54,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_PIPE = ITEMS.register("machine_pipe",
             () -> new BlockItem(ModBlocks.MACHINE_PIPE.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_FLUID_PIPE = ITEMS.register("machine_fluid_pipe",
+            () -> new BlockItem(ModBlocks.MACHINE_FLUID_PIPE.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 

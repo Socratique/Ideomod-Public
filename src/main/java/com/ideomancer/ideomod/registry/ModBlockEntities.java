@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlockEntity;
 import net.minecraft.world.level.block.entity.BlockEntityType;
@@ -45,6 +46,18 @@ public class ModBlockEntities {
                     () -> BlockEntityType.Builder.of(
                             MachinePipeBlockEntity::new,
                             ModBlocks.MACHINE_PIPE.get()
+                    ).build(null));
+
+    /**
+     * Machine Fluid Pipe block entity type. Separate from MACHINE_FRAME because
+     * the fluid pipe has fluid type tracking, ticker, IFluidHandler capability,
+     * and fluid-pipe-specific NBT. Only used by MachineFluidPipeBlock.
+     */
+    public static final RegistryObject<BlockEntityType<MachineFluidPipeBlockEntity>> MACHINE_FLUID_PIPE =
+            BLOCK_ENTITIES.register("machine_fluid_pipe",
+                    () -> BlockEntityType.Builder.of(
+                            MachineFluidPipeBlockEntity::new,
+                            ModBlocks.MACHINE_FLUID_PIPE.get()
                     ).build(null));
 
     /**

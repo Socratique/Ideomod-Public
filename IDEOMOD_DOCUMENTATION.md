@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15d (Machine Pipe specialization. Unified dynamic GUI. ideomod_gui.png spritesheet. MachinePipeBlockEntity subclass BE.)*
+*Last updated: 2026-03-15e (Machine Fluid Pipe specialization. Biome water tint via ModColorHandlers. Lava light emission. IFluidHandler capability.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -86,6 +86,10 @@ com.ideomancer.ideomod
   |     |     |-- MachinePipeBlock.java        Pipe specialization. Push-only item transport + ticker.
   |     |     |-- MachinePipeBlockEntity.java  Pipe BE subclass. Transit slot + cooldown + round-robin.
   |     |     |                                Client sync: getUpdatePacket(), getUpdateTag(), syncToClients().
+  |     |     |-- MachineFluidPipeBlock.java   Fluid pipe specialization. Fluid vacuum/depositor + ticker.
+  |     |     |-- MachineFluidPipeBlockEntity.java  Fluid pipe BE subclass. Fluid type + cooldown + round-robin.
+  |     |     |                                IFluidHandler capability. Bucket state sync in setFluidType().
+  |     |     |-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA. Blockstate property.
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
@@ -1076,7 +1080,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 | Feature | Implementation |
 |---------|---------------|
 | **Universal stickiness** | MachineType.FRAME sticks to ALL machine types via `canStickToMachineType()`. Also sticks to Frame Family (active) and is permissive to slime/honey/odd_slime (grab immunity blocks reverse). |
-| **Block entity with GUI** | Most machine blocks share MachineFrameBlockEntity. Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. GUI renders from ideomod_gui.png spritesheet (151px fixed height). |
+| **Block entity with GUI** | Most machine blocks share MachineFrameBlockEntity. Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Fluid Pipe uses MachineFluidPipeBlockEntity subclass (adds fluid type tracking, IFluidHandler, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. GUI renders from ideomod_gui.png spritesheet (151px fixed height). |
 | **Specialization swap** | When slot contents change, MachineSwapHelper.checkAndSwap() determines target block from item registry. Block replaced in-world, item transferred to new BE via setItemDirect(). |
 | **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Frame emits anti-signal. All other specializations always activate. |
 | **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.markDirty(). |
@@ -1089,7 +1093,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 **IMachineFamily interface**: Provides `getMachineType()` for type-aware stickiness. Static `canMachineFamilyStickTo(MachineType myType, BlockState other)` checks: (1) other Machine Family -- types must match or one must be FRAME, (2) Frame Family -- must be active, (3) slime/honey/odd_slime -- permissive for grab immunity.
 
-**MachineSwapHelper**: Central swap utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley). `checkAndSwap()` with isSwapping ThreadLocal guard. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+**MachineSwapHelper**: Central swap utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Bucket <-> Fluid Pipe). `checkAndSwap()` with isSwapping ThreadLocal guard. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
 **PositionBoundContainer**: Container backed by Level + BlockPos. Every method call does `level.getBlockEntity(pos)` and forwards to the current MachineFrameBlockEntity (or subclass). Reports container size 2: slot 0 works with any MachineFrameBlockEntity, slot 1 delegates to MachinePipeBlockEntity when present (returns empty otherwise). isPipe() method enables live checking. Used by MachineFrameMenu on both server and client sides. Survives block swaps automatically.
 
@@ -1170,6 +1174,44 @@ Non-directional Machine Family block. Own BE subclass: MachinePipeBlockEntity (B
 **GUI**: Uses unified MachineFrameMenu with dynamic TransitSlot. TransitSlot.isActive() returns true only when BE is MachinePipeBlockEntity. Screen renders slot tile at (79,37) only when isPipe().
 
 Stickiness: MachineType.PIPE -- sticks to other Pipes + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Fluid Pipe -- Fluid Vacuum and Depositor
+
+Registry ID: `machine_fluid_pipe`. Class: MachineFluidPipeBlock extends AbstractMachineBlock. `MachineType.FLUID_PIPE`.
+
+Non-directional Machine Family block. Own BE subclass: MachineFluidPipeBlockEntity (BlockEntityType: MACHINE_FLUID_PIPE). Extends MachineFrameBlockEntity with fluid type tracking (FluidType enum), transfer cooldown (8 ticks), round-robin index, last input face, and Forge IFluidHandler capability.
+
+| Property | Value |
+|----------|-------|
+| **Block entity** | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity |
+| **BE type** | ModBlockEntities.MACHINE_FLUID_PIPE (separate from MACHINE_FRAME) |
+| **Specialization item** | Bucket (empty) |
+| **Blockstate properties** | FLUID_TYPE (EnumProperty: empty, water, lava) |
+| **Container size** | 1 (slot 0 = specialization only, no transit slot) |
+
+**Behaviour**: Fluid vacuum and depositor. Redstone powered = actively pulling fluid from adjacent source blocks/cauldrons (opposite of item Pipe -- "pump" metaphor). Unpowered = idle (still auto-pushes if holding fluid). Pull only takes source blocks (flowing water/lava ignored -- infinite water sources survive). Push sends to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely). Water+lava collision: bucket in slot 0 replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Frame (no special case code needed).
+
+**Bucket state sync**: setFluidType() swaps slot 0 item to match fluid state: EMPTY -> Items.BUCKET, WATER -> Items.WATER_BUCKET, LAVA -> Items.LAVA_BUCKET. Uses setItemDirect() to avoid triggering swap check (water/lava buckets are not registered specialization items and would cause revert).
+
+**Output priority** (relative to input face): Same as item Pipe -- forward (opposite), right, left, up, down. Round-robin resets on input face change. For vertical input (UP/DOWN), NORTH is the reference anchor.
+
+**Cauldron interaction**: Pull from full water/lava cauldron (empties completely). Push into empty/partial cauldron (fills to max -- vanilla bucket behavior, one bucket = full). Lava cauldrons are always full or empty (no level property in vanilla).
+
+**IFluidHandler capability**: Exposes pipe's fluid state as a Forge IFluidHandler. Reports 1000mB capacity (1 bucket). Accepts water and lava only. Maps fill/drain operations to internal FluidType state. For future mod interop -- other mods querying for fluid handlers will see the pipe's contents.
+
+**Visual**: Dual-cuboid block model with `"render_type": "minecraft:cutout"`. Outer cuboid: pipe texture with 4x4 pixel transparent window in center of each face (player-made texture with glass-like border pixels). Inner cuboid (0.05 inset to avoid z-fighting): shows fluid state. Three inner textures: `machine_fluid_pipe_inner_empty.png` (dark grey #303030), `minecraft:block/water_still` (animated, with tintIndex 0 for biome water color), `minecraft:block/lava_still` (animated, no tint needed). Blockstate variants swap the entire model based on FLUID_TYPE.
+
+**Water tint**: Vanilla water_still.png is greyscale -- color applied at render time. Block color handler registered in ModColorHandlers: when fluid_type=water and tintIndex=0, returns BiomeColors.getAverageWaterColor(level, pos) or default 0x3F76E4 fallback. Item color handler returns 0xFFFFFF (no tint).
+
+**Light emission**: Level 10 when fluid_type=lava (via lightLevel predicate in ModBlocks registration). Reduced from lava's full 15 to represent the small exposed surface area. Level 0 for empty and water.
+
+**Comparator output**: 0 = empty, 15 = has fluid (water or lava).
+
+**Piston safety**: IPistonMovable inherited from MachineFrameBlockEntity preserves fluid type, cooldown, round-robin, and input face through piston moves. loadMovementData enforces minimum TRANSFER_COOLDOWN after landing.
+
+Stickiness: MachineType.FLUID_PIPE -- sticks to other Fluid Pipes + Machine Frames + Frame Family (active). Does NOT stick to item Pipes, Tracks, Trolleys, Conductors, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1412,7 +1454,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 

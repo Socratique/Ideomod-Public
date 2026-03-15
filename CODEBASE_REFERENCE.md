@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15d (Machine Pipe specialization. Unified dynamic GUI. ideomod_gui.png spritesheet.)*
+*Last updated: 2026-03-15e (Machine Fluid Pipe specialization. ModColorHandlers water tint. Lava light emission.)*
 
 ---
 
@@ -71,8 +71,14 @@ com.ideomancer.ideomod
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
   |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR.
   |     |     |-- MachinePipeBlock.java        Extends AbstractMachineBlock. MachineType.PIPE. Ticker + push.
-  |     |     \-- MachinePipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type. Transit slot.
-  |     |                                      Custom redstone wire. Input/output face model.
+  |     |     |-- MachinePipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type. Transit slot.
+  |     |     |                                Custom redstone wire. Input/output face model.
+  |     |     |-- MachineFluidPipeBlock.java   Extends AbstractMachineBlock. MachineType.FLUID_PIPE.
+  |     |     |                                Fluid vacuum/depositor. Ticker. Pull/push/deposit.
+  |     |     |-- MachineFluidPipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type.
+  |     |     |                                Fluid type tracking. IFluidHandler capability.
+  |     |     |                                Bucket state sync. Water+lava collision.
+  |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -105,7 +111,8 @@ com.ideomancer.ideomod
   |           |-- PortalUtils.java             Corner validation, interior nav, clearing
   |           \-- EnderPearlPortalHandler.java Ender pearl portal activation (Forge event)
   |-- client/
-  |     |-- ModColorHandlers.java        Block/item color tinting (Machine Block, Portal)
+  |     |-- ModColorHandlers.java        Block/item color tinting (Conductor power indicator,
+  |     |                                Fluid Pipe biome water tint)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |     |-- gui/
   |     |     \-- MachineFrameScreen.java      Dynamic GUI from ideomod_gui.png spritesheet. All machines.
@@ -383,9 +390,9 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
 
-**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR and MACHINE_PIPE. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, and MACHINE_FLUID_PIPE. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-15d (Machine Pipe specialization implemented. Unified dynamic GUI system. ideomod_gui.png spritesheet.)*
+*Last updated: 2026-03-15e (Machine Fluid Pipe specialization implemented. Animated water/lava inner textures. Biome water tint. Lava light emission.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -272,6 +272,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
 | Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [WIP] |
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
+| Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Comparator | Repeater | TBD | REPEATER | [IDEA] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
@@ -293,11 +294,12 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | AbstractMachineBlock | [DONE] | Shared base class for all Machine Family blocks. Default lifecycle, GUI, drops, stickiness. MachineFrameBlock/MachineTrolleyBlock ~20 lines each. |
 | Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 151px height. |
 | Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
+| Fluid Pipe subclass BE | [DONE] | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fluid type tracking, cooldown, round-robin, input face tracking. IFluidHandler capability. Biome water tint via ModColorHandlers. Lava light emission (level 10). |
 
 ---
 
 ### Machine Specializations [WIP]
-> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, and Pipe are implemented; remaining specializations are designed but not yet built.
+> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, Pipe, and Fluid Pipe are implemented; remaining specializations are designed but not yet built.
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
@@ -306,6 +308,9 @@ Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) t
 
 **Machine Pipe:** [DONE]
 Push-only item transport. Hopper specialization item. Own BE subclass (MachinePipeBlockEntity) with transit slot (1 stack, slot 1), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FILLED BooleanProperty drives texture swap. No pulling -- items enter via player hand, hopper, or pipe-to-pipe push. Redstone locks the pipe (powered = frozen). Output priority relative to input face: forward, right, left, up, down. Round-robin resets on input face change. Pipe-to-pipe push notifies receiver of input face. Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator reads transit slot fullness. ThreadLocal pendingInputFace in WorldlyContainer bridges face parameter to setItem for automation input tracking.
+
+**Machine Fluid Pipe:** [DONE]
+Fluid vacuum and depositor. Bucket specialization item. Own BE subclass (MachineFluidPipeBlockEntity) with fluid type tracking (FluidType enum: EMPTY/WATER/LAVA), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FLUID_TYPE EnumProperty drives inner cuboid texture via blockstate variants. Redstone behavior is OPPOSITE of item Pipe: powered = actively pulling (pump metaphor), unpowered = idle (still auto-pushes if holding fluid). Pull scans all 6 faces for water/lava source blocks (only source blocks -- flowing ignored, infinite water sources survive) and full cauldrons. Push sends fluid to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely per vanilla bucket behavior). Water+lava collision: receiving pipe's bucket replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Frame (no special case code). Bucket item in slot 0 swaps to match fluid state (water_bucket/lava_bucket/bucket) via setItemDirect(). No transit slot -- fluid state is BE data, not a slot item. IFluidHandler capability for mod interop (1000mB = 1 bucket). Comparator output: 0=empty, 15=has fluid. Lava light emission: level 10 (reduced from 15 for small window). Dual-cuboid block model with cutout render type: outer texture has 4x4 transparent window, inner cuboid shows dark grey (empty), animated water_still with biome tint (water), or animated lava_still (lava). Water tint via ModColorHandlers block color handler (tintIndex 0 -> BiomeColors.getAverageWaterColor).
 
 **Machine Track:** [DONE]
 Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.

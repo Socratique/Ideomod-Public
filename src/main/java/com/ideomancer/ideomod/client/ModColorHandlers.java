@@ -1,8 +1,11 @@
 package com.ideomancer.ideomod.client;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.block.machine.FluidType;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
+import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
+import net.minecraft.client.renderer.BiomeColors;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -15,6 +18,10 @@ import net.minecraftforge.fml.common.Mod;
  * The color maps POWER 0-15 to a gradient: black at 0, dim red at 1,
  * bright red at 15. Smoother transition at the low end so power 1-3
  * are noticeably dimmer rather than jumping straight from black to red.
+ *
+ * Machine Fluid Pipe uses tintIndex 0 for the water texture inner cuboid.
+ * Vanilla water_still.png is greyscale -- the colour handler applies
+ * biome water colour (or default blue) when the pipe holds water.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -69,6 +76,21 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF; // tintIndex 0: white = no tint
         }, ModBlocks.MACHINE_CONDUCTOR.get());
+
+        // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
+        // Water model uses tintIndex 0 -- apply biome water colour.
+        // Lava and empty models have no tintIndex -- this handler is never
+        // called for them, but we guard with a fluid type check anyway.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 0 && state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == FluidType.WATER) {
+                // Biome-aware water colour when level/pos are available
+                if (level != null && pos != null) {
+                    return BiomeColors.getAverageWaterColor(level, pos);
+                }
+                return 0x3F76E4; // Default water blue fallback
+            }
+            return 0xFFFFFF; // No tint (white = pass-through)
+        }, ModBlocks.MACHINE_FLUID_PIPE.get());
     }
 
     @SubscribeEvent
@@ -80,5 +102,11 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_CONDUCTOR.get().asItem());
+
+        // Machine Fluid Pipe item: no tint needed (item uses empty model,
+        // which has no tintIndex). Return white = no tint for safety.
+        event.register((stack, tintIndex) -> {
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_FLUID_PIPE.get().asItem());
     }
 }
