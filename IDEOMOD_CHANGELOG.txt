@@ -1,5 +1,58 @@
 # Ideomod Changelog
 
+## [2026-03-15b] Issue #15 Fix & Issue #14 Status Update
+
+### Issue #15 Fix: Vanilla metal first-push failure after frame network change [FIXED]
+
+Root cause: activatedVanillaMetals was a global volatile Set<Long> that got entirely
+replaced via atomic swap on every recalculate() call. Each recalculate() built a fresh
+set containing only its own network's vanilla metals, then swapped out the global set.
+When flushIfDirty() processed multiple networks in one flush cycle (which happens when
+breaking a frame triggers dirty positions that span a network split), the second
+recalculate() would overwrite the first's results -- wiping vanilla metals from
+previously-processed networks.
+
+Fix: Changed activatedVanillaMetals from volatile atomic-swap to ConcurrentHashMap-backed
+key set with per-network remove-then-add. Each recalculate() now only removes vanilla
+metal entries belonging to the network it's processing (step 2 WIPE), then adds back the
+ones that should be active (step 6 APPLY). This preserves vanilla metals from unrelated
+networks.
+
+Thread safety preserved: ConcurrentHashMap.newKeySet() provides thread-safe individual
+add/remove/contains. Concurrent reads from stickiness checks always see consistent
+per-element state.
+
+Key learning: Global state replaced atomically per-network is not safe when multiple
+networks are processed in the same flush cycle. Per-element mutation with a thread-safe
+collection is the correct pattern.
+
+Files modified: FrameActivation.java
+
+### Issue #14 Status Update: Framed redstone blocks don't emit power on frame activation
+
+Status changed from OPEN to NEEDS VERIFICATION. During 2026-03-15 testing, Issue #14
+appeared to work correctly (framed redstone blocks emit power on activation) with no
+intentional fix applied. May have been incidentally resolved by the Cowork BFS refactors
+(Audit #15) or AbstractMachineBlock extraction (Audit #13).
+
+An attempted fix using level.updateNeighborsAt() in FrameActivation.recalculate() caused
+infinite neighbor cascade loops: updateNeighborsAt triggers neighborChanged on frame
+network blocks, which calls markDirty(), which re-enters recalculate() during the same
+neighbor update chain. Vanilla's CollectingNeighborUpdater safety cap ("Too many chained
+neighbor updates") fires but the world state is corrupted enough to loop on reload. The
+attempted fix was reverted.
+
+If Issue #14 resurfaces, the correct approach is deferred notification with re-entrancy
+protection -- collect transitioned positions during recalculate(), process neighbor
+notifications in the TickHandler AFTER all dirty networks are done, with a guard to
+prevent the resulting markDirty() calls from re-entering the same tick's processing.
+
+Files modified: FrameActivation.java (updateNeighborsAt added then reverted)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-03-15] Architecture Cleanup, Performance, & Bug Fixes
 
 ### Audit #13: AbstractMachineBlock base class extraction
@@ -65,27 +118,7 @@ Files modified: MachineFrameBlockEntity.java, MachineSwapHelper.java
 
 ### Known Bug #15: Vanilla metal first-push failure after frame network change
 
-When vanilla iron/copper blocks participate in a frame network, modifications to the
-network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail
-to "grab" adjacent frames on the first piston push after the change. Works correctly on
-the second push.
-
-Reproduction: Piston(up) -> machine block -> iron frame -> iron block -> row of iron
-frames. Break a frame in the middle of the row (not at the end). Push piston -- iron
-block doesn't grab. Push again -- it works. Also reproduces when iron block directly
-touches machine frame -- machine frame doesn't grab iron on first push after network
-change.
-
-Attempted fixes:
-1. flushIfDirty() at TAIL of addBranchingBlocks -- failed because by TAIL, vanilla has
-   already checked isStickyBlock() and canStickTo() with stale ACTIVE=false states.
-2. flushIfDirty() at HEAD of resolve() -- still fails. Root cause unclear.
-
-Suspected areas: activatedVanillaMetals global set management across multiple networks,
-timing between block removal neighbor cascades and piston resolution within the same
-tick, possible fidelity gap in the FrameActivation rewrite vs. original behavior.
-
-Deferred to a future session.
+(See [2026-03-15b] above for the fix.)
 
 Written by Claude, directed and guided by The Ideomancer.
 

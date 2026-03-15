@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Known Issue #15.)*
+*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Issue #15 fix (per-network vanilla metal tracking), Issue #14 status update.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -668,7 +668,7 @@ Signal decay prevents backward activation (same as redstone dust) — no block c
 When `recalculate()` is called:
 
 1. **DISCOVER**: BFS from the change point through all connected conductors (IFrameBlock + vanilla metals, any material, active or inactive). Finds the entire network.
-2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade). Clear vanilla metal positions from activatedVanillaMetals set.
+2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade). Remove only this network's vanilla metal positions from activatedVanillaMetals set (per-network remove, not global clear).
 3. **FIND SOURCES**: For every block in the network AND the change position, check 6 neighbors for Machine Blocks.
 4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts if its conductive materials intersect the available materials. Mediators pass ALL materials. Signal decays by 1 per hop. Records max strength per position.
 5. **PROPAGATE ANTI-SIGNAL**: From powered Machine Frames ONLY (no other Machine Family blocks), BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
@@ -676,7 +676,11 @@ When `recalculate()` is called:
 
 ### Vanilla Metal Activation Tracking
 
-Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains a volatile `Set<Long> activatedVanillaMetals` (packed BlockPos longs) that is atomically swapped to a fresh immutable set at the end of each recalculate(). This ensures concurrent reads from stickiness checks always see a consistent snapshot (audit fix B, 2026-03-14).
+Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains a `ConcurrentHashMap.newKeySet()` backed `Set<Long> activatedVanillaMetals` (packed BlockPos longs) with per-network remove-then-add. Each `recalculate()` removes only the vanilla metal positions belonging to the network it's processing (step 2), then adds back the ones that should be active (step 6). This preserves vanilla metals from other networks.
+
+Thread safety: `ConcurrentHashMap.newKeySet()` provides thread-safe individual add/remove/contains. Concurrent reads from stickiness checks always see consistent per-element state.
+
+History: Previously used volatile atomic-swap of an immutable set (audit fix B, 2026-03-14), which was safe for single-network worlds but caused Issue #15 -- when multiple networks were recalculated in one flush cycle, each recalculate() replaced the ENTIRE global set with only its own network's metals, wiping metals from previously-processed networks (Issue #15 fix, 2026-03-15).
 
 Public queries:
 - `isVanillaMetalActivated(BlockPos)` — is this vanilla metal connected to a machine source?
@@ -1418,8 +1422,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 | ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ |
 | 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
 | ~~13~~ | ~~Machine Conductor base texture renders black~~ | ~~Visual bug~~ | ~~FIXED 2026-03-14. Root cause: indicator overlay used default "solid" render type, which renders transparent pixels as opaque black. The overlay's tintIndex 1 at power 0 produces color 0x000000, creating a fully opaque black shell. Fix: added `"render_type": "minecraft:cutout"` to model JSON. Also removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.~~ |
-| 14 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | When a framed redstone block transitions from inactive to active via the frame network, neighbors are not notified of the signal change. The block only starts emitting power after receiving a redstone update (e.g., from another redstone component updating). Works fine if placed while frame is inactive. Fix: FrameActivation needs to call `level.updateNeighborsAt(pos, block)` when a framed redstone source transitions active state. File: FrameActivation.java. |
-| 15 | Vanilla metal first-push failure after frame network change | Movement bug | When vanilla iron/copper blocks participate in a frame network, modifications to the network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail to grab adjacent frames on the first piston push. Works correctly on the second push. Reproduction: piston(up) -> machine block -> iron frame -> iron block -> row of iron frames; break a frame in middle of row; push piston -- iron block doesn't grab; push again -- works. Also reproduces when iron block directly touches machine frame. Two fix attempts failed: (1) flushIfDirty at TAIL of addBranchingBlocks -- too late, vanilla already checked stale states; (2) flushIfDirty at HEAD of resolve -- still fails. Suspected areas: activatedVanillaMetals global set management, timing between neighbor cascades and piston resolution, possible FrameActivation rewrite fidelity gap. File: FrameActivation.java, PistonStructureResolverMixin.java. |
+| 14 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors (Audit #15) or AbstractMachineBlock extraction (Audit #13). An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java. |
+| ~~15~~ | ~~Vanilla metal first-push failure after frame network change~~ | ~~Movement bug~~ | ~~FIXED 2026-03-15. Root cause: activatedVanillaMetals global set was atomically swapped per-network, so each recalculate() replaced the ENTIRE set with only its own network's metals. When multiple networks were processed in one flush cycle (e.g., breaking a frame that splits a network), the second recalculate wiped the first's results. Fix: changed to ConcurrentHashMap.newKeySet() with per-network remove-then-add -- each recalculate() only removes/adds entries belonging to its own network. File: FrameActivation.java.~~ |
 
 
 ## 15. CONVENTIONS & PATTERNS

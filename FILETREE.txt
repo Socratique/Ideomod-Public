@@ -18,6 +18,7 @@
 |  |           |  |  +-- FrameMaterial.java
 |  |           |  |  \\-- IFrameBlock.java
 |  |           |  +-- machine
+|  |           |  |  +-- AbstractMachineBlock.java
 |  |           |  |  +-- IMachineFamily.java
 |  |           |  |  +-- MachineConductorBlock.java
 |  |           |  |  +-- MachineFrameBlock.java
@@ -220,6 +221,7 @@
 |     |  |  |  \\-- blocks
 |     |  |  |     +-- frameable_blocks.json
 |     |  |  |     +-- furnace_array_frame.json
+|     |  |  |     +-- immovable_when_framed.json
 |     |  |  |     +-- portal_corner_blocks.json
 |     |  |  |     \\-- redstone_components.json
 |     |  |  \\-- worldgen

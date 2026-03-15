@@ -50,13 +50,16 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *    activated, it passes ALL materials (universal bridge).
  *
  * 3. VANILLA METAL BLOCKS: No ACTIVE property. Activation tracked in
- *    ephemeral Set<Long> rebuilt every recalculate(). Conduct
- *    for their material only. Queryable via isVanillaMetalActivated(pos).
+ *    a concurrent set of packed BlockPos longs. Each recalculate() only
+ *    touches entries belonging to its own network (remove-then-add),
+ *    preserving vanilla metals from other networks.
+ *    Queryable via isVanillaMetalActivated(pos).
  *
  * THE ALGORITHM:
  * ==============
  * 1. DISCOVER: BFS from change point through all conductors.
- * 2. WIPE: Set all IFrameBlock to ACTIVE=false, clear vanilla metal map.
+ * 2. WIPE: Set all IFrameBlock to ACTIVE=false, remove this network's
+ *    vanilla metals from the global set.
  * 3. FIND SOURCES: Find Machine Blocks adjacent to network.
  * 4. ACTIVATE: BFS from activation sources. Machine Frames only activate
  *    when unpowered; all other Machine Family blocks always activate.
@@ -67,7 +70,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *    redstone level, decaying by 1. Any block reached by anti-signal
  *    is deactivated. Other Machine Family blocks never suppress.
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
- *    no anti-signal.
+ *    no anti-signal. Add activated vanilla metals back to the global set.
  *
  * BATCHING (Audit #14):
  * =====================
@@ -78,13 +81,18 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * a single pass — placing 50 frame blocks triggers 1 recalculation
  * instead of 50.
  *
- * THREAD SAFETY (Audit #B):
- * =========================
- * activatedVanillaMetals uses volatile reference swapping rather than
- * clear-and-rebuild on a shared mutable set. During recalculate(), a new
- * set is built locally and then atomically swapped in. Readers always see
- * a consistent snapshot. This prevents stale reads during concurrent
- * stickiness checks on different code paths (e.g., chunk loading).
+ * THREAD SAFETY (Audit #B, updated for Issue #15 fix):
+ * ====================================================
+ * activatedVanillaMetals uses a ConcurrentHashMap-backed key set.
+ * recalculate() performs per-network remove-then-add: it removes only
+ * the vanilla metal positions discovered in THIS network, then adds back
+ * the ones that should be active. This prevents one network's recalculation
+ * from wiping vanilla metals belonging to a different network — the root
+ * cause of Issue #15 (first-push failure after frame network change).
+ *
+ * Concurrent reads from stickiness checks (e.g., during piston resolution)
+ * see a consistent view because ConcurrentHashMap.newKeySet() provides
+ * thread-safe individual add/remove/contains operations.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -222,16 +230,22 @@ public class FrameActivation {
 
     /**
      * Ephemeral set of activated vanilla metal positions (packed longs).
-     * Rebuilt every recalculate(). Vanilla blocks have no ACTIVE property,
-     * so we track them here.
+     * Updated per-network during recalculate(): each call removes only the
+     * vanilla metals belonging to its discovered network, then adds back the
+     * ones that should be active. This preserves metals from other networks.
      *
-     * THREAD SAFETY: This is a volatile reference that gets atomically swapped
-     * to a new set during recalculate(). Readers see a consistent snapshot.
-     * Previously was a plain HashSet that was cleared and rebuilt in place,
-     * risking stale/partial reads from concurrent stickiness checks.
-     * (Audit item #B, fixed 2026-03-13)
+     * THREAD SAFETY: ConcurrentHashMap.newKeySet() provides thread-safe
+     * individual add/remove/contains. Concurrent reads from stickiness
+     * checks always see a consistent per-element view.
+     *
+     * HISTORY: Previously used volatile atomic-swap of an immutable set,
+     * which was safe for single-network worlds but caused Issue #15 —
+     * when multiple networks were recalculated in one flush cycle, each
+     * recalculate() replaced the ENTIRE global set with only its own
+     * network's metals, wiping metals from previously-processed networks.
+     * (Issue #15 fix, 2026-03-15)
      */
-    private static volatile Set<Long> activatedVanillaMetals = Collections.emptySet();
+    private static final Set<Long> activatedVanillaMetals = ConcurrentHashMap.newKeySet();
 
     /**
      * Query whether a vanilla metal block at the given position is
@@ -263,6 +277,11 @@ public class FrameActivation {
      * Full wipe-and-rebuild with signal strength propagation.
      * Called internally by processDirtyNetworks(). External callers should
      * use markDirty() to batch changes.
+     *
+     * Vanilla metal tracking uses per-network remove-then-add:
+     * 1. WIPE removes only vanilla metals found in THIS network
+     * 2. APPLY adds back only the ones that should be active
+     * This preserves vanilla metals belonging to other networks.
      */
     static void recalculate(Level level, BlockPos changePos) {
         if (level.isClientSide()) return;
@@ -272,11 +291,17 @@ public class FrameActivation {
         if (network.isEmpty()) return;
 
         // Step 2: Wipe all activation states
+        // -- IFrameBlocks: set ACTIVE=false
+        // -- Vanilla metals: remove only THIS network's entries from global set
         for (BlockPos pos : network) {
             BlockState state = level.getBlockState(pos);
             if (state.getBlock() instanceof IFrameBlock && isActive(state)) {
                 level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, false),
                         Block.UPDATE_CLIENTS);
+            }
+            // Remove this network's vanilla metals from global set
+            if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
+                activatedVanillaMetals.remove(pos.asLong());
             }
         }
 
@@ -293,8 +318,7 @@ public class FrameActivation {
         }
 
         if (machineSources.isEmpty()) {
-            // No sources found — ensure vanilla metals are cleared
-            activatedVanillaMetals = Collections.emptySet();
+            // No sources — vanilla metals for this network already removed in step 2
             Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, no sources",
                     changePos, network.size());
             return;
@@ -331,8 +355,6 @@ public class FrameActivation {
         }
 
         // Step 6: Apply — activate blocks that have signal and no anti-signal
-        Set<Long> newVanillaMetals = new HashSet<>();
-
         for (BlockPos pos : network) {
             long packed = pos.asLong();
             int activation = activationStrength.getOrDefault(packed, 0);
@@ -349,13 +371,12 @@ public class FrameActivation {
                 }
             } else if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
                 if (shouldActivate) {
-                    newVanillaMetals.add(packed);
+                    // Add back to global set — only this network's activated metals
+                    activatedVanillaMetals.add(packed);
                 }
+                // If not shouldActivate, the entry was already removed in step 2
             }
         }
-
-        // Atomic swap: readers now see the complete new set
-        activatedVanillaMetals = Collections.unmodifiableSet(newVanillaMetals);
 
         Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, sources={}, powered={}",
                 changePos, network.size(), machineSources.size(),

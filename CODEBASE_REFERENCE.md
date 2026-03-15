@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Known Issue #15.)*
+*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Issue #15 fix (per-network vanilla metal tracking), Issue #14 status update.)*
 
 ---
 
@@ -311,7 +311,7 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 
 **FrameActivation algorithm** (redstone-style signal strength with anti-signal suppression):
 1. DISCOVER: BFS from change point through all conductors (IFrameBlock + vanilla metals, any material/state)
-2. WIPE: Set all IFrameBlocks to ACTIVE=false, clear vanilla metal activation set
+2. WIPE: Set all IFrameBlocks to ACTIVE=false, remove only this network's vanilla metal positions from activatedVanillaMetals (per-network remove, not global clear)
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
 4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate regardless of redstone state. Each entry carries available materials + strength. Mediators (framed blocks with cross-material inner conductor) pass ALL materials.
 5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone input level, decaying by 1. Binary override: any block reached = deactivated.
@@ -418,8 +418,8 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.
 12. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
 ~~13. **Machine Conductor base texture renders black**~~ -- FIXED 2026-03-14. Root cause: indicator overlay element used default "solid" render type, treating transparent pixels as opaque black. At power 0 the tinted overlay was a solid black shell hiding the base. Fix: added `"render_type": "minecraft:cutout"` to model JSON, removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.
-14. **Framed redstone blocks don't emit power on frame activation** -- When a framed redstone block transitions from inactive to active via the frame network, redstone neighbors are not notified. Block only starts emitting after receiving a redstone update from another component. Works fine if placed while frame is inactive. Fix: FrameActivation needs `level.updateNeighborsAt()` on active-state transitions for redstone sources. File: FrameActivation.java.
-15. **Vanilla metal first-push failure after frame network change** -- When vanilla iron/copper blocks participate in a frame network, modifications to the network (e.g., breaking a frame in the middle of a row) cause the vanilla metal to fail to grab adjacent frames on the first piston push. Works correctly on the second push. Reproduction: piston(up) -> machine block -> iron frame -> iron block -> row of iron frames; break frame in middle of row; push piston -- iron doesn't grab; push again -- works. Also reproduces when iron touches machine frame directly. Two fix attempts failed: (1) flushIfDirty at TAIL of addBranchingBlocks (too late); (2) flushIfDirty at HEAD of resolve (still fails). Suspected: activatedVanillaMetals set management, timing between neighbor cascades and piston resolution, possible FrameActivation rewrite fidelity gap. Files: FrameActivation.java, PistonStructureResolverMixin.java.
+14. **Framed redstone blocks don't emit power on frame activation** -- NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors or AbstractMachineBlock extraction. An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java.
+15. ~~**Vanilla metal first-push failure after frame network change**~~ -- FIXED 2026-03-15. Root cause: activatedVanillaMetals global set was atomically swapped per-network, so each recalculate() replaced the ENTIRE set with only its own network's metals. Fix: changed to ConcurrentHashMap.newKeySet() with per-network remove-then-add. Files: FrameActivation.java.
 
 ### Audit-Identified Issues (2026-03-13)
 
@@ -428,7 +428,7 @@ The following issues were identified during a comprehensive codebase audit. See 
 | ID | Severity | Issue | Location |
 |----|----------|-------|----------|
 | ~~A~~ | ~~Critical~~ | ~~MachineConductorBlock.shouldSignal is plain boolean, not ThreadLocal.~~ *FIXED 2026-03-13* | MachineConductorBlock.java |
-| ~~B~~ | ~~Critical~~ | ~~FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization.~~ *FIXED 2026-03-14 (volatile + atomic swap)* | FrameActivation.java |
+| ~~B~~ | ~~Critical~~ | ~~FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization.~~ *FIXED 2026-03-14 (volatile + atomic swap), then updated 2026-03-15 (ConcurrentHashMap.newKeySet() per-network remove-then-add -- atomic swap caused Issue #15)* | FrameActivation.java |
 | ~~C~~ | ~~Critical~~ | ~~ThreadLocal cleanup gaps in PistonStructureResolverMixin.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
 | ~~D~~ | ~~Critical~~ | ~~ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos.~~ *FIXED 2026-03-13* | PistonBaseBlockMixin.java |
 | ~~E~~ | ~~High~~ | ~~OddstonePortalSavedData.unregisterPortal() uses && where || is needed.~~ *FIXED 2026-03-13* | OddstonePortalSavedData.java |
