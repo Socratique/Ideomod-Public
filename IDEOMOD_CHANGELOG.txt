@@ -1,5 +1,46 @@
 # Ideomod Changelog
 
+## [2026-03-15c] Removed REDSTONE_COMPONENTS Tag (Redundant)
+
+The REDSTONE_COMPONENTS block tag was originally created to whitelist which
+vanilla redstone devices could provide signal to the old Machine Block,
+preventing feedback loops (since Machine Block was itself a signal source).
+
+This tag is now redundant for two reasons:
+1. Machine Track has full redstone isolation (isSignalSource=false, getSignal=0,
+   getDirectSignal=0) since 2026-03-08 (Issue #8 fix), so it cannot create
+   feedback loops regardless of what feeds signal into it.
+2. The Machine Conductor block now handles vanilla redstone signal propagation
+   as its own specialization, with its own anti-feedback mechanism (input face
+   suppression).
+
+### Changes
+
+**MachineTrackBlock.java**:
+- Removed import of ModTags
+- Removed isRedstoneComponent() helper method (was the tag check)
+- calculatePower(): replaced `else if (isRedstoneComponent(nBlock))` with
+  plain `else` -- any non-conduit neighbor is now queried via level.getSignal()
+- scheduleAllPushes(): same change for direction detection
+- Updated class javadoc explaining no-feedback reasoning
+- Net result: simpler code, Tracks now accept signal from ANY vanilla source
+
+**ModTags.java**:
+- Removed REDSTONE_COMPONENTS TagKey constant and javadoc
+
+**Deleted file**:
+- data/ideomod/tags/blocks/redstone_components.json
+
+### Documentation sync
+- IDEOMOD_DOCUMENTATION.md: ModTags table (5 tags -> 4), Machine Track spec
+  updated, Section 13 redstone_components subsection removed
+- CODEBASE_REFERENCE.md: ModTags entry, MachineTrackBlock entry (2 locations),
+  Machine Track block spec -- all updated to reflect vanilla signal query
+- IDEOMOD_CHANGELOG.txt: This entry
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-15b] Issue #15 Fix & Issue #14 Status Update
 
 ### Issue #15 Fix: Vanilla metal first-push failure after frame network change [FIXED]

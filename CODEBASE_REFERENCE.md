@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Issue #15 fix (per-network vanilla metal tracking), Issue #14 status update.)*
+*Last updated: 2026-03-15b (Removed REDSTONE_COMPONENTS tag -- redundant after Track redstone isolation + Conductor block.)*
 
 ---
 
@@ -217,7 +217,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Set before `new PistonStructureResolver()`, cleared in finally block.
 
-**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks via direct blockstate access and from tagged REDSTONE_COMPONENTS via vanilla signal query. Signal direction detection checks actual sources (conduit blocks with higher POWER, tagged redstone components) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
+**MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks/Conductors via direct blockstate access and from any vanilla redstone source via level.getSignal() (no whitelist needed -- Track emits no signal so no feedback risk). Signal direction detection checks actual sources (conduit blocks with higher POWER, any vanilla source with signal > 0) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
@@ -353,7 +353,7 @@ Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICK
 
 ### 8. Machine Track (isolated redstone + Trolley push)
 
-Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 1) for Track-to-Track chaining only. NOT exposed to vanilla redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads from other Tracks via direct blockstate access and tagged REDSTONE_COMPONENTS via vanilla signal query. On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement.
+Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 1) for Track-to-Track chaining only. NOT exposed to vanilla redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads from other Tracks/Conductors via direct blockstate access and from any vanilla redstone source via level.getSignal() (no whitelist needed -- Track emits no signal so no feedback risk). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement.
 
 ### 9. Machine Trolley (passive cargo)
 
@@ -375,7 +375,7 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 **ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
-**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), REDSTONE_COMPONENTS (redstone devices whitelist), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
+**ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 
 **ModCreativeTabs**: Two tabs. `ideomod_tab` (icon IDEOBLOCK, all standard items). `framed_blocks_tab` (icon Iron Framed Stone, dynamically populated from cached frameable blocks list built on first tab open via FrameabilityHelper).
 

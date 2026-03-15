@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15 (AbstractMachineBlock extraction, frame activation batching, BFS frontier queues, machine GUI sync fix, Issue #15 fix (per-network vanilla metal tracking), Issue #14 status update.)*
+*Last updated: 2026-03-15b (Removed REDSTONE_COMPONENTS tag -- redundant after Track redstone isolation + Conductor block. Tracks now accept signal from any vanilla source via level.getSignal().)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -199,12 +199,11 @@ Two tabs:
 
 ### ModTags
 
-Five custom block tags, all with TagKey constants in ModTags.java:
+Four custom block tags, all with TagKey constants in ModTags.java:
 
 | Tag | Purpose | TagKey in ModTags? | JSON Location |
 |-----|---------|-------------------|---------------|
 | `PORTAL_CORNER_BLOCKS` | Valid portal frame corner types (defines addresses) | YES | `data/ideomod/tags/blocks/portal_corner_blocks.json` |
-| `REDSTONE_COMPONENTS` | Whitelist for Machine Block signal sources | YES | `data/ideomod/tags/blocks/redstone_components.json` |
 | `FURNACE_ARRAY_FRAME` | Valid frame blocks for furnace array multiblock | YES (added 2026-03-13). FurnaceArrayDefinition still uses inline ref — should be updated. | `data/ideomod/tags/blocks/furnace_array_frame.json` |
 | `IMMOVABLE_WHEN_FRAMED` | Blocks that should be immovable when wrapped in a FramedBlock. Used by PistonBaseBlockMixin Feature 4. Extensible by datapacks. DestroySpeed == -1 fallback still runs for unlisted indestructible blocks. | YES (added 2026-03-14) | `data/ideomod/tags/blocks/immovable_when_framed.json` |
 | `FRAMEABLE_BLOCKS` | Whitelist of blocks that can be wrapped in frames (~310 vanilla + 2 ideomod blocks) | YES | `data/ideomod/tags/blocks/frameable_blocks.json` |
@@ -1094,7 +1093,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 Registry ID: `machine_track`. Class: MachineTrackBlock extends AbstractMachineBlock. `MachineType.TRACK`.
 
-Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing powered rail in slot). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). On rising edge, pushes ALL adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style movement.
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing powered rail in slot). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Accepts input from conduit blocks (other Tracks, Conductors) via direct blockstate reads and from any vanilla redstone source via level.getSignal(). No input whitelist needed -- since Tracks emit no vanilla signal, there is no feedback risk. On rising edge, pushes ALL adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style movement.
 
 Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
 
@@ -1384,16 +1383,6 @@ Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd
 minecraft:coal_block, minecraft:iron_block, minecraft:copper_block, minecraft:gold_block, minecraft:redstone_block, minecraft:lapis_block, minecraft:diamond_block, minecraft:emerald_block, minecraft:netherite_block, minecraft:quartz_block, minecraft:amethyst_block, minecraft:raw_iron_block, minecraft:raw_copper_block, minecraft:raw_gold_block.
 
 14 types -> 14^4 = 38,416 unique addresses per dimension.
-
-### redstone_components (whitelist for Machine Block)
-
-`data/ideomod/tags/blocks/redstone_components.json`:
-
-Individual blocks: redstone_wire, lever, repeater, comparator, observer, redstone_block, redstone_torch, redstone_wall_torch, daylight_detector, trapped_chest, tripwire_hook, lectern, target, sculk_sensor, calibrated_sculk_sensor, lightning_rod, detector_rail.
-
-Tag references: #minecraft:buttons, #minecraft:pressure_plates.
-
-This whitelist prevents Machine Block from accepting signal from generic powered solid blocks (which would create feedback loops since Machine Block itself is a signal source).
 
 ### furnace_array_frame (18 blocks)
 

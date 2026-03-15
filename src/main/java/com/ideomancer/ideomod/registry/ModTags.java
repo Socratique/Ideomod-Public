@@ -33,16 +33,6 @@ public class ModTags {
             BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "portal_corner_blocks"));
 
     /**
-     * Blocks that are "real" redstone signal sources.
-     * Machine Block only accepts redstone signal from blocks in this tag,
-     * preventing feedback loops with generic powered solid blocks.
-     * 
-     * Tag file: data/ideomod/tags/blocks/redstone_components.json
-     */
-    public static final TagKey<Block> REDSTONE_COMPONENTS =
-            BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "redstone_components"));
-
-    /**
      * Blocks that can be wrapped in iron/copper frames via the framing recipe.
      * This is a WHITELIST -- only blocks in this tag are frameable.
      * Other mods or datapacks can add their blocks to this tag.

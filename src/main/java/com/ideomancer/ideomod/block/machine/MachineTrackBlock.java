@@ -1,7 +1,6 @@
 package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.block.frame.FrameActivation;
-import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.BlockGetter;
@@ -18,6 +17,14 @@ import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
  *
  * Overrides lifecycle hooks from AbstractMachineBlock to add isolated
  * redstone power tracking and Trolley push scheduling.
+ *
+ * Signal input: Tracks accept signal from two sources:
+ *   1. Other Tracks/Conductors -- via direct blockstate POWER read (decay by 1)
+ *   2. Any vanilla redstone source -- via level.getSignal() query
+ *
+ * Signal output: NONE. isSignalSource=false, getSignal=0, getDirectSignal=0.
+ * Track POWER is purely internal bookkeeping, invisible to vanilla redstone.
+ * This isolation eliminates feedback loops, so no input whitelist is needed.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -103,6 +110,16 @@ public class MachineTrackBlock extends AbstractMachineBlock {
         }
     }
 
+    /**
+     * Calculates the strongest signal reaching this Track from any neighbor.
+     *
+     * Two input paths:
+     *   1. Conduit blocks (other Tracks, Conductors) -- read POWER blockstate directly, decay by 1
+     *   2. Everything else -- query vanilla level.getSignal() for redstone input
+     *
+     * Since Tracks emit no vanilla signal (isSignalSource=false), there is no
+     * feedback risk from accepting signal from any vanilla source.
+     */
     private int calculatePower(Level level, BlockPos pos) {
         int bestPower = 0;
         for (Direction dir : Direction.values()) {
@@ -110,18 +127,16 @@ public class MachineTrackBlock extends AbstractMachineBlock {
             BlockState nState = level.getBlockState(nPos);
             Block nBlock = nState.getBlock();
             if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
+                // Conduit path: direct blockstate read with decay
                 int p = nState.getValue(POWER) - 1;
                 if (p > bestPower) bestPower = p;
-            } else if (isRedstoneComponent(nBlock)) {
+            } else {
+                // Vanilla path: any redstone source feeds in directly
                 int s = level.getSignal(nPos, dir);
                 if (s > bestPower) bestPower = s;
             }
         }
         return Math.min(15, Math.max(0, bestPower));
-    }
-
-    private static boolean isRedstoneComponent(Block block) {
-        return block.defaultBlockState().is(ModTags.REDSTONE_COMPONENTS);
     }
 
     // ========================================================================
@@ -136,7 +151,8 @@ public class MachineTrackBlock extends AbstractMachineBlock {
             boolean isSource = false;
             if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
                 isSource = nState.getValue(POWER) > myPower;
-            } else if (isRedstoneComponent(nBlock)) {
+            } else {
+                // Any vanilla source with signal counts as a directional source
                 isSource = level.getSignal(nPos, signalDir) > 0;
             }
             if (!isSource) continue;
