@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15e (Machine Fluid Pipe specialization. Biome water tint via ModColorHandlers. Lava light emission. IFluidHandler capability.)*
+*Last updated: 2026-03-15f (Machine Piston + Machine Sticky Piston specializations. BESR arm animation. PistonBaseBlockMixin Feature 5.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -90,6 +90,12 @@ com.ideomancer.ideomod
   |     |     |-- MachineFluidPipeBlockEntity.java  Fluid pipe BE subclass. Fluid type + cooldown + round-robin.
   |     |     |                                IFluidHandler capability. Bucket state sync in setFluidType().
   |     |     |-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA. Blockstate property.
+  |     |     |-- MachinePistonBlock.java      Piston specialization. Omnidirectional extend/retract.
+  |     |     |                                BESR animation via MachineFrameBlockEntity arm state.
+  |     |     |                                Ticker advances animation. BlockMoveHelper for push/pull.
+  |     |     |-- MachineStickyPistonBlock.java  Extends MachinePistonBlock. isSticky()=true. Pulls on retract.
+  |     |     |-- MachinePistonHeadBlock.java  8x8x16 arm block. FACING + STICKY. PushReaction.BLOCK.
+  |     |     |                                updateShape validates parent piston. No drops.
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
@@ -125,6 +131,9 @@ com.ideomancer.ideomod
   |           |-- FramedBlockItemModel.java    Custom BakedModel for framed items (inner texture in inventory)
   |           |-- FramedBlockRenderTypes.java  Custom RenderType for framed block overlays
   |           \-- MovingFrameData.java         Client-side cache for inner block IDs during piston transit
+  |           \-- MachinePistonArmRenderer.java  BESR for piston arm animation. Renders head model
+  |                                              at interpolated offset during 2-tick extend/retract.
+  |                                              Registered for MACHINE_FRAME BE type.
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -184,6 +193,10 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_trolley` | MachineTrolleyBlock | Hardness 3.0/6.0, pickaxe, metal sound. Machine Family stickiness. No conduction. |
 | `machine_conductor` | MachineConductorBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + vanilla redstone signal (0-15). |
 | `machine_pipe` | MachinePipeBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. FILLED BooleanProperty. Own BE type (MACHINE_PIPE). Ticker for item transfer. |
+| `machine_fluid_pipe` | MachineFluidPipeBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. FLUID_TYPE EnumProperty. Own BE type (MACHINE_FLUID_PIPE). Ticker. Light 10 for lava. |
+| `machine_piston` | MachinePistonBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.PISTON. Omnidirectional. Ticker for arm animation. |
+| `machine_sticky_piston` | MachineStickyPistonBlock | Same properties as Machine Piston. MachineType.STICKY_PISTON. Sticky pull on retraction. |
+| `machine_piston_head` | MachinePistonHeadBlock | Hardness 0.5, metal sound. `PushReaction.BLOCK`. `noLootTable()`, `noOcclusion()`. FACING + STICKY. Not player-placeable. 8x8x16 collision shape. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -193,7 +206,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock.
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
@@ -202,7 +215,7 @@ Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `sta
 ### ModCreativeTabs
 
 Two tabs:
-- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
 - `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
@@ -596,6 +609,9 @@ CACHE: MovingFrameData (ConcurrentHashMap<BlockPos, FrameTransitInfo>)
 **PistonBaseBlockMixin** (`com.ideomancer.ideomod.mixin.PistonBaseBlockMixin`):
 
 Target: `net.minecraft.world.level.block.piston.PistonBaseBlock`
+
+Feature 5 -- Machine Piston immovability (in same HEAD inject, runs FIRST):
+When the block is a `MachinePistonBlock` and `hasExtendedHead()` returns true (any neighbor is a `MachinePistonHeadBlock` pointing back at the piston position), returns false (immovable). Matches vanilla piston behavior where extended pistons cannot be pushed. Runs before all other feature checks (oddstone pull immunity, framed immovable inner, IPistonMovable bypass).
 
 Feature 1 -- isPushable override (HEAD inject, cancellable):
 Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons. Uses `MovementScanHelper` for efficient block state lookups. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
@@ -1214,6 +1230,51 @@ Non-directional Machine Family block. Own BE subclass: MachineFluidPipeBlockEnti
 Stickiness: MachineType.FLUID_PIPE -- sticks to other Fluid Pipes + Machine Frames + Frame Family (active). Does NOT stick to item Pipes, Tracks, Trolleys, Conductors, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Piston -- Omnidirectional Pusher
+
+Registry ID: `machine_piston`. Class: MachinePistonBlock extends AbstractMachineBlock. `MachineType.PISTON`.
+
+Non-directional block (omnidirectional -- no FACING property on the base). Shares MachineFrameBlockEntity (right-click opens GUI showing piston in slot). Signal on any face causes head extension from the opposite face. Multiple heads can extend simultaneously from different faces.
+
+| Feature | Implementation |
+|---------|---------------|
+| **Extension** | Signal detected in neighborChanged (server only). Block event queued per signal face. triggerEvent runs on BOTH sides: pushes blocks via BlockMoveHelper if needed, starts BESR animation on BE. Ticker advances progress 0.5/tick (2 ticks total). On completion, places real MachinePistonHeadBlock. |
+| **Retraction** | Signal loss detected in neighborChanged. Block event queued. triggerEvent removes head immediately (level.setBlock to AIR), starts visual-only retraction animation on BE. Sticky variant: removes head, then pulls block behind head via BlockMoveHelper. |
+| **Animation** | BESR-based (MachinePistonArmRenderer registered for MACHINE_FRAME BE type). Per-face animation state in MachineFrameBlockEntity: armProgress[6], armProgressO[6] (previous tick for interpolation), armAnimDirection[6] (+1 extending, -1 retracting, 0 idle). Renderer interpolates with partialTick for smooth sub-tick motion. Extension: arm grows from face outward (offset 0→1). Retraction: arm shrinks from extended to face (offset 1→0). Transient state -- not saved to NBT (animation is only 2 ticks). |
+| **Push mechanics** | Uses BlockMoveHelper for pushing blocks. 12-block vanilla push limit. Full sticky group resolution. Sound only plays when no blocks pushed/pulled (BlockMoveHelper plays its own sound). |
+| **Immovability** | Cannot be pushed while any head is extended (PistonBaseBlockMixin Feature 5). hasExtendedHead() checks all 6 neighbors for MachinePistonHeadBlock pointing back at piston. |
+| **Head block** | MachinePistonHeadBlock: 8×8×16 cuboid, FACING + STICKY properties. PushReaction.BLOCK. Breaks to AIR if parent piston missing (updateShape). onRemove notifies parent. No drops. Middle-click returns parent piston item. |
+| **Re-entry guard** | isProcessing ThreadLocal prevents neighborChanged from re-triggering during block events. Animation-in-progress skip prevents new events while animation running on a face. |
+
+Stickiness: MachineType.PISTON -- sticks to other Pistons + Machine Frames + Frame Family (active). Does NOT stick to Sticky Pistons, Tracks, Trolleys, Conductors, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Sticky Piston -- Omnidirectional Pusher/Puller
+
+Registry ID: `machine_sticky_piston`. Class: MachineStickyPistonBlock extends MachinePistonBlock. `MachineType.STICKY_PISTON`.
+
+Extends MachinePistonBlock with isSticky()=true. On retraction, pulls the block in front of the head one space backward before the head disappears. Pull skips blocks that are air, destroyable, immovable, or already moving. All other behavior inherited from MachinePistonBlock.
+
+Stickiness: MachineType.STICKY_PISTON -- sticks to other Sticky Pistons + Machine Frames + Frame Family (active). Does NOT stick to regular Pistons or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Piston Head -- Extended Arm Block
+
+Registry ID: `machine_piston_head`. Class: MachinePistonHeadBlock extends DirectionalBlock.
+
+Not a Machine Family member (does NOT implement IMachineFamily). Not an EntityBlock. Placed by MachinePistonBlock when extension animation completes. Removed by MachinePistonBlock on retraction.
+
+| Property | Type | Values | Purpose |
+|----------|------|--------|---------|
+| FACING | DirectionProperty | 6 directions | Direction the arm points (away from piston base) |
+| STICKY | BooleanProperty | false, true | Texture variant (normal vs sticky front face) |
+
+VoxelShape: 8×8×16 cuboid centered on the block face, oriented by FACING. Full block length in extension direction, half-width in perpendicular axes.
+
+Model: Single 8×8×16 element. North face (front) UV-crops central 8×8 pixels from machine_piston.png (or machine_sticky_piston.png for sticky=true). Side faces use machine_piston_arm.png with rotation=90 on east/west for correct orientation after blockstate Y-rotation. Top/bottom use same arm texture with vertical UV strip.
 
 ---
 

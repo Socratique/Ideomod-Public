@@ -10,6 +10,9 @@ import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlock;
+import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
+import com.ideomancer.ideomod.block.machine.MachinePistonHeadBlock;
+import com.ideomancer.ideomod.block.machine.MachineStickyPistonBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrolleyBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
@@ -193,6 +196,42 @@ public class ModBlocks {
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
                     .lightLevel(state -> state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == com.ideomancer.ideomod.block.machine.FluidType.LAVA ? 10 : 0)
+            ));
+
+    // Machine Piston: omnidirectional piston. Pushes blocks on redstone signal.
+    // Signal on any face -> head extends from opposite face.
+    // pushReaction NORMAL when retracted. Immovable while extended (checked by mixin).
+    public static final RegistryObject<Block> MACHINE_PISTON = BLOCKS.register("machine_piston",
+            () -> new MachinePistonBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Sticky Piston: omnidirectional sticky piston. Pushes on extend,
+    // pulls on retract. Same properties as Machine Piston.
+    public static final RegistryObject<Block> MACHINE_STICKY_PISTON = BLOCKS.register("machine_sticky_piston",
+            () -> new MachineStickyPistonBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Piston Head: the 8x8x16 arm block placed when a Machine Piston extends.
+    // Not player-placeable. Breaks instantly. PushReaction.BLOCK (immovable).
+    // noOcclusion for the non-full-block shape. noLootTable (no drops).
+    public static final RegistryObject<Block> MACHINE_PISTON_HEAD = BLOCKS.register("machine_piston_head",
+            () -> new MachinePistonHeadBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(0.5f)
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.BLOCK)
+                    .noLootTable()
+                    .noOcclusion()
             ));
 
     // ========================================================================

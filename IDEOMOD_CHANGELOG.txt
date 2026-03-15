@@ -1,5 +1,118 @@
 # Ideomod Changelog
 
+## [2026-03-15f] Machine Piston + Machine Sticky Piston Specializations
+
+Omnidirectional pistons as Machine Family specializations. Signal on any face
+extends a head from the opposite face. Multiple heads can extend simultaneously.
+Pushed/pulled blocks use existing BlockMoveHelper (vanilla piston animation for
+the moved blocks). Head animation uses a custom BESR system instead of vanilla's
+MovingPistonBlock, which has hardcoded assumptions about vanilla piston blocks.
+
+### New Files
+
+**MachinePistonBlock.java** (block/machine/):
+  Extends AbstractMachineBlock. MachineType.PISTON. Omnidirectional: no FACING
+  property. Signal detection in neighborChanged loops all 6 faces. Block events
+  for extend/retract run on both client and server. Extension pushes blocks via
+  BlockMoveHelper, starts BESR animation, ticker places real head on completion.
+  Retraction removes head immediately, starts visual-only retraction animation.
+  Re-entry guard (isProcessing ThreadLocal) + animation-in-progress skip prevent
+  feedback loops during block events. getTicker() returns animation ticker for
+  MACHINE_FRAME BE type. hasExtendedHead() static helper for immovability check.
+
+**MachineStickyPistonBlock.java** (block/machine/):
+  Extends MachinePistonBlock. MachineType.STICKY_PISTON. Overrides isSticky()
+  to return true. All extension/retraction logic inherited. Sticky retraction
+  removes head, then pulls block behind head via BlockMoveHelper.
+
+**MachinePistonHeadBlock.java** (block/machine/):
+  Extends DirectionalBlock. FACING + STICKY properties. 8x8x16 cuboid collision
+  shape (centered on face, full block length in FACING direction). PushReaction.BLOCK
+  (immovable). No drops (noLootTable). updateShape checks parent piston behind it --
+  breaks to AIR if parent missing. onRemove notifies parent piston via onHeadBroken().
+  Middle-click returns parent piston's item. Not an EntityBlock.
+
+**MachinePistonArmRenderer.java** (client/render/):
+  BESR registered against MACHINE_FRAME BlockEntityType. Only renders for
+  MachinePistonBlock/MachineStickyPistonBlock instances. For each face with
+  active animation, renders MachinePistonHeadBlock model at interpolated offset
+  using partialTick. Extension: offset 0->1 (arm grows outward from piston face).
+  Retraction: offset 1->0 (arm shrinks back into piston). Uses renderSingleBlock().
+
+### Modified Files
+
+**MachineFrameBlockEntity.java**: Added per-face arm animation state: armProgress[6],
+  armProgressO[6] (previous tick for interpolation), armAnimDirection[6] (+1 extending,
+  -1 retracting, 0 idle). Transient (not saved to NBT -- animation is only 2 ticks).
+  Accessors: getArmProgress/setArmProgress, getArmProgressO/setArmProgressO,
+  getArmAnimDirection/setArmAnimDirection, getArmRenderProgress(dir, partialTick).
+
+**MachineSwapHelper.java**: Uncommented Items.PISTON -> MACHINE_PISTON and
+  Items.STICKY_PISTON -> MACHINE_STICKY_PISTON mappings.
+
+**ModBlocks.java**: Added MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD
+  registrations. Head block has noLootTable(), noOcclusion(), PushReaction.BLOCK.
+
+**ModItems.java**: Added MACHINE_PISTON and MACHINE_STICKY_PISTON BlockItems.
+  No item for the head block (not player-placeable).
+
+**ModBlockEntities.java**: Added MACHINE_PISTON and MACHINE_STICKY_PISTON to
+  MACHINE_FRAME validBlocks list.
+
+**ModCreativeTabs.java**: Added Machine Piston and Machine Sticky Piston
+  pre-loaded stacks to creative tab.
+
+**PistonBaseBlockMixin.java**: Added Feature 5 -- Machine Piston immovability.
+  Extended pistons cannot be pushed (hasExtendedHead checks all 6 neighbors for
+  head blocks pointing back at piston). Runs before Feature 3 (oddstone pull immunity).
+
+**Ideomod.java**: Registered MachinePistonArmRenderer BESR for MACHINE_FRAME
+  BE type in clientSetup.
+
+### Resource Files
+
+**blockstates/machine_piston.json**: Simple, no variants (omnidirectional).
+**blockstates/machine_sticky_piston.json**: Simple, no variants.
+**blockstates/machine_piston_head.json**: FACING x STICKY variants (12 total).
+  Rotates model via x/y rotation. Swaps between normal and sticky head model.
+
+**models/block/machine_piston.json**: cube_all with machine_piston texture.
+**models/block/machine_sticky_piston.json**: cube_all with machine_sticky_piston texture.
+**models/block/machine_piston_head.json**: 8x8x16 bar element. North face UV crops
+  central 8x8 from machine_piston.png. Side faces use machine_piston_arm.png with
+  rotation=90 on east/west for correct orientation after blockstate Y-rotation.
+**models/block/machine_piston_head_sticky.json**: Same shape, front face crops from
+  machine_sticky_piston.png instead.
+**models/item/machine_piston.json**: Inherits block model.
+**models/item/machine_sticky_piston.json**: Inherits block model.
+
+**data/ideomod/loot_tables/blocks/machine_piston.json**: Standard block drop.
+**data/ideomod/loot_tables/blocks/machine_sticky_piston.json**: Standard block drop.
+
+Textures: machine_piston.png, machine_sticky_piston.png, machine_piston_arm.png
+  (pre-existing, created by The Ideomancer).
+
+### Challenges Resolved
+
+**Vanilla MovingPistonBlock incompatibility**: Initial implementation tried to use
+  vanilla's MovingPistonBlock + PistonMovingBlockEntity for head animation.
+  Three problems: (1) PistonHeadRenderer crashes when isSourcePiston=true because
+  it assumes movedState is vanilla PistonHeadBlock and calls setValue(EXTENDED) --
+  our block doesn't have that property. (2) isSourcePiston=false causes tick()
+  completion to re-place the head block on retraction, creating infinite feedback
+  loop. (3) isSourcePiston->AIR logic only exists in finalTick(), not tick().
+  Solution: BESR-based animation system that renders the arm model directly from
+  MachineFrameBlockEntity animation state, completely bypassing vanilla's
+  MovingPistonBlock system for the piston head. Pushed/pulled blocks still use
+  BlockMoveHelper (which uses MovingPistonBlock for regular blocks -- that works).
+
+**Double sound effect**: BlockMoveHelper.moveBlockAt() plays piston sound internally.
+  doExtend/doRetract now only play sound when no blocks were pushed/pulled.
+
+**Head survival check**: MachinePistonHeadBlock.updateShape() verifies parent piston
+  exists behind it. If the piston is broken, the head breaks automatically (returns
+  AIR). canSurvive() uses the same check for placement validation.
+
 ## [2026-03-15e] Machine Fluid Pipe Specialization -- Full Implementation
 
 Machine Fluid Pipe is the second specialization with its own block entity subclass,

@@ -4,6 +4,7 @@ import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
@@ -88,6 +89,13 @@ import java.util.Set;
  * (Audit item #20), plus the destroySpeed == -1 fallback for
  * bedrock-type blocks.
  *
+ * FEATURE 5: MACHINE PISTON IMMOVABILITY (isPushable)
+ * ====================================================
+ * Machine Pistons with any extended heads cannot be pushed or pulled.
+ * Matches vanilla piston behavior where extended pistons are immovable.
+ * Uses MachinePistonBlock.hasExtendedHead() to check all 6 neighbors
+ * for head blocks pointing back at the piston.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 @Mixin(PistonBaseBlock.class)
@@ -109,7 +117,7 @@ public abstract class PistonBaseBlockMixin {
     private static final ThreadLocal<BlockPos> ideomod$pullTargetPos = ThreadLocal.withInitial(() -> null);
 
     // ========================================================================
-    // FEATURE 1 + 3 + 4: isPushable overrides
+    // FEATURE 1 + 3 + 4 + 5: isPushable overrides
     // ========================================================================
 
     @Inject(method = "isPushable", at = @At("HEAD"), cancellable = true)
@@ -117,6 +125,19 @@ public abstract class PistonBaseBlockMixin {
             BlockState blockState, Level level, BlockPos pos,
             Direction pushDirection, boolean allowDestroy, Direction pistonFacing,
             CallbackInfoReturnable<Boolean> cir) {
+
+        // --- Feature 5: Machine Piston immovability when extended ---
+        // Like vanilla pistons, Machine Pistons cannot be pushed while any
+        // head is extended. Check all 6 neighbors for head blocks pointing
+        // back at this position.
+        if (blockState.getBlock() instanceof MachinePistonBlock) {
+            if (MachinePistonBlock.hasExtendedHead(level, pos)) {
+                Ideomod.LOGGER.debug("[PistonBaseMixin] Machine Piston immovable: " +
+                        "has extended head at {}", pos);
+                cir.setReturnValue(false);
+                return;
+            }
+        }
 
         // --- Feature 3: Oddstone pull immunity during sticky piston retraction ---
         // Only blocks the DIRECTLY PULLED block (pullTargetPos), not every

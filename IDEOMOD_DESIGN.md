@@ -277,8 +277,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
 | Lever | Toggle | TBD | TOGGLE | [IDEA] |
-| Piston | Machine Piston | TBD | PISTON | [IDEA] |
-| Sticky Piston | Machine Sticky Piston | TBD | STICKY_PISTON | [IDEA] |
+| Piston | Machine Piston | MachinePistonBlock | PISTON | [DONE] |
+| Sticky Piston | Machine Sticky Piston | MachineStickyPistonBlock | STICKY_PISTON | [DONE] |
 
 **Features:**
 
@@ -295,11 +295,17 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 151px height. |
 | Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
 | Fluid Pipe subclass BE | [DONE] | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fluid type tracking, cooldown, round-robin, input face tracking. IFluidHandler capability. Biome water tint via ModColorHandlers. Lava light emission (level 10). |
+| Piston extension/retraction | [DONE] | Omnidirectional. BESR animation. Head placed on extension completion, removed on retraction start. |
+| Piston pushing | [DONE] | Via BlockMoveHelper. 12-block limit. Full sticky group. Sound deduplication. |
+| Sticky pull | [DONE] | Removes head, pulls block behind head via BlockMoveHelper. |
+| Piston immovability | [DONE] | PistonBaseBlockMixin Feature 5. Extended pistons cannot be pushed. |
+| Piston head block | [DONE] | MachinePistonHeadBlock. 8×8×16 shape. FACING+STICKY. Parent survival check. No drops. |
+| BESR arm animation | [DONE] | MachinePistonArmRenderer. Per-face interpolated animation. 2-tick duration. Transient state in MachineFrameBlockEntity. |
 
 ---
 
 ### Machine Specializations [WIP]
-> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, Pipe, and Fluid Pipe are implemented; remaining specializations are designed but not yet built.
+> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, Pipe, Fluid Pipe, Piston, and Sticky Piston are implemented; remaining specializations are designed but not yet built.
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
@@ -327,8 +333,12 @@ Emits a single redstone pulse on placement or activation. One-shot signal source
 **Machine Toggle:**
 Flip-flop. First activation = ON, second = OFF. Maintains state.
 
-**Machine Piston / Machine Sticky Piston:**
-Piston behavior as Machine Family members. Fully sticky to Machine Family, participates in frame activation networks.
+**Machine Piston / Machine Sticky Piston:** [DONE]
+Omnidirectional pistons as Machine Family members. No FACING property on the base block — signal on any face extends a head from the opposite face. Multiple heads can extend simultaneously. Pushes blocks via BlockMoveHelper (12-block limit, full sticky group resolution). Immovable while any head is extended (PistonBaseBlockMixin Feature 5). Head block (MachinePistonHeadBlock) is a real block in the world with 8×8×16 collision shape, FACING + STICKY properties. Breaking the head causes the piston to recognize that face is free (vanilla-like behavior — if signal is still present, re-extends immediately).
+
+Animation uses a custom BESR system (MachinePistonArmRenderer) with per-face animation state in MachineFrameBlockEntity, NOT vanilla's MovingPistonBlock system (which has hardcoded assumptions about vanilla piston blocks). Extension: arm slides outward from piston face over 2 ticks, then real head block placed. Retraction: head removed immediately, arm slides back over 2 ticks (purely visual).
+
+Sticky variant pulls the block in front of the head on retraction via BlockMoveHelper. The pulled block gets vanilla MovingPistonBlock animation (from BlockMoveHelper).
 
 ---
 

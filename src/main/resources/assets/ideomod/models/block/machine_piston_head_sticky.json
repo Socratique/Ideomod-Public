@@ -1,0 +1,23 @@
+{
+  "parent": "minecraft:block/block",
+  "textures": {
+    "arm": "ideomod:block/machine_piston_arm",
+    "face": "ideomod:block/machine_sticky_piston",
+    "particle": "ideomod:block/machine_piston_arm"
+  },
+  "elements": [
+    {
+      "comment": "8x8x16 arm bar, centered on block face, extending full block length along Z (north). Front face crops central 8x8 from sticky piston texture.",
+      "from": [4, 4, 0],
+      "to": [12, 12, 16],
+      "faces": {
+        "north": { "uv": [4, 4, 12, 12], "texture": "#face", "cullface": "north" },
+        "south": { "uv": [4, 4, 12, 12], "texture": "#arm", "cullface": "south" },
+        "up":    { "uv": [4, 0, 12, 16], "texture": "#arm", "cullface": "up" },
+        "down":  { "uv": [4, 0, 12, 16], "texture": "#arm", "rotation": 180, "cullface": "down" },
+        "east":  { "uv": [4, 0, 12, 16], "texture": "#arm", "rotation": 90, "cullface": "east" },
+        "west":  { "uv": [4, 0, 12, 16], "texture": "#arm", "rotation": 270, "cullface": "west" }
+      }
+    }
+  ]
+}

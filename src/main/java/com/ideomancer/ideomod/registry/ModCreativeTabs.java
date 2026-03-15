@@ -84,6 +84,8 @@ public class ModCreativeTabs {
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_CONDUCTOR.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_PIPE.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_FLUID_PIPE.get()));
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_PISTON.get()));
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_STICKY_PISTON.get()));
 
                         // Frame Blocks
                         output.accept(ModItems.IRON_FRAME.get());

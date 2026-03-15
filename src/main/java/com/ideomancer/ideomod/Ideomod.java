@@ -14,6 +14,7 @@ import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.block.portal.EnderPearlPortalHandler;
 import com.ideomancer.ideomod.client.render.FramedBlockItemModel;
 import com.ideomancer.ideomod.client.render.FramedBlockRenderer;
+import com.ideomancer.ideomod.client.render.MachinePistonArmRenderer;
 import com.ideomancer.ideomod.client.gui.MachineFrameScreen;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import com.ideomancer.ideomod.registry.ModBlocks;
@@ -272,6 +273,7 @@ public class Ideomod {
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.COPPER_FRAMED_BLOCK.get(), RenderType.cutoutMipped());
 
             BlockEntityRenderers.register(ModBlockEntities.FRAMED_BLOCK.get(), FramedBlockRenderer::new);
+            BlockEntityRenderers.register(ModBlockEntities.MACHINE_FRAME.get(), MachinePistonArmRenderer::new);
 
             MinecraftForge.EVENT_BUS.register(new com.ideomancer.ideomod.client.FramedBlockDebugOverlay());
         });

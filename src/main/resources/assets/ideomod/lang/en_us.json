@@ -21,5 +21,8 @@
   "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
   "ideomod.container.enhanced_smoker": "Enhanced Smoker",
   "block.ideomod.machine_pipe": "Machine Pipe",
-  "block.ideomod.machine_fluid_pipe": "Machine Fluid Pipe"
+  "block.ideomod.machine_fluid_pipe": "Machine Fluid Pipe",
+  "block.ideomod.machine_piston": "Machine Piston",
+  "block.ideomod.machine_sticky_piston": "Machine Sticky Piston",
+  "block.ideomod.machine_piston_head": "Machine Piston Head"
 }

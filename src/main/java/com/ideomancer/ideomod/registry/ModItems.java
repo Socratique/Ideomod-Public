@@ -57,6 +57,15 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_FLUID_PIPE = ITEMS.register("machine_fluid_pipe",
             () -> new BlockItem(ModBlocks.MACHINE_FLUID_PIPE.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_PISTON = ITEMS.register("machine_piston",
+            () -> new BlockItem(ModBlocks.MACHINE_PISTON.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> MACHINE_STICKY_PISTON = ITEMS.register("machine_sticky_piston",
+            () -> new BlockItem(ModBlocks.MACHINE_STICKY_PISTON.get(), new Item.Properties()));
+
+    // No item for MACHINE_PISTON_HEAD -- it is not player-placeable.
+    // Middle-click on the head returns the parent piston's item instead.
+
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 

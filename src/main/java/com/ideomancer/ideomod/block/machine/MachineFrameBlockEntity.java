@@ -59,6 +59,21 @@ public class MachineFrameBlockEntity extends BlockEntity
     @Nullable
     private Direction inputFace = null;
 
+    // ========================================================================
+    // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
+    // ========================================================================
+    // Per-face animation for omnidirectional piston arms.
+    // animDirection: +1 = extending, -1 = retracting, 0 = idle
+    // progress: 0.0 to 1.0 (advances 0.5 per tick, 2 ticks total)
+    // progressO: previous tick's progress (for partialTick interpolation)
+    // These fields are transient — not saved to NBT. Animation is short
+    // enough (2 ticks) that it doesn't survive chunk unload/reload.
+    // Block events re-trigger on chunk load via neighborChanged anyway.
+
+    private final float[] armProgress = new float[6];
+    private final float[] armProgressO = new float[6];
+    private final int[] armAnimDirection = new int[6]; // +1, -1, or 0
+
     public MachineFrameBlockEntity(BlockPos pos, BlockState state) {
         this(ModBlockEntities.MACHINE_FRAME.get(), pos, state);
     }
@@ -86,6 +101,42 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.inputFace = face;
             this.setChanged();
         }
+    }
+
+    // ========================================================================
+    // ARM ANIMATION ACCESSORS
+    // ========================================================================
+
+    public float getArmProgress(Direction dir) {
+        return armProgress[dir.get3DDataValue()];
+    }
+
+    public void setArmProgress(Direction dir, float value) {
+        armProgress[dir.get3DDataValue()] = value;
+    }
+
+    public float getArmProgressO(Direction dir) {
+        return armProgressO[dir.get3DDataValue()];
+    }
+
+    public void setArmProgressO(Direction dir, float value) {
+        armProgressO[dir.get3DDataValue()] = value;
+    }
+
+    public int getArmAnimDirection(Direction dir) {
+        return armAnimDirection[dir.get3DDataValue()];
+    }
+
+    public void setArmAnimDirection(Direction dir, int value) {
+        armAnimDirection[dir.get3DDataValue()] = value;
+    }
+
+    /**
+     * Returns the interpolated arm progress for rendering.
+     * Uses partialTick for smooth sub-tick animation.
+     */
+    public float getArmRenderProgress(Direction dir, float partialTick) {
+        return net.minecraft.util.Mth.lerp(partialTick, armProgressO[dir.get3DDataValue()], armProgress[dir.get3DDataValue()]);
     }
 
     // ========================================================================

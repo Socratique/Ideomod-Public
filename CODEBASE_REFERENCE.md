@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15e (Machine Fluid Pipe specialization. ModColorHandlers water tint. Lava light emission.)*
+*Last updated: 2026-03-15f (Machine Piston + Machine Sticky Piston specializations. BESR arm animation.)*
 
 ---
 
@@ -78,6 +78,13 @@ com.ideomancer.ideomod
   |     |     |-- MachineFluidPipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type.
   |     |     |                                Fluid type tracking. IFluidHandler capability.
   |     |     |                                Bucket state sync. Water+lava collision.
+  |     |     |-- MachinePistonBlock.java      Extends AbstractMachineBlock. MachineType.PISTON.
+  |     |     |                                Omnidirectional extend/retract. BESR animation.
+  |     |     |                                Ticker for arm progress. BlockMoveHelper for push.
+  |     |     |-- MachineStickyPistonBlock.java  Extends MachinePistonBlock. MachineType.STICKY_PISTON.
+  |     |     |                                isSticky()=true. Pulls on retract.
+  |     |     |-- MachinePistonHeadBlock.java  DirectionalBlock. FACING + STICKY. 8x8x16 shape.
+  |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -121,6 +128,9 @@ com.ideomancer.ideomod
   |           |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
   |           |-- FramedBlockRenderTypes.java Custom RenderType for framed block overlays
   |           \-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
+  |           \-- MachinePistonArmRenderer.java  BESR for Machine Piston arm animation.
+  |                                              Renders head model at interpolated offset.
+  |                                              Registered for MACHINE_FRAME BE type.
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -130,7 +140,7 @@ com.ideomancer.ideomod
   |     |                                      Call-pair toggle for backward walk grab immunity.
   |     |                                      Vanilla metal conductor scanning (bidirectional).
   |     |-- PistonBaseBlockMixin.java          IPistonMovable BE movement + data save + Oddstone pull
-  |     |                                      immunity + immovable inner. Uses MovementScanHelper.
+  |     |                                      immunity + immovable inner + Machine Piston immovability.
   |     |-- PistonMovingBlockEntityMixin.java  Restores IPistonMovable data after animation
   |     |-- EntityMovementMixin.java           Entity speed/jump factor for framed blocks.
   |     |                                      Generic ideomod$getFramedFactor() helper.
@@ -159,7 +169,9 @@ com.ideomancer.ideomod
         |-- ModCommands.java             /judgement command (Forge event bus)
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
-        |                                MACHINE_FRAME (shared), MACHINE_PIPE (pipe subclass),
+        |                                MACHINE_FRAME (shared: Frame, Track, Trolley, Conductor,
+        |                                Piston, Sticky Piston), MACHINE_PIPE (pipe subclass),
+        |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
         |                                FRAMED_BLOCK (shared iron/copper).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
         |                                (unified for all machine types).

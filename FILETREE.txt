@@ -19,13 +19,19 @@
 |  |           |  |  \\-- IFrameBlock.java
 |  |           |  +-- machine
 |  |           |  |  +-- AbstractMachineBlock.java
+|  |           |  |  +-- FluidType.java
 |  |           |  |  +-- IMachineFamily.java
 |  |           |  |  +-- MachineConductorBlock.java
+|  |           |  |  +-- MachineFluidPipeBlock.java
+|  |           |  |  +-- MachineFluidPipeBlockEntity.java
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
 |  |           |  |  +-- MachinePipeBlock.java
 |  |           |  |  +-- MachinePipeBlockEntity.java
+|  |           |  |  +-- MachinePistonBlock.java
+|  |           |  |  +-- MachinePistonHeadBlock.java
+|  |           |  |  +-- MachineStickyPistonBlock.java
 |  |           |  |  +-- MachineSwapHelper.java
 |  |           |  |  +-- MachineTrackBlock.java
 |  |           |  |  +-- MachineTrolleyBlock.java
@@ -62,6 +68,7 @@
 |  |           |  |  +-- FramedBlockItemModel.java
 |  |           |  |  +-- FramedBlockRenderer.java
 |  |           |  |  +-- FramedBlockRenderTypes.java
+|  |           |  |  +-- MachinePistonArmRenderer.java
 |  |           |  |  \\-- MovingFrameData.java
 |  |           |  +-- FramedBlockDebugOverlay.java
 |  |           |  \\-- ModColorHandlers.java
@@ -114,7 +121,11 @@
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
 |     |     |  +-- machine_conductor.json
+|     |     |  +-- machine_fluid_pipe.json
 |     |     |  +-- machine_pipe.json
+|     |     |  +-- machine_piston.json
+|     |     |  +-- machine_piston_head.json
+|     |     |  +-- machine_sticky_piston.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
@@ -139,8 +150,15 @@
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
 |     |     |  |  +-- machine_conductor.json
+|     |     |  |  +-- machine_fluid_pipe_empty.json
+|     |     |  |  +-- machine_fluid_pipe_lava.json
+|     |     |  |  +-- machine_fluid_pipe_water.json
 |     |     |  |  +-- machine_pipe.json
 |     |     |  |  +-- machine_pipe_filled.json
+|     |     |  |  +-- machine_piston.json
+|     |     |  |  +-- machine_piston_head.json
+|     |     |  |  +-- machine_piston_head_sticky.json
+|     |     |  |  +-- machine_sticky_piston.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
@@ -158,7 +176,10 @@
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
 |     |     |     +-- machine_conductor.json
+|     |     |     +-- machine_fluid_pipe.json
 |     |     |     +-- machine_pipe.json
+|     |     |     +-- machine_piston.json
+|     |     |     +-- machine_sticky_piston.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
@@ -181,8 +202,14 @@
 |     |        |  +-- machine_block.png
 |     |        |  +-- machine_conductor.png
 |     |        |  +-- machine_conductor_indicator.png
+|     |        |  +-- machine_extender.png
+|     |        |  +-- machine_fluid_pipe.png
+|     |        |  +-- machine_fluid_pipe_inner_empty.png
 |     |        |  +-- machine_pipe.png
 |     |        |  +-- machine_pipe_filled.png
+|     |        |  +-- machine_piston.png
+|     |        |  +-- machine_piston_arm.png
+|     |        |  +-- machine_sticky_piston.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
@@ -194,8 +221,7 @@
 |     |        |  +-- oddstone_attractor_side.png
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
-|     |        |  +-- oddstone_repulser_side.png
-|     |        |  \\-- oddstone1.png
+|     |        |  \\-- oddstone_repulser_side.png
 |     |        \\-- gui
 |     |           \\-- ideomod_gui.png
 |     +-- data
@@ -210,6 +236,10 @@
 |     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
 |     |  |  |     +-- machine_conductor.json
+|     |  |  |     +-- machine_fluid_pipe.json
+|     |  |  |     +-- machine_pipe.json
+|     |  |  |     +-- machine_piston.json
+|     |  |  |     +-- machine_sticky_piston.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json
@@ -234,9 +264,6 @@
 |     |  |  \\-- worldgen
 |     |  |     +-- world_preset
 |     |  |     \\-- chunky_geology_settings.json
-|     |  +-- loot_tables
-|     |  |  \\-- blocks
-|     |  |     \\-- machine_pipe.json
 |     |  \\-- minecraft
 |     |     \\-- tags
 |     |        +-- blocks
