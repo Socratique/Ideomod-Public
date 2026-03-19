@@ -1,5 +1,72 @@
 # Ideomod Changelog
 
+## [2026-03-17a] Machine Brace Specialization
+
+Machine Brace is a structural reinforcement specialization that increases the
+piston push limit for any push group it belongs to. Each Brace found within
+the current push limit adds +6 to the limit, cascading as new Braces are
+discovered. Hard cap of 60 blocks (8 Braces). The limit increase is dynamic
+-- the resolver's limit grows as Braces are gathered, so a Brace must be
+reachable within the limit that exists at the time of discovery.
+
+### New Files
+
+**MachineBraceBlock.java** (block/machine/):
+  Extends AbstractMachineBlock. MachineType.BRACE. Constants: +6 per brace,
+  60 max push limit, 8 max braces. No unique behavior beyond its machine type
+  -- the push limit increase is implemented in PistonStructureResolverMixin.
+
+### Modified Files
+
+**PistonStructureResolverMixin.java**: Added Feature 8 -- Machine Brace dynamic
+  push limit. @ModifyConstant targets the hardcoded constant 12 in addBlockLine().
+  Replacement method ideomod$calculatePushLimit() counts MachineBraceBlock
+  instances currently in toPush and returns 12 + (count * 6), capped at 60.
+  New import: MachineBraceBlock, Constant, ModifyConstant.
+
+**MachineType.java**: Added BRACE enum value.
+
+**MachineSwapHelper.java**: Added Machine Brace mapping using lazy registration
+  pattern. Machine Block item (our own mod item) cannot be resolved during mod
+  construction (DeferredRegister not yet resolved), so the mapping is registered
+  lazily via ensureBraceMapping() on first lookup. New fields: braceRegistered
+  boolean, ensureBraceMapping() method. getSpecializationBlock() and
+  ensureBlockToItem() both call ensureBraceMapping().
+
+**ModBlocks.java**: Added MACHINE_BRACE registration. Standard machine properties
+  (metal, 3.0/6.0, pickaxe, PushReaction.NORMAL). Added MachineBraceBlock import.
+
+**ModItems.java**: Added MACHINE_BRACE BlockItem registration.
+
+**ModBlockEntities.java**: Added ModBlocks.MACHINE_BRACE to MACHINE_FRAME
+  validBlocks list.
+
+**ModCreativeTabs.java**: Added Machine Brace pre-loaded stack to creative tab
+  (after Machine Sticky Piston).
+
+### Resource Files
+
+**blockstates/machine_brace.json**: Simple, no variants (cube_all).
+**models/block/machine_brace.json**: cube_all with machine_extender texture
+  (existing texture, rename pending).
+**models/item/machine_brace.json**: Inherits block model.
+**data/ideomod/loot_tables/blocks/machine_brace.json**: Standard block drop.
+**lang/en_us.json**: Added "block.ideomod.machine_brace": "Machine Brace".
+**tags/blocks/mineable/pickaxe.json**: Added "ideomod:machine_brace".
+
+### Challenges Resolved
+
+**DeferredRegister timing**: MachineSwapHelper.registerMappings() runs during
+  the Ideomod constructor (mod construction phase), before DeferredRegister
+  resolves RegistryObjects. Previous specializations all use vanilla items as
+  trigger keys (Items.POWERED_RAIL, etc.) which exist at construction time.
+  Machine Brace is the first specialization that uses our own mod item as the
+  trigger key. Calling ModBlocks.MACHINE_BLOCK.get().asItem() at construction
+  time throws NullPointerException. Fixed with lazy ensureBraceMapping() that
+  defers the mapping registration until first actual lookup (always post-
+  registration). Pattern documented for future specializations that use mod
+  items as triggers.
+
 ## [2026-03-15f] Machine Piston + Machine Sticky Piston Specializations
 
 Omnidirectional pistons as Machine Family specializations. Signal on any face

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-15e (Machine Fluid Pipe specialization implemented. Animated water/lava inner textures. Biome water tint. Lava light emission.)*
+*Last updated: 2026-03-17a (Machine Brace specialization implemented. Dynamic push limit via @ModifyConstant. Lazy swap mapping for mod-item triggers.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -273,6 +273,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [WIP] |
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
+| Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
 | Comparator | Repeater | TBD | REPEATER | [IDEA] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
@@ -296,11 +297,13 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
 | Fluid Pipe subclass BE | [DONE] | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fluid type tracking, cooldown, round-robin, input face tracking. IFluidHandler capability. Biome water tint via ModColorHandlers. Lava light emission (level 10). |
 | Piston extension/retraction | [DONE] | Omnidirectional. BESR animation. Head placed on extension completion, removed on retraction start. |
-| Piston pushing | [DONE] | Via BlockMoveHelper. 12-block limit. Full sticky group. Sound deduplication. |
+| Piston pushing | [DONE] | Via BlockMoveHelper. 12-block base limit (extendable by Machine Brace). Full sticky group. Sound deduplication. |
 | Sticky pull | [DONE] | Removes head, pulls block behind head via BlockMoveHelper. |
 | Piston immovability | [DONE] | PistonBaseBlockMixin Feature 5. Extended pistons cannot be pushed. |
-| Piston head block | [DONE] | MachinePistonHeadBlock. 8×8×16 shape. FACING+STICKY. Parent survival check. No drops. |
+| Piston head block | [DONE] | MachinePistonHeadBlock. 8x16 shape. FACING+STICKY. Parent survival check. No drops. |
 | BESR arm animation | [DONE] | MachinePistonArmRenderer. Per-face interpolated animation. 2-tick duration. Transient state in MachineFrameBlockEntity. |
+| Brace push limit increase | [DONE] | Each Machine Brace in a push group adds +6 to the push limit (base 12), up to 60. Cascading: limit grows as Braces are discovered. Implemented via @ModifyConstant in PistonStructureResolverMixin. |
+| Lazy swap mapping | [DONE] | Specializations using mod items as triggers (Brace uses Machine Frame item) register lazily via ensureBraceMapping() to avoid DeferredRegister timing issues. |
 
 ---
 

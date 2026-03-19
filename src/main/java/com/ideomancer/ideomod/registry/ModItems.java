@@ -66,6 +66,9 @@ public class ModItems {
     // No item for MACHINE_PISTON_HEAD -- it is not player-placeable.
     // Middle-click on the head returns the parent piston's item instead.
 
+    public static final RegistryObject<Item> MACHINE_BRACE = ITEMS.register("machine_brace",
+            () -> new BlockItem(ModBlocks.MACHINE_BRACE.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 

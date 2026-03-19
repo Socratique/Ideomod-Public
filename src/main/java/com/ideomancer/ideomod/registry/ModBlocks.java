@@ -6,6 +6,7 @@ import com.ideomancer.ideomod.block.frame.FrameBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
@@ -232,6 +233,18 @@ public class ModBlocks {
                     .pushReaction(PushReaction.BLOCK)
                     .noLootTable()
                     .noOcclusion()
+            ));
+
+    // Machine Brace: structural reinforcement. Increases push limit by 6 per Brace
+    // found in the push group, up to a hard cap of 60 (8 Braces max).
+    // pushReaction NORMAL so IPistonMovable can preserve block entity data.
+    public static final RegistryObject<Block> MACHINE_BRACE = BLOCKS.register("machine_brace",
+            () -> new MachineBraceBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
             ));
 
     // ========================================================================

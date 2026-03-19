@@ -21,6 +21,7 @@
 |  |           |  |  +-- AbstractMachineBlock.java
 |  |           |  |  +-- FluidType.java
 |  |           |  |  +-- IMachineFamily.java
+|  |           |  |  +-- MachineBraceBlock.java
 |  |           |  |  +-- MachineConductorBlock.java
 |  |           |  |  +-- MachineFluidPipeBlock.java
 |  |           |  |  +-- MachineFluidPipeBlockEntity.java
@@ -120,6 +121,7 @@
 |     |     |  +-- iron_frame.json
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
+|     |     |  +-- machine_brace.json
 |     |     |  +-- machine_conductor.json
 |     |     |  +-- machine_fluid_pipe.json
 |     |     |  +-- machine_pipe.json
@@ -149,6 +151,7 @@
 |     |     |  |  +-- iron_framed_block.json
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
+|     |     |  |  +-- machine_brace.json
 |     |     |  |  +-- machine_conductor.json
 |     |     |  |  +-- machine_fluid_pipe_empty.json
 |     |     |  |  +-- machine_fluid_pipe_lava.json
@@ -175,6 +178,7 @@
 |     |     |     +-- iron_frame.json
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
+|     |     |     +-- machine_brace.json
 |     |     |     +-- machine_conductor.json
 |     |     |     +-- machine_fluid_pipe.json
 |     |     |     +-- machine_pipe.json
@@ -209,7 +213,10 @@
 |     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_piston.png
 |     |        |  +-- machine_piston_arm.png
+|     |        |  +-- machine_repeater.png
 |     |        |  +-- machine_sticky_piston.png
+|     |        |  +-- machine_toggle.png
+|     |        |  +-- machine_toggle_on.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
@@ -235,6 +242,7 @@
 |     |  |  |     +-- iron_frame.json
 |     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
+|     |  |  |     +-- machine_brace.json
 |     |  |  |     +-- machine_conductor.json
 |     |  |  |     +-- machine_fluid_pipe.json
 |     |  |  |     +-- machine_pipe.json

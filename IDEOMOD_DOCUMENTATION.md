@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-15f (Machine Piston + Machine Sticky Piston specializations. BESR arm animation. PistonBaseBlockMixin Feature 5.)*
+*Last updated: 2026-03-17a (Machine Brace specialization. Dynamic push limit via @ModifyConstant. Lazy swap mapping for mod-item triggers.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -96,6 +96,8 @@ com.ideomancer.ideomod
   |     |     |-- MachineStickyPistonBlock.java  Extends MachinePistonBlock. isSticky()=true. Pulls on retract.
   |     |     |-- MachinePistonHeadBlock.java  8x8x16 arm block. FACING + STICKY. PushReaction.BLOCK.
   |     |     |                                updateShape validates parent piston. No drops.
+  |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
+  |     |     |                                Structural reinforcement. Push limit constants.
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
@@ -139,7 +141,7 @@ com.ideomancer.ideomod
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event (Forge event bus)
   |-- mixin/
-  |     |-- PistonStructureResolverMixin.java    5-feature mixin (see section 5)
+  |     |-- PistonStructureResolverMixin.java    8-feature mixin (see section 5)
   |     |-- PistonBaseBlockMixin.java            Allows IPistonMovable BE movement + saves data + immovable inner
   |     |-- PistonMovingBlockEntityMixin.java    Restores IPistonMovable data after animation
   |     |-- EntityMovementMixin.java             Entity speed/jump factor for framed blocks
@@ -197,6 +199,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_piston` | MachinePistonBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.PISTON. Omnidirectional. Ticker for arm animation. |
 | `machine_sticky_piston` | MachineStickyPistonBlock | Same properties as Machine Piston. MachineType.STICKY_PISTON. Sticky pull on retraction. |
 | `machine_piston_head` | MachinePistonHeadBlock | Hardness 0.5, metal sound. `PushReaction.BLOCK`. `noLootTable()`, `noOcclusion()`. FACING + STICKY. Not player-placeable. 8x8x16 collision shape. |
+| `machine_brace` | MachineBraceBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.BRACE. Structural reinforcement -- push limit increase via PistonStructureResolverMixin. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -206,16 +209,14 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
-
-Additionally: `STRUCTURE_DEBUG_STICK` -- standalone Item (not a BlockItem), `stacksTo(1)`. Hold in either hand to see structure register/deregister chat messages.
 
 ### ModCreativeTabs
 
 Two tabs:
-- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Machine Brace, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
 - `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
@@ -446,6 +447,7 @@ This is needed because ranged pistons pass the device's own position as `pistonP
 | `addBranchingBlocks` | TAIL | @Inject | Phase detection | Set `inBranching = false` |
 | `addBlockLine` | HEAD | @Inject (cancellable) | Feature 5 + 1A + 2A | Immovable inner check (all phases) + block sideways grabs (branching only) |
 | `addBlockLine` | canStickTo INVOKE | @Redirect | Features 1B+2B | Chain cohesion (call-pair toggle: grab immunity on Call 1 only) |
+| `addBlockLine` | constant 12 | @ModifyConstant | Feature 8 | Dynamic push limit from Machine Braces |
 
 ### Feature 5: Framed Block Immovable Inner (HEAD of addBlockLine)
 
@@ -468,6 +470,25 @@ Conditions for anchor detection (ALL must be true):
 4. Frame stickiness connects the neighbor to the group member (same material, cross-frame mediation via ideomod$wouldFrameStickinessAllow, or Machine Family adjacency)
 
 Helper: `ideomod$hasImmovableFrameAnchor()` — iterates toPush, checks 6 neighbors per block, returns true if any immovable anchor found.
+
+### Feature 8: Machine Brace Dynamic Push Limit (@ModifyConstant on addBlockLine)
+
+```
+@ModifyConstant(method = "addBlockLine", constant = @Constant(intValue = 12))
+```
+
+Replaces the hardcoded push limit constant (12) in addBlockLine() with a dynamic value based on Machine Braces in the toPush list. Each MachineBraceBlock adds +6, capped at 60 (8 Braces max).
+
+Helper: `ideomod$calculatePushLimit()` — iterates toPush, counts MachineBraceBlock instances (early-exits at MAX_BRACES=8), returns `12 + (count * 6)` capped at MAX_PUSH_LIMIT=60. Called every time vanilla checks the push limit during block gathering.
+
+The cascading behavior is automatic: as the resolver gathers blocks via addBlockLine's forward+backward walk and addBranchingBlocks' sideways grabs, each Brace discovered increases the limit for subsequent blocks. A Brace only counts if it was reachable within the limit at the time of discovery — a Brace at position 13 in a line won't be found unless an earlier Brace already raised the limit past 12.
+
+Performance: iterates toPush (max 60 entries) per limit check. Lightweight — no world lookups, just instanceof checks on cached blockstates.
+
+Constants defined in MachineBraceBlock:
+- PUSH_LIMIT_INCREASE_PER_BRACE = 6
+- MAX_PUSH_LIMIT = 60
+- MAX_BRACES = 8
 
 ---
 
@@ -1261,6 +1282,21 @@ Stickiness: MachineType.STICKY_PISTON -- sticks to other Sticky Pistons + Machin
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
+### Machine Brace -- Structural Push Limit Reinforcement
+
+Registry ID: `machine_brace`. Class: MachineBraceBlock extends AbstractMachineBlock. `MachineType.BRACE`. ~35 lines.
+
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing Machine Frame item in slot). No active behavior -- pure structural reinforcement.
+
+| Feature | Implementation |
+|---------|---------------|
+| **Push limit increase** | Each Brace in a push group adds +6 to the push limit (base 12). @ModifyConstant in PistonStructureResolverMixin replaces the hardcoded 12 with ideomod$calculatePushLimit(). Cascading: limit grows as Braces are gathered. Cap: 60 blocks (8 Braces). |
+| **Specialization item** | Machine Frame item (our own mod item). Lazy registration via ensureBraceMapping() in MachineSwapHelper -- first specialization to use a mod item as trigger key. |
+
+Stickiness: MachineType.BRACE -- sticks to other Braces + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, Pipes, Pistons, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
 ### Machine Piston Head -- Extended Arm Block
 
 Registry ID: `machine_piston_head`. Class: MachinePistonHeadBlock extends DirectionalBlock.
@@ -1515,7 +1551,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 
@@ -1573,6 +1609,8 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 **ThreadLocal coordination**: For passing context from caller into mixin. Set before creating the object that triggers the mixin, read inside the mixin, clear in a finally block. Class must live outside the mixin package.
 
 **Stickiness**: canStickTo = permissive (Layer 1). StickinessRules = restrictive (Layer 2+3). Never express one-way behavior in canStickTo alone. See section 4 for the golden rule.
+
+**Lazy swap mapping**: Specializations that use mod items as trigger keys (rather than vanilla items) must register lazily because DeferredRegister RegistryObjects are not resolved during mod construction. Pattern: skip the mapping in registerMappings(), add an ensureXxxMapping() method called from getSpecializationBlock() and ensureBlockToItem(). See MachineSwapHelper.ensureBraceMapping() as the reference implementation.
 
 **File naming**: All lowercase. Block classes use PascalCase matching the block concept (OddstoneBlock, MachineFrameBlock). Registry names use snake_case (oddstone, machine_block).
 

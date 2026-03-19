@@ -4,6 +4,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
@@ -21,7 +22,9 @@ import org.spongepowered.asm.mixin.Mutable;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Constant;
 import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.ModifyConstant;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -75,6 +78,56 @@ public abstract class PistonStructureResolverMixin {
         if (target != null) {
             this.startPos = target;
         }
+    }
+
+    // ====================================================================
+    // FEATURE 8: MACHINE BRACE DYNAMIC PUSH LIMIT
+    // ====================================================================
+
+    /**
+     * Replaces the hardcoded push limit constant (12) in addBlockLine() with
+     * a dynamic value based on how many Machine Brace blocks are already in
+     * the toPush list.
+     *
+     * The cascading behavior is automatic: as the resolver gathers blocks and
+     * encounters Braces, the limit increases, allowing it to gather more blocks
+     * which may include more Braces. Each Brace adds +6 to the limit, up to
+     * a hard cap of 60 (8 Braces). A Brace only counts if it was discovered
+     * within the limit that existed when it was found -- this is inherent in
+     * how the resolver works, since blocks beyond the current limit are never
+     * reached.
+     *
+     * The constant 12 appears in addBlockLine in two comparison points:
+     * - Forward walk: if (this.toPush.size() >= 12) return false;
+     * - Backward walk: the same size check
+     * @ModifyConstant targets ALL occurrences of the int constant 12 in the
+     * method. The replacement reads the current toPush list to count Braces.
+     */
+    @ModifyConstant(method = "addBlockLine", constant = @Constant(intValue = 12))
+    private int ideomod$dynamicPushLimit(int originalLimit) {
+        return ideomod$calculatePushLimit();
+    }
+
+    /**
+     * Calculates the current push limit based on Machine Braces in toPush.
+     * Base limit is 12. Each Brace adds 6. Cap at 60 (8 Braces max).
+     *
+     * This method is called every time vanilla checks the push limit during
+     * addBlockLine. It's lightweight: just iterates toPush (which is small,
+     * max 60 entries) and counts MachineBraceBlock instances.
+     */
+    @Unique
+    private int ideomod$calculatePushLimit() {
+        int braceCount = 0;
+        for (BlockPos pos : this.toPush) {
+            if (this.level.getBlockState(pos).getBlock() instanceof MachineBraceBlock) {
+                braceCount++;
+                if (braceCount >= MachineBraceBlock.MAX_BRACES) break;
+            }
+        }
+
+        int limit = 12 + (braceCount * MachineBraceBlock.PUSH_LIMIT_INCREASE_PER_BRACE);
+        return Math.min(limit, MachineBraceBlock.MAX_PUSH_LIMIT);
     }
 
     // ====================================================================

@@ -67,6 +67,12 @@ public final class MachineSwapHelper {
         itemToBlock.put(Items.PISTON,         () -> ModBlocks.MACHINE_PISTON.get());
         itemToBlock.put(Items.STICKY_PISTON,  () -> ModBlocks.MACHINE_STICKY_PISTON.get());
 
+        // Machine Brace: uses our own Machine Block item as the trigger.
+        // Can't register here because registerMappings() runs during mod
+        // construction, before DeferredRegister has resolved RegistryObjects.
+        // Vanilla items (above) are fine — they exist at construction time.
+        // Our own items don't exist yet. Registered lazily via ensureBraceMapping().
+
         // Future specializations:
         // itemToBlock.put(Items.COMPARATOR,      () -> ModBlocks.MACHINE_REPEATER.get());
         // itemToBlock.put(Items.REDSTONE_TORCH,  () -> ModBlocks.MACHINE_PULSER.get());
@@ -75,10 +81,36 @@ public final class MachineSwapHelper {
     }
 
     // ========================================================================
+    // LAZY BRACE MAPPING
+    // ========================================================================
+
+    /**
+     * Lazy registration for specializations that use our own mod items as
+     * trigger keys. Called on first lookup after blocks are available.
+     *
+     * This pattern is needed because registerMappings() runs during the Ideomod
+     * constructor (mod construction phase), before DeferredRegister resolves
+     * RegistryObjects. Vanilla items exist at that point but our own items don't.
+     */
+    private static boolean braceRegistered = false;
+
+    private static void ensureBraceMapping() {
+        if (braceRegistered) return;
+        braceRegistered = true;
+        try {
+            itemToBlock.put(ModBlocks.MACHINE_BLOCK.get().asItem(), () -> ModBlocks.MACHINE_BRACE.get());
+        } catch (NullPointerException e) {
+            // Still too early — will retry next call
+            braceRegistered = false;
+        }
+    }
+
+    // ========================================================================
     // BLOCK LOOKUP
     // ========================================================================
 
     public static Block getSpecializationBlock(net.minecraft.world.item.Item item) {
+        ensureBraceMapping();
         RegistrySupplier supplier = itemToBlock.get(item);
         return supplier != null ? supplier.get() : null;
     }
@@ -96,6 +128,7 @@ public final class MachineSwapHelper {
 
     private static void ensureBlockToItem() {
         if (blockToItem != null) return;
+        ensureBraceMapping();
         blockToItem = new IdentityHashMap<>();
         for (Map.Entry<net.minecraft.world.item.Item, RegistrySupplier> entry : itemToBlock.entrySet()) {
             blockToItem.put(entry.getValue().get(), entry.getKey());

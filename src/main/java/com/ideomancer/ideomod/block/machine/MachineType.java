@@ -33,6 +33,9 @@ public enum MachineType {
     /** Machine Trolley -- passive cargo carrier. */
     TROLLEY,
 
+    /** Machine Brace -- structural reinforcement, increases push limit. */
+    BRACE,
+
     /** Machine Repeater -- three-axis redstone repeater. */
     REPEATER,
 

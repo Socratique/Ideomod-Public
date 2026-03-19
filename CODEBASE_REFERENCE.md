@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-15f (Machine Piston + Machine Sticky Piston specializations. BESR arm animation.)*
+*Last updated: 2026-03-17a (Machine Brace specialization. Dynamic push limit. Lazy swap mapping.)*
 
 ---
 
@@ -85,6 +85,8 @@ com.ideomancer.ideomod
   |     |     |                                isSticky()=true. Pulls on retract.
   |     |     |-- MachinePistonHeadBlock.java  DirectionalBlock. FACING + STICKY. 8x8x16 shape.
   |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
+  |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
+  |     |     |                                Structural reinforcement. Push limit constants.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -170,7 +172,7 @@ com.ideomancer.ideomod
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |                                MACHINE_FRAME (shared: Frame, Track, Trolley, Conductor,
-        |                                Piston, Sticky Piston), MACHINE_PIPE (pipe subclass),
+        |                                Piston, Sticky Piston, Brace), MACHINE_PIPE (pipe subclass),
         |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
         |                                FRAMED_BLOCK (shared iron/copper).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
@@ -245,6 +247,8 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 **MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks/Conductors via direct blockstate access and from any vanilla redstone source via level.getSignal() (no whitelist needed -- Track emits no signal so no feedback risk). Signal direction detection checks actual sources (conduit blocks with higher POWER, any vanilla source with signal > 0) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
+
+**MachineBraceBlock**: Structural reinforcement. No active behavior. Push limit increase implemented in PistonStructureResolverMixin Feature 8 via @ModifyConstant -- each Brace in toPush adds +6 to the push limit (base 12, cap 60, max 8 Braces). Cascading: limit grows during block gathering as Braces are discovered. A Brace must be within the current limit to count. Machine Frame item as specialization trigger via lazy mapping (ensureBraceMapping).
 
 **MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 

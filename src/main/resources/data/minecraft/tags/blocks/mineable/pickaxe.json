@@ -17,6 +17,7 @@
     "ideomod:machine_pipe",
     "ideomod:machine_fluid_pipe",
     "ideomod:machine_piston",
-    "ideomod:machine_sticky_piston"
+    "ideomod:machine_sticky_piston",
+    "ideomod:machine_brace"
   ]
 }

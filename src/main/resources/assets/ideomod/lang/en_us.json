@@ -24,5 +24,6 @@
   "block.ideomod.machine_fluid_pipe": "Machine Fluid Pipe",
   "block.ideomod.machine_piston": "Machine Piston",
   "block.ideomod.machine_sticky_piston": "Machine Sticky Piston",
-  "block.ideomod.machine_piston_head": "Machine Piston Head"
+  "block.ideomod.machine_piston_head": "Machine Piston Head",
+  "block.ideomod.machine_brace": "Machine Brace"
 }
