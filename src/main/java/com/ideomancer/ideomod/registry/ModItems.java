@@ -28,8 +28,6 @@ public class ModItems {
     public static final RegistryObject<Item> ODDSTONE = ITEMS.register("oddstone",
             () -> new BlockItem(ModBlocks.ODDSTONE.get(), new Item.Properties()));
     
-    // Registry ID remains "machine_block" for world compatibility.
-    // Display name changed to "Machine Frame".
     public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
             () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
     
@@ -64,10 +62,12 @@ public class ModItems {
             () -> new BlockItem(ModBlocks.MACHINE_STICKY_PISTON.get(), new Item.Properties()));
 
     // No item for MACHINE_PISTON_HEAD -- it is not player-placeable.
-    // Middle-click on the head returns the parent piston's item instead.
 
     public static final RegistryObject<Item> MACHINE_BRACE = ITEMS.register("machine_brace",
             () -> new BlockItem(ModBlocks.MACHINE_BRACE.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> MACHINE_REPEATER = ITEMS.register("machine_repeater",
+            () -> new BlockItem(ModBlocks.MACHINE_REPEATER.get(), new Item.Properties()));
 
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));

@@ -25,7 +25,7 @@ public class ModBlockEntities {
      * Machine Frame block entity type. Shared by all Machine Family blocks
      * that use the base MachineFrameBlockEntity (single specialization slot):
      * Machine Frame, Machine Track, Machine Trolley, Machine Conductor,
-     * Machine Piston, Machine Sticky Piston, Machine Brace.
+     * Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater.
      * Each specialization stores its trigger item in the single slot.
      */
     public static final RegistryObject<BlockEntityType<MachineFrameBlockEntity>> MACHINE_FRAME =
@@ -38,7 +38,8 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_CONDUCTOR.get(),
                             ModBlocks.MACHINE_PISTON.get(),
                             ModBlocks.MACHINE_STICKY_PISTON.get(),
-                            ModBlocks.MACHINE_BRACE.get()
+                            ModBlocks.MACHINE_BRACE.get(),
+                            ModBlocks.MACHINE_REPEATER.get()
                     ).build(null));
 
     /**

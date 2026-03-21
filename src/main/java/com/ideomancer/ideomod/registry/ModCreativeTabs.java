@@ -19,26 +19,12 @@ import java.util.List;
 /**
  * Registry for creative mode tabs.
  *
- * The framed blocks tab caches the list of frameable blocks on first open
- * rather than iterating the entire block registry every time. The cache
- * is built once (after all mods have registered their blocks) and reused
- * for all subsequent tab opens.
- *
- * Since frameability now depends on the ideomod:frameable_blocks tag,
- * the cache is invalidated on datapack reload so changes take effect
- * without restarting.
- *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
 public class ModCreativeTabs {
 
-    /** Cached list of blocks that pass FrameabilityHelper.isFrameable(). Built on first tab open. */
     private static List<Block> cachedFrameableBlocks = null;
 
-    /**
-     * Returns the cached list of frameable blocks, building it on first call.
-     * Thread-safe: displayItems runs on the main thread, so no synchronization needed.
-     */
     private static List<Block> getFrameableBlocks() {
         if (cachedFrameableBlocks == null) {
             cachedFrameableBlocks = new ArrayList<>();
@@ -52,10 +38,6 @@ public class ModCreativeTabs {
         return cachedFrameableBlocks;
     }
 
-    /**
-     * Invalidate the frameable blocks cache. Call this on datapack reload
-     * so tag changes take effect without restarting.
-     */
     public static void invalidateCache() {
         cachedFrameableBlocks = null;
         Ideomod.LOGGER.debug("[ModCreativeTabs] Frameable blocks cache invalidated");
@@ -78,7 +60,6 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ODDSTONE_ATTRACTOR.get());
 
                         // Machine specializations: pre-loaded with their specialization item
-                        // so they come ready to place as the correct block type.
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TRACK.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TROLLEY.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_CONDUCTOR.get()));
@@ -87,6 +68,7 @@ public class ModCreativeTabs {
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_PISTON.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_STICKY_PISTON.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_BRACE.get()));
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_REPEATER.get()));
 
                         // Frame Blocks
                         output.accept(ModItems.IRON_FRAME.get());
@@ -98,18 +80,9 @@ public class ModCreativeTabs {
                     .build()
     );
 
-    /**
-     * Dynamic creative tab for Framed Blocks.
-     *
-     * Uses a cached list of frameable blocks (built on first open) instead
-     * of iterating the entire block registry every time the tab is opened.
-     * Since frameability is now tag-based (ideomod:frameable_blocks),
-     * the cache is invalidated on datapack reload via invalidateCache().
-     */
     public static final RegistryObject<CreativeModeTab> FRAMED_BLOCKS_TAB = CREATIVE_TABS.register("framed_blocks_tab",
             () -> CreativeModeTab.builder()
                     .icon(() -> {
-                        // Icon: iron framed stone
                         return FramedBlockItem.createStack(
                                 ModItems.IRON_FRAMED_BLOCK.get(),
                                 net.minecraft.world.level.block.Blocks.STONE);
@@ -117,10 +90,8 @@ public class ModCreativeTabs {
                     .title(Component.translatable("itemGroup." + Ideomod.MOD_ID + ".framed_blocks_tab"))
                     .displayItems((parameters, output) -> {
                         for (Block block : getFrameableBlocks()) {
-                            // Iron variant
                             output.accept(FramedBlockItem.createStack(
                                     ModItems.IRON_FRAMED_BLOCK.get(), block));
-                            // Copper variant
                             output.accept(FramedBlockItem.createStack(
                                     ModItems.COPPER_FRAMED_BLOCK.get(), block));
                         }

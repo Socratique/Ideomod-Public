@@ -31,11 +31,14 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Also stores an inputFace for redstone-active specializations (Conductor,
- * future Toggle/Pulser/Transformer/Arm). The input face is the direction
- * from which signal is received; the block outputs on all other faces.
- * Specializations that don't use redstone (Track, Trolley, Frame) ignore
- * this field. inputFace is reset to null on every specialization swap to
- * prevent stale directional data from leaking between specialization types.
+ * Repeater, future Toggle/Pulser/Transformer/Arm). The input face is the
+ * direction from which signal is received; the block outputs on all other
+ * faces. Specializations that don't use redstone (Track, Trolley, Frame)
+ * ignore this field. inputFace is reset to null on every specialization swap
+ * to prevent stale directional data from leaking between specialization types.
+ *
+ * Also stores repeaterDelay for the Machine Repeater specialization (1-4
+ * redstone ticks). Reset to 1 on every specialization swap.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -46,10 +49,11 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final int[] SLOTS = {0};
 
     private static final String TAG_INPUT_FACE = "InputFace";
+    private static final String TAG_REPEATER_DELAY = "RepeaterDelay";
 
     /**
      * The face from which this block receives redstone signal.
-     * Null = no input (unpowered). Used by Conductor and future
+     * Null = no input (unpowered). Used by Conductor, Repeater, and future
      * redstone specializations. Signal is output on all faces EXCEPT this one.
      *
      * IMPORTANT: This field is reset to null whenever the specialization
@@ -58,6 +62,16 @@ public class MachineFrameBlockEntity extends BlockEntity
      */
     @Nullable
     private Direction inputFace = null;
+
+    /**
+     * Delay setting for the Machine Repeater, in redstone ticks (1-4).
+     * Each redstone tick = 2 game ticks. Default 1 (fastest).
+     * Only meaningful when the block is a MachineRepeaterBlock; other
+     * specializations ignore this field.
+     *
+     * Reset to 1 on every specialization swap (via triggerSwapCheck).
+     */
+    private int repeaterDelay = 1;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -100,6 +114,38 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputFace != face) {
             this.inputFace = face;
             this.setChanged();
+        }
+    }
+
+    // ========================================================================
+    // REPEATER DELAY (for Machine Repeater)
+    // ========================================================================
+
+    /**
+     * Get the repeater delay in redstone ticks (1-4).
+     */
+    public int getRepeaterDelay() {
+        return this.repeaterDelay;
+    }
+
+    /**
+     * Set the repeater delay in redstone ticks (1-4).
+     * Clamps to valid range. Syncs DELAY blockstate if the block is a Repeater.
+     */
+    public void setRepeaterDelay(int delay) {
+        delay = Math.max(1, Math.min(4, delay));
+        if (this.repeaterDelay != delay) {
+            this.repeaterDelay = delay;
+            this.setChanged();
+
+            // Sync the DELAY blockstate property on the block
+            if (this.level != null && !this.level.isClientSide()) {
+                BlockState state = this.getBlockState();
+                if (state.getBlock() instanceof MachineRepeaterBlock) {
+                    this.level.setBlock(this.worldPosition,
+                            state.setValue(MachineRepeaterBlock.DELAY, delay), 2);
+                }
+            }
         }
     }
 
@@ -150,6 +196,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputFace != null) {
             tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
         }
+        if (this.repeaterDelay != 1) {
+            tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
+        }
     }
 
     @Override
@@ -162,25 +211,22 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.inputFace = null;
         }
+        if (tag.contains(TAG_REPEATER_DELAY)) {
+            this.repeaterDelay = Math.max(1, Math.min(4, tag.getInt(TAG_REPEATER_DELAY)));
+        } else {
+            this.repeaterDelay = 1;
+        }
     }
 
     // ========================================================================
     // CLIENT SYNC
     // ========================================================================
 
-    /**
-     * Creates the packet sent to clients when the BE needs syncing.
-     * Vanilla calls this when level.sendBlockUpdated() is invoked.
-     */
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
     }
 
-    /**
-     * Provides the NBT data to include in the sync packet.
-     * Same as save data — sends items and inputFace to clients.
-     */
     @Override
     public CompoundTag getUpdateTag() {
         CompoundTag tag = super.getUpdateTag();
@@ -188,14 +234,12 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputFace != null) {
             tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
         }
+        if (this.repeaterDelay != 1) {
+            tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
+        }
         return tag;
     }
 
-    /**
-     * Notifies clients that this BE's data has changed.
-     * Called after setItemDirect() in the swap flow and after any
-     * other data change that clients need to see.
-     */
     public void syncToClients() {
         if (this.level != null && !this.level.isClientSide()) {
             this.level.sendBlockUpdated(this.worldPosition,
@@ -215,6 +259,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputFace != null) {
             tag.putInt(TAG_INPUT_FACE, this.inputFace.get3DDataValue());
         }
+        if (this.repeaterDelay != 1) {
+            tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
+        }
         return tag;
     }
 
@@ -226,6 +273,11 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
         } else {
             this.inputFace = null;
+        }
+        if (tag.contains(TAG_REPEATER_DELAY)) {
+            this.repeaterDelay = Math.max(1, Math.min(4, tag.getInt(TAG_REPEATER_DELAY)));
+        } else {
+            this.repeaterDelay = 1;
         }
         this.setChanged();
     }
@@ -294,10 +346,9 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     private void triggerSwapCheck() {
         // Clear stale directional data from the previous specialization.
-        // The new specialization will set its own inputFace when it first
-        // receives a signal. Without this reset, swapping e.g. Conductor -> Track
-        // -> Conductor would inherit the old Conductor's inputFace.
         this.inputFace = null;
+        // Reset repeater delay to default (prevents stale delay leaking)
+        this.repeaterDelay = 1;
 
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));

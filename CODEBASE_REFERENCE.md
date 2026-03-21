@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-17a (Machine Brace specialization. Dynamic push limit. Lazy swap mapping.)*
+*Last updated: 2026-03-21a (Machine Repeater specialization. Network packet system. Numbered button spritesheet.)*
 
 ---
 
@@ -87,6 +87,9 @@ com.ideomancer.ideomod
   |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
   |     |     |                                Structural reinforcement. Push limit constants.
+  |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER.
+  |     |     |                                Omnidirectional repeater. POWERED + DELAY blockstates.
+  |     |     |                                5-layer anti-feedback. updatingPos ThreadLocal.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -135,6 +138,11 @@ com.ideomancer.ideomod
   |                                              Registered for MACHINE_FRAME BE type.
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
+  |-- network/
+  |     |-- ModNetworking.java           Forge SimpleChannel ("ideomod:main").
+  |     |                                registerPackets() called from commonSetup.
+  |     \-- RepeaterDelayPacket.java     Client->Server delay change. Validates range,
+  |                                      distance, block type.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
@@ -172,7 +180,7 @@ com.ideomancer.ideomod
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |                                MACHINE_FRAME (shared: Frame, Track, Trolley, Conductor,
-        |                                Piston, Sticky Piston, Brace), MACHINE_PIPE (pipe subclass),
+        |                                Repeater, Piston, Sticky Piston, Brace), MACHINE_PIPE (pipe subclass),
         |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
         |                                FRAMED_BLOCK (shared iron/copper).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
@@ -250,6 +258,8 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **MachineBraceBlock**: Structural reinforcement. No active behavior. Push limit increase implemented in PistonStructureResolverMixin Feature 8 via @ModifyConstant -- each Brace in toPush adds +6 to the push limit (base 12, cap 60, max 8 Braces). Cascading: limit grows during block gathering as Braces are discovered. A Brace must be within the current limit to count. Machine Frame item as specialization trigger via lazy mapping (ensureBraceMapping).
 
+**MachineRepeaterBlock**: Omnidirectional redstone repeater. POWERED (boolean) + DELAY (1-4) blockstates. Always outputs 15 when powered on all non-input faces. Configurable delay 1-4 redstone ticks via GUI buttons. Anti-feedback: 5-layer architecture -- (1) getSignal input-face suppression via `direction == inputFace.getOpposite()`, (2) neighborChanged output-face early-return via getFaceFromSourcePos, (3) protected inputFace (never modified in neighborChanged when powered), (4) input-face-first tick (no full-scan when powered), (5) updatingPos ThreadLocal blocks re-entrant neighborChanged at own position during setBlock cascade. shouldSignal ThreadLocal suppresses isSignalSource + getDirectSignal during own scan. Signal detection: getIncomingSignalFromFace handles Conductor (-1 decay), other Repeater (15 if powered, input-face aware), RedStoneWireBlock (POWER -1 decay), vanilla (level.getSignal with shouldSignal=false). Tick uses setBlock flag 3, no manual updateNeighborsAt except onRemove.
+
 **MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 
 **MachinePipeBlock**: Push-only item transport. Own BE subclass (MachinePipeBlockEntity, BlockEntityType MACHINE_PIPE). FILLED BooleanProperty drives texture. Server ticker pushes 1 item per 8 ticks via IItemHandler capability. Round-robin output relative to input face (forward, right, left, up, down). Redstone locks. No pulling. Input face tracked via: player GUI = UP, hopper/automation = ThreadLocal pendingInputFace in canPlaceItemThroughFace, pipe-to-pipe = onItemReceived() called by sender. Piston safety: movedByPiston guard in onRemove prevents duplication; minimum cooldown in loadMovementData prevents immediate push after landing. updateFilledState guarded against isSwapping. Comparator output scales transit fullness.
@@ -321,7 +331,7 @@ Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachine
 
 **IMachineFamily interface** (`block/machine/IMachineFamily.java`): Provides `getMachineType()` and static `canMachineFamilyStickTo(MachineType, BlockState)`. Type check: FRAME sticks to everything, specializations stick to same-type + FRAME. Frame Family requires active. Slime types permissive.
 
-**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe, Repeater <-> Machine Repeater). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
 **PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Reports 2 slots. Slot 0 resolves to any MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity (returns empty for non-pipes). isPipe() for live type checking. Survives block swaps without close/reopen.
 

@@ -1,0 +1,12 @@
+{
+  "variants": {
+    "delay=1,powered=false": { "model": "ideomod:block/machine_repeater_1" },
+    "delay=1,powered=true":  { "model": "ideomod:block/machine_repeater_1" },
+    "delay=2,powered=false": { "model": "ideomod:block/machine_repeater_2" },
+    "delay=2,powered=true":  { "model": "ideomod:block/machine_repeater_2" },
+    "delay=3,powered=false": { "model": "ideomod:block/machine_repeater_3" },
+    "delay=3,powered=true":  { "model": "ideomod:block/machine_repeater_3" },
+    "delay=4,powered=false": { "model": "ideomod:block/machine_repeater_4" },
+    "delay=4,powered=true":  { "model": "ideomod:block/machine_repeater_4" }
+  }
+}

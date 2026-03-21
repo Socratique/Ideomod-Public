@@ -29,6 +29,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * When a player inserts an item into slot 1 via GUI, this is treated as
  * input from Direction.UP (top of block) for the pipe's round-robin system.
  *
+ * REPEATER SUPPORT:
+ * =================
+ * isRepeater() checks if the current block is a MachineRepeaterBlock.
+ * getRepeaterDelay() reads the delay from the BE for ContainerData sync.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class PositionBoundContainer implements Container {
@@ -63,6 +68,21 @@ public class PositionBoundContainer implements Container {
      */
     public boolean isPipe() {
         return getPipeBE() != null;
+    }
+
+    /**
+     * Check if the current block is a Machine Repeater.
+     */
+    public boolean isRepeater() {
+        return level.getBlockState(pos).getBlock() instanceof MachineRepeaterBlock;
+    }
+
+    /**
+     * Get the repeater delay from the BE. Returns 1 if not a repeater.
+     */
+    public int getRepeaterDelay() {
+        MachineFrameBlockEntity be = getBE();
+        return be != null ? be.getRepeaterDelay() : 1;
     }
 
     // ========================================================================

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-17a (Machine Brace specialization implemented. Dynamic push limit via @ModifyConstant. Lazy swap mapping for mod-item triggers.)*
+*Last updated: 2026-03-21a (Machine Repeater specialization implemented. Omnidirectional redstone repeater with configurable delay.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -274,7 +274,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
-| Comparator | Repeater | TBD | REPEATER | [IDEA] |
+| Comparator | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
 | Lever | Toggle | TBD | TOGGLE | [IDEA] |
@@ -324,8 +324,8 @@ Fluid vacuum and depositor. Bucket specialization item. Own BE subclass (Machine
 **Machine Track:** [DONE]
 Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.
 
-**Machine Repeater:**
-Three-axis redstone repeater. Receives signal on any face, outputs on the opposite. No locking (removed -- timing/strength disambiguation broken for three-axis; players who need locking use vanilla repeaters).
+**Machine Repeater:** [DONE]
+Omnidirectional redstone repeater. Receives signal on any face, outputs full-strength 15 on all other faces with configurable delay (1-4 redstone ticks). Specialization item: vanilla Repeater. Shares MachineFrameBlockEntity with repeaterDelay field. Blockstate: POWERED (boolean) + DELAY (1-4). No locking (three-axis makes locking impractical; players who need locking use vanilla repeaters). GUI shows 4 numbered buttons for delay selection. Anti-feedback via 5-layer architecture: output-face early-return in neighborChanged, protected inputFace (only modified in tick when powered), input-face-first tick evaluation, updatingPos ThreadLocal for re-entrant protection, shouldSignal ThreadLocal for solid-block self-read suppression. Dual-cuboid visual model with tinted underlay (black=off, red=on). First specialization with custom networking (RepeaterDelayPacket via Forge SimpleChannel).
 
 **Machine Clock:**
 Emits a configurable redstone pulse at a set interval. Right-click to cycle intervals.

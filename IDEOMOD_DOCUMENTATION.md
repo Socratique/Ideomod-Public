@@ -1182,6 +1182,49 @@ Frame activation: Always emits activation (strength 15). Never suppresses.
 
 **Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). ~~(2) Base texture renders black (issue #13 -- FIXED 2026-03-14, cutout render type).~~
 
+### Machine Repeater -- Omnidirectional Redstone Repeater
+
+Registry ID: `machine_repeater`. Class: MachineRepeaterBlock extends AbstractMachineBlock. `MachineType.REPEATER`.
+
+Omnidirectional redstone repeater. Receives signal on one face (input), outputs full-strength 15 on all other 5 faces with configurable delay. Specialization item: vanilla Repeater.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot + 4 delay buttons).
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) + DELAY (IntegerProperty 1-4) |
+| **Output** | Always strength 15 when POWERED, on all non-input faces |
+| **Delay** | 1-4 redstone ticks (2-8 game ticks). Default 1. Set via GUI buttons. |
+| **Locking** | None (three-axis makes locking impractical) |
+
+**Input/Output Face Model**: Same concept as Conductor -- receives on one face, outputs on other 5. Input face = strongest incoming signal. Stored as `inputFace` in MachineFrameBlockEntity.
+
+**Anti-feedback Architecture** (5 layers, derived from vanilla DiodeBlock analysis):
+
+1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. `shouldSignal` ThreadLocal (static on block class) suppresses `isSignalSource` and `getDirectSignal` during own scan to prevent self-reads through solid blocks.
+
+2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face (determined via `getFaceFromSourcePos(pos, sourcePos)`), return immediately. Only input-face updates proceed to logic.
+
+3. Protected inputFace: neighborChanged NEVER modifies inputFace when powered. When powered and input-face update arrives, only checks that single face's signal. If signal gone, schedules tick. Does NOT full-scan (output-face dust would give false positives).
+
+4. Input-face-first tick: when powered, tick() checks only current inputFace. If still has signal, stays on. If signal gone, turns off (inputFace set to null). Full-scan only happens when unpowered (safe because no output-face dust has power from us).
+
+5. updatingPos ThreadLocal: during tick()'s setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately (prevents stale dust reads during synchronous cascade). Adjacent repeaters at different positions proceed normally.
+
+**Signal Detection**: `getIncomingSignalFromFace()` handles four neighbor types: MachineConductorBlock (getSignal with -1 decay), MachineRepeaterBlock (15 if powered and we're not on their input face), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
+
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at configured delay (DELAY * 2 game ticks). Uses `willTickThisTick()` guard. tick() uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+
+**GUI Buttons**: 4 numbered buttons from `ideomod_numbered_buttons.png` rendered in transit slot zone (Y=37, same space as pipe transit slot). `MachineFrameScreen.mouseClicked()` sends `RepeaterDelayPacket`. `MachineFrameMenu` uses split constructor pattern with `ContainerData` for cross-side delay sync.
+
+**Networking**: `RepeaterDelayPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates delay range (1-4), player distance (64 blocks), block type.
+
+**Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1 -- black when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
+
+Stickiness: MachineType.REPEATER -- sticks to other Repeaters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Tracks, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
 ### Machine Pipe -- Push-Only Item Transport
 
 Registry ID: `machine_pipe`. Class: MachinePipeBlock extends AbstractMachineBlock. `MachineType.PIPE`.
@@ -1551,7 +1594,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 

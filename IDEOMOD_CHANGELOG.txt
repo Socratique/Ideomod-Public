@@ -1,5 +1,224 @@
 # Ideomod Changelog
 
+## [2026-03-21] Machine Repeater Specialization + Networking + Numbered Button Spritesheet
+
+New Machine Family specialization: Machine Repeater. Omnidirectional redstone
+repeater that receives signal on one face, outputs full-strength 15 on all
+other faces with configurable delay (1-4 redstone ticks). First specialization
+requiring custom networking (Forge SimpleChannel) and GUI buttons.
+
+Also added: numbered button spritesheet (1-64) and deploy script convention doc.
+
+### Machine Repeater -- Behaviour
+
+- Specialization item: Vanilla Repeater (Items.REPEATER)
+- MachineType.REPEATER, shares MachineFrameBlockEntity
+- Blockstate: POWERED (boolean) + DELAY (IntegerProperty 1-4)
+- Output: always strength 15 on all non-input faces when POWERED
+- Delay: 1-4 redstone ticks (2-8 game ticks). Default 1. Set via GUI buttons.
+- No locking (three-axis makes locking impractical)
+- Input face model: same as Conductor -- strongest incoming signal wins
+
+### Machine Repeater -- Anti-Feedback Architecture
+
+The Repeater required a fundamentally different anti-feedback approach from the
+Conductor (which uses shouldSignal ThreadLocal + variable power decay). The
+Repeater always outputs 15, meaning any feedback path is full-strength and
+self-sustaining. Seven iterations were needed to reach a stable design.
+
+Final architecture (derived from vanilla DiodeBlock analysis):
+
+1. **getSignal/getDirectSignal**: return 0 toward input face (direction ==
+   inputFace.getOpposite()), 15 on all other faces. shouldSignal ThreadLocal
+   suppresses self-reads through solid blocks during scan.
+
+2. **neighborChanged output-face early-return**: when POWERED and the update
+   comes from a non-input face, return immediately. This is the omnidirectional
+   equivalent of vanilla DiodeBlock only reading from FACING.
+
+3. **Protected inputFace**: neighborChanged NEVER modifies inputFace when
+   powered. Only tick() does. Prevents intermediate dust states (power=0 during
+   vanilla recalculation) from corrupting inputFace to null.
+
+4. **Input-face-first tick**: when powered, tick() checks only the current
+   input face. Does NOT full-scan (output-face dust has POWER=15 from us,
+   creating false positive signal 14). Only does full scan when unpowered.
+
+5. **setBlock flag 3**: tick() uses UPDATE_NEIGHBORS | UPDATE_CLIENTS so
+   adjacent blocks learn about our state change. No manual updateNeighborsAt
+   calls except in onRemove.
+
+6. **updatingPos ThreadLocal**: during tick()'s setBlock, blocks re-entrant
+   neighborChanged at THIS position only. Adjacent repeaters at different
+   positions still receive their updates normally.
+
+### Challenges Resolved (7 iterations)
+
+1. **Cascading neighbor updates (v1-v3)**: neighborChanged or onPlace calling
+   updateNeighborsAt triggered infinite cascading through adjacent dust. Fix:
+   removed all manual updateNeighborsAt except onRemove. Let setBlock flag 3
+   handle propagation.
+
+2. **inputFace corruption (v3-v4)**: scanAllFaces during neighborChanged read
+   dust at intermediate power=0 during vanilla recalculation, setting inputFace
+   to null. This disabled both the getSignal suppression and the output-face
+   early-return guard. Fix: never modify inputFace in neighborChanged when
+   powered.
+
+3. **setBlock flag 2 vs 3 (v4-v6)**: flag 2 (UPDATE_CLIENTS only) doesn't
+   fire neighborChanged on adjacent blocks. Dust never learned about our state
+   change. Fix: use flag 3 (UPDATE_NEIGHBORS | UPDATE_CLIENTS).
+
+4. **getSignal direction convention (v5)**: Incorrectly flipped the input
+   face suppression from inputFace.getOpposite() to inputFace. Caused output
+   on input face and suppression on output faces. Fix: reverted to the correct
+   Conductor convention (inputFace.getOpposite()).
+
+5. **Output-face dust false positives (v6-v7)**: when powered and outputting 15
+   to adjacent dust, that dust had POWER=15. Full rescan in tick() read this
+   as signal 14 and jumped inputFace to the output face. Fix: when powered,
+   tick() only checks the current input face, not all 6.
+
+6. **Stale dust reads on turn-off (v6-v7)**: setBlock(POWERED=false, flag 3)
+   triggered synchronous neighborChanged on output dust. Dust recalculated but
+   some hadn't finished yet. Re-entrant neighborChanged on us read stale
+   POWER=15 from un-recalculated dust. Fix: updatingPos ThreadLocal blocks
+   re-entrant calls at our position.
+
+7. **Global isUpdating blocking adjacent repeaters (v7)**: boolean ThreadLocal
+   blocked ALL repeaters' neighborChanged, not just the one doing the update.
+   Fix: changed to BlockPos ThreadLocal (updatingPos) so only the specific
+   position being updated is blocked.
+
+### Key Learning: Vanilla DiodeBlock Pattern
+
+Vanilla repeaters prevent feedback through static geometry: they only read from
+FACING (back) and only output on FACING.getOpposite() (front). Our omnidirectional
+version achieves the same property dynamically: once an input face is locked,
+only that face can trigger state changes. Output-face activity is completely
+ignored while powered. This is the "dynamic facing" pattern -- functionally
+identical to a vanilla repeater that chose its direction at runtime.
+
+### Visual System: Dual-Cuboid Tinted Underlay
+
+Same pattern as Fluid Pipe. Inner underlay cuboid (0.05 inset) uses
+machine_repeater_indicator.png (solid white) tinted via tintIndex 1 --
+black when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell
+uses delay-variant textures with transparent windows. 4 block models (not 8 --
+tint handles on/off). Blockstate maps both powered=true/false to same model
+per delay.
+
+### GUI: Delay Buttons
+
+4 delay buttons (1-4) rendered in transit slot zone (Y=37) when isRepeater().
+Uses ideomod_numbered_buttons.png spritesheet. Selected button shows pressed
+state. Click sends RepeaterDelayPacket to server.
+
+### Networking: Forge SimpleChannel (new system)
+
+First custom network packet in the mod. ModNetworking.java registers a Forge
+SimpleChannel ("ideomod:main", version "1"). RepeaterDelayPacket carries
+BlockPos + delay value, validates range (1-4), distance (64 blocks), and
+block type on server.
+
+### Numbered Button Spritesheet
+
+Generated ideomod_numbered_buttons.png (256x256) with buttons 1-64 in
+Minecraft-accurate 5x7 bitmap font. Unselected (Y 0-63): black text, light
+emboss shadow, raised 3D bevel. Selected (Y 64-127): white text, dark shadow,
+pressed bevel. UV: col=(N-1)%16, row=(N-1)/16, unselected v=row*16,
+selected v=row*16+64.
+
+### MachineFrameMenu Split Constructor
+
+Menu now has separate server and client constructors (vanilla AbstractFurnaceMenu
+pattern). Server constructor: live-reading ContainerData from BE. Client
+constructor: SimpleContainerData receiving synced values. DATA_REPEATER_DELAY=0,
+DATA_IS_REPEATER=1, DATA_SIZE=2. isRepeater()/getRepeaterDelay() read from
+ContainerData (works on both sides).
+
+### New Files
+
+**MachineRepeaterBlock.java** (block/machine/): Omnidirectional redstone
+  repeater with 5-layer anti-feedback architecture. POWERED + DELAY blockstates.
+  scanAllFaces + getIncomingSignalFromFace for signal detection. Input-face-first
+  tick evaluation. updatingPos ThreadLocal for re-entrant protection.
+
+**ModNetworking.java** (network/): Forge SimpleChannel registration.
+  registerPackets() called from commonSetup in Ideomod.java.
+
+**RepeaterDelayPacket.java** (network/): Client-to-server packet for delay
+  button clicks. Validates range, distance, block type.
+
+**ideomod_numbered_buttons.png** (textures/gui/): 256x256 spritesheet with
+  buttons 1-64. Unselected + selected states.
+
+**machine_repeater_indicator.png** (textures/block/): 16x16 solid white
+  texture for tinted underlay.
+
+**blockstates/machine_repeater.json**: 8 variants (DELAY x POWERED).
+
+**models/block/machine_repeater_1.json through _4.json**: Dual-cuboid models
+  with cutout render type.
+
+**models/item/machine_repeater.json**: Standard parent block model.
+
+**loot_tables/blocks/machine_repeater.json**: Simple self-drop.
+
+### Modified Files
+
+**MachineFrameBlockEntity.java**: Added repeaterDelay field (int, 1-4, default
+  1). Saved in saveAdditional, load, getUpdateTag, saveMovementData,
+  loadMovementData. Reset to 1 in triggerSwapCheck(). setRepeaterDelay() syncs
+  DELAY blockstate.
+
+**MachineFrameMenu.java**: Split constructor pattern. Server constructor with
+  live ContainerData, client constructor with SimpleContainerData. DATA_SIZE=2
+  for repeater delay + isRepeater flag.
+
+**MachineFrameScreen.java**: Added BUTTON_SHEET ResourceLocation. Renders delay
+  buttons 1-4 in transit slot zone when isRepeater(). mouseClicked() sends
+  RepeaterDelayPacket.
+
+**PositionBoundContainer.java**: Added isRepeater() and getRepeaterDelay()
+  methods.
+
+**MachineSwapHelper.java**: Added Items.REPEATER -> MACHINE_REPEATER mapping.
+
+**MachineType.java**: Added REPEATER enum value.
+
+**ModBlocks.java**: Added MACHINE_REPEATER registration (isRedstoneConductor=
+  false, pushReaction=NORMAL).
+
+**ModItems.java**: Added MACHINE_REPEATER BlockItem.
+
+**ModBlockEntities.java**: Added MACHINE_REPEATER to shared MACHINE_FRAME
+  valid blocks.
+
+**ModCreativeTabs.java**: Added Machine Repeater pre-loaded stack.
+
+**ModColorHandlers.java**: Added block+item color handlers for MACHINE_REPEATER
+  (tintIndex 1: POWER_COLORS[15] when powered, POWER_COLORS[0] when not).
+
+**Ideomod.java**: Added ModNetworking.registerPackets() call in commonSetup.
+
+**en_us.json**: Added "block.ideomod.machine_repeater": "Machine Repeater".
+
+**pickaxe.json**: Added "ideomod:machine_repeater".
+
+### Documentation sync
+- IDEOMOD_DOCUMENTATION.md: Machine Repeater section, network package,
+  updated GUI/Menu docs, updated en_us and pickaxe entries
+- CODEBASE_REFERENCE.md: MachineRepeaterBlock entry, network package,
+  updated ModBlockEntities and MachineSwapHelper entries
+- IDEOMOD_DESIGN.md: Machine Repeater status [IDEA] -> [DONE], specialization
+  table updated, description rewritten with final implementation
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
+# Ideomod Changelog
+
 ## [2026-03-17a] Machine Brace Specialization
 
 Machine Brace is a structural reinforcement specialization that increases the
