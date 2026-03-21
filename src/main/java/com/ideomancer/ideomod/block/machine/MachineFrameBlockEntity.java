@@ -31,7 +31,7 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Also stores an inputFace for redstone-active specializations (Conductor,
- * Repeater, future Toggle/Pulser/Transformer/Arm). The input face is the
+ * Repeater, Toggle, future Pulser/Transformer/Arm). The input face is the
  * direction from which signal is received; the block outputs on all other
  * faces. Specializations that don't use redstone (Track, Trolley, Frame)
  * ignore this field. inputFace is reset to null on every specialization swap
@@ -39,6 +39,11 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  *
  * Also stores repeaterDelay for the Machine Repeater specialization (1-4
  * redstone ticks). Reset to 1 on every specialization swap.
+ *
+ * Also stores inputWasLow for the Machine Toggle specialization (edge
+ * detection — tracks whether the input signal has dropped to 0 since the
+ * last toggle, arming the block for the next rising edge). Reset to false
+ * on every specialization swap.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -50,11 +55,13 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     private static final String TAG_INPUT_FACE = "InputFace";
     private static final String TAG_REPEATER_DELAY = "RepeaterDelay";
+    private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
 
     /**
      * The face from which this block receives redstone signal.
-     * Null = no input (unpowered). Used by Conductor, Repeater, and future
-     * redstone specializations. Signal is output on all faces EXCEPT this one.
+     * Null = no input (unpowered). Used by Conductor, Repeater, Toggle,
+     * and future redstone specializations. Signal is output on all faces
+     * EXCEPT this one.
      *
      * IMPORTANT: This field is reset to null whenever the specialization
      * item changes (via triggerSwapCheck) to prevent stale directional
@@ -72,6 +79,19 @@ public class MachineFrameBlockEntity extends BlockEntity
      * Reset to 1 on every specialization swap (via triggerSwapCheck).
      */
     private int repeaterDelay = 1;
+
+    /**
+     * Edge detection state for the Machine Toggle specialization.
+     * Tracks whether the input signal has been seen at 0 since the last
+     * toggle-on event. When true, the next rising edge on the input face
+     * triggers toggle-off.
+     *
+     * Only meaningful when the block is a MachineToggleBlock; other
+     * specializations ignore this field.
+     *
+     * Reset to false on every specialization swap (via triggerSwapCheck).
+     */
+    private boolean inputWasLow = false;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -150,6 +170,28 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
+    // TOGGLE EDGE DETECTION (for Machine Toggle)
+    // ========================================================================
+
+    /**
+     * Whether the input signal has been seen at 0 since the last toggle-on.
+     * When true, the next rising edge on the input face triggers toggle-off.
+     */
+    public boolean isInputWasLow() {
+        return this.inputWasLow;
+    }
+
+    /**
+     * Set the edge detection arm state.
+     */
+    public void setInputWasLow(boolean value) {
+        if (this.inputWasLow != value) {
+            this.inputWasLow = value;
+            this.setChanged();
+        }
+    }
+
+    // ========================================================================
     // ARM ANIMATION ACCESSORS
     // ========================================================================
 
@@ -199,6 +241,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
         }
+        if (this.inputWasLow) {
+            tag.putBoolean(TAG_INPUT_WAS_LOW, true);
+        }
     }
 
     @Override
@@ -216,6 +261,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.repeaterDelay = 1;
         }
+        this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
     }
 
     // ========================================================================
@@ -236,6 +282,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
+        }
+        if (this.inputWasLow) {
+            tag.putBoolean(TAG_INPUT_WAS_LOW, true);
         }
         return tag;
     }
@@ -262,6 +311,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
         }
+        if (this.inputWasLow) {
+            tag.putBoolean(TAG_INPUT_WAS_LOW, true);
+        }
         return tag;
     }
 
@@ -279,6 +331,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.repeaterDelay = 1;
         }
+        this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
         this.setChanged();
     }
 
@@ -349,6 +402,8 @@ public class MachineFrameBlockEntity extends BlockEntity
         this.inputFace = null;
         // Reset repeater delay to default (prevents stale delay leaking)
         this.repeaterDelay = 1;
+        // Reset toggle edge detection state
+        this.inputWasLow = false;
 
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));

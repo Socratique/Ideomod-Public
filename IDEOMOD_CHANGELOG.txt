@@ -1,5 +1,188 @@
 # Ideomod Changelog
 
+## [2026-03-21b] Machine Toggle Specialization + Vanilla-Style Color Ramp
+
+New Machine Family specialization: Machine Toggle. Omnidirectional flip-flop /
+T-latch that toggles between ON and OFF on each rising edge of its input signal.
+Specialization item: Lever.
+
+Also updated: indicator color ramp across all Machine Family redstone
+specializations from pure black (0x000000) at power 0 to vanilla-style dark
+maroon, matching RedStoneWireBlock's feel. Greyscale shading in indicator
+textures now renders as dark red gradations when unpowered.
+
+### Machine Toggle -- Behaviour
+
+- Specialization item: Vanilla Lever (Items.LEVER)
+- MachineType.TOGGLE, shares MachineFrameBlockEntity
+- Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none/north/south/
+  east/west/up/down)
+- Output: always strength 15 on all non-input faces when POWERED
+- Edge-triggered: only responds to rising edges (signal going from 0 to >0)
+- No GUI controls beyond the specialization slot
+
+### Machine Toggle -- Edge Detection
+
+The Toggle tracks whether the input signal has been "seen low" since the last
+state change. This prevents static signals from triggering unwanted toggles.
+
+Toggle cycle:
+1. Signal arrives on face X -> inputFace=X, POWERED=true, inputWasLow=false
+2. Signal drops to 0 -> inputWasLow=true (block stays ON, armed for next edge)
+3. Signal rises again on face X -> POWERED=false (toggle OFF)
+4. After toggle-off, if signal is still present, it's absorbed (inputWasLow=false)
+5. Different face gets signal while OFF -> new input face, cycle restarts
+
+inputWasLow stored in MachineFrameBlockEntity. Persists through saves and
+piston movement via IPistonMovable.
+
+### Machine Toggle -- Placement Signal Absorption
+
+When placed next to an already-active signal source, the Toggle does NOT
+immediately turn on. Instead, it snapshots the current signal landscape in
+onPlace() and treats it as pre-existing:
+- Sets inputFace to strongest signal face
+- Sets inputWasLow = false (haven't seen it drop yet)
+- Stays OFF
+- absorbing ThreadLocal prevents neighborChanged from scheduling a turn-on tick
+
+The signal must drop and rise again before the Toggle will respond. This
+prevents unwanted activation when building binary counters or placing toggles
+near active redstone.
+
+### Machine Toggle -- Anti-Feedback Architecture
+
+Simplified from Repeater (no delay complication):
+1. getSignal/getDirectSignal: return 0 toward input face, 15 on others.
+   INPUT_FACE read from blockstate (not BE) for BlockGetter compatibility.
+2. neighborChanged output-face early-return when POWERED.
+3. shouldSignal ThreadLocal for solid-block self-read suppression.
+4. updatingPos ThreadLocal for re-entrant protection during setBlock.
+5. Tick scheduling: 2 game ticks (1 redstone tick) for all state changes.
+
+### Machine Toggle -- Visual System
+
+Dual-cuboid model (same pattern as Repeater/Fluid Pipe):
+- Inner underlay cuboid (0.05 inset): machine_repeater_indicator.png (shared
+  white texture) tinted via tintIndex 1. Dark maroon when off, bright red when on.
+- Outer shell: 2 block models (machine_toggle_off, machine_toggle_on).
+  machine_toggle_on has input face (north in canonical model) using the off
+  texture, other 5 faces use the on texture. Blockstate rotates the on model
+  via x/y rotation to point the input face at the correct direction.
+- INPUT_FACE blockstate property (EnumProperty with 7 values: none + 6
+  directions) drives model rotation. 14 blockstate variants, 2 model files.
+- When powered, input face shows machine_toggle texture (visually "off"),
+  other 5 faces show machine_toggle_on texture.
+
+Known limitation: Vanilla block color handlers don't receive face direction,
+so all 6 faces of the inner indicator get the same tint color. The input face
+is visually distinguished by the outer texture (off vs on), but the indicator
+tint is uniform. Future improvement: investigate per-face indicator suppression
+via BESR or split-element model approach.
+
+### Vanilla-Style Indicator Color Ramp
+
+Updated POWER_COLORS array in ModColorHandlers from pure black at power 0
+to vanilla RedStoneWireBlock-style dark maroon. Affects all Machine Family
+redstone specializations: Conductor, Repeater, and Toggle.
+
+Old: POWER_COLORS[0] = 0x000000 (pure black, all shading invisible)
+New: POWER_COLORS[0] = ~0x4C0000 (dark maroon, preserves texture shading)
+
+Formula matches vanilla dust: power 0 gets 0.3 red baseline; power 1-15 uses
+f*0.6+0.4 for red, f^2*0.7-0.5 for green (subtle warmth at high power).
+
+### Signal Detection
+
+getIncomingSignalFromFace() handles five neighbor types (one more than Repeater):
+MachineConductorBlock (getSignal with -1 decay), MachineRepeaterBlock (15 if
+powered and we're not on their input face), MachineToggleBlock (15 if powered
+and we're not on their input face), RedStoneWireBlock (POWER with -1 decay),
+everything else (vanilla level.getSignal with shouldSignal=false).
+
+### New Files
+
+**MachineToggleBlock.java** (block/machine/): Edge-triggered flip-flop with
+  POWERED + INPUT_FACE blockstates. InputFace enum (StringRepresentable).
+  shouldSignal + updatingPos + absorbing ThreadLocals. Rising-edge-only
+  design with placement signal absorption.
+
+**blockstates/machine_toggle.json**: 14 variants (powered x input_face).
+  2 models rotated via x/y for input face direction.
+
+**models/block/machine_toggle_off.json**: Dual-cuboid. All faces use
+  machine_toggle texture. Parent minecraft:block/block, cutout render type.
+
+**models/block/machine_toggle_on.json**: Dual-cuboid. North face uses
+  machine_toggle (off), other 5 use machine_toggle_on. Rotated by blockstate.
+
+**models/item/machine_toggle.json**: Parents machine_toggle_off block model.
+
+**loot_tables/blocks/machine_toggle.json**: Standard self-drop.
+
+**textures/block/machine_toggle.png**: User-created off/input face texture.
+
+**textures/block/machine_toggle_on.png**: User-created powered face texture.
+
+### Modified Files
+
+**MachineFrameBlockEntity.java**: Added inputWasLow boolean field for Toggle
+  edge detection. Saved in saveAdditional, load, getUpdateTag, saveMovementData,
+  loadMovementData. Reset to false in triggerSwapCheck().
+
+**MachineSwapHelper.java**: Added Items.LEVER -> MACHINE_TOGGLE mapping.
+
+**ModBlocks.java**: Added MACHINE_TOGGLE registration (isRedstoneConductor=
+  false, pushReaction=NORMAL).
+
+**ModItems.java**: Added MACHINE_TOGGLE BlockItem.
+
+**ModBlockEntities.java**: Added MACHINE_TOGGLE to shared MACHINE_FRAME
+  valid blocks.
+
+**ModCreativeTabs.java**: Added Machine Toggle pre-loaded stack.
+
+**ModColorHandlers.java**: Updated POWER_COLORS array to vanilla-style dark
+  maroon baseline. Added block+item color handlers for MACHINE_TOGGLE
+  (tintIndex 1: POWER_COLORS[15] when powered, POWER_COLORS[0] when not).
+
+**en_us.json**: Added "block.ideomod.machine_toggle": "Machine Toggle".
+
+**pickaxe.json**: Added "ideomod:machine_toggle".
+
+### Challenges Resolved
+
+1. **Model rendering: indicator covering outer texture**: Initial models had the
+   inner indicator cuboid extending OUTSIDE the outer shell (-0.05 to 16.05)
+   instead of being inset inside it (0.05 to 15.95). Fixed by matching the
+   Repeater model pattern exactly.
+
+2. **Item rendering as flat sprite**: Block models were missing
+   "parent": "minecraft:block/block" which provides display transforms for
+   3D item rendering in hand/inventory/ground.
+
+3. **Pre-existing signal activation on placement**: Placing a Toggle next to
+   an already-active signal source caused immediate toggle-on. Fixed with
+   placement signal absorption: onPlace snapshots current signal, sets
+   inputWasLow=false (not armed), absorbing ThreadLocal prevents neighborChanged
+   from scheduling a turn-on tick during placement.
+
+4. **Binary counter chain activation**: Adjacent toggles in a row would
+   cascade-activate because neighborChanged in the unpowered path treated any
+   signal as a rising edge. Fixed by checking if the detected signal face was
+   already tracked with inputWasLow=false (pre-existing signal), skipping the
+   turn-on in that case.
+
+### Documentation sync
+- IDEOMOD_DOCUMENTATION.md: Machine Toggle section added, color ramp updated,
+  known issue #5 added (per-face indicator tint limitation), package structure
+  updated, language file entries updated.
+- CODEBASE_REFERENCE.md: MachineToggleBlock entry added, package structure
+  updated, registries updated.
+- IDEOMOD_DESIGN.md: Machine Toggle status updated to [DONE], description
+  rewritten with full implementation details.
+
+
 ## [2026-03-21] Machine Repeater Specialization + Networking + Numbered Button Spritesheet
 
 New Machine Family specialization: Machine Repeater. Omnidirectional redstone

@@ -1,0 +1,18 @@
+{
+  "variants": {
+    "input_face=none,powered=false": { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=none,powered=true":  { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=north,powered=false": { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=north,powered=true":  { "model": "ideomod:block/machine_toggle_on" },
+    "input_face=south,powered=false": { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=south,powered=true":  { "model": "ideomod:block/machine_toggle_on", "y": 180 },
+    "input_face=east,powered=false":  { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=east,powered=true":   { "model": "ideomod:block/machine_toggle_on", "y": 90 },
+    "input_face=west,powered=false":  { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=west,powered=true":   { "model": "ideomod:block/machine_toggle_on", "y": 270 },
+    "input_face=up,powered=false":    { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=up,powered=true":     { "model": "ideomod:block/machine_toggle_on", "x": 270 },
+    "input_face=down,powered=false":  { "model": "ideomod:block/machine_toggle_off" },
+    "input_face=down,powered=true":   { "model": "ideomod:block/machine_toggle_on", "x": 90 }
+  }
+}

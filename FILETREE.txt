@@ -32,8 +32,10 @@
 |  |           |  |  +-- MachinePipeBlockEntity.java
 |  |           |  |  +-- MachinePistonBlock.java
 |  |           |  |  +-- MachinePistonHeadBlock.java
+|  |           |  |  +-- MachineRepeaterBlock.java
 |  |           |  |  +-- MachineStickyPistonBlock.java
 |  |           |  |  +-- MachineSwapHelper.java
+|  |           |  |  +-- MachineToggleBlock.java
 |  |           |  |  +-- MachineTrackBlock.java
 |  |           |  |  +-- MachineTrolleyBlock.java
 |  |           |  |  +-- MachineType.java
@@ -100,6 +102,9 @@
 |  |           |  +-- StructureRegistration.java
 |  |           |  +-- StructureResult.java
 |  |           |  \\-- StructureScanner.java
+|  |           +-- network
+|  |           |  +-- ModNetworking.java
+|  |           |  \\-- RepeaterDelayPacket.java
 |  |           +-- registry
 |  |           |  +-- ModBlockEntities.java
 |  |           |  +-- ModBlocks.java
@@ -127,7 +132,9 @@
 |     |     |  +-- machine_pipe.json
 |     |     |  +-- machine_piston.json
 |     |     |  +-- machine_piston_head.json
+|     |     |  +-- machine_repeater.json
 |     |     |  +-- machine_sticky_piston.json
+|     |     |  +-- machine_toggle.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
@@ -161,7 +168,13 @@
 |     |     |  |  +-- machine_piston.json
 |     |     |  |  +-- machine_piston_head.json
 |     |     |  |  +-- machine_piston_head_sticky.json
+|     |     |  |  +-- machine_repeater_1.json
+|     |     |  |  +-- machine_repeater_2.json
+|     |     |  |  +-- machine_repeater_3.json
+|     |     |  |  +-- machine_repeater_4.json
 |     |     |  |  +-- machine_sticky_piston.json
+|     |     |  |  +-- machine_toggle_off.json
+|     |     |  |  +-- machine_toggle_on.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
@@ -183,7 +196,9 @@
 |     |     |     +-- machine_fluid_pipe.json
 |     |     |     +-- machine_pipe.json
 |     |     |     +-- machine_piston.json
+|     |     |     +-- machine_repeater.json
 |     |     |     +-- machine_sticky_piston.json
+|     |     |     +-- machine_toggle.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
@@ -213,7 +228,11 @@
 |     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_piston.png
 |     |        |  +-- machine_piston_arm.png
-|     |        |  +-- machine_repeater.png
+|     |        |  +-- machine_repeater_1.png
+|     |        |  +-- machine_repeater_2.png
+|     |        |  +-- machine_repeater_3.png
+|     |        |  +-- machine_repeater_4.png
+|     |        |  +-- machine_repeater_indicator.png
 |     |        |  +-- machine_sticky_piston.png
 |     |        |  +-- machine_toggle.png
 |     |        |  +-- machine_toggle_on.png
@@ -230,7 +249,8 @@
 |     |        |  +-- oddstone_repulser_front.png
 |     |        |  \\-- oddstone_repulser_side.png
 |     |        \\-- gui
-|     |           \\-- ideomod_gui.png
+|     |           +-- ideomod_gui.png
+|     |           \\-- ideomod_numbered_buttons.png
 |     +-- data
 |     |  +-- ideomod
 |     |  |  +-- loot_tables
@@ -247,7 +267,9 @@
 |     |  |  |     +-- machine_fluid_pipe.json
 |     |  |  |     +-- machine_pipe.json
 |     |  |  |     +-- machine_piston.json
+|     |  |  |     +-- machine_repeater.json
 |     |  |  |     +-- machine_sticky_piston.json
+|     |  |  |     +-- machine_toggle.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json

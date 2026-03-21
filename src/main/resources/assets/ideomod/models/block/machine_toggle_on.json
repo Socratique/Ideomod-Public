@@ -1,0 +1,38 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "outer_on": "ideomod:block/machine_toggle_on",
+    "outer_off": "ideomod:block/machine_toggle",
+    "inner": "ideomod:block/machine_repeater_indicator",
+    "particle": "ideomod:block/machine_toggle_on"
+  },
+  "elements": [
+    {
+      "name": "inner_underlay",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "north": { "texture": "#inner", "tintindex": 1 },
+        "south": { "texture": "#inner", "tintindex": 1 },
+        "east":  { "texture": "#inner", "tintindex": 1 },
+        "west":  { "texture": "#inner", "tintindex": 1 },
+        "up":    { "texture": "#inner", "tintindex": 1 },
+        "down":  { "texture": "#inner", "tintindex": 1 }
+      }
+    },
+    {
+      "name": "outer_shell",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#outer_off" },
+        "south": { "texture": "#outer_on" },
+        "east":  { "texture": "#outer_on" },
+        "west":  { "texture": "#outer_on" },
+        "up":    { "texture": "#outer_on" },
+        "down":  { "texture": "#outer_on" }
+      }
+    }
+  ]
+}

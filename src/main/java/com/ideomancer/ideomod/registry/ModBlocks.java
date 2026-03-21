@@ -15,6 +15,7 @@ import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonHeadBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
 import com.ideomancer.ideomod.block.machine.MachineStickyPistonBlock;
+import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrolleyBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
@@ -220,6 +221,18 @@ public class ModBlocks {
     // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_REPEATER = BLOCKS.register("machine_repeater",
             () -> new MachineRepeaterBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Toggle: omnidirectional flip-flop / T-latch.
+    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
+    public static final RegistryObject<Block> MACHINE_TOGGLE = BLOCKS.register("machine_toggle",
+            () -> new MachineToggleBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()

@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-21 (Documentation audit — cleaned resolved issues, updated feature counts, synced content)*
+*Last updated: 2026-03-21b (Machine Toggle specialization, vanilla-style indicator color ramp)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -101,7 +101,9 @@ com.ideomancer.ideomod
   |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
-  |     |     \-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR. Custom redstone.
+  |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR. Custom redstone.
+  |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER. Custom redstone.
+  |     |     \-- MachineToggleBlock.java     Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -1178,7 +1180,7 @@ Stickiness: MachineType.CONDUCTOR -- sticks to other Conductors + Machine Frames
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
-**Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Squared curve gradient: POWER 0 = black, 1-15 = dim-to-bright red.
+**Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Vanilla-style gradient: POWER 0 = dark maroon (~0x4C0000), 1-15 = progressively brighter red.
 
 **Known issues**: Dust sees Conductor strong power through solid blocks (issue #3 in Known Issues -- needs RedStoneWireBlock mixin).
 
@@ -1219,13 +1221,56 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 **Networking**: `RepeaterDelayPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates delay range (1-4), player distance (64 blocks), block type.
 
-**Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1 -- black when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
+**Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1 -- dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
 
 Stickiness: MachineType.REPEATER -- sticks to other Repeaters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
-### Machine Pipe -- Push-Only Item Transport
+### Machine Toggle -- Omnidirectional Flip-Flop
+
+Registry ID: `machine_toggle`. Class: MachineToggleBlock extends AbstractMachineBlock. `MachineType.TOGGLE`.
+
+Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on one face (input), toggles between ON and OFF on each rising edge. Specialization item: vanilla Lever.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Uses `inputFace` field for redstone direction and `inputWasLow` field for edge detection.
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) + INPUT_FACE (EnumProperty: none/north/south/east/west/up/down) |
+| **Output** | Always strength 15 when POWERED, on all non-input faces |
+| **Trigger** | Rising edge only (signal must drop to 0 then rise again) |
+| **No GUI controls** | Just the specialization slot |
+
+**Input/Output Face Model**: Same concept as Conductor/Repeater -- receives on one face, outputs on other 5. Input face stored as `inputFace` in MachineFrameBlockEntity AND as `INPUT_FACE` blockstate property (drives model rotation). INPUT_FACE is an EnumProperty with 7 values (NONE + 6 directions) defined as an inner enum `MachineToggleBlock.InputFace` implementing `StringRepresentable`.
+
+**Edge Detection**: `inputWasLow` boolean in MachineFrameBlockEntity tracks whether the input signal has been seen at 0 since the last state change. Toggle cycle: (1) signal arrives → ON, inputWasLow=false; (2) signal drops → inputWasLow=true, stays ON; (3) signal rises → OFF. After toggle-off, if signal still present, absorbed (inputWasLow=false, stays OFF until drop-and-rise).
+
+**Placement Signal Absorption**: When placed next to an already-active signal, onPlace() snapshots the signal landscape and absorbs it: sets inputFace to strongest face, inputWasLow=false, stays OFF. `absorbing` ThreadLocal prevents neighborChanged from scheduling a turn-on tick during placement. Signal must drop and rise before Toggle responds. This prevents unwanted activation when building binary counters or placing near active redstone.
+
+**Anti-feedback Architecture** (4 layers, simplified from Repeater):
+
+1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. INPUT_FACE read from blockstate (not BE) for BlockGetter compatibility. `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+
+2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
+
+3. updatingPos ThreadLocal: during tick()'s setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately.
+
+4. absorbing ThreadLocal: during onPlace signal snapshot, prevents neighborChanged from scheduling ticks.
+
+**Signal Detection**: `getIncomingSignalFromFace()` handles five neighbor types: MachineConductorBlock (getSignal with -1 decay), MachineRepeaterBlock (15 if powered and we're not on their input face), MachineToggleBlock (15 if powered and we're not on their input face), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
+
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+
+**Visual**: Dual-cuboid model (Repeater pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (shared white texture) tinted via tintIndex 1 -- dark maroon when unpowered, bright red when powered. Outer shell uses 2 model files: `machine_toggle_off` (all faces use machine_toggle texture) and `machine_toggle_on` (north face = machine_toggle, other 5 = machine_toggle_on). Blockstate rotates the on model via x/y to point input face at correct direction. 14 blockstate variants (7 input_face values x 2 powered states), 2 model files.
+
+When powered, input face shows the "off" texture (machine_toggle) while other 5 faces show the "on" texture (machine_toggle_on), visually indicating which face is the input.
+
+**Known limitation**: Vanilla block color handlers don't receive face direction, so all 6 faces of the inner indicator get the same tint color. The input face is distinguished by the outer texture only (off vs on). Future improvement: investigate per-face indicator suppression via BESR or split-element model approach (see Known Issue #5).
+
+Stickiness: MachineType.TOGGLE -- sticks to other Toggles + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Tracks, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
 
 Registry ID: `machine_pipe`. Class: MachinePipeBlock extends AbstractMachineBlock. `MachineType.PIPE`.
 
@@ -1594,7 +1639,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, machine_toggle, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 
@@ -1638,6 +1683,7 @@ Whitelist of blocks that can be wrapped in frames. Contains approximately 310 va
 | 2 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. In-world rendering is correct. |
 | 3 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
 | 4 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors (Audit #15) or AbstractMachineBlock extraction (Audit #13). An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java. |
+| 5 | Toggle indicator tint uniform on all faces | Cosmetic | Vanilla block color handlers don't receive face direction — all 6 faces of the inner indicator cuboid get the same tint color via tintIndex 1. The input face is visually distinguished by the outer texture swap (off vs on texture), but the indicator glow is the same on all faces including the input face. Fix options: BESR for per-face tint, split inner cuboid into separate elements with different tintIndex values per face (would require per-direction model variants), or make the off texture's window opaque so indicator doesn't show through on input face. File: MachineToggleBlock.java, ModColorHandlers.java. |
 
 ---
 

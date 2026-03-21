@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-21a (Machine Repeater specialization implemented. Omnidirectional redstone repeater with configurable delay.)*
+*Last updated: 2026-03-21b (Machine Toggle specialization implemented. Edge-triggered flip-flop with placement signal absorption.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -333,8 +333,8 @@ Emits a configurable redstone pulse at a set interval. Right-click to cycle inte
 **Machine Pulser:**
 Emits a single redstone pulse on placement or activation. One-shot signal source.
 
-**Machine Toggle:**
-Flip-flop. First activation = ON, second = OFF. Maintains state.
+**Machine Toggle:** [DONE]
+Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).
 
 **Machine Piston / Machine Sticky Piston:** [DONE]
 Omnidirectional pistons as Machine Family members. No FACING property on the base block — signal on any face extends a head from the opposite face. Multiple heads can extend simultaneously. Pushes blocks via BlockMoveHelper (12-block limit, full sticky group resolution). Immovable while any head is extended (PistonBaseBlockMixin Feature 5). Head block (MachinePistonHeadBlock) is a real block in the world with 8×8×16 collision shape, FACING + STICKY properties. Breaking the head causes the piston to recognize that face is free (vanilla-like behavior — if signal is still present, re-extends immediately).

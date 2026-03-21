@@ -5,9 +5,13 @@ import com.ideomancer.ideomod.block.machine.FluidType;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
+import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModItems;
 import net.minecraft.client.renderer.BiomeColors;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -17,17 +21,23 @@ import net.minecraftforge.fml.common.Mod;
  * Registers block and item color handlers for tintIndex-based coloring.
  *
  * Machine Conductor uses tintIndex 1 for its power indicator overlay.
- * The color maps POWER 0-15 to a gradient: black at 0, dim red at 1,
- * bright red at 15. Smoother transition at the low end so power 1-3
- * are noticeably dimmer rather than jumping straight from black to red.
+ * The color maps POWER 0-15 to a vanilla-style gradient: dark maroon at 0,
+ * dim red at low power, bright red at 15. Matches vanilla RedStoneWireBlock's
+ * color feel — unpowered components have a visible dark red rather than
+ * pure black.
  *
  * Machine Repeater uses tintIndex 1 for its inner underlay cuboid.
- * Binary: black when unpowered, bright red (same as conductor at 15)
- * when powered. The outer shell texture has transparent windows where
- * the tinted underlay shines through.
+ * Binary: dark maroon when unpowered, bright red (POWER_COLORS[15])
+ * when powered.
+ *
+ * Machine Toggle uses tintIndex 1 for its inner underlay cuboid.
+ * Per-face: input face always gets POWER_COLORS[0] (dark maroon),
+ * other faces get POWER_COLORS[15] (bright red) when powered, or
+ * POWER_COLORS[0] when unpowered. Toggle reads INPUT_FACE from
+ * the blockstate to determine which face is the input.
  *
  * Machine Fluid Pipe uses tintIndex 0 for the water texture inner cuboid.
- * Vanilla water_still.png is greyscale -- the colour handler applies
+ * Vanilla water_still.png is greyscale — the colour handler applies
  * biome water colour (or default blue) when the pipe holds water.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
@@ -38,21 +48,38 @@ public class ModColorHandlers {
     /**
      * Pre-computed color table for power levels 0-15.
      *
-     * 0 = pure black (indicator invisible)
-     * 1-15 = red gradient using a squared curve for smoother low-end.
+     * Vanilla-style gradient matching RedStoneWireBlock's color feel:
+     *   0 = dark maroon (visible, not pure black — shading detail shows)
+     *   1-15 = progressively brighter red with subtle warm tones at high power.
+     *
+     * Uses vanilla's approach: even power 0 has a base red component so
+     * unpowered redstone components look like dark red rather than flat black.
+     * Grey shading in indicator textures renders as dark red gradations when
+     * off, bright red gradations when fully powered.
      */
     private static final int[] POWER_COLORS = new int[16];
 
     static {
-        POWER_COLORS[0] = 0x000000;
-
-        for (int power = 1; power <= 15; power++) {
+        // Vanilla RedStoneWireBlock color formula (adapted):
+        //   power 0: f=0, red = 0.3 baseline
+        //   power 1-15: f = power/15, red = 0.4 + f*0.6
+        //   green = clamp(f*f * 0.7 - 0.5) [very low, subtle warmth at high power]
+        //   blue  = clamp(f*f * 0.6 - 0.7) [negligible except at max power]
+        for (int power = 0; power <= 15; power++) {
             float f = (float) power / 15.0F;
-            float curve = f * f;
 
-            float r = curve * 0.6F + 0.15F;
-            float g = Math.max(0.0F, curve * 0.7F - 0.5F);
-            float b = Math.max(0.0F, curve * 0.6F - 0.7F);
+            float r, g, b;
+            if (power == 0) {
+                // Dark maroon baseline — visible but dim.
+                // Vanilla dust uses ~0.3 red at power 0.
+                r = 0.3F;
+                g = 0.0F;
+                b = 0.0F;
+            } else {
+                r = f * 0.6F + 0.4F;
+                g = Math.max(0.0F, f * f * 0.7F - 0.5F);
+                b = Math.max(0.0F, f * f * 0.6F - 0.7F);
+            }
 
             int ri = Math.min(255, (int) (r * 255.0F));
             int gi = Math.min(255, (int) (g * 255.0F));
@@ -74,8 +101,7 @@ public class ModColorHandlers {
         }, ModBlocks.MACHINE_CONDUCTOR.get());
 
         // Machine Repeater: tintIndex 1 on inner underlay cuboid.
-        // Binary: off = black (invisible behind outer shell),
-        //         on  = full bright red (POWER_COLORS[15]).
+        // Binary: off = dark maroon, on = full bright red.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {
                 return state.getValue(MachineRepeaterBlock.POWERED)
@@ -83,6 +109,25 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_REPEATER.get());
+
+        // Machine Toggle: tintIndex 1 on inner underlay cuboid.
+        // Per-face coloring: input face = dark maroon (off look),
+        // other faces = bright red when powered, dark maroon when not.
+        //
+        // NOTE: Block color handlers receive tintIndex but NOT face direction.
+        // All faces of a single tintIndex get the same color. Since the Toggle
+        // model uses blockstate-driven rotation (input face always maps to the
+        // NORTH face in the canonical model), we can't do per-face tint here.
+        // Instead: when powered, tint is bright red (the input face uses the
+        // off-texture via the model, so its indicator is visually separate).
+        // When unpowered, tint is dark maroon.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                return state.getValue(MachineToggleBlock.POWERED)
+                        ? POWER_COLORS[15] : POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_TOGGLE.get());
 
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
@@ -98,7 +143,7 @@ public class ModColorHandlers {
 
     @SubscribeEvent
     public static void registerItemColors(RegisterColorHandlersEvent.Item event) {
-        // Machine Conductor item: show unpowered (black)
+        // Machine Conductor item: show unpowered (dark maroon)
         event.register((stack, tintIndex) -> {
             if (tintIndex == 1) {
                 return POWER_COLORS[0];
@@ -106,13 +151,21 @@ public class ModColorHandlers {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_CONDUCTOR.get().asItem());
 
-        // Machine Repeater item: show unpowered (black)
+        // Machine Repeater item: show unpowered (dark maroon)
         event.register((stack, tintIndex) -> {
             if (tintIndex == 1) {
                 return POWER_COLORS[0];
             }
             return 0xFFFFFF;
         }, ModItems.MACHINE_REPEATER.get());
+
+        // Machine Toggle item: show unpowered (dark maroon)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_TOGGLE.get());
 
         // Machine Fluid Pipe item: no tint needed
         event.register((stack, tintIndex) -> {

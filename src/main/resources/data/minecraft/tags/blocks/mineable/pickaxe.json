@@ -19,6 +19,7 @@
     "ideomod:machine_piston",
     "ideomod:machine_sticky_piston",
     "ideomod:machine_brace",
-    "ideomod:machine_repeater"
+    "ideomod:machine_repeater",
+    "ideomod:machine_toggle"
   ]
 }

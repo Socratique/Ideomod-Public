@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-21 (Documentation audit — cleaned resolved issues, synced registries)*
+*Last updated: 2026-03-21b (Machine Toggle specialization, vanilla-style indicator color ramp)*
 
 ---
 
@@ -87,6 +87,10 @@ com.ideomancer.ideomod
   |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
   |     |     |                                Structural reinforcement. Push limit constants.
+  |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER.
+  |     |     |                                Omnidirectional redstone repeater. Configurable delay.
+  |     |     |-- MachineToggleBlock.java     Extends AbstractMachineBlock. MachineType.TOGGLE.
+  |     |     |                                Edge-triggered flip-flop. INPUT_FACE blockstate.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -414,6 +418,10 @@ Extends AbstractMachineBlock. MachineType.BRACE. Structural reinforcement block.
 
 Extends AbstractMachineBlock. MachineType.REPEATER. Omnidirectional redstone repeater. Receives signal on one face (input), outputs full-strength 15 on all other 5 faces with configurable delay (1-4 redstone ticks). POWERED + DELAY blockstates. 5-layer anti-feedback architecture (shouldSignal ThreadLocal, output-face early-return, protected inputFace, input-face-first tick, updatingPos ThreadLocal). GUI buttons from `ideomod_numbered_buttons.png`. RepeaterDelayPacket via Forge SimpleChannel. Dual-cuboid model with tinted indicator overlay.
 
+### 9g. Machine Toggle (omnidirectional flip-flop)
+
+Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop / T-latch. Receives signal on one face, toggles between ON and OFF on each rising edge. POWERED + INPUT_FACE (EnumProperty: none + 6 directions) blockstates. Specialization item: vanilla Lever. 4-layer anti-feedback (shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal). Edge detection via `inputWasLow` boolean in MachineFrameBlockEntity. Placement signal absorption prevents activation from pre-existing signals. INPUT_FACE blockstate drives model rotation (2 models, 14 variants). Dual-cuboid model with tinted indicator overlay (shared machine_repeater_indicator.png). Input face shows off texture while other 5 show on texture when powered.
+
 ### 10. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
@@ -426,9 +434,9 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD, MACHINE_BRACE, MACHINE_REPEATER, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD, MACHINE_BRACE, MACHINE_REPEATER, MACHINE_TOGGLE, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
 
-**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_BRACE, and MACHINE_REPEATER. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_BRACE, MACHINE_REPEATER, and MACHINE_TOGGLE. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 
@@ -463,5 +471,6 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
 3. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
 4. **Framed redstone blocks don't emit power on frame activation** -- NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors or AbstractMachineBlock extraction. An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java.
+5. **Toggle indicator tint uniform on all faces** -- Cosmetic. Vanilla block color handlers don't receive face direction, so all 6 inner indicator faces get the same tint. Input face distinguished by outer texture swap only. Fix options: BESR, split-element model, or opaque off-texture window. Files: MachineToggleBlock.java, ModColorHandlers.java.
 
 Written by Claude, directed and guided by The Ideomancer.
