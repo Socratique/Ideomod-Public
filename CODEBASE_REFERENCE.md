@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-21a (Machine Repeater specialization. Network packet system. Numbered button spritesheet.)*
+*Last updated: 2026-03-21 (Documentation audit — cleaned resolved issues, synced registries)*
 
 ---
 
@@ -87,9 +87,6 @@ com.ideomancer.ideomod
   |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
   |     |     |                                Structural reinforcement. Push limit constants.
-  |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER.
-  |     |     |                                Omnidirectional repeater. POWERED + DELAY blockstates.
-  |     |     |                                5-layer anti-feedback. updatingPos ThreadLocal.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -138,11 +135,6 @@ com.ideomancer.ideomod
   |                                              Registered for MACHINE_FRAME BE type.
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
-  |-- network/
-  |     |-- ModNetworking.java           Forge SimpleChannel ("ideomod:main").
-  |     |                                registerPackets() called from commonSetup.
-  |     \-- RepeaterDelayPacket.java     Client->Server delay change. Validates range,
-  |                                      distance, block type.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
@@ -180,7 +172,7 @@ com.ideomancer.ideomod
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |                                MACHINE_FRAME (shared: Frame, Track, Trolley, Conductor,
-        |                                Repeater, Piston, Sticky Piston, Brace), MACHINE_PIPE (pipe subclass),
+        |                                Piston, Sticky Piston, Brace), MACHINE_PIPE (pipe subclass),
         |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
         |                                FRAMED_BLOCK (shared iron/copper).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
@@ -258,8 +250,6 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **MachineBraceBlock**: Structural reinforcement. No active behavior. Push limit increase implemented in PistonStructureResolverMixin Feature 8 via @ModifyConstant -- each Brace in toPush adds +6 to the push limit (base 12, cap 60, max 8 Braces). Cascading: limit grows during block gathering as Braces are discovered. A Brace must be within the current limit to count. Machine Frame item as specialization trigger via lazy mapping (ensureBraceMapping).
 
-**MachineRepeaterBlock**: Omnidirectional redstone repeater. POWERED (boolean) + DELAY (1-4) blockstates. Always outputs 15 when powered on all non-input faces. Configurable delay 1-4 redstone ticks via GUI buttons. Anti-feedback: 5-layer architecture -- (1) getSignal input-face suppression via `direction == inputFace.getOpposite()`, (2) neighborChanged output-face early-return via getFaceFromSourcePos, (3) protected inputFace (never modified in neighborChanged when powered), (4) input-face-first tick (no full-scan when powered), (5) updatingPos ThreadLocal blocks re-entrant neighborChanged at own position during setBlock cascade. shouldSignal ThreadLocal suppresses isSignalSource + getDirectSignal during own scan. Signal detection: getIncomingSignalFromFace handles Conductor (-1 decay), other Repeater (15 if powered, input-face aware), RedStoneWireBlock (POWER -1 decay), vanilla (level.getSignal with shouldSignal=false). Tick uses setBlock flag 3, no manual updateNeighborsAt except onRemove.
-
 **MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 
 **MachinePipeBlock**: Push-only item transport. Own BE subclass (MachinePipeBlockEntity, BlockEntityType MACHINE_PIPE). FILLED BooleanProperty drives texture. Server ticker pushes 1 item per 8 ticks via IItemHandler capability. Round-robin output relative to input face (forward, right, left, up, down). Redstone locks. No pulling. Input face tracked via: player GUI = UP, hopper/automation = ThreadLocal pendingInputFace in canPlaceItemThroughFace, pipe-to-pipe = onItemReceived() called by sender. Piston safety: movedByPiston guard in onRemove prevents duplication; minimum cooldown in loadMovementData prevents immediate push after landing. updateFilledState guarded against isSwapping. Comparator output scales transit fullness.
@@ -331,7 +321,7 @@ Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachine
 
 **IMachineFamily interface** (`block/machine/IMachineFamily.java`): Provides `getMachineType()` and static `canMachineFamilyStickTo(MachineType, BlockState)`. Type check: FRAME sticks to everything, specializations stick to same-type + FRAME. Frame Family requires active. Slime types permissive.
 
-**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe, Repeater <-> Machine Repeater). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
+**MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
 **PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Reports 2 slots. Slot 0 resolves to any MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity (returns empty for non-pipes). isPipe() for live type checking. Survives block swaps without close/reopen.
 
@@ -400,9 +390,29 @@ Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 
 
 Non-directional Machine Family block. No active behavior. Pushed by Tracks, carries anything stuck to it. Does NOT conduct redstone.
 
+### 9a. Machine Fluid Pipe (fluid vacuum/depositor)
+
+Non-directional Machine Family block. Own BE subclass (MachineFluidPipeBlockEntity, BlockEntityType MACHINE_FLUID_PIPE). Extends AbstractMachineBlock. MachineType.FLUID_PIPE. Server ticker pulls fluid from adjacent sources, stores type (EMPTY, WATER, LAVA), and deposits into adjacent containers. IFluidHandler capability support. Bucket state syncing. Water+lava collision detection and handling.
+
 ### 9b. Machine Pipe (push-only item transport)
 
 Non-directional Machine Family block. Own BE subclass (MachinePipeBlockEntity, BlockEntityType MACHINE_PIPE). FILLED BooleanProperty drives texture swap. Server ticker pushes 1 item per 8 ticks to adjacent containers via IItemHandler. Round-robin output relative to input face (forward, right, left, up, down). Redstone locks (powered = frozen). No pulling. Input face tracked via: player GUI = UP, hopper/automation = ThreadLocal pendingInputFace, pipe-to-pipe = onItemReceived(). Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator output scales transit fullness (0-15).
+
+### 9c. Machine Piston (omnidirectional push/pull)
+
+Extends AbstractMachineBlock. MachineType.PISTON. Omnidirectional extend/retract controlled by redstone. BESR animation via MachinePistonArmRenderer. Server ticker manages arm progress state. BlockMoveHelper executes piston-style movement with proper push limit handling via PistonStructureResolverMixin.
+
+### 9d. Machine Sticky Piston (omnidirectional with pull)
+
+Extends MachinePistonBlock. MachineType.STICKY_PISTON. isSticky()=true. Pulls adjacent blocks on retract in addition to pushing on extend. Inherits animation and ticker from parent Machine Piston.
+
+### 9e. Machine Brace (push limit reinforcement)
+
+Extends AbstractMachineBlock. MachineType.BRACE. Structural reinforcement block. No active behavior. Increases push limit via dynamic push limit system: each Brace in toPush adds +6 to the base push limit (base 12, cap 60, max 8 Braces per push). Limit grows cascadingly during block gathering as Braces are discovered.
+
+### 9f. Machine Repeater (omnidirectional redstone repeater)
+
+Extends AbstractMachineBlock. MachineType.REPEATER. Omnidirectional redstone repeater. Receives signal on one face (input), outputs full-strength 15 on all other 5 faces with configurable delay (1-4 redstone ticks). POWERED + DELAY blockstates. 5-layer anti-feedback architecture (shouldSignal ThreadLocal, output-face early-return, protected inputFace, input-face-first tick, updatingPos ThreadLocal). GUI buttons from `ideomod_numbered_buttons.png`. RepeaterDelayPacket via Forge SimpleChannel. Dual-cuboid model with tinted indicator overlay.
 
 ### 10. Odd Slime Block
 
@@ -416,9 +426,9 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD, MACHINE_BRACE, MACHINE_REPEATER, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
 
-**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, and MACHINE_FLUID_PIPE. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_BRACE, and MACHINE_REPEATER. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 
@@ -449,41 +459,9 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 ---
 
 ## KNOWN ISSUES & TECHNICAL DEBT
-
 1. **OddstoneConfig.reloadConfig() not wired to command** -- config can be reloaded programmatically but there's no in-game command to trigger it. Low priority.
 2. **Item model translucency** -- Translucent inner blocks (glass, slime) render opaque in inventory item display. Quad-compositing approach can't handle separate render passes. Purely cosmetic; in-world rendering is correct.
-3. ~~**Framed block transit rendering (Trolley/Repulser/Attractor)**~~ -- FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.
-4. ~~**Framed blocks not grabbed by slime during Repulser/Attractor moves**~~ -- FIXED 2026-03-01. Backward walk grab immunity was firing on both canStickTo calls in the pair, blocking the behind block's passive response. Fixed with call-pair toggle in PistonStructureResolverMixin.
-5. ~~**Frame inside-face rendering**~~ -- FIXED. Inverted cuboid elements added to frame JSON models.
-6. ~~**Sympathetic framed oddstone transit rendering**~~ -- FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.
-7. ~~**Sympathetic retraction with machine-activated framed blocks**~~ -- FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.
-8. ~~**Machine Track signal bleeds into attached Machine Blocks via Trolley**~~ -- FIXED 2026-03-08. Two-part fix: (1) Track redstone isolation -- isSignalSource=false, getSignal=0, getDirectSignal=0. POWER is internal bookkeeping only, read via direct blockstate access. (2) FrameActivation suppression -- only MachineFrameBlock emits anti-signal; all other Machine Family blocks always activate. File: MachineTrackBlock.java, FrameActivation.java.
-9. ~~**Repulser/Attractor cannot target Framed Oddstone**~~ -- FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE. File: RangedPistonUtil.java.
-10. ~~**Framed blocks not pulled from behind in push direction**~~ -- FIXED 2026-03-07. Vanilla backward walk silently skips unpushable blocks (isPushable false -> stop, return true), so Feature 5 never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks checks toPush neighbors for active framed immovable blocks connected via frame stickiness. File: PistonStructureResolverMixin.java.
-11. ~~**Framed inner blocks with light emission do not emit light**~~ -- FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, getStateForPlacement() pre-population from item NBT. File: FramedBlock.java, FramedBlockEntity.java, ModBlocks.java.
-12. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
-~~13. **Machine Conductor base texture renders black**~~ -- FIXED 2026-03-14. Root cause: indicator overlay element used default "solid" render type, treating transparent pixels as opaque black. At power 0 the tinted overlay was a solid black shell hiding the base. Fix: added `"render_type": "minecraft:cutout"` to model JSON, removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.
-14. **Framed redstone blocks don't emit power on frame activation** -- NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors or AbstractMachineBlock extraction. An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java.
-15. ~~**Vanilla metal first-push failure after frame network change**~~ -- FIXED 2026-03-15. Root cause: activatedVanillaMetals global set was atomically swapped per-network, so each recalculate() replaced the ENTIRE set with only its own network's metals. Fix: changed to ConcurrentHashMap.newKeySet() with per-network remove-then-add. Files: FrameActivation.java.
-
-### Audit-Identified Issues (2026-03-13)
-
-The following issues were identified during a comprehensive codebase audit. See IDEOMOD_AUDIT_REPORT.md for full details and recommended fixes.
-
-| ID | Severity | Issue | Location |
-|----|----------|-------|----------|
-| ~~A~~ | ~~Critical~~ | ~~MachineConductorBlock.shouldSignal is plain boolean, not ThreadLocal.~~ *FIXED 2026-03-13* | MachineConductorBlock.java |
-| ~~B~~ | ~~Critical~~ | ~~FrameActivation.activatedVanillaMetals is plain HashSet mutated without synchronization.~~ *FIXED 2026-03-14 (volatile + atomic swap), then updated 2026-03-15 (ConcurrentHashMap.newKeySet() per-network remove-then-add -- atomic swap caused Issue #15)* | FrameActivation.java |
-| ~~C~~ | ~~Critical~~ | ~~ThreadLocal cleanup gaps in PistonStructureResolverMixin.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
-| ~~D~~ | ~~Critical~~ | ~~ThreadLocal cleanup gap in PistonBaseBlockMixin.pullTargetPos.~~ *FIXED 2026-03-13* | PistonBaseBlockMixin.java |
-| ~~E~~ | ~~High~~ | ~~OddstonePortalSavedData.unregisterPortal() uses && where || is needed.~~ *FIXED 2026-03-13* | OddstonePortalSavedData.java |
-| ~~F~~ | ~~High~~ | ~~FrameActivation.recalculate() has no debouncing.~~ *FIXED 2026-03-15 (markDirty + TickHandler batching)* | FrameActivation.java |
-| ~~G~~ | ~~High~~ | ~~ideomod$addVanillaMetalConductors uses O(n^2) fixed-point loop.~~ *FIXED 2026-03-15 (BFS frontier queue)* | PistonStructureResolverMixin.java |
-| ~~H~~ | ~~High~~ | ~~MovementScanHelper.scanSympathetic() rebuilds snapshots every iteration.~~ *FIXED 2026-03-15 (BFS frontier queue)* | MovementScanHelper.java |
-| ~~J~~ | ~~Medium~~ | ~~OddstoneConfig sympathetic radius is unbounded.~~ *FIXED 2026-03-13* | OddstoneConfig.java |
-| ~~K~~ | ~~Medium~~ | ~~MovingBlockEntityData key collision risk.~~ *FIXED 2026-03-14 (pipe delimiters)* | MovingBlockEntityData.java |
-| ~~L~~ | ~~Medium~~ | ~~StructureManager chunk iteration without defensive copy.~~ *FIXED 2026-03-14* | StructureManager.java |
-| ~~N~~ | ~~Low~~ | ~~BUG10 debug logging left at INFO level.~~ *FIXED 2026-03-13* | PistonStructureResolverMixin.java |
-| ~~P~~ | ~~Low~~ | ~~StructureDefinition ScanMode stub values undocumented.~~ *FIXED 2026-03-14 (javadoc)* | StructureDefinition.java |
+3. **Conductor strong power visible to dust through solid blocks** -- MachineConductorBlock.getDirectSignal outputs strong power (matching vanilla dust). Vanilla dust avoids cross-wire through-block power because all dust shares one RedStoneWireBlock instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock to suppress Conductor output during dust's calculateTargetStrength scan. File: MachineConductorBlock.java.
+4. **Framed redstone blocks don't emit power on frame activation** -- NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors or AbstractMachineBlock extraction. An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java.
 
 Written by Claude, directed and guided by The Ideomancer.

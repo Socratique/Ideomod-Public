@@ -270,7 +270,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 |---------------|----------------|-------------|-------------|--------|
 | Powered Rail | Track | MachineTrackBlock | TRACK | [DONE] |
 | Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
-| Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [WIP] |
+| Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [DONE] |
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
@@ -312,8 +312,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
-**Machine Conductor:** [WIP]
-Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin). ~~Base texture renders black~~ (FIXED 2026-03-14, cutout render type).
+**Machine Conductor:** [DONE]
+Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin).
 
 **Machine Pipe:** [DONE]
 Push-only item transport. Hopper specialization item. Own BE subclass (MachinePipeBlockEntity) with transit slot (1 stack, slot 1), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FILLED BooleanProperty drives texture swap. No pulling -- items enter via player hand, hopper, or pipe-to-pipe push. Redstone locks the pipe (powered = frozen). Output priority relative to input face: forward, right, left, up, down. Round-robin resets on input face change. Pipe-to-pipe push notifies receiver of input face. Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator reads transit slot fullness. ThreadLocal pendingInputFace in WorldlyContainer bridges face parameter to setItem for automation input tracking.
@@ -2367,7 +2367,7 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 | File | Purpose |
 |------|---------|
 | `ideomod.mixins.json` | Mixin config |
-| `PistonStructureResolverMixin.java` | 4 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect |
+| `PistonStructureResolverMixin.java` | 8 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect, immovable inner check (framed obsidian anchors), vanilla metal conductors, frame anchor detection (post-gathering scan), dynamic push limit (Machine Brace) |
 | `AbstractFurnaceBlockEntityMixin.java` | Furnace array speed boost (50% cooking speed when part of registered structure) |
 
 ---

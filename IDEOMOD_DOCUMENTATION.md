@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-17a (Machine Brace specialization. Dynamic push limit via @ModifyConstant. Lazy swap mapping for mod-item triggers.)*
+*Last updated: 2026-03-21 (Documentation audit — cleaned resolved issues, updated feature counts, synced content)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -1096,7 +1096,7 @@ Zero overhead when nobody holds it (just a player list scan).
 
 ## 9. BLOCK SPECIFICATIONS
 
-### Oddstone -- 5 Features in One Block
+### Oddstone -- 6 Features in One Block
 
 | Feature | Implementation |
 |---------|---------------|
@@ -1180,7 +1180,7 @@ Frame activation: Always emits activation (strength 15). Never suppresses.
 
 **Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Squared curve gradient: POWER 0 = black, 1-15 = dim-to-bright red.
 
-**Known issues**: (1) Dust sees Conductor strong power through solid blocks (issue #12 -- needs RedStoneWireBlock mixin). ~~(2) Base texture renders black (issue #13 -- FIXED 2026-03-14, cutout render type).~~
+**Known issues**: Dust sees Conductor strong power through solid blocks (issue #3 in Known Issues -- needs RedStoneWireBlock mixin).
 
 ### Machine Repeater -- Omnidirectional Redstone Repeater
 
@@ -1616,6 +1616,18 @@ minecraft:stone, minecraft:cobblestone, minecraft:stone_bricks, minecraft:mossy_
 
 Stone-family blocks that form the frame around furnace array multiblocks. Data-driven via tag so datapacks can add/remove valid frame materials.
 
+### immovable_when_framed
+
+`data/ideomod/tags/blocks/immovable_when_framed.json`:
+
+Blocks that should be immovable when wrapped in a FramedBlock. Default: obsidian, crying_obsidian, reinforced_deepslate. Extensible by datapacks. Used by PistonBaseBlockMixin Feature 4 and PistonStructureResolverMixin Features 5 and 7.
+
+### frameable_blocks
+
+`data/ideomod/tags/blocks/frameable_blocks.json`:
+
+Whitelist of blocks that can be wrapped in frames. Contains approximately 310 vanilla blocks plus Ideomod blocks (oddstone, odd_slime). Extensible by datapacks or other mods. Used by FrameabilityHelper to determine valid wrapping targets.
+
 ---
 
 ## 14. KNOWN ISSUES & TECHNICAL DEBT
@@ -1624,20 +1636,10 @@ Stone-family blocks that form the frame around furnace array multiblocks. Data-d
 |---|-------|----------|----------|
 | 1 | OddstoneConfig.reloadConfig() not wired to command | Missing feature | config/OddstoneConfig.java |
 | 2 | Item model translucency | Cosmetic | Translucent inner blocks (glass, slime) render opaque in inventory. Quad-compositing approach can't handle separate render passes. In-world rendering is correct. |
-| ~~3~~ | ~~Framed block transit rendering (Trolley/Repulser/Attractor)~~ | ~~Visual bug~~ | ~~FIXED 2026-02-28c. BlockMoveHelper step 2.6 populates MovingFrameData on client side.~~ |
-| ~~4~~ | ~~Framed blocks not grabbed by slime during Repulser/Attractor moves~~ | ~~Movement bug~~ | ~~FIXED 2026-03-01. Backward walk grab immunity was firing on both canStickTo calls in the pair, blocking the behind block's passive response. Fixed with call-pair toggle in PistonStructureResolverMixin.~~ |
-| ~~5~~ | ~~Frame inside-face rendering~~ | ~~Cosmetic~~ | ~~FIXED. Inverted cuboid elements added to frame JSON models.~~ |
-| ~~6~~ | ~~Sympathetic framed oddstone transit rendering~~ | ~~Visual bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockClientMixin sympathetic scan added to retraction capture.~~ |
-| ~~7~~ | ~~Sympathetic retraction with machine-activated framed blocks~~ | ~~Data loss bug~~ | ~~FIXED 2026-02-28c. PistonBaseBlockMixin.scanSympathetic() now calls scanStickyGroup() on each found oddstone.~~ |
-| ~~8~~ | ~~Machine Track signal bleeds into attached Machine Blocks via Trolley~~ | ~~Gameplay bug~~ | ~~FIXED 2026-03-08. Two-part fix: (1) MachineTrackBlock redstone isolation -- isSignalSource=false, getSignal=0, getDirectSignal=0. Track POWER is now purely internal bookkeeping read via direct blockstate access in calculatePower(). No vanilla signal leakage through solid blocks. (2) FrameActivation suppression rule -- only MachineFrameBlock can emit anti-signal. All other Machine Family blocks always emit activation regardless of redstone state. Files: MachineTrackBlock.java, FrameActivation.java.~~ |
-| ~~9~~ | ~~Repulser/Attractor cannot target Framed Oddstone~~ | ~~Movement bug~~ | ~~FIXED 2026-03-08. ODDSTONE_ONLY predicate expanded to check FramedBlock with INNER_STICKY=ODDSTONE.~~ |
-| ~~10~~ | ~~Framed blocks not pulled from behind in push direction~~ | ~~Movement bug~~ | ~~FIXED 2026-03-07. Root cause was vanilla's backward walk silently skipping unpushable blocks (isPushable false -> stop walk, return true) so Feature 5 at HEAD of addBlockLine never fired. Fix: Feature 7 post-gathering anchor scan in TAIL of addBranchingBlocks. Scans toPush neighbors for active framed blocks with immovable inners connected via frame stickiness. If found, fails resolve.~~ |
-| ~~11~~ | ~~Framed inner blocks with light emission do not emit light~~ | ~~Missing delegation~~ | ~~FIXED 2026-03-08. Added INNER_LIGHT blockstate property (0-15), lightLevel predicate in ModBlocks.java, and getStateForPlacement() pre-population from item NBT.~~ |
-| 12 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
-| ~~13~~ | ~~Machine Conductor base texture renders black~~ | ~~Visual bug~~ | ~~FIXED 2026-03-14. Root cause: indicator overlay used default "solid" render type, which renders transparent pixels as opaque black. The overlay's tintIndex 1 at power 0 produces color 0x000000, creating a fully opaque black shell. Fix: added `"render_type": "minecraft:cutout"` to model JSON. Also removed unnecessary tintindex from base layer. File: models/block/machine_conductor.json.~~ |
-| 14 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors (Audit #15) or AbstractMachineBlock extraction (Audit #13). An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java. |
-| ~~15~~ | ~~Vanilla metal first-push failure after frame network change~~ | ~~Movement bug~~ | ~~FIXED 2026-03-15. Root cause: activatedVanillaMetals global set was atomically swapped per-network, so each recalculate() replaced the ENTIRE set with only its own network's metals. When multiple networks were processed in one flush cycle (e.g., breaking a frame that splits a network), the second recalculate wiped the first's results. Fix: changed to ConcurrentHashMap.newKeySet() with per-network remove-then-add -- each recalculate() only removes/adds entries belonging to its own network. File: FrameActivation.java.~~ |
+| 3 | Conductor strong power visible to dust through solid blocks | Gameplay bug | MachineConductorBlock.getDirectSignal outputs strong power. Vanilla dust avoids cross-wire through-block power because all dust shares one block instance and shouldSignal suppresses ALL dust during any dust scan. Conductor is a different class so dust's shouldSignal doesn't affect it. Fix requires mixin into RedStoneWireBlock. File: MachineConductorBlock.java. |
+| 4 | Framed redstone blocks don't emit power on frame activation | Gameplay bug | NEEDS VERIFICATION. Appeared to work during 2026-03-15 testing but no intentional fix was applied. May have been incidentally resolved by Cowork BFS refactors (Audit #15) or AbstractMachineBlock extraction (Audit #13). An attempted fix using updateNeighborsAt in recalculate() caused infinite neighbor cascade loops and was reverted. If it resurfaces, correct approach is deferred notification with re-entrancy protection. File: FrameActivation.java. |
 
+---
 
 ## 15. CONVENTIONS & PATTERNS
 
