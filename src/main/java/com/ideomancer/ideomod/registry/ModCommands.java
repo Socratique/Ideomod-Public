@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.registry;
 
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.effect.JudgementEffect;
 import com.ideomancer.ideomod.Ideomod;
 import net.minecraft.commands.Commands;
@@ -18,6 +19,8 @@ import net.minecraftforge.fml.common.Mod;
  * Current commands:
  *   /judgement - Triggers the Judgement stare effect on the player
  *                Requires op level 2 (same as /give, /tp, etc.)
+ *   /ideomod reload - Reloads the ideomod.json config from disk
+ *                      Requires op level 2
  */
 @Mod.EventBusSubscriber(modid = Ideomod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class ModCommands {
@@ -38,6 +41,20 @@ public class ModCommands {
                             Component.literal("This command can only be run by a player."));
                     return 0;
                 })
+        );
+
+        event.getDispatcher().register(
+            Commands.literal("ideomod")
+                .requires(source -> source.hasPermission(2))
+                .then(Commands.literal("reload")
+                    .executes(context -> {
+                        IdeomodConfig.reloadConfig();
+                        context.getSource().sendSuccess(
+                                () -> Component.literal("Ideomod config reloaded."), true);
+                        Ideomod.LOGGER.info("Config reloaded by command");
+                        return 1;
+                    })
+                )
         );
     }
 }

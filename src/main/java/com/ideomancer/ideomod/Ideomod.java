@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod;
 
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.block.frame.FrameActivation;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
@@ -80,6 +81,9 @@ public class Ideomod {
     }
 
     private void commonSetup(final FMLCommonSetupEvent event) {
+        // Load config early so all systems have values ready
+        IdeomodConfig.loadConfig();
+
         // Register framed block items for each material before stickiness rules
         FrameMaterial.registerFramedBlockItem(FrameMaterial.IRON, ModItems.IRON_FRAMED_BLOCK::get);
         FrameMaterial.registerFramedBlockItem(FrameMaterial.COPPER, ModItems.COPPER_FRAMED_BLOCK::get);

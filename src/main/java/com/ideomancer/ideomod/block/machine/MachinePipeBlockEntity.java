@@ -45,8 +45,10 @@ public class MachinePipeBlockEntity extends MachineFrameBlockEntity {
     // CONSTANTS
     // ========================================================================
 
-    /** Transfer cooldown in ticks. Matches vanilla hopper speed. */
-    public static final int TRANSFER_COOLDOWN = 8;
+    /** Transfer cooldown in ticks. Reads from config (default matches vanilla hopper speed). */
+    public static int getConfigTransferCooldown() {
+        return com.ideomancer.ideomod.config.IdeomodConfig.getItemPipeTransferCooldown();
+    }
 
     /** Slot index for the transit item. */
     public static final int TRANSIT_SLOT = 1;
@@ -157,7 +159,7 @@ public class MachinePipeBlockEntity extends MachineFrameBlockEntity {
         setLastInputFace(effectiveFace);
         // Start cooldown for the push
         if (this.transferCooldown <= 0) {
-            this.transferCooldown = TRANSFER_COOLDOWN;
+            this.transferCooldown = getConfigTransferCooldown();
         }
     }
 
@@ -403,8 +405,8 @@ public class MachinePipeBlockEntity extends MachineFrameBlockEntity {
         // Ensure minimum cooldown after piston movement to prevent
         // items from being pushed on the very first tick at the new position.
         // This gives the world state time to settle after the move.
-        if (this.transferCooldown < TRANSFER_COOLDOWN) {
-            this.transferCooldown = TRANSFER_COOLDOWN;
+        if (this.transferCooldown < getConfigTransferCooldown()) {
+            this.transferCooldown = getConfigTransferCooldown();
         }
         this.roundRobinIndex = tag.getInt(TAG_ROUND_ROBIN);
         if (tag.contains(TAG_LAST_INPUT_FACE)) {

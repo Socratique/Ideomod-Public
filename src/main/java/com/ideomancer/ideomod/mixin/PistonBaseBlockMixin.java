@@ -8,7 +8,7 @@ import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
-import com.ideomancer.ideomod.config.OddstoneConfig;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -380,7 +380,7 @@ public abstract class PistonBaseBlockMixin {
     private void scanSympathetic(Level level, Direction moveDir,
                                   String dimensionKey,
                                   java.util.Set<BlockPos> savedPositions) {
-        int radius = OddstoneConfig.getSympatheticRadius();
+        int radius = IdeomodConfig.getSympatheticRadius();
 
         // Use helper to find all sympathetic oddstone blocks
         Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, savedPositions, radius);

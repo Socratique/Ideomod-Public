@@ -1,14 +1,17 @@
 package com.ideomancer.ideomod.block.machine;
 
+import com.ideomancer.ideomod.config.IdeomodConfig;
+
 /**
  * Machine Brace -- structural reinforcement that increases piston push limits.
  *
  * When a Machine Brace is found within a piston push group, the push limit
- * for that group increases by 6 (from the base 12). Each additional Brace
- * found within the expanded limit adds another 6, up to a hard cap of 60
- * (requiring 8 Braces). The cascading discovery is automatic: the limit
- * grows as Braces are found, but a Brace must be within the current limit
- * to count.
+ * for that group increases (from the base push limit). Each additional Brace
+ * found within the expanded limit adds more, up to a hard cap. The cascading
+ * discovery is automatic: the limit grows as Braces are found, but a Brace
+ * must be within the current limit to count.
+ *
+ * All values are now read from IdeomodConfig for easy tuning.
  *
  * All shared behavior (GUI, drops, clone, block entity, lifecycle hooks,
  * stickiness, specialization swap) is inherited from AbstractMachineBlock.
@@ -19,14 +22,20 @@ package com.ideomancer.ideomod.block.machine;
  */
 public class MachineBraceBlock extends AbstractMachineBlock {
 
-    /** Push limit increase per Brace found in the push group. */
-    public static final int PUSH_LIMIT_INCREASE_PER_BRACE = 6;
+    /** Push limit increase per Brace found in the push group. Reads from config. */
+    public static int getPushLimitPerBrace() {
+        return IdeomodConfig.getPushLimitPerBrace();
+    }
 
-    /** Maximum push limit with Braces (8 Braces * 6 = 48 + 12 base = 60). */
-    public static final int MAX_PUSH_LIMIT = 60;
+    /** Maximum push limit with Braces. Reads from config. */
+    public static int getMaxPushLimit() {
+        return IdeomodConfig.getMaxPushLimit();
+    }
 
-    /** Maximum number of Braces that contribute to the push limit. */
-    public static final int MAX_BRACES = 8;
+    /** Maximum number of Braces that contribute to the push limit. Reads from config. */
+    public static int getMaxBraces() {
+        return IdeomodConfig.getMaxBraces();
+    }
 
     public MachineBraceBlock(Properties properties) {
         super(properties);

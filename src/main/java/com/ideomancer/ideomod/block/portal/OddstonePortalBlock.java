@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block.portal;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -55,7 +56,7 @@ public class OddstonePortalBlock extends Block {
     protected static final VoxelShape X_AXIS_AABB = Block.box(0.0, 0.0, 6.0, 16.0, 16.0, 10.0);
     protected static final VoxelShape Z_AXIS_AABB = Block.box(6.0, 0.0, 0.0, 10.0, 16.0, 16.0);
 
-    private static final int TELEPORT_COOLDOWN = 80; // 4 seconds
+    // Teleport cooldown now read from IdeomodConfig.getPortalTeleportCooldown()
 
     public OddstonePortalBlock(Properties properties) {
         super(properties);
@@ -118,7 +119,7 @@ public class OddstonePortalBlock extends Block {
         if (!(entity instanceof ServerPlayer player)) return;
         if (player.isOnPortalCooldown()) return;
 
-        player.setPortalCooldown(TELEPORT_COOLDOWN);
+        player.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());
 
         OddstonePortalSavedData data = OddstonePortalSavedData.get(serverLevel);
         OddstonePortalSavedData.PortalEntry entry = findPortalEntry(serverLevel, pos, state, data);
@@ -457,7 +458,9 @@ public class OddstonePortalBlock extends Block {
 
     private void scatterTeleport(ServerLevel level, ServerPlayer player) {
         double angle = level.getRandom().nextDouble() * Math.PI * 2;
-        double distance = 200 + level.getRandom().nextDouble() * 800;
+        int minDist = IdeomodConfig.getScatterDistanceMin();
+        int maxDist = IdeomodConfig.getScatterDistanceMax();
+        double distance = minDist + level.getRandom().nextDouble() * (maxDist - minDist);
         int targetX = player.blockPosition().getX() + (int) (Math.cos(angle) * distance);
         int targetZ = player.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
 
@@ -471,7 +474,7 @@ public class OddstonePortalBlock extends Block {
                 targetPos.getZ() + 0.5
         );
 
-        player.hurt(level.damageSources().magic(), 10.0F);
+        player.hurt(level.damageSources().magic(), IdeomodConfig.getScatterDamage());
 
         Ideomod.LOGGER.info("Player {} scatter-teleported by unlinked Oddstone Portal to {}",
                 player.getName().getString(), targetPos);

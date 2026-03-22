@@ -14,20 +14,14 @@ import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Handles loading/saving the Oddstone JSON config file.
- * 
- * Config file location: config/ideomod/oddstone.json
- * 
- * Contains:
- * - "sympathetic_radius": int (default 5) - how far Oddstone blocks
- *   can "feel" each other for sympathetic movement
- * - "affected_mobs": string[] - list of mob registry IDs that are
- *   repelled by Oddstone pathfinding. If a mob is NOT in this list,
- *   it walks over Oddstone normally.
- * 
- * On first launch, the file is auto-generated with ALL land mobs.
- * Players can then remove mobs from the list to create exceptions.
+ * @deprecated Replaced by {@link IdeomodConfig} which centralizes all mod config.
+ * This file is kept for reference but is no longer used by any system.
+ * All references now point to IdeomodConfig. Safe to delete.
+ *
+ * Original config file location: config/ideomod/oddstone.json
+ * New config file location: config/ideomod/ideomod.json
  */
+@Deprecated
 public class OddstoneConfig {
 
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
