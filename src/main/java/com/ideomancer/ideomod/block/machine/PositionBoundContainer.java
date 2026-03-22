@@ -34,6 +34,11 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * isRepeater() checks if the current block is a MachineRepeaterBlock.
  * getRepeaterDelay() reads the delay from the BE for ContainerData sync.
  *
+ * TRANSFORMER SUPPORT:
+ * ====================
+ * isTransformer() checks if the current block is a MachineTransformerBlock.
+ * getTransformerLevel() reads the output level from the BE for ContainerData sync.
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class PositionBoundContainer implements Container {
@@ -83,6 +88,21 @@ public class PositionBoundContainer implements Container {
     public int getRepeaterDelay() {
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getRepeaterDelay() : 1;
+    }
+
+    /**
+     * Check if the current block is a Machine Transformer.
+     */
+    public boolean isTransformer() {
+        return level.getBlockState(pos).getBlock() instanceof MachineTransformerBlock;
+    }
+
+    /**
+     * Get the transformer output level from the BE. Returns 1 if not a transformer.
+     */
+    public int getTransformerLevel() {
+        MachineFrameBlockEntity be = getBE();
+        return be != null ? be.getTransformerLevel() : 1;
     }
 
     // ========================================================================

@@ -4,6 +4,7 @@ import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.machine.MachineFrameMenu;
 import com.ideomancer.ideomod.network.ModNetworking;
 import com.ideomancer.ideomod.network.RepeaterDelayPacket;
+import com.ideomancer.ideomod.network.TransformerLevelPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
@@ -16,15 +17,26 @@ import net.minecraft.world.level.block.Block;
 /**
  * Client-side GUI screen for all Machine Family blocks.
  *
- * FIXED-SIZE LAYOUT:
- * ==================
- * All machine GUIs use the same height (determined at open time by the
- * menu's content height). The transit slot area exists in the pipe layout
- * but the slot tile is only rendered when the BE is a pipe.
+ * DYNAMIC CONTENT HEIGHT:
+ * =======================
+ * The menu determines content height based on specialization type.
+ * The screen reads this via menu.getContentHeight() and adjusts all
+ * rendering and click zones accordingly.
+ *
+ * FIXED-SIZE LAYOUT (per specialization):
+ * ========================================
+ * The transit slot area exists in the pipe layout but the slot tile is
+ * only rendered when the BE is a pipe.
  *
  * For Machine Repeater, 4 numbered delay buttons (1-4) are rendered in
- * the same zone where the transit slot would be for Pipes. Since Repeater
- * and Pipe never coexist, this is safe.
+ * the same zone where the transit slot would be for Pipes.
+ *
+ * For Machine Transformer, 15 numbered level buttons (1-15) are rendered
+ * in two rows: 8 on top, 7 on bottom (centered). The content area is
+ * taller (71px vs 53px) to accommodate the extra row.
+ *
+ * Since Repeater, Transformer, and Pipe never coexist, sharing the zone
+ * below the spec slot is safe.
  *
  * GUI ASSEMBLY FROM SPRITESHEET (ideomod_gui.png):
  * =================================================
@@ -32,7 +44,8 @@ import net.minecraft.world.level.block.Block;
  *   2. Content area: left/right edges + background fill (176 x contentH)
  *   3. Spec slot tile stamped at (79, 19) -- always
  *   4. Transit slot tile stamped at (79, 37) -- only when pipe
- *      OR: 4 delay buttons at (52, 37)...(120, 37) -- only when repeater
+ *      OR: 4 delay buttons -- only when repeater
+ *      OR: 15 level buttons in 2 rows -- only when transformer
  *   5. Player inventory section (176x90) -- pre-assembled with slots
  *   6. Bottom border strip (176x4)
  *
@@ -70,16 +83,26 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
     private static final int INV_H = 90;
     private static final int BG_COLOR = 0xFFC6C6C6; // rgb(198,198,198)
 
-    // Button layout constants
+    // Button layout constants (shared)
     private static final int BUTTON_SIZE = 16;
     private static final int BUTTON_GAP = 2;  // gap between buttons
-    private static final int BUTTON_COUNT = 4; // buttons 1-4
 
-    // Buttons are centered horizontally in the content area, on the transit slot row (Y=37)
-    // Total width: 4 buttons * 16px + 3 gaps * 2px = 70px
-    // Center offset from left: (176 - 70) / 2 = 53
-    private static final int BUTTONS_START_X = 53;
-    private static final int BUTTONS_Y = 37;
+    // Repeater button layout: 4 buttons in 1 row
+    private static final int REPEATER_BUTTON_COUNT = 4;
+    // Total width: 4*16 + 3*2 = 70, center: (176-70)/2 = 53
+    private static final int REPEATER_BUTTONS_START_X = 53;
+    private static final int REPEATER_BUTTONS_Y = 37;
+
+    // Transformer button layout: 15 buttons in 2 rows (8 top, 7 bottom)
+    private static final int TRANSFORMER_ROW1_COUNT = 8;
+    private static final int TRANSFORMER_ROW2_COUNT = 7;
+    // Row 1: 8*16 + 7*2 = 142, center: (176-142)/2 = 17
+    private static final int TRANSFORMER_ROW1_START_X = 17;
+    // Row 2: 7*16 + 6*2 = 124, center: (176-124)/2 = 26
+    private static final int TRANSFORMER_ROW2_START_X = 26;
+    // Y positions: spec slot ends at ~37, leave a gap for visual breathing room
+    private static final int TRANSFORMER_ROW1_Y = 40;
+    private static final int TRANSFORMER_ROW2_Y = 40 + BUTTON_SIZE + BUTTON_GAP; // 58
 
     private final Component playerInventoryTitle;
 
@@ -126,6 +149,11 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
             renderDelayButtons(g, x, y);
         }
 
+        // Level buttons: only rendered for transformer
+        if (this.menu.isTransformer()) {
+            renderTransformerButtons(g, x, y);
+        }
+
         // 4. Player inventory section
         int invY = y + BORDER_H + contentH;
         g.blit(GUI_SHEET, x, invY, INV_U, INV_V, GUI_WIDTH, INV_H, TEX, TEX);
@@ -142,24 +170,54 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
     private void renderDelayButtons(GuiGraphics g, int guiX, int guiY) {
         int currentDelay = this.menu.getRepeaterDelay();
 
-        for (int i = 0; i < BUTTON_COUNT; i++) {
+        for (int i = 0; i < REPEATER_BUTTON_COUNT; i++) {
             int buttonNumber = i + 1; // 1-4
-            int btnX = guiX + BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
-            int btnY = guiY + BUTTONS_Y;
+            int btnX = guiX + REPEATER_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+            int btnY = guiY + REPEATER_BUTTONS_Y;
 
-            // UV lookup from spritesheet
-            int col = (buttonNumber - 1) % 16;
-            int row = (buttonNumber - 1) / 16;
-            int u = col * BUTTON_SIZE;
-            int v = row * BUTTON_SIZE;
-
-            // Use selected (pressed) variant for current delay, unselected for others
-            if (buttonNumber == currentDelay) {
-                v += 64; // Selected buttons start at Y=64
-            }
-
-            g.blit(BUTTON_SHEET, btnX, btnY, u, v, BUTTON_SIZE, BUTTON_SIZE, TEX, TEX);
+            renderNumberedButton(g, btnX, btnY, buttonNumber, buttonNumber == currentDelay);
         }
+    }
+
+    /**
+     * Renders the 15 level buttons (1-15) in two rows from the numbered buttons
+     * spritesheet. Row 1: buttons 1-8, Row 2: buttons 9-15 (centered).
+     * The currently selected level shows the "selected" (pressed) variant.
+     */
+    private void renderTransformerButtons(GuiGraphics g, int guiX, int guiY) {
+        int currentLevel = this.menu.getTransformerLevel();
+
+        // Row 1: buttons 1-8
+        for (int i = 0; i < TRANSFORMER_ROW1_COUNT; i++) {
+            int buttonNumber = i + 1;
+            int btnX = guiX + TRANSFORMER_ROW1_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+            int btnY = guiY + TRANSFORMER_ROW1_Y;
+            renderNumberedButton(g, btnX, btnY, buttonNumber, buttonNumber == currentLevel);
+        }
+
+        // Row 2: buttons 9-15
+        for (int i = 0; i < TRANSFORMER_ROW2_COUNT; i++) {
+            int buttonNumber = i + 9;
+            int btnX = guiX + TRANSFORMER_ROW2_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+            int btnY = guiY + TRANSFORMER_ROW2_Y;
+            renderNumberedButton(g, btnX, btnY, buttonNumber, buttonNumber == currentLevel);
+        }
+    }
+
+    /**
+     * Renders a single numbered button from the spritesheet.
+     * @param buttonNumber 1-64
+     * @param selected whether to show pressed/selected state
+     */
+    private void renderNumberedButton(GuiGraphics g, int x, int y, int buttonNumber, boolean selected) {
+        int col = (buttonNumber - 1) % 16;
+        int row = (buttonNumber - 1) / 16;
+        int u = col * BUTTON_SIZE;
+        int v = row * BUTTON_SIZE;
+        if (selected) {
+            v += 64; // Selected buttons start at Y=64
+        }
+        g.blit(BUTTON_SHEET, x, y, u, v, BUTTON_SIZE, BUTTON_SIZE, TEX, TEX);
     }
 
     @Override
@@ -189,22 +247,54 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
-        // Check if a delay button was clicked (only for repeater)
-        if (button == 0 && this.menu.isRepeater()) {
+        if (button == 0) {
             int guiX = (this.width - this.imageWidth) / 2;
             int guiY = (this.height - this.imageHeight) / 2;
 
-            for (int i = 0; i < BUTTON_COUNT; i++) {
-                int btnX = guiX + BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
-                int btnY = guiY + BUTTONS_Y;
+            // Check repeater delay buttons
+            if (this.menu.isRepeater()) {
+                for (int i = 0; i < REPEATER_BUTTON_COUNT; i++) {
+                    int btnX = guiX + REPEATER_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + REPEATER_BUTTONS_Y;
 
-                if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
-                        && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
-                    int newDelay = i + 1;
-                    // Send packet to server
-                    ModNetworking.CHANNEL.sendToServer(
-                            new RepeaterDelayPacket(this.menu.getBlockPos(), newDelay));
-                    return true;
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        int newDelay = i + 1;
+                        ModNetworking.CHANNEL.sendToServer(
+                                new RepeaterDelayPacket(this.menu.getBlockPos(), newDelay));
+                        return true;
+                    }
+                }
+            }
+
+            // Check transformer level buttons
+            if (this.menu.isTransformer()) {
+                // Row 1: buttons 1-8
+                for (int i = 0; i < TRANSFORMER_ROW1_COUNT; i++) {
+                    int btnX = guiX + TRANSFORMER_ROW1_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + TRANSFORMER_ROW1_Y;
+
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        int newLevel = i + 1;
+                        ModNetworking.CHANNEL.sendToServer(
+                                new TransformerLevelPacket(this.menu.getBlockPos(), newLevel));
+                        return true;
+                    }
+                }
+
+                // Row 2: buttons 9-15
+                for (int i = 0; i < TRANSFORMER_ROW2_COUNT; i++) {
+                    int btnX = guiX + TRANSFORMER_ROW2_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + TRANSFORMER_ROW2_Y;
+
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        int newLevel = i + 9;
+                        ModNetworking.CHANNEL.sendToServer(
+                                new TransformerLevelPacket(this.menu.getBlockPos(), newLevel));
+                        return true;
+                    }
                 }
             }
         }

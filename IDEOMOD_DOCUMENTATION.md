@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-21b (Machine Toggle specialization, vanilla-style indicator color ramp)*
+*Last updated: 2026-03-22 (Machine Transformer specialization, MachineRedstoneHelper refactor, dynamic GUI height)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -76,10 +76,16 @@ com.ideomancer.ideomod
   |     |     |-- MachineType.java             Enum: FRAME, TRACK, TROLLEY, etc. canStickToMachineType().
   |     |     |-- AbstractMachineBlock.java    Base class for all Machine Family blocks. Shared lifecycle,
   |     |     |                                GUI, drops, stickiness, frame activation markDirty().
+  |     |     |                                getRedstoneOutput(BlockState) for MachineRedstoneHelper.
+  |     |     |-- MachineRedstoneHelper.java   Shared signal detection utility. Single source of truth
+  |     |     |                                for getIncomingSignalFromFace(), scanAllFaces(),
+  |     |     |                                getFaceFromSourcePos(). Generic device detection via
+  |     |     |                                AbstractMachineBlock.getRedstoneOutput().
   |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
   |     |     |                                Client sync via syncToClients() after swap.
   |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
+  |     |     |                                isPipe(), isRepeater(), isTransformer(). Dynamic slots.
   |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
   |     |     |                                Protected constructor for subclass BE types.
@@ -98,12 +104,18 @@ com.ideomancer.ideomod
   |     |     |                                updateShape validates parent piston. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
   |     |     |                                Structural reinforcement. Push limit constants.
-  |     |     |-- MachineFrameMenu.java        Position-bound menu. PositionBoundContainer on both sides.
+  |     |     |-- MachineFrameMenu.java        Position-bound menu. Dynamic content height (53px default,
+  |     |     |                                71px for Transformer). ContainerData size 4.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
   |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR. Custom redstone.
   |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER. Custom redstone.
-  |     |     \-- MachineToggleBlock.java     Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop.
+  |     |     |                                Signal detection via MachineRedstoneHelper.
+  |     |     |-- MachineToggleBlock.java     Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop.
+  |     |     |                                Signal detection via MachineRedstoneHelper.
+  |     |     \-- MachineTransformerBlock.java Extends AbstractMachineBlock. MachineType.TRANSFORMER.
+  |     |                                      Configurable signal level setter. Signal detection via
+  |     |                                      MachineRedstoneHelper.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -202,6 +214,9 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_sticky_piston` | MachineStickyPistonBlock | Same properties as Machine Piston. MachineType.STICKY_PISTON. Sticky pull on retraction. |
 | `machine_piston_head` | MachinePistonHeadBlock | Hardness 0.5, metal sound. `PushReaction.BLOCK`. `noLootTable()`, `noOcclusion()`. FACING + STICKY. Not player-placeable. 8x8x16 collision shape. |
 | `machine_brace` | MachineBraceBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.BRACE. Structural reinforcement -- push limit increase via PistonStructureResolverMixin. |
+| `machine_repeater` | MachineRepeaterBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.REPEATER. Omnidirectional redstone repeater. POWERED + DELAY (1-4). |
+| `machine_toggle` | MachineToggleBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TOGGLE. Edge-triggered flip-flop. POWERED + INPUT_FACE. |
+| `machine_transformer` | MachineTransformerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TRANSFORMER. Configurable signal level setter. POWERED + OUTPUT_LEVEL (1-15). |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -211,14 +226,14 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
 ### ModCreativeTabs
 
 Two tabs:
-- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Machine Brace, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater, Machine Toggle, Machine Transformer, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
 - `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
@@ -1213,7 +1228,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 5. updatingPos ThreadLocal: during tick()'s setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately (prevents stale dust reads during synchronous cascade). Adjacent repeaters at different positions proceed normally.
 
-**Signal Detection**: `getIncomingSignalFromFace()` handles four neighbor types: MachineConductorBlock (getSignal with -1 decay), MachineRepeaterBlock (15 if powered and we're not on their input face), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
+**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. Handles: MachineConductorBlock (getSignal with -1 decay), any AbstractMachineBlock with getRedstoneOutput() > 0 (device neighbor, input-face check), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
 
 **Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at configured delay (DELAY * 2 game ticks). Uses `willTickThisTick()` guard. tick() uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
 
@@ -1258,7 +1273,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Us
 
 4. absorbing ThreadLocal: during onPlace signal snapshot, prevents neighborChanged from scheduling ticks.
 
-**Signal Detection**: `getIncomingSignalFromFace()` handles five neighbor types: MachineConductorBlock (getSignal with -1 decay), MachineRepeaterBlock (15 if powered and we're not on their input face), MachineToggleBlock (15 if powered and we're not on their input face), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
+**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. Same handler set as Repeater/Transformer. `getRedstoneOutput()` returns 15 when POWERED.
 
 **Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
 
@@ -1271,6 +1286,45 @@ When powered, input face shows the "off" texture (machine_toggle) while other 5 
 Stickiness: MachineType.TOGGLE -- sticks to other Toggles + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Transformer -- Configurable Signal Level Setter
+
+Registry ID: `machine_transformer`. Class: MachineTransformerBlock extends AbstractMachineBlock. `MachineType.TRANSFORMER`.
+
+Omnidirectional redstone signal level setter. Receives signal on one face (input), outputs a user-configured signal strength (1-15) on all other 5 faces. Input signal acts purely as an on/off gate -- the output level is always whatever the player sets in the GUI, regardless of input strength. Specialization item: vanilla Comparator.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing comparator in slot + 15 level buttons in two rows).
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) + OUTPUT_LEVEL (IntegerProperty 1-15) |
+| **Output** | OUTPUT_LEVEL on all non-input faces when POWERED, 0 when not |
+| **Delay** | None -- responds on 1-tick schedule (same as Toggle) |
+| **Default level** | 1 (minimum) |
+
+**Input/Output Face Model**: Same concept as Conductor/Repeater/Toggle -- receives on one face, outputs on other 5. Input face = strongest incoming signal. Stored as `inputFace` in MachineFrameBlockEntity.
+
+**Anti-feedback Architecture**: Same 5 layers as Repeater. Output value is OUTPUT_LEVEL (read from blockstate) instead of fixed 15.
+
+**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. `getRedstoneOutput()` returns OUTPUT_LEVEL when POWERED.
+
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+
+**GUI Buttons**: 15 numbered buttons from `ideomod_numbered_buttons.png` in two rows: row 1 = buttons 1-8 (centered at X=17), row 2 = buttons 9-15 (centered at X=26). Row 1 at Y=40, row 2 at Y=58. `MachineFrameScreen.mouseClicked()` sends `TransformerLevelPacket`. Dynamic content height: 71px (vs 53px default) to accommodate two button rows. `MachineFrameMenu` uses `computeContentHeight()` at construction time to determine height from `PositionBoundContainer.isTransformer()`.
+
+**Networking**: `TransformerLevelPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates level range (1-15), player distance (64 blocks), block type.
+
+**MachineFrameBlockEntity fields**: `transformerLevel` (int, 1-15, default 1). Saved in saveAdditional, load, getUpdateTag, saveMovementData, loadMovementData. Reset to 1 in triggerSwapCheck(). `setTransformerLevel()` syncs OUTPUT_LEVEL blockstate with setBlock flag 3.
+
+**ContainerData**: MachineFrameMenu ContainerData size 4: DATA_REPEATER_DELAY=0, DATA_IS_REPEATER=1, DATA_TRANSFORMER_LEVEL=2, DATA_IS_TRANSFORMER=3.
+
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1. Level-aware tint: unpowered = POWER_COLORS[0] (dark maroon), powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Outer shell uses `machine_transformer.png` texture with transparent indicator windows. Single block model for all 30 blockstate variants (15 levels x 2 powered states) -- tint handles visual differentiation.
+
+Stickiness: MachineType.TRANSFORMER -- sticks to other Transformers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Tracks, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Pipe -- Push-Only Item Transport
 
 Registry ID: `machine_pipe`. Class: MachinePipeBlock extends AbstractMachineBlock. `MachineType.PIPE`.
 
@@ -1639,7 +1693,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, machine_toggle, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, machine_toggle, machine_transformer, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 

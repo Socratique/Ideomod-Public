@@ -39,6 +39,9 @@ public enum MachineType {
     /** Machine Repeater -- three-axis redstone repeater. */
     REPEATER,
 
+    /** Machine Transformer -- configurable signal level setter. */
+    TRANSFORMER,
+
     /** Machine Clock -- configurable redstone pulse emitter. */
     CLOCK,
 

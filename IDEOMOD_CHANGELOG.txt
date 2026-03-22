@@ -1,5 +1,220 @@
 # Ideomod Changelog
 
+## [2026-03-22] Machine Transformer Specialization + MachineRedstoneHelper Refactor
+
+New Machine Family specialization: Machine Transformer. Omnidirectional redstone
+signal level setter that receives signal on one face and outputs a user-configured
+signal strength (1-15) on all other 5 faces. Specialization item: vanilla Comparator.
+
+Also introduced: MachineRedstoneHelper, a shared signal detection utility that
+eliminates duplicated getIncomingSignalFromFace() methods across all Machine Family
+redstone specializations. Adding future redstone specializations (Clock, Pulser)
+now only requires updating MachineRedstoneHelper, not every existing block.
+
+Also introduced: dynamic GUI content height. The MachineFrameMenu now computes
+content area height based on specialization type (71px for Transformer's 2-row
+button layout, 53px for all others). Player inventory slots shift down automatically.
+
+### Machine Transformer -- Behaviour
+
+- Specialization item: Vanilla Comparator (Items.COMPARATOR)
+- MachineType.TRANSFORMER, shares MachineFrameBlockEntity
+- Blockstate: POWERED (boolean) + OUTPUT_LEVEL (IntegerProperty 1-15)
+- Output: configurable strength (OUTPUT_LEVEL) on all non-input faces when POWERED
+- No delay -- responds on 1-tick schedule (same as Toggle)
+- Input signal acts as on/off gate only -- output level is always whatever the
+  player sets in the GUI, regardless of input strength
+- Input face model: same as Conductor/Repeater/Toggle -- strongest incoming signal wins
+
+### Machine Transformer -- Anti-Feedback Architecture
+
+Same 5-layer architecture as Machine Repeater:
+1. getSignal/getDirectSignal: return 0 toward input face, OUTPUT_LEVEL on others.
+   shouldSignal ThreadLocal suppresses self-reads through solid blocks.
+2. neighborChanged output-face early-return when POWERED.
+3. Protected inputFace: neighborChanged NEVER modifies inputFace when powered.
+4. Input-face-first tick: when powered, only checks current input face.
+5. updatingPos ThreadLocal blocks re-entrant neighborChanged during setBlock.
+
+### Machine Transformer -- GUI
+
+15 numbered buttons (1-15) in two rows: 8 on top (buttons 1-8), 7 on bottom
+(buttons 9-15, centered). Uses existing ideomod_numbered_buttons.png spritesheet.
+Selected button shows pressed state. Click sends TransformerLevelPacket to server.
+
+Content area is 71px (vs 53px default) to accommodate two button rows. Dynamic
+height computed at menu construction time via PositionBoundContainer.isTransformer().
+
+### Machine Transformer -- Visual
+
+Dual-cuboid model (same pattern as Repeater/Toggle/Fluid Pipe). Inner underlay
+cuboid (0.05 inset) uses shared machine_repeater_indicator.png (solid white)
+tinted via tintIndex 1. Outer shell uses machine_transformer.png texture with
+transparent indicator windows. Single block model for all 30 blockstate variants
+(15 levels x 2 powered states).
+
+Tint is level-aware: when unpowered, indicator shows POWER_COLORS[0] (dark maroon).
+When powered, indicator shows POWER_COLORS[outputLevel] -- so a Transformer set to
+level 5 glows dimmer than one set to 15. This gives a visual cue of the output
+strength without needing separate textures per level.
+
+### MachineRedstoneHelper -- Shared Signal Detection Refactor
+
+New utility class: MachineRedstoneHelper (block/machine/MachineRedstoneHelper.java).
+Single source of truth for "what signal is my neighbor providing to me?" All Machine
+Family redstone specializations (Repeater, Toggle, Transformer) now delegate to
+MachineRedstoneHelper.getIncomingSignalFromFace() and scanAllFaces() instead of
+maintaining their own copies.
+
+New method on AbstractMachineBlock: getRedstoneOutput(BlockState). Returns the
+signal strength a machine device outputs when powered. Default returns 0 (non-
+redstone specializations). Overridden by:
+  - MachineRepeaterBlock: 15 when POWERED
+  - MachineToggleBlock: 15 when POWERED
+  - MachineTransformerBlock: OUTPUT_LEVEL when POWERED
+
+MachineRedstoneHelper detects machine devices generically via getRedstoneOutput()
+-- no instanceof chains for specific block classes. Adding a new redstone
+specialization only requires:
+  1. Override getRedstoneOutput() on the new block
+  2. The helper automatically recognizes it as a device neighbor
+
+The Conductor is NOT refactored to use this helper -- its signal detection is
+fundamentally different (wire-type: variable power output with decay, source/wire
+categorization). The Conductor's existing approach of falling through to vanilla
+level.getSignal() for machine devices works correctly because they provide proper
+getDirectSignal output.
+
+Also moved getFaceFromSourcePos() to MachineRedstoneHelper as a shared static
+utility (was duplicated across Repeater, Toggle, Transformer).
+
+### Dynamic GUI Content Height
+
+MachineFrameMenu.CONTENT_HEIGHT replaced with instance field computed at
+construction time. computeContentHeight() checks PositionBoundContainer.isTransformer()
+and returns 71px for Transformer (2 button rows), 53px for all others. Player
+inventory slot Y positions are computed from the instance contentHeight, so they
+shift down automatically for the taller GUI.
+
+### Networking
+
+New packet: TransformerLevelPacket via existing Forge SimpleChannel (ModNetworking).
+Client-to-server. Carries BlockPos + level (1-15). Server validates range, distance
+(64 blocks), and block type (MachineTransformerBlock). Second packet registered in
+the mod (after RepeaterDelayPacket).
+
+### ContainerData Expansion
+
+MachineFrameMenu ContainerData expanded from size 2 to size 4:
+  DATA_REPEATER_DELAY = 0
+  DATA_IS_REPEATER = 1
+  DATA_TRANSFORMER_LEVEL = 2
+  DATA_IS_TRANSFORMER = 3
+
+PositionBoundContainer gained isTransformer() and getTransformerLevel() methods.
+
+### MachineFrameBlockEntity Changes
+
+New field: transformerLevel (int, 1-15, default 1). Saved in saveAdditional, load,
+getUpdateTag, saveMovementData, loadMovementData. Reset to 1 in triggerSwapCheck().
+setTransformerLevel() syncs OUTPUT_LEVEL blockstate with setBlock flag 3 (triggers
+neighbor updates so adjacent redstone components learn about the level change).
+
+### New Files
+
+**MachineTransformerBlock.java** (block/machine/): Omnidirectional signal level
+  setter. POWERED + OUTPUT_LEVEL blockstates. 5-layer anti-feedback. Delegates
+  signal detection to MachineRedstoneHelper. getRedstoneOutput() returns OUTPUT_LEVEL.
+
+**MachineRedstoneHelper.java** (block/machine/): Shared signal detection utility.
+  getIncomingSignalFromFace(), scanAllFaces(), getFaceFromSourcePos(). Generic
+  machine device detection via AbstractMachineBlock.getRedstoneOutput().
+
+**TransformerLevelPacket.java** (network/): Client-to-server packet for output
+  level button clicks (1-15).
+
+**blockstates/machine_transformer.json**: 30 variants (15 levels x 2 powered),
+  all pointing to single model.
+
+**models/block/machine_transformer.json**: Dual-cuboid (indicator underlay +
+  outer shell with cutout render type).
+
+**models/item/machine_transformer.json**: Standard parent block model.
+
+**loot_tables/blocks/machine_transformer.json**: Simple self-drop.
+
+### Modified Files
+
+**AbstractMachineBlock.java**: Added getRedstoneOutput(BlockState) method. Returns
+  0 by default. Redstone specializations override to report their output level.
+
+**MachineRepeaterBlock.java**: Removed private getIncomingSignalFromFace(),
+  scanAllFaces(), getFaceFromSourcePos(). Now delegates to MachineRedstoneHelper.
+  Added getRedstoneOutput() returning 15 when POWERED. shouldSignal changed to
+  package-private for helper access.
+
+**MachineToggleBlock.java**: Same refactor as Repeater. Delegates to
+  MachineRedstoneHelper. Added getRedstoneOutput() returning 15 when POWERED.
+  shouldSignal changed to package-private.
+
+**MachineFrameBlockEntity.java**: Added transformerLevel field (int, 1-15, default
+  1). Saved in all NBT paths. Reset to 1 in triggerSwapCheck(). setTransformerLevel()
+  syncs OUTPUT_LEVEL blockstate.
+
+**MachineFrameMenu.java**: Replaced fixed CONTENT_HEIGHT with instance contentHeight.
+  New constants: DEFAULT_CONTENT_HEIGHT=53, TRANSFORMER_CONTENT_HEIGHT=71.
+  ContainerData expanded to size 4 (added transformer level + isTransformer).
+  Renamed repeaterData -> machineData. Added isTransformer(), getTransformerLevel().
+
+**MachineFrameScreen.java**: Added transformer 2-row button rendering + click
+  handling. Extracted renderNumberedButton() helper. Added TransformerLevelPacket
+  import. Transformer buttons: row 1 at Y=40 (1-8), row 2 at Y=58 (9-15 centered).
+
+**PositionBoundContainer.java**: Added isTransformer() and getTransformerLevel().
+
+**MachineSwapHelper.java**: Added Items.COMPARATOR -> MACHINE_TRANSFORMER mapping.
+
+**MachineType.java**: Added TRANSFORMER enum value.
+
+**ModBlocks.java**: Added MACHINE_TRANSFORMER registration (isRedstoneConductor=
+  false, pushReaction=NORMAL).
+
+**ModItems.java**: Added MACHINE_TRANSFORMER BlockItem.
+
+**ModBlockEntities.java**: Added MACHINE_TRANSFORMER to shared MACHINE_FRAME
+  valid blocks.
+
+**ModCreativeTabs.java**: Added Machine Transformer pre-loaded stack.
+
+**ModColorHandlers.java**: Added block+item color handlers for MACHINE_TRANSFORMER
+  (tintIndex 1: level-aware -- POWER_COLORS[outputLevel] when powered,
+  POWER_COLORS[0] when not).
+
+**ModNetworking.java**: Registered TransformerLevelPacket (packet ID 1).
+
+**en_us.json**: Added "block.ideomod.machine_transformer": "Machine Transformer".
+
+**pickaxe.json**: Added "ideomod:machine_transformer".
+
+### Documentation sync
+- IDEOMOD_DOCUMENTATION.md: Machine Transformer section, MachineRedstoneHelper
+  in package structure, updated signal detection docs, updated registry entries,
+  updated en_us entries, dynamic GUI height docs.
+- CODEBASE_REFERENCE.md: MachineTransformerBlock + MachineRedstoneHelper entries,
+  updated package structure, registries, AbstractMachineBlock description.
+- IDEOMOD_DESIGN.md: Specialization table updated (Comparator -> Transformer,
+  Repeater item corrected to vanilla Repeater, Toggle status -> [DONE]),
+  Transformer description added with full implementation details.
+
+### Design Doc Fix: Repeater Item Mapping
+The specialization table previously listed "Comparator" as the Repeater's
+specialization item. The actual code uses Items.REPEATER (vanilla Repeater).
+This has been corrected in the design doc. The Comparator is now correctly
+listed as the Transformer's item.
+
+Written by Claude, directed and guided by The Ideomancer.
+
+
 ## [2026-03-21b] Machine Toggle Specialization + Vanilla-Style Color Ramp
 
 New Machine Family specialization: Machine Toggle. Omnidirectional flip-flop /

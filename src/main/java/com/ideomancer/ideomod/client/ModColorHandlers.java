@@ -6,12 +6,10 @@ import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
+import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModItems;
 import net.minecraft.client.renderer.BiomeColors;
-import net.minecraft.core.Direction;
-import net.minecraft.world.level.block.entity.BlockEntity;
-import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RegisterColorHandlersEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
@@ -31,10 +29,12 @@ import net.minecraftforge.fml.common.Mod;
  * when powered.
  *
  * Machine Toggle uses tintIndex 1 for its inner underlay cuboid.
- * Per-face: input face always gets POWER_COLORS[0] (dark maroon),
- * other faces get POWER_COLORS[15] (bright red) when powered, or
- * POWER_COLORS[0] when unpowered. Toggle reads INPUT_FACE from
- * the blockstate to determine which face is the input.
+ * Binary: dark maroon when unpowered, bright red when powered.
+ *
+ * Machine Transformer uses tintIndex 1 for its inner underlay cuboid.
+ * Level-aware: dark maroon when unpowered, POWER_COLORS[outputLevel]
+ * when powered — so a transformer set to level 5 glows dimmer than one
+ * set to 15.
  *
  * Machine Fluid Pipe uses tintIndex 0 for the water texture inner cuboid.
  * Vanilla water_still.png is greyscale — the colour handler applies
@@ -111,16 +111,7 @@ public class ModColorHandlers {
         }, ModBlocks.MACHINE_REPEATER.get());
 
         // Machine Toggle: tintIndex 1 on inner underlay cuboid.
-        // Per-face coloring: input face = dark maroon (off look),
-        // other faces = bright red when powered, dark maroon when not.
-        //
-        // NOTE: Block color handlers receive tintIndex but NOT face direction.
-        // All faces of a single tintIndex get the same color. Since the Toggle
-        // model uses blockstate-driven rotation (input face always maps to the
-        // NORTH face in the canonical model), we can't do per-face tint here.
-        // Instead: when powered, tint is bright red (the input face uses the
-        // off-texture via the model, so its indicator is visually separate).
-        // When unpowered, tint is dark maroon.
+        // Binary: off = dark maroon, on = bright red.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {
                 return state.getValue(MachineToggleBlock.POWERED)
@@ -128,6 +119,20 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_TOGGLE.get());
+
+        // Machine Transformer: tintIndex 1 on inner underlay cuboid.
+        // Level-aware: off = dark maroon, on = POWER_COLORS[outputLevel].
+        // A transformer set to level 5 glows dimmer than one set to 15.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                if (state.getValue(MachineTransformerBlock.POWERED)) {
+                    int outputLevel = state.getValue(MachineTransformerBlock.OUTPUT_LEVEL);
+                    return POWER_COLORS[outputLevel];
+                }
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_TRANSFORMER.get());
 
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
@@ -166,6 +171,14 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModItems.MACHINE_TOGGLE.get());
+
+        // Machine Transformer item: show unpowered (dark maroon)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_TRANSFORMER.get());
 
         // Machine Fluid Pipe item: no tint needed
         event.register((stack, tintIndex) -> {

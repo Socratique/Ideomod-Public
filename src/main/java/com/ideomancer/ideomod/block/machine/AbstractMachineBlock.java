@@ -35,8 +35,12 @@ import java.util.List;
  * - Lifecycle hooks (FrameActivation recalculation)
  * - Stickiness (type-aware via IMachineFamily)
  * - Specialization swap on placement
+ * - Redstone output query (getRedstoneOutput for MachineRedstoneHelper)
  *
  * Specializations override getMachineType() and add their unique behavior.
+ * Redstone specializations override getRedstoneOutput() to report their
+ * signal strength when powered.
+ *
  * Lifecycle hooks (onPlace/onRemove/neighborChanged) can be overridden by
  * calling super to preserve FrameActivation recalculation, or handled
  * entirely by the subclass if custom lifecycle logic is needed.
@@ -62,6 +66,29 @@ public abstract class AbstractMachineBlock extends Block implements EntityBlock,
     @Override
     public RenderShape getRenderShape(BlockState state) {
         return RenderShape.MODEL;
+    }
+
+    // ========================================================================
+    // REDSTONE OUTPUT QUERY
+    // ========================================================================
+
+    /**
+     * Returns the signal strength this block outputs when powered, for use
+     * by MachineRedstoneHelper's shared signal detection.
+     *
+     * Base implementation returns 0 (non-redstone specializations like Track,
+     * Trolley, Brace don't output redstone). Redstone specializations override:
+     *   - Repeater: 15 when POWERED
+     *   - Toggle: 15 when POWERED
+     *   - Transformer: OUTPUT_LEVEL when POWERED
+     *   - Conductor: 0 (Conductor uses its own signal detection path because
+     *     it's a wire, not a device — see MachineRedstoneHelper javadoc)
+     *
+     * @param state The current blockstate
+     * @return Signal strength (0-15), or 0 if not powered / not a redstone device
+     */
+    public int getRedstoneOutput(BlockState state) {
+        return 0;
     }
 
     // ========================================================================

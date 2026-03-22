@@ -31,7 +31,7 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Also stores an inputFace for redstone-active specializations (Conductor,
- * Repeater, Toggle, future Pulser/Transformer/Arm). The input face is the
+ * Repeater, Toggle, Transformer, future Pulser/Arm). The input face is the
  * direction from which signal is received; the block outputs on all other
  * faces. Specializations that don't use redstone (Track, Trolley, Frame)
  * ignore this field. inputFace is reset to null on every specialization swap
@@ -39,6 +39,9 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  *
  * Also stores repeaterDelay for the Machine Repeater specialization (1-4
  * redstone ticks). Reset to 1 on every specialization swap.
+ *
+ * Also stores transformerLevel for the Machine Transformer specialization
+ * (1-15 signal strength output). Reset to 1 on every specialization swap.
  *
  * Also stores inputWasLow for the Machine Toggle specialization (edge
  * detection — tracks whether the input signal has dropped to 0 since the
@@ -55,13 +58,14 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     private static final String TAG_INPUT_FACE = "InputFace";
     private static final String TAG_REPEATER_DELAY = "RepeaterDelay";
+    private static final String TAG_TRANSFORMER_LEVEL = "TransformerLevel";
     private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
 
     /**
      * The face from which this block receives redstone signal.
      * Null = no input (unpowered). Used by Conductor, Repeater, Toggle,
-     * and future redstone specializations. Signal is output on all faces
-     * EXCEPT this one.
+     * Transformer, and future redstone specializations. Signal is output
+     * on all faces EXCEPT this one.
      *
      * IMPORTANT: This field is reset to null whenever the specialization
      * item changes (via triggerSwapCheck) to prevent stale directional
@@ -79,6 +83,17 @@ public class MachineFrameBlockEntity extends BlockEntity
      * Reset to 1 on every specialization swap (via triggerSwapCheck).
      */
     private int repeaterDelay = 1;
+
+    /**
+     * Output level setting for the Machine Transformer (1-15).
+     * When powered, the Transformer outputs this signal strength on all
+     * non-input faces. Default 1 (minimum).
+     * Only meaningful when the block is a MachineTransformerBlock; other
+     * specializations ignore this field.
+     *
+     * Reset to 1 on every specialization swap (via triggerSwapCheck).
+     */
+    private int transformerLevel = 1;
 
     /**
      * Edge detection state for the Machine Toggle specialization.
@@ -170,6 +185,38 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
+    // TRANSFORMER LEVEL (for Machine Transformer)
+    // ========================================================================
+
+    /**
+     * Get the transformer output level (1-15).
+     */
+    public int getTransformerLevel() {
+        return this.transformerLevel;
+    }
+
+    /**
+     * Set the transformer output level (1-15).
+     * Clamps to valid range. Syncs OUTPUT_LEVEL blockstate if the block is a Transformer.
+     */
+    public void setTransformerLevel(int level) {
+        level = Math.max(1, Math.min(15, level));
+        if (this.transformerLevel != level) {
+            this.transformerLevel = level;
+            this.setChanged();
+
+            // Sync the OUTPUT_LEVEL blockstate property on the block
+            if (this.level != null && !this.level.isClientSide()) {
+                BlockState state = this.getBlockState();
+                if (state.getBlock() instanceof MachineTransformerBlock) {
+                    this.level.setBlock(this.worldPosition,
+                            state.setValue(MachineTransformerBlock.OUTPUT_LEVEL, level), 3);
+                }
+            }
+        }
+    }
+
+    // ========================================================================
     // TOGGLE EDGE DETECTION (for Machine Toggle)
     // ========================================================================
 
@@ -241,6 +288,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
         }
+        if (this.transformerLevel != 1) {
+            tag.putInt(TAG_TRANSFORMER_LEVEL, this.transformerLevel);
+        }
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
         }
@@ -260,6 +310,11 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.repeaterDelay = Math.max(1, Math.min(4, tag.getInt(TAG_REPEATER_DELAY)));
         } else {
             this.repeaterDelay = 1;
+        }
+        if (tag.contains(TAG_TRANSFORMER_LEVEL)) {
+            this.transformerLevel = Math.max(1, Math.min(15, tag.getInt(TAG_TRANSFORMER_LEVEL)));
+        } else {
+            this.transformerLevel = 1;
         }
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
     }
@@ -282,6 +337,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
+        }
+        if (this.transformerLevel != 1) {
+            tag.putInt(TAG_TRANSFORMER_LEVEL, this.transformerLevel);
         }
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
@@ -311,6 +369,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.repeaterDelay != 1) {
             tag.putInt(TAG_REPEATER_DELAY, this.repeaterDelay);
         }
+        if (this.transformerLevel != 1) {
+            tag.putInt(TAG_TRANSFORMER_LEVEL, this.transformerLevel);
+        }
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
         }
@@ -330,6 +391,11 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.repeaterDelay = Math.max(1, Math.min(4, tag.getInt(TAG_REPEATER_DELAY)));
         } else {
             this.repeaterDelay = 1;
+        }
+        if (tag.contains(TAG_TRANSFORMER_LEVEL)) {
+            this.transformerLevel = Math.max(1, Math.min(15, tag.getInt(TAG_TRANSFORMER_LEVEL)));
+        } else {
+            this.transformerLevel = 1;
         }
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
         this.setChanged();
@@ -402,6 +468,8 @@ public class MachineFrameBlockEntity extends BlockEntity
         this.inputFace = null;
         // Reset repeater delay to default (prevents stale delay leaking)
         this.repeaterDelay = 1;
+        // Reset transformer level to default (prevents stale level leaking)
+        this.transformerLevel = 1;
         // Reset toggle edge detection state
         this.inputWasLow = false;
 

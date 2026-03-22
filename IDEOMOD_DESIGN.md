@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-21b (Machine Toggle specialization implemented. Edge-triggered flip-flop with placement signal absorption.)*
+*Last updated: 2026-03-22 (Machine Transformer specialization implemented. MachineRedstoneHelper refactor for shared signal detection.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -274,10 +274,11 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
-| Comparator | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
+| Repeater | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
+| Comparator | Transformer | MachineTransformerBlock | TRANSFORMER | [DONE] |
 | Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
-| Lever | Toggle | TBD | TOGGLE | [IDEA] |
+| Lever | Toggle | MachineToggleBlock | TOGGLE | [DONE] |
 | Piston | Machine Piston | MachinePistonBlock | PISTON | [DONE] |
 | Sticky Piston | Machine Sticky Piston | MachineStickyPistonBlock | STICKY_PISTON | [DONE] |
 
@@ -325,7 +326,10 @@ Fluid vacuum and depositor. Bucket specialization item. Own BE subclass (Machine
 Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.
 
 **Machine Repeater:** [DONE]
-Omnidirectional redstone repeater. Receives signal on any face, outputs full-strength 15 on all other faces with configurable delay (1-4 redstone ticks). Specialization item: vanilla Repeater. Shares MachineFrameBlockEntity with repeaterDelay field. Blockstate: POWERED (boolean) + DELAY (1-4). No locking (three-axis makes locking impractical; players who need locking use vanilla repeaters). GUI shows 4 numbered buttons for delay selection. Anti-feedback via 5-layer architecture: output-face early-return in neighborChanged, protected inputFace (only modified in tick when powered), input-face-first tick evaluation, updatingPos ThreadLocal for re-entrant protection, shouldSignal ThreadLocal for solid-block self-read suppression. Dual-cuboid visual model with tinted underlay (black=off, red=on). First specialization with custom networking (RepeaterDelayPacket via Forge SimpleChannel).
+Omnidirectional redstone repeater. Receives signal on any face, outputs full-strength 15 on all other faces with configurable delay (1-4 redstone ticks). Specialization item: vanilla Repeater (Items.REPEATER). Shares MachineFrameBlockEntity with repeaterDelay field. Blockstate: POWERED (boolean) + DELAY (1-4). No locking (three-axis makes locking impractical; players who need locking use vanilla repeaters). GUI shows 4 numbered buttons for delay selection. Anti-feedback via 5-layer architecture: output-face early-return in neighborChanged, protected inputFace (only modified in tick when powered), input-face-first tick evaluation, updatingPos ThreadLocal for re-entrant protection, shouldSignal ThreadLocal for solid-block self-read suppression. Signal detection delegated to MachineRedstoneHelper. Dual-cuboid visual model with tinted underlay (black=off, red=on). Custom networking (RepeaterDelayPacket via Forge SimpleChannel).
+
+**Machine Transformer:** [DONE]
+Omnidirectional redstone signal level setter. Receives signal on any face, outputs a user-configured signal strength (1-15) on all other faces. Specialization item: vanilla Comparator (Items.COMPARATOR). Shares MachineFrameBlockEntity with transformerLevel field. Blockstate: POWERED (boolean) + OUTPUT_LEVEL (IntegerProperty 1-15). No delay -- responds on 1-tick schedule. Input signal is purely an on/off gate; output level is always whatever the player sets in the GUI. GUI shows 15 numbered buttons in two rows (8 top + 7 bottom centered). Dynamic GUI content height (71px vs 53px default) to accommodate two button rows. Anti-feedback via same 5-layer architecture as Repeater. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns OUTPUT_LEVEL when POWERED. Dual-cuboid visual model with level-aware tinted underlay: unpowered = dark maroon, powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Single block model for all 30 blockstate variants. Custom networking (TransformerLevelPacket via existing Forge SimpleChannel).
 
 **Machine Clock:**
 Emits a configurable redstone pulse at a set interval. Right-click to cycle intervals.
@@ -334,7 +338,7 @@ Emits a configurable redstone pulse at a set interval. Right-click to cycle inte
 Emits a single redstone pulse on placement or activation. One-shot signal source.
 
 **Machine Toggle:** [DONE]
-Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).
+Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).
 
 **Machine Piston / Machine Sticky Piston:** [DONE]
 Omnidirectional pistons as Machine Family members. No FACING property on the base block — signal on any face extends a head from the opposite face. Multiple heads can extend simultaneously. Pushes blocks via BlockMoveHelper (12-block limit, full sticky group resolution). Immovable while any head is extended (PistonBaseBlockMixin Feature 5). Head block (MachinePistonHeadBlock) is a real block in the world with 8×8×16 collision shape, FACING + STICKY properties. Breaking the head causes the piston to recognize that face is free (vanilla-like behavior — if signal is still present, re-extends immediately).

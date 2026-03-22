@@ -26,7 +26,7 @@ public class ModBlockEntities {
      * that use the base MachineFrameBlockEntity (single specialization slot):
      * Machine Frame, Machine Track, Machine Trolley, Machine Conductor,
      * Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater,
-     * Machine Toggle.
+     * Machine Toggle, Machine Transformer.
      * Each specialization stores its trigger item in the single slot.
      */
     public static final RegistryObject<BlockEntityType<MachineFrameBlockEntity>> MACHINE_FRAME =
@@ -41,7 +41,8 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_STICKY_PISTON.get(),
                             ModBlocks.MACHINE_BRACE.get(),
                             ModBlocks.MACHINE_REPEATER.get(),
-                            ModBlocks.MACHINE_TOGGLE.get()
+                            ModBlocks.MACHINE_TOGGLE.get(),
+                            ModBlocks.MACHINE_TRANSFORMER.get()
                     ).build(null));
 
     /**

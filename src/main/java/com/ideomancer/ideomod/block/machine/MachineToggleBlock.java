@@ -10,7 +10,6 @@ import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
-import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
@@ -45,6 +44,9 @@ import org.slf4j.LoggerFactory;
  *   3. shouldSignal ThreadLocal: suppresses self-reads through solid blocks.
  *   4. updatingPos ThreadLocal: blocks re-entrant neighborChanged during setBlock.
  *
+ * Signal detection delegated to MachineRedstoneHelper (shared single source
+ * of truth for all Machine Family redstone specializations).
+ *
  * Visual: INPUT_FACE blockstate property drives model rotation.
  *   When POWERED, input face shows machine_toggle (off texture), other 5 show
  *   machine_toggle_on. Inner indicator tinted: bright red when powered, dark
@@ -62,8 +64,9 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     /**
      * Suppresses both isSignalSource and getDirectSignal during our own scan.
      * Prevents us from reading our own output through adjacent solid blocks.
+     * Passed to MachineRedstoneHelper for vanilla signal reads.
      */
-    private static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
 
     /**
      * Stores the position of the toggle currently inside its tick() setBlock call.
@@ -94,6 +97,11 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     @Override
     public MachineType getMachineType() {
         return MachineType.TOGGLE;
+    }
+
+    @Override
+    public int getRedstoneOutput(BlockState state) {
+        return state.getValue(POWERED) ? 15 : 0;
     }
 
     // ==================== InputFace Enum (Blockstate Property) ====================
@@ -155,8 +163,6 @@ public class MachineToggleBlock extends AbstractMachineBlock {
         if (!state.getValue(POWERED)) return 0;
 
         // Suppress output toward our input face.
-        // direction param = FROM the querying block TO us.
-        // Suppress when direction == inputFace.getOpposite().
         Direction inputDir = state.getValue(INPUT_FACE).getDirection();
         if (inputDir != null && direction == inputDir.getOpposite()) {
             return 0;
@@ -171,103 +177,14 @@ public class MachineToggleBlock extends AbstractMachineBlock {
         return getSignal(state, level, pos, direction);
     }
 
-    // ==================== Signal Detection ====================
-
-    /**
-     * Read incoming signal from a specific face.
-     * Same structure as Repeater/Conductor.getIncomingSignalFromFace.
-     */
-    private int getIncomingSignalFromFace(Level level, BlockPos pos, Direction face) {
-        BlockPos neighborPos = pos.relative(face);
-        BlockState neighborState = level.getBlockState(neighborPos);
-        Block neighborBlock = neighborState.getBlock();
-
-        if (neighborBlock instanceof MachineConductorBlock) {
-            int signal = neighborState.getSignal(level, neighborPos, face);
-            return Math.max(0, signal - 1);
-
-        } else if (neighborBlock instanceof MachineRepeaterBlock) {
-            if (neighborState.getValue(MachineRepeaterBlock.POWERED)) {
-                BlockEntity nbe = level.getBlockEntity(neighborPos);
-                if (nbe instanceof MachineFrameBlockEntity nMachine) {
-                    Direction nInput = nMachine.getInputFace();
-                    if (nInput != null && nInput == face.getOpposite()) {
-                        return 0; // We're on their input face
-                    }
-                    return 15;
-                }
-            }
-            return 0;
-
-        } else if (neighborBlock instanceof MachineToggleBlock) {
-            if (neighborState.getValue(POWERED)) {
-                Direction nInputDir = neighborState.getValue(INPUT_FACE).getDirection();
-                if (nInputDir != null && nInputDir == face.getOpposite()) {
-                    return 0; // We're on their input face
-                }
-                return 15;
-            }
-            return 0;
-
-        } else if (neighborBlock instanceof RedStoneWireBlock) {
-            int power = neighborState.getValue(RedStoneWireBlock.POWER);
-            return Math.max(0, power - 1);
-
-        } else {
-            shouldSignal.set(false);
-            try {
-                return level.getSignal(neighborPos, face);
-            } finally {
-                shouldSignal.set(true);
-            }
-        }
-    }
-
-    /**
-     * Scan all 6 faces for best incoming signal.
-     * Returns [bestSignal, bestFaceOrdinal] (-1 if no signal).
-     */
-    private int[] scanAllFaces(Level level, BlockPos pos) {
-        int bestSignal = 0;
-        int bestFaceOrd = -1;
-        for (Direction dir : Direction.values()) {
-            int signal = getIncomingSignalFromFace(level, pos, dir);
-            if (signal > bestSignal) {
-                bestSignal = signal;
-                bestFaceOrd = dir.ordinal();
-            }
-        }
-        return new int[]{bestSignal, bestFaceOrd};
-    }
-
-    // ==================== Helper ====================
-
-    /**
-     * Determine which face a source position is on relative to us.
-     * Returns null if sourcePos is not an immediate neighbor.
-     */
-    private static Direction getFaceFromSourcePos(BlockPos myPos, BlockPos sourcePos) {
-        int dx = sourcePos.getX() - myPos.getX();
-        int dy = sourcePos.getY() - myPos.getY();
-        int dz = sourcePos.getZ() - myPos.getZ();
-
-        if (dx == 1 && dy == 0 && dz == 0) return Direction.EAST;
-        if (dx == -1 && dy == 0 && dz == 0) return Direction.WEST;
-        if (dx == 0 && dy == 1 && dz == 0) return Direction.UP;
-        if (dx == 0 && dy == -1 && dz == 0) return Direction.DOWN;
-        if (dx == 0 && dy == 0 && dz == 1) return Direction.SOUTH;
-        if (dx == 0 && dy == 0 && dz == -1) return Direction.NORTH;
-        return null;
-    }
-
     // ==================== neighborChanged ====================
 
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
                                  Block sourceBlock, BlockPos sourcePos, boolean movedByPiston) {
         if (level.isClientSide()) return;
-        if (pos.equals(updatingPos.get())) return; // Re-entrant call from our own tick — ignore
-        if (absorbing.get()) return; // onPlace is absorbing initial signal — ignore
+        if (pos.equals(updatingPos.get())) return;
+        if (absorbing.get()) return;
 
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof MachineFrameBlockEntity machineBE)) return;
@@ -278,51 +195,44 @@ public class MachineToggleBlock extends AbstractMachineBlock {
             // === POWERED: only respond to input face updates ===
             Direction inputFace = machineBE.getInputFace();
             if (inputFace != null) {
-                Direction sourceFace = getFaceFromSourcePos(pos, sourcePos);
+                Direction sourceFace = MachineRedstoneHelper.getFaceFromSourcePos(pos, sourcePos);
                 if (sourceFace != null && sourceFace != inputFace) {
-                    // Output face update — ignore completely.
-                    return;
+                    return; // Output face update — ignore
                 }
             }
 
-            // Input face update while powered.
-            // Check the input signal state for edge detection.
+            // Check if input signal dropped
             if (inputFace != null) {
-                int inputSignal = getIncomingSignalFromFace(level, pos, inputFace);
-
-                if (inputSignal <= 0 && !machineBE.isInputWasLow()) {
-                    // Signal dropped — arm the toggle for next rising edge.
-                    machineBE.setInputWasLow(true);
-                    LOGGER.debug("[TOGGLE] armed at {} (input dropped on {})", pos, inputFace);
-
-                } else if (inputSignal > 0 && machineBE.isInputWasLow()) {
-                    // Rising edge detected while armed — schedule toggle OFF.
-                    if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                        level.scheduleTick(pos, this, 2); // 1 redstone tick
+                int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, inputFace, shouldSignal);
+                if (inputSignal <= 0) {
+                    // Signal dropped. Arm the toggle (inputWasLow = true).
+                    if (!machineBE.isInputWasLow()) {
+                        machineBE.setInputWasLow(true);
+                        LOGGER.debug("[TOGGLE] input dropped at {} — armed", pos);
                     }
-                    LOGGER.debug("[TOGGLE] rising edge at {} — scheduling OFF", pos);
+                } else {
+                    // Signal still present.
+                    if (machineBE.isInputWasLow()) {
+                        // Armed and signal returned → schedule toggle-off.
+                        if (!level.getBlockTicks().willTickThisTick(pos, this)) {
+                            level.scheduleTick(pos, this, 2);
+                        }
+                    }
                 }
-                // If signal is still high and not armed, or signal is low and already armed: no-op.
             }
 
         } else {
-            // === UNPOWERED: check for rising edge ===
-            int[] scan = scanAllFaces(level, pos);
+            // === UNPOWERED: full scan to find new input ===
+            int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
             int bestSignal = scan[0];
             Direction bestFace = scan[1] >= 0 ? Direction.values()[scan[1]] : null;
 
             if (bestSignal > 0 && bestFace != null) {
-                // Signal detected while unpowered.
-                // Check if this is a genuine rising edge or a pre-existing signal
-                // that was absorbed on placement.
                 Direction currentInputFace = machineBE.getInputFace();
 
                 if (currentInputFace != null && currentInputFace == bestFace
                         && !machineBE.isInputWasLow()) {
-                    // This face was already tracked as having signal and we haven't
-                    // seen it go low yet. This is a pre-existing signal (absorbed on
-                    // placement or left over after toggle-off on a different face).
-                    // Do NOT toggle on — wait for it to drop first.
+                    // Pre-existing signal — ignore until it drops and rises
                     LOGGER.debug("[TOGGLE] pre-existing signal on {} at {} — ignoring", bestFace, pos);
                     return;
                 }
@@ -330,11 +240,9 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                 // Genuine rising edge — schedule turn on.
                 machineBE.setInputFace(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                    level.scheduleTick(pos, this, 2); // 1 redstone tick
+                    level.scheduleTick(pos, this, 2);
                 }
             } else if (bestSignal <= 0) {
-                // No signal on any face. If we were tracking a pre-existing signal
-                // from placement, mark it as having gone low.
                 if (machineBE.getInputFace() != null && !machineBE.isInputWasLow()) {
                     machineBE.setInputWasLow(true);
                     LOGGER.debug("[TOGGLE] pre-existing signal dropped at {} — now armed", pos);
@@ -363,16 +271,10 @@ public class MachineToggleBlock extends AbstractMachineBlock {
             Direction currentInput = machineBE.getInputFace();
 
             if (currentInput != null) {
-                int inputSignal = getIncomingSignalFromFace(level, pos, currentInput);
+                int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, currentInput, shouldSignal);
 
                 if (inputSignal > 0) {
-                    // Verify this is a genuine rising edge, not pre-existing signal.
-                    // If inputWasLow is false and we got here from a neighborChanged
-                    // that already checked, the neighborChanged wouldn't have scheduled
-                    // this tick for a pre-existing signal. So if we're here, it's legit.
-
-                    // Turn ON.
-                    machineBE.setInputWasLow(false); // Not armed yet — signal is currently high.
+                    machineBE.setInputWasLow(false);
                     InputFace inputFaceEnum = InputFace.fromDirection(currentInput);
 
                     LOGGER.debug("[TOGGLE] ON at {} input={} signal={}", pos, currentInput, inputSignal);
@@ -386,29 +288,20 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                         updatingPos.set(null);
                     }
                 }
-                // If signal is gone by the time tick fires, do nothing — stay off.
             }
 
         } else {
-            // POWERED → toggle OFF (armed rising edge was detected).
-            // After turning off, we need to handle the case where the signal
-            // that just toggled us off is still present. We absorb it by
-            // keeping inputFace set and inputWasLow = false, so the block
-            // won't immediately re-toggle when it sees that same signal.
+            // POWERED → toggle OFF
             Direction currentInput = machineBE.getInputFace();
             int remainingSignal = 0;
             if (currentInput != null) {
-                remainingSignal = getIncomingSignalFromFace(level, pos, currentInput);
+                remainingSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, currentInput, shouldSignal);
             }
 
             if (remainingSignal > 0) {
-                // Signal is still present on the input face after toggle-off.
-                // Absorb it: keep inputFace, set inputWasLow = false.
-                // The block stays off and waits for the signal to drop and rise.
                 machineBE.setInputWasLow(false);
                 LOGGER.debug("[TOGGLE] OFF at {} — absorbing remaining signal on {}", pos, currentInput);
             } else {
-                // Signal is gone. Clean slate.
                 machineBE.setInputFace(null);
                 machineBE.setInputWasLow(false);
                 LOGGER.debug("[TOGGLE] OFF at {} — clean", pos);
@@ -430,39 +323,24 @@ public class MachineToggleBlock extends AbstractMachineBlock {
 
     // ==================== Lifecycle ====================
 
-    /**
-     * On placement, snapshot any pre-existing signal and absorb it.
-     * The block stays OFF but records which face has signal, preventing
-     * that static signal from being treated as a rising edge.
-     *
-     * The absorbing ThreadLocal prevents neighborChanged (which fires
-     * during onPlace due to block placement notifications) from
-     * scheduling a turn-on tick for the pre-existing signal.
-     */
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
         if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineFrameBlockEntity machineBE) {
-                // Snapshot current signal landscape.
-                // Use absorbing guard to prevent neighborChanged from
-                // scheduling a tick during our scan.
                 absorbing.set(true);
                 try {
-                    int[] scan = scanAllFaces(level, pos);
+                    int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
                     int bestSignal = scan[0];
                     Direction bestFace = scan[1] >= 0 ? Direction.values()[scan[1]] : null;
 
                     if (bestSignal > 0 && bestFace != null) {
-                        // Pre-existing signal found. Record it but stay OFF.
-                        // inputWasLow = false means "haven't seen this drop yet."
                         machineBE.setInputFace(bestFace);
                         machineBE.setInputWasLow(false);
                         LOGGER.debug("[TOGGLE] placed at {} — absorbed pre-existing signal on {} (strength {})",
                                 pos, bestFace, bestSignal);
                     }
-                    // If no signal, inputFace stays null — normal fresh placement.
                 } finally {
                     absorbing.set(false);
                 }
@@ -476,7 +354,6 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {
             super.onRemove(state, level, pos, newState, movedByPiston);
-            // If we were powered, neighbors need to know we're gone.
             if (!level.isClientSide() && state.getValue(POWERED)) {
                 for (Direction dir : Direction.values()) {
                     level.updateNeighborsAt(pos.relative(dir), this);

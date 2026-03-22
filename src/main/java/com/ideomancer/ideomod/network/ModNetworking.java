@@ -33,6 +33,12 @@ public class ModNetworking {
                 .consumerMainThread(RepeaterDelayPacket::handle)
                 .add();
 
+        CHANNEL.messageBuilder(TransformerLevelPacket.class, packetId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(TransformerLevelPacket::encode)
+                .decoder(TransformerLevelPacket::decode)
+                .consumerMainThread(TransformerLevelPacket::handle)
+                .add();
+
         Ideomod.LOGGER.info("Registered {} network packet(s)", packetId);
     }
 }

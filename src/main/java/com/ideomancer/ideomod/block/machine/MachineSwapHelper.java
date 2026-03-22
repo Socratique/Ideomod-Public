@@ -68,6 +68,7 @@ public final class MachineSwapHelper {
         itemToBlock.put(Items.STICKY_PISTON,  () -> ModBlocks.MACHINE_STICKY_PISTON.get());
         itemToBlock.put(Items.REPEATER,       () -> ModBlocks.MACHINE_REPEATER.get());
         itemToBlock.put(Items.LEVER,          () -> ModBlocks.MACHINE_TOGGLE.get());
+        itemToBlock.put(Items.COMPARATOR,     () -> ModBlocks.MACHINE_TRANSFORMER.get());
 
         // Machine Brace: uses our own Machine Block item as the trigger.
         // Can't register here because registerMappings() runs during mod
