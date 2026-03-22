@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.multiblock.definitions;
 
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.multiblock.StructureDefinition;
 import com.ideomancer.ideomod.multiblock.effects.FurnaceArrayEffect;
 import net.minecraft.resources.ResourceLocation;
@@ -45,7 +46,7 @@ public class FurnaceArrayDefinition {
                 .addCoreBlock(new ResourceLocation("minecraft", "blast_furnace"))
                 .addCoreBlock(new ResourceLocation("minecraft", "smoker"))
                 .setFrameTag(FRAME_TAG)
-                .setMaxClusterSize(5, 5)
+                .setMaxClusterSize(IdeomodConfig.getFurnaceArrayMaxWidth(), IdeomodConfig.getFurnaceArrayMaxHeight())
                 .setEffectHandler(new FurnaceArrayEffect())
                 .build();
     }

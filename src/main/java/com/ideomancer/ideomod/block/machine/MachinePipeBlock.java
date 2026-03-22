@@ -123,7 +123,7 @@ public class MachinePipeBlock extends AbstractMachineBlock {
         // Attempt push when cooldown expires and we have items
         if (pipe.getTransferCooldown() <= 0 && pipe.hasTransitItem()) {
             if (tryPushItem(level, pos, pipe)) {
-                pipe.setTransferCooldown(MachinePipeBlockEntity.TRANSFER_COOLDOWN);
+                pipe.setTransferCooldown(MachinePipeBlockEntity.getConfigTransferCooldown());
                 pipe.setChanged();
             }
         }

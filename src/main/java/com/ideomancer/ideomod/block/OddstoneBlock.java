@@ -2,7 +2,7 @@ package com.ideomancer.ideomod.block;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.movement.StickyType;
-import com.ideomancer.ideomod.config.OddstoneConfig;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Mob;
@@ -121,7 +121,7 @@ public class OddstoneBlock extends Block {
         net.minecraft.resources.ResourceLocation mobKey = net.minecraftforge.registries.ForgeRegistries
                 .ENTITY_TYPES.getKey(mob.getType());
         if (mobKey == null) return BlockPathTypes.DAMAGE_OTHER;
-        if (OddstoneConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DAMAGE_OTHER;
+        if (IdeomodConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DAMAGE_OTHER;
         return null;
     }
 
@@ -133,7 +133,7 @@ public class OddstoneBlock extends Block {
         net.minecraft.resources.ResourceLocation mobKey = net.minecraftforge.registries.ForgeRegistries
                 .ENTITY_TYPES.getKey(mob.getType());
         if (mobKey == null) return BlockPathTypes.DANGER_OTHER;
-        if (OddstoneConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DANGER_OTHER;
+        if (IdeomodConfig.isMobAffected(mobKey.toString())) return BlockPathTypes.DANGER_OTHER;
         return null;
     }
 }

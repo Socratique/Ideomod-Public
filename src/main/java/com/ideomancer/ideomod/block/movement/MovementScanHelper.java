@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.block.movement;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -32,7 +33,10 @@ import java.util.Set;
  */
 public class MovementScanHelper {
 
-    private static final int MAX_PUSH_BLOCKS = 12;
+    /** Base push limit — reads from config. Kept as method for dynamic access. */
+    public static int getBasePushLimit() {
+        return IdeomodConfig.getBasePushLimit();
+    }
 
     // ========================================================================
     // ODDSTONE DETECTION
@@ -95,17 +99,17 @@ public class MovementScanHelper {
             for (Direction face : Direction.values()) {
                 for (int dist = 2; dist <= radius; dist++) {
                     BlockPos checkPos = oddPos.relative(face, dist);
-                    BlockState checkState = level.getBlockState(checkPos);
 
                     if (isOddstoneOrFramedOddstone(level, checkPos)) {
                         if (found.add(checkPos)) {
                             // Newly discovered — add to frontier for transitive scan
                             frontier.add(checkPos);
                         }
+                        // Found the first oddstone in this direction — stop scanning further
                         break;
                     }
-
-                    if (!checkState.isAir()) break;
+                    // Non-oddstone blocks (solid or air) do NOT block the scan.
+                    // Oddstone sympathetic links work through any intervening blocks.
                 }
             }
         }

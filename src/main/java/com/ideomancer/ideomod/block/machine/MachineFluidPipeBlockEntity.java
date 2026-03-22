@@ -44,8 +44,10 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
     // CONSTANTS
     // ========================================================================
 
-    /** Transfer cooldown in ticks. Matches item pipe speed. */
-    public static final int TRANSFER_COOLDOWN = 8;
+    /** Transfer cooldown in ticks. Reads from config (default matches item pipe speed). */
+    public static int getConfigTransferCooldown() {
+        return com.ideomancer.ideomod.config.IdeomodConfig.getFluidPipeTransferCooldown();
+    }
 
     // NBT tags
     private static final String TAG_FLUID_TYPE = "FluidType";
@@ -172,7 +174,7 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
         Direction effectiveFace = fromFace != null ? fromFace : Direction.UP;
         setLastInputFace(effectiveFace);
         if (this.transferCooldown <= 0) {
-            this.transferCooldown = TRANSFER_COOLDOWN;
+            this.transferCooldown = getConfigTransferCooldown();
         }
     }
 
@@ -299,8 +301,8 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
         }
         this.transferCooldown = tag.getInt(TAG_COOLDOWN);
         // Ensure minimum cooldown after piston movement
-        if (this.transferCooldown < TRANSFER_COOLDOWN) {
-            this.transferCooldown = TRANSFER_COOLDOWN;
+        if (this.transferCooldown < getConfigTransferCooldown()) {
+            this.transferCooldown = getConfigTransferCooldown();
         }
         this.roundRobinIndex = tag.getInt(TAG_ROUND_ROBIN);
         if (tag.contains(TAG_LAST_INPUT_FACE)) {

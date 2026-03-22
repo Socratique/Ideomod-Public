@@ -1519,30 +1519,108 @@ A rare atmospheric event. When a player kills a non-hostile mob (Animal or Abstr
 
 ## 11. CONFIGURATION
 
-### Oddstone Config (`config/ideomod/oddstone.json`)
+### Ideomod Config (`config/ideomod/ideomod.json`)
 
-Auto-generated on first launch. Loaded lazily on first access via double-checked locking (thread-safe).
+Centralized JSON config for all mod systems. Auto-generated on first launch with sensible defaults. Loaded eagerly in `commonSetup()`, with lazy double-checked locking as fallback. All values are clamped to safe ranges on load. Hot-reload via `/ideomod reload` command (op level 2).
 
-**JSON structure:**
+Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneConfig.java` (deprecated, safe to delete).
+
+**JSON structure** (7 sections):
+
 ```json
 {
-  "_comment1": "Oddstone Configuration",
-  "_comment2": "sympathetic_radius: How far Oddstone blocks link when pushed",
-  "_comment3": "affected_mobs: Mobs that refuse to walk on Oddstone",
-  "sympathetic_radius": 5,
-  "affected_mobs": [
-    "minecraft:axolotl",
-    "minecraft:blaze",
-    ...sorted alphabetically...
-  ]
+  "_comment": "Ideomod Configuration — edit values below to tune gameplay. Delete this file to regenerate defaults.",
+  "oddstone": {
+    "sympathetic_radius": 5,
+    "affected_mobs": ["minecraft:axolotl", "minecraft:bee", ...]
+  },
+  "pistons": {
+    "ranged_scan_range": 12,
+    "base_push_limit": 12
+  },
+  "machine_braces": {
+    "push_limit_per_brace": 6,
+    "max_braces": 8,
+    "max_push_limit": 60
+  },
+  "pipes": {
+    "item_transfer_cooldown": 8,
+    "fluid_transfer_cooldown": 8
+  },
+  "portals": {
+    "teleport_cooldown": 80,
+    "scatter_distance_min": 200,
+    "scatter_distance_max": 1000,
+    "scatter_damage": 10.0
+  },
+  "judgement": {
+    "chance": 200,
+    "radius": 32.0,
+    "duration_ticks": 100
+  },
+  "furnace_array": {
+    "max_width": 5,
+    "max_height": 5
+  }
 }
 ```
 
-**sympathetic_radius**: Integer, default 5, clamped 1-32. How many blocks apart Oddstones can "feel" each other for sympathetic movement.
+**Section: oddstone**
 
-**affected_mobs**: Array of full registry IDs. Mobs in this list get `DAMAGE_OTHER` pathfinding from Oddstone. Default includes all land-based mobs from vanilla 1.20.1 (49 total). Excludes: purely aquatic (cod, salmon, etc.), purely flying (ghast, phantom, bat, etc.), wither, ender dragon.
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `sympathetic_radius` | int | 5 | 1-16 | How many blocks apart Oddstones can "feel" each other for sympathetic movement. Scans through solid blocks. |
+| `affected_mobs` | string[] | 62 mobs | — | Full registry IDs of mobs repelled by Oddstone pathfinding (`DAMAGE_OTHER`). Default includes all land-based vanilla 1.20.1 mobs. Excludes purely aquatic, purely flying, wither, ender dragon. |
 
-**Reload**: `OddstoneConfig.reloadConfig()` clears and reloads. Not currently wired to any in-game command.
+**Section: pistons**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `ranged_scan_range` | int | 12 | 1-64 | How far Repulser/Attractor devices scan for targets (in blocks). |
+| `base_push_limit` | int | 12 | 1-128 | Base piston push limit (vanilla default 12). Machine Braces add on top of this. |
+
+**Section: machine_braces**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `push_limit_per_brace` | int | 6 | 1-64 | Additional push limit each Machine Brace adds. |
+| `max_braces` | int | 8 | 0-64 | Maximum number of Braces that contribute to push limit. |
+| `max_push_limit` | int | 60 | 1-1024 | Hard cap on total push limit. Formula: `base + (braces × per_brace)`, capped at this value. |
+
+**Section: pipes**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `item_transfer_cooldown` | int | 8 | 1-200 | Item pipe transfer cooldown in ticks. Vanilla hopper = 8 ticks. Lower = faster. |
+| `fluid_transfer_cooldown` | int | 8 | 1-200 | Fluid pipe transfer cooldown in ticks. |
+
+**Section: portals**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `teleport_cooldown` | int | 80 | 1-1200 | Ticks between portal uses (80 = 4 seconds). |
+| `scatter_distance_min` | int | 200 | 1-10000 | Minimum scatter teleport distance for unlinked portals (blocks). |
+| `scatter_distance_max` | int | 1000 | min-30000 | Maximum scatter teleport distance. |
+| `scatter_damage` | float | 10.0 | 0-100 | Damage from scatter teleport (half-hearts, 10 = 5 hearts). |
+
+**Section: judgement**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `chance` | int | 200 | 1-10000 | 1-in-N chance Judgement triggers on passive mob kill. |
+| `radius` | double | 32.0 | 1-256 | Search radius for mobs when Judgement triggers (blocks). |
+| `duration_ticks` | int | 100 | 1-6000 | How long the stare lasts (100 = 5 seconds). |
+
+**Section: furnace_array**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `max_width` | int | 5 | 1-16 | Maximum furnace array cluster width. |
+| `max_height` | int | 5 | 1-16 | Maximum furnace array cluster height. |
+
+**Reload**: `/ideomod reload` command (op level 2) calls `IdeomodConfig.reloadConfig()`. Also available programmatically for future use.
+
+**Missing sections**: If a section is absent from the JSON, defaults are used. If the entire file is missing, it's regenerated. Individual missing keys within a section fall back to defaults.
 
 ---
 

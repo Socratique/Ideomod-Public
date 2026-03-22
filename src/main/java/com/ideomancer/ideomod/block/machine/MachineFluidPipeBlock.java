@@ -109,7 +109,7 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
         // PULL: when powered and empty, try to pull fluid from adjacent
         if (powered && !pipe.hasFluid() && pipe.getTransferCooldown() <= 0) {
             if (tryPullFluid(level, pos, pipe)) {
-                pipe.setTransferCooldown(MachineFluidPipeBlockEntity.TRANSFER_COOLDOWN);
+                pipe.setTransferCooldown(MachineFluidPipeBlockEntity.getConfigTransferCooldown());
                 pipe.setChanged();
             }
         }
@@ -117,7 +117,7 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
         // PUSH: when holding fluid and cooldown expired, try to push
         if (pipe.hasFluid() && pipe.getTransferCooldown() <= 0) {
             if (tryPushFluid(level, pos, pipe)) {
-                pipe.setTransferCooldown(MachineFluidPipeBlockEntity.TRANSFER_COOLDOWN);
+                pipe.setTransferCooldown(MachineFluidPipeBlockEntity.getConfigTransferCooldown());
                 pipe.setChanged();
             }
         }

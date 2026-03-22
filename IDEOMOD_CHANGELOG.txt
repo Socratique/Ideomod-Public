@@ -1,5 +1,59 @@
 # Ideomod Changelog
 
+## [2026-03-22] Centralized Config System + Sympathetic Movement Fix
+
+Replaced the Oddstone-only config (oddstone.json) with a comprehensive mod-wide
+config system (ideomod.json). All gameplay-tunable values that were previously
+hardcoded across the codebase are now centralized in a single JSON file at
+config/ideomod/ideomod.json, auto-generated on first launch with sensible defaults.
+
+Added /ideomod reload command (op level 2) for hot-reloading config without restart.
+
+Also fixed sympathetic movement being blocked by solid blocks between oddstones.
+Oddstone links now scan through any intervening blocks within radius, not just air.
+
+### Config Sections & Configurable Values
+
+- oddstone: sympathetic_radius (default 5, range 1-16), affected_mobs list
+- pistons: ranged_scan_range (default 12), base_push_limit (default 12)
+- machine_braces: push_limit_per_brace (default 6), max_braces (default 8),
+  max_push_limit (default 60)
+- pipes: item_transfer_cooldown (default 8 ticks), fluid_transfer_cooldown (default 8)
+- portals: teleport_cooldown (default 80 ticks), scatter_distance_min (200),
+  scatter_distance_max (1000), scatter_damage (10.0 half-hearts)
+- judgement: chance (1-in-200), radius (32 blocks), duration_ticks (100)
+- furnace_array: max_width (5), max_height (5)
+
+### Files Changed
+
+New:
+- config/IdeomodConfig.java -- centralized config loader with per-section parsing,
+  clamping, default generation, and lazy-load with double-checked locking
+
+Modified (14 files -- all now read from IdeomodConfig instead of hardcoded constants):
+- Ideomod.java -- loads config eagerly in commonSetup
+- ModCommands.java -- added /ideomod reload command
+- RangedPistonUtil.java -- SCAN_RANGE -> IdeomodConfig.getRangedPistonScanRange()
+- MovementScanHelper.java -- MAX_PUSH_BLOCKS -> IdeomodConfig.getBasePushLimit();
+  sympathetic scan no longer blocked by solid blocks between oddstones
+- MachineBraceBlock.java -- constants replaced with config-reading methods
+- PistonStructureResolverMixin.java -- uses IdeomodConfig for base push limit
+- PistonBaseBlockMixin.java -- OddstoneConfig -> IdeomodConfig
+- PistonBaseBlockClientMixin.java -- OddstoneConfig -> IdeomodConfig, MAX_PUSH_BLOCKS -> config
+- OddstoneBlock.java -- OddstoneConfig -> IdeomodConfig
+- OddstonePortalBlock.java -- TELEPORT_COOLDOWN, scatter range, damage all from config
+- MachinePipeBlockEntity.java -- TRANSFER_COOLDOWN -> getConfigTransferCooldown()
+- MachinePipeBlock.java -- references updated
+- MachineFluidPipeBlockEntity.java -- TRANSFER_COOLDOWN -> getConfigTransferCooldown()
+- MachineFluidPipeBlock.java -- references updated
+- JudgementEffect.java -- CHANCE, RADIUS, DURATION_TICKS all from config
+- FurnaceArrayDefinition.java -- cluster size from config
+
+Deprecated:
+- config/OddstoneConfig.java -- marked @Deprecated, no longer referenced anywhere
+
+---
+
 ## [2026-03-22] Machine Transformer Specialization + MachineRedstoneHelper Refactor
 
 New Machine Family specialization: Machine Transformer. Omnidirectional redstone

@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-22 (Machine Transformer specialization, MachineRedstoneHelper refactor)*
+*Last updated: 2026-03-22 (Centralized IdeomodConfig, Machine Transformer specialization, MachineRedstoneHelper refactor)*
 
 ---
 
@@ -92,7 +92,7 @@ com.ideomancer.ideomod
   |     |     |-- MachinePistonHeadBlock.java  DirectionalBlock. FACING + STICKY. 8x8x16 shape.
   |     |     |                                PushReaction.BLOCK. Parent survival check. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
-  |     |     |                                Structural reinforcement. Push limit constants.
+  |     |     |                                Structural reinforcement. Push limit from IdeomodConfig.
   |     |     |-- MachineRepeaterBlock.java   Extends AbstractMachineBlock. MachineType.REPEATER.
   |     |     |                                Omnidirectional redstone repeater. Configurable delay.
   |     |     |                                Signal detection via MachineRedstoneHelper.
@@ -149,7 +149,11 @@ com.ideomancer.ideomod
   |                                              Renders head model at interpolated offset.
   |                                              Registered for MACHINE_FRAME BE type.
   |-- config/
-  |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
+  |     |-- IdeomodConfig.java           Centralized JSON config for all mod systems.
+  |     |                                Sections: oddstone, pistons, machine_braces, pipes,
+  |     |                                portals, judgement, furnace_array. Lazy-load with
+  |     |                                double-checked locking. /ideomod reload support.
+  |     \-- OddstoneConfig.java          @Deprecated. Replaced by IdeomodConfig.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- mixin/
@@ -183,7 +187,7 @@ com.ideomancer.ideomod
         |-- ModBlocks.java               DeferredRegister<Block> -- all block registrations
         |-- ModItems.java                DeferredRegister<Item> -- BlockItems + debug stick
         |-- ModCreativeTabs.java         Creative tab with all mod items
-        |-- ModCommands.java             /judgement command (Forge event bus)
+        |-- ModCommands.java             /judgement + /ideomod reload commands (Forge event bus)
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>
         |-- ModBlockEntities.java        DeferredRegister<BlockEntityType<?>>
         |                                MACHINE_FRAME (shared: Frame, Track, Trolley, Conductor,
@@ -254,7 +258,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **PistonBaseBlockMixin**: Four features. (1) isPushable HEAD inject returns true for IPistonMovable block entities; also handles Oddstone pull immunity via position-specific ThreadLocal<BlockPos> — during retraction, only the directly pulled oddstone is immune, not oddstone elsewhere in group. (2) moveBlocks HEAD inject saves data. Extension uses resolver. Retraction bypasses resolver (it fails for our blocks), scans pull position directly + BFS for sticky group + sympathetic scan for distant oddstone via scanSympathetic(). (4) Framed block inner push reaction: checks `#ideomod:immovable_when_framed` tag (data-driven, extensible by datapacks) + destroySpeed == -1 fallback for bedrock-type blocks.
 
-**RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to 12 blocks. Delegates movement to BlockMoveHelper.
+**RangedPistonUtil**: Scanning + dispatch for Repulser/Attractor. `scanForNearest` / `scanForFarthest` walk up to configurable range (default 12, via IdeomodConfig.getRangedPistonScanRange()). Delegates movement to BlockMoveHelper.
 
 **AbstractRangedPistonBlock**: Shared base for Repulser/Attractor. Handles FACING/POWERED, rising edge, block events, rotation. Subclasses implement `fire()` only (~15 lines each).
 
@@ -264,7 +268,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **MachineTrolleyBlock**: Passive cargo. No active behavior, just Machine Family stickiness.
 
-**MachineBraceBlock**: Structural reinforcement. No active behavior. Push limit increase implemented in PistonStructureResolverMixin Feature 8 via @ModifyConstant -- each Brace in toPush adds +6 to the push limit (base 12, cap 60, max 8 Braces). Cascading: limit grows during block gathering as Braces are discovered. A Brace must be within the current limit to count. Machine Frame item as specialization trigger via lazy mapping (ensureBraceMapping).
+**MachineBraceBlock**: Structural reinforcement. No active behavior. Push limit increase implemented in PistonStructureResolverMixin Feature 8 via @ModifyConstant -- each Brace in toPush adds to the push limit. All values configurable via IdeomodConfig: push_limit_per_brace (default 6), max_braces (default 8), max_push_limit (default 60), base_push_limit (default 12). Cascading: limit grows during block gathering as Braces are discovered. A Brace must be within the current limit to count. Machine Frame item as specialization trigger via lazy mapping (ensureBraceMapping).
 
 **MachineConductorBlock**: Solid-block redstone wire. POWER blockstate (0-15) exposed to vanilla redstone. Input/output face model: receives on one face (strongest signal), outputs on other 5. Source blocks (levers etc.) = no decay. Wire blocks (dust, other Conductors) = -1 decay. getSignal and getDirectSignal return 0 on input face via `direction == inputFace.getOpposite()` check. inputFace stored in shared MachineFrameBlockEntity (reset to null on specialization swap to prevent stale directional data). Visual: two-layer model with cutout render type — base texture renders as-is, tinted indicator overlay via ModColorHandlers (tintIndex 1, squared red gradient). Known issue: dust sees strong power through solid blocks (#12).
 

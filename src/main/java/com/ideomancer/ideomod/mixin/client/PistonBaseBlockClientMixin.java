@@ -5,7 +5,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.client.render.MovingFrameData;
-import com.ideomancer.ideomod.config.OddstoneConfig;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.resources.ResourceLocation;
@@ -49,7 +49,9 @@ public abstract class PistonBaseBlockClientMixin {
     private static final Logger IDEOMOD_LOGGER = LoggerFactory.getLogger("Ideomod");
 
     @Unique
-    private static final int MAX_PUSH_BLOCKS = 12;
+    private static int ideomod$getMaxPushBlocks() {
+        return com.ideomancer.ideomod.config.IdeomodConfig.getBasePushLimit();
+    }
 
     @Inject(method = "moveBlocks", at = @At("HEAD"))
     private void ideomod$captureFramedBlockDataForRenderer(
@@ -106,7 +108,7 @@ public abstract class PistonBaseBlockClientMixin {
         // Walk the line of blocks being pulled (same as vanilla retraction)
         List<BlockPos> lineBlocks = new ArrayList<>();
         BlockPos current = pullPos;
-        for (int i = 0; i < MAX_PUSH_BLOCKS; i++) {
+        for (int i = 0; i < ideomod$getMaxPushBlocks(); i++) {
             BlockState state = level.getBlockState(current);
             if (state.isAir()) break;
             lineBlocks.add(current);
@@ -122,7 +124,7 @@ public abstract class PistonBaseBlockClientMixin {
             BlockState state = level.getBlockState(linePos);
             if (state.isStickyBlock()
                     || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
-                Set<BlockPos> group = MovementScanHelper.scanStickyGroup(level, linePos, MAX_PUSH_BLOCKS);
+                Set<BlockPos> group = MovementScanHelper.scanStickyGroup(level, linePos, ideomod$getMaxPushBlocks());
                 allBlocks.addAll(group);
             }
         }
@@ -154,7 +156,7 @@ public abstract class PistonBaseBlockClientMixin {
      */
     @Unique
     private static void ideomod$captureSympathetic(Level level, Set<BlockPos> allBlocks) {
-        int radius = OddstoneConfig.getSympatheticRadius();
+        int radius = IdeomodConfig.getSympatheticRadius();
 
         // Use helper to find all sympathetic oddstone blocks
         Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, allBlocks, radius);
@@ -185,7 +187,7 @@ public abstract class PistonBaseBlockClientMixin {
     @Unique
     private static void ideomod$scanStickyGroupInto(Level level, BlockPos startPos,
                                                      Set<BlockPos> allBlocks) {
-        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(level, startPos, MAX_PUSH_BLOCKS);
+        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(level, startPos, ideomod$getMaxPushBlocks());
         allBlocks.addAll(groupBlocks);
     }
 

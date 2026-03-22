@@ -9,7 +9,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.block.movement.StickinessRules;
-import com.ideomancer.ideomod.config.OddstoneConfig;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
@@ -122,12 +122,12 @@ public abstract class PistonStructureResolverMixin {
         for (BlockPos pos : this.toPush) {
             if (this.level.getBlockState(pos).getBlock() instanceof MachineBraceBlock) {
                 braceCount++;
-                if (braceCount >= MachineBraceBlock.MAX_BRACES) break;
+                if (braceCount >= MachineBraceBlock.getMaxBraces()) break;
             }
         }
 
-        int limit = 12 + (braceCount * MachineBraceBlock.PUSH_LIMIT_INCREASE_PER_BRACE);
-        return Math.min(limit, MachineBraceBlock.MAX_PUSH_LIMIT);
+        int limit = IdeomodConfig.getBasePushLimit() + (braceCount * MachineBraceBlock.getPushLimitPerBrace());
+        return Math.min(limit, MachineBraceBlock.getMaxPushLimit());
     }
 
     // ====================================================================
@@ -384,7 +384,7 @@ public abstract class PistonStructureResolverMixin {
         boolean addedMetals = ideomod$addVanillaMetalConductors();
 
         // --- Feature 3: Oddstone sympathetic movement ---
-        int radius = OddstoneConfig.getSympatheticRadius();
+        int radius = IdeomodConfig.getSympatheticRadius();
 
         java.util.Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, new java.util.HashSet<>(this.toPush), radius);
 

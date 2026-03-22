@@ -2355,13 +2355,21 @@ The ore/ingot inserted to activate the beacon is consumed as fuel over time. The
 ---
 
 ### Config System [DONE]
-> JSON-based config for Oddstone (mob list, sympathetic radius).
+> Centralized JSON config for all mod gameplay values.
 
 | File | Location |
 |------|----------|
-| `oddstone.json` | `config/ideomod/oddstone.json` |
+| `ideomod.json` | `config/ideomod/ideomod.json` |
+| `IdeomodConfig.java` | `config/IdeomodConfig.java` |
 
-**Future:** May need a general config system as more features are added.
+Replaces the original Oddstone-only config. Now covers 7 sections: oddstone
+(sympathetic radius, mob list), pistons (scan range, base push limit), machine_braces
+(per-brace limit, max braces, max push limit), pipes (item/fluid transfer cooldowns),
+portals (teleport cooldown, scatter range, scatter damage), judgement (chance, radius,
+duration), furnace_array (max cluster dimensions). All values clamped to safe ranges.
+
+Hot-reload via `/ideomod reload` (op level 2). Auto-generates with defaults on first
+launch. Missing sections or keys gracefully fall back to defaults.
 
 ---
 

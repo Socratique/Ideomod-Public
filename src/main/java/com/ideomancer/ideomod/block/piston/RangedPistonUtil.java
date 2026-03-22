@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.block.piston;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.movement.StickyType;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -32,8 +33,10 @@ import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
  */
 public class RangedPistonUtil {
 
-    /** How far the device scans for targets. */
-    public static final int SCAN_RANGE = 12;
+    /** How far the device scans for targets. Reads from config. */
+    public static int getScanRange() {
+        return IdeomodConfig.getRangedPistonScanRange();
+    }
 
     // ========================================================================
     // PUBLIC API
@@ -87,7 +90,8 @@ public class RangedPistonUtil {
      */
     public static BlockPos scanForNearest(Level level, BlockPos devicePos,
                                            Direction facing, Predicate<BlockState> filter) {
-        for (int dist = 1; dist <= SCAN_RANGE; dist++) {
+        int scanRange = getScanRange();
+        for (int dist = 1; dist <= scanRange; dist++) {
             BlockPos checkPos = devicePos.relative(facing, dist);
             if (filter.test(level.getBlockState(checkPos))) return checkPos;
         }
@@ -101,7 +105,8 @@ public class RangedPistonUtil {
     public static BlockPos scanForFarthest(Level level, BlockPos devicePos,
                                             Direction facing, Predicate<BlockState> filter) {
         BlockPos farthest = null;
-        for (int dist = 1; dist <= SCAN_RANGE; dist++) {
+        int scanRange = getScanRange();
+        for (int dist = 1; dist <= scanRange; dist++) {
             BlockPos checkPos = devicePos.relative(facing, dist);
             if (filter.test(level.getBlockState(checkPos))) farthest = checkPos;
         }

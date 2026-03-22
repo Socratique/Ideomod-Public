@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.effect;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
@@ -40,14 +41,10 @@ import java.util.*;
 @Mod.EventBusSubscriber(modid = Ideomod.MOD_ID, bus = Mod.EventBusSubscriber.Bus.FORGE)
 public class JudgementEffect {
 
-    // 1 in 200 chance on each passive mob kill
-    private static final int CHANCE = 200;
-
-    // How far to scan for mobs (in blocks)
-    private static final double RADIUS = 32.0;
-
-    // How long the stare lasts (in ticks, 20 ticks = 1 second)
-    private static final int DURATION_TICKS = 100; // 5 seconds
+    // All tunable values now read from IdeomodConfig:
+    // - chance: IdeomodConfig.getJudgementChance()
+    // - radius: IdeomodConfig.getJudgementRadius()
+    // - duration: IdeomodConfig.getJudgementDurationTicks()
 
     // Active judgement sessions. Each player can only have one at a time.
     // Maps player UUID -> active session data
@@ -89,7 +86,7 @@ public class JudgementEffect {
         if (activeSessions.containsKey(player.getUUID())) return;
 
         // Roll the dice
-        if (player.getRandom().nextInt(CHANCE) == 0) {
+        if (player.getRandom().nextInt(IdeomodConfig.getJudgementChance()) == 0) {
             trigger(player);
         }
     }
@@ -119,9 +116,10 @@ public class JudgementEffect {
         Vec3 playerPos = player.position();
 
         // Build a box around the player to scan for mobs
+        double radius = IdeomodConfig.getJudgementRadius();
         AABB scanBox = new AABB(
-                playerPos.x - RADIUS, playerPos.y - RADIUS, playerPos.z - RADIUS,
-                playerPos.x + RADIUS, playerPos.y + RADIUS, playerPos.z + RADIUS
+                playerPos.x - radius, playerPos.y - radius, playerPos.z - radius,
+                playerPos.x + radius, playerPos.y + radius, playerPos.z + radius
         );
 
         // Find all non-hostile mobs in range
@@ -143,7 +141,7 @@ public class JudgementEffect {
 
         // Store the session
         activeSessions.put(player.getUUID(), new JudgementSession(
-                player.getUUID(), targets, DURATION_TICKS
+                player.getUUID(), targets, IdeomodConfig.getJudgementDurationTicks()
         ));
 
         Ideomod.LOGGER.info("Judgement triggered on {} - {} mobs staring",

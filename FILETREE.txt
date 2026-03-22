@@ -32,11 +32,13 @@
 |  |           |  |  +-- MachinePipeBlockEntity.java
 |  |           |  |  +-- MachinePistonBlock.java
 |  |           |  |  +-- MachinePistonHeadBlock.java
+|  |           |  |  +-- MachineRedstoneHelper.java
 |  |           |  |  +-- MachineRepeaterBlock.java
 |  |           |  |  +-- MachineStickyPistonBlock.java
 |  |           |  |  +-- MachineSwapHelper.java
 |  |           |  |  +-- MachineToggleBlock.java
 |  |           |  |  +-- MachineTrackBlock.java
+|  |           |  |  +-- MachineTransformerBlock.java
 |  |           |  |  +-- MachineTrolleyBlock.java
 |  |           |  |  +-- MachineType.java
 |  |           |  |  \\-- PositionBoundContainer.java
@@ -76,6 +78,7 @@
 |  |           |  +-- FramedBlockDebugOverlay.java
 |  |           |  \\-- ModColorHandlers.java
 |  |           +-- config
+|  |           |  +-- IdeomodConfig.java
 |  |           |  \\-- OddstoneConfig.java
 |  |           +-- effect
 |  |           |  \\-- JudgementEffect.java
@@ -104,7 +107,8 @@
 |  |           |  \\-- StructureScanner.java
 |  |           +-- network
 |  |           |  +-- ModNetworking.java
-|  |           |  \\-- RepeaterDelayPacket.java
+|  |           |  +-- RepeaterDelayPacket.java
+|  |           |  \\-- TransformerLevelPacket.java
 |  |           +-- registry
 |  |           |  +-- ModBlockEntities.java
 |  |           |  +-- ModBlocks.java
@@ -136,6 +140,7 @@
 |     |     |  +-- machine_sticky_piston.json
 |     |     |  +-- machine_toggle.json
 |     |     |  +-- machine_track.json
+|     |     |  +-- machine_transformer.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
 |     |     |  +-- oddstone.json
@@ -176,6 +181,7 @@
 |     |     |  |  +-- machine_toggle_off.json
 |     |     |  |  +-- machine_toggle_on.json
 |     |     |  |  +-- machine_track.json
+|     |     |  |  +-- machine_transformer.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
 |     |     |  |  +-- oddstone.json
@@ -200,6 +206,7 @@
 |     |     |     +-- machine_sticky_piston.json
 |     |     |     +-- machine_toggle.json
 |     |     |     +-- machine_track.json
+|     |     |     +-- machine_transformer.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
 |     |     |     +-- oddstone.json
@@ -237,6 +244,7 @@
 |     |        |  +-- machine_toggle.png
 |     |        |  +-- machine_toggle_on.png
 |     |        |  +-- machine_track.png
+|     |        |  +-- machine_transformer.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
 |     |        |  +-- odd_slime_front.png
@@ -271,6 +279,7 @@
 |     |  |  |     +-- machine_sticky_piston.json
 |     |  |  |     +-- machine_toggle.json
 |     |  |  |     +-- machine_track.json
+|     |  |  |     +-- machine_transformer.json
 |     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json
 |     |  |  |     +-- oddstone.json
