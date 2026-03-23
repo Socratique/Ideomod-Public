@@ -77,6 +77,11 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
         return state.getValue(POWERED) ? state.getValue(OUTPUT_LEVEL) : 0;
     }
 
+    @Override
+    public int getGuiContentHeight() {
+        return 71; // 2 rows of level buttons
+    }
+
     // ==================== Redstone Signal Output ====================
 
     @Override

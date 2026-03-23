@@ -39,6 +39,12 @@ public class ModNetworking {
                 .consumerMainThread(TransformerLevelPacket::handle)
                 .add();
 
+        CHANNEL.messageBuilder(TimerDurationPacket.class, packetId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(TimerDurationPacket::encode)
+                .decoder(TimerDurationPacket::decode)
+                .consumerMainThread(TimerDurationPacket::handle)
+                .add();
+
         Ideomod.LOGGER.info("Registered {} network packet(s)", packetId);
     }
 }

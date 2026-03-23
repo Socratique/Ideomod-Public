@@ -69,6 +69,7 @@ public final class MachineSwapHelper {
         itemToBlock.put(Items.REPEATER,       () -> ModBlocks.MACHINE_REPEATER.get());
         itemToBlock.put(Items.LEVER,          () -> ModBlocks.MACHINE_TOGGLE.get());
         itemToBlock.put(Items.COMPARATOR,     () -> ModBlocks.MACHINE_TRANSFORMER.get());
+        itemToBlock.put(Items.CLOCK,          () -> ModBlocks.MACHINE_TIMER.get());
 
         // Machine Brace: uses our own Machine Block item as the trigger.
         // Can't register here because registerMappings() runs during mod
@@ -77,8 +78,9 @@ public final class MachineSwapHelper {
         // Our own items don't exist yet. Registered lazily via ensureBraceMapping().
 
         // Future specializations:
-        // itemToBlock.put(Items.REDSTONE_TORCH,  () -> ModBlocks.MACHINE_PULSER.get());
-        // itemToBlock.put(Items.CLOCK,           () -> ModBlocks.MACHINE_CLOCK.get());
+        // itemToBlock.put(Items.FURNACE,         () -> ModBlocks.MACHINE_ENGINE.get());
+        // Pulser: tag-based (any button item) — needs special handling
+        // Grabber: slime/honey block items — needs special handling
     }
 
     // ========================================================================

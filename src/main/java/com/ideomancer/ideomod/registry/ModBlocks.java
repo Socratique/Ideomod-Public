@@ -15,6 +15,7 @@ import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonHeadBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
 import com.ideomancer.ideomod.block.machine.MachineStickyPistonBlock;
+import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
@@ -150,8 +151,6 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
-    // Machine Conductor: isRedstoneConductor=false prevents vanilla treating it as
-    // a solid conductor that would pass strong signal through itself.
     public static final RegistryObject<Block> MACHINE_CONDUCTOR = BLOCKS.register("machine_conductor",
             () -> new MachineConductorBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -218,8 +217,6 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
-    // Machine Repeater: omnidirectional redstone repeater with configurable delay.
-    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_REPEATER = BLOCKS.register("machine_repeater",
             () -> new MachineRepeaterBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -230,8 +227,6 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
-    // Machine Toggle: omnidirectional flip-flop / T-latch.
-    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_TOGGLE = BLOCKS.register("machine_toggle",
             () -> new MachineToggleBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
@@ -242,10 +237,20 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
-    // Machine Transformer: omnidirectional redstone signal level setter.
-    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_TRANSFORMER = BLOCKS.register("machine_transformer",
             () -> new MachineTransformerBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Timer: edge-triggered timed output with configurable duration.
+    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
+    public static final RegistryObject<Block> MACHINE_TIMER = BLOCKS.register("machine_timer",
+            () -> new MachineTimerBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()

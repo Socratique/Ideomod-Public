@@ -36,10 +36,13 @@ import java.util.List;
  * - Stickiness (type-aware via IMachineFamily)
  * - Specialization swap on placement
  * - Redstone output query (getRedstoneOutput for MachineRedstoneHelper)
+ * - GUI content height declaration (getGuiContentHeight for dynamic GUI sizing)
  *
  * Specializations override getMachineType() and add their unique behavior.
  * Redstone specializations override getRedstoneOutput() to report their
  * signal strength when powered.
+ * Specializations with custom GUI layouts override getGuiContentHeight()
+ * to declare how much vertical space their content area needs.
  *
  * Lifecycle hooks (onPlace/onRemove/neighborChanged) can be overridden by
  * calling super to preserve FrameActivation recalculation, or handled
@@ -48,6 +51,9 @@ import java.util.List;
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public abstract class AbstractMachineBlock extends Block implements EntityBlock, IMachineFamily {
+
+    /** Default GUI content height for specializations with no custom controls. */
+    public static final int DEFAULT_GUI_CONTENT_HEIGHT = 53;
 
     public AbstractMachineBlock(Properties properties) {
         super(properties);
@@ -80,6 +86,7 @@ public abstract class AbstractMachineBlock extends Block implements EntityBlock,
      * Trolley, Brace don't output redstone). Redstone specializations override:
      *   - Repeater: 15 when POWERED
      *   - Toggle: 15 when POWERED
+     *   - Timer: 15 when POWERED
      *   - Transformer: OUTPUT_LEVEL when POWERED
      *   - Conductor: 0 (Conductor uses its own signal detection path because
      *     it's a wire, not a device — see MachineRedstoneHelper javadoc)
@@ -89,6 +96,37 @@ public abstract class AbstractMachineBlock extends Block implements EntityBlock,
      */
     public int getRedstoneOutput(BlockState state) {
         return 0;
+    }
+
+    // ========================================================================
+    // GUI CONTENT HEIGHT
+    // ========================================================================
+
+    /**
+     * Returns the content area height (in pixels) this specialization needs
+     * in the Machine Family GUI.
+     *
+     * The GUI is assembled dynamically: top border (4px) + content area +
+     * player inventory (90px) + bottom border (4px). The content area holds
+     * the specialization slot, any additional slots, and specialization-
+     * specific controls (buttons, labels, etc.).
+     *
+     * Base implementation returns DEFAULT_GUI_CONTENT_HEIGHT (53px), which
+     * fits the specialization slot and one additional slot row (transit/buttons).
+     *
+     * Specializations with larger GUI layouts override this:
+     *   - Transformer: 71px (2 rows of level buttons)
+     *   - Timer: 89px (label + 2 rows of duration buttons)
+     *   - Future specializations: override as needed
+     *
+     * This value is read live by MachineFrameMenu/Screen via
+     * PositionBoundContainer, so the GUI resizes dynamically when the
+     * specialization item changes while the GUI is open.
+     *
+     * @return Content area height in pixels
+     */
+    public int getGuiContentHeight() {
+        return DEFAULT_GUI_CONTENT_HEIGHT;
     }
 
     // ========================================================================

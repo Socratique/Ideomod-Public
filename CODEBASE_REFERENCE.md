@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-22 (Centralized IdeomodConfig, Machine Transformer specialization, MachineRedstoneHelper refactor)*
+*Last updated: 2026-03-22b (Machine Timer specialization, fixed GUI height, button spritesheet expansion)*
 
 ---
 
@@ -66,13 +66,14 @@ com.ideomancer.ideomod
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
   |     |     |                                Client sync via syncToClients() after swap.
   |     |     |-- PositionBoundContainer.java  Position-bound Container. Auto-resolves to current BE.
+  |     |     |                                isPipe(), isRepeater(), isTransformer(), isTimer().
   |     |     |                                isPipe(), isRepeater(), isTransformer(). Dynamic slots.
   |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
   |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync.
   |     |     |                                Protected constructor for subclass BE types.
   |     |     |                                (getUpdatePacket, getUpdateTag, syncToClients).
-  |     |     |-- MachineFrameMenu.java        Unified menu. SpecSlot + TransitSlot. Dynamic content height
-  |     |     |                                (53px default, 71px for Transformer). ContainerData size 4.
+  |     |     |-- MachineFrameMenu.java        Unified menu. SpecSlot + TransitSlot. Fixed content height
+  |     |     |                                (89px for all machines). ContainerData size 6.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
   |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR.
@@ -102,6 +103,10 @@ com.ideomancer.ideomod
   |     |     |-- MachineTransformerBlock.java Extends AbstractMachineBlock. MachineType.TRANSFORMER.
   |     |     |                                Configurable signal level setter (1-15). OUTPUT_LEVEL
   |     |     |                                blockstate. Signal detection via MachineRedstoneHelper.
+  |     |     |-- MachineTimerBlock.java       Extends AbstractMachineBlock. MachineType.TIMER.
+  |     |     |                                Edge-triggered timed output. POWERED blockstate.
+  |     |     |                                Self-rescheduling countdown. Signal detection via
+  |     |     |                                MachineRedstoneHelper.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -332,10 +337,10 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 ### 6. Machine Frame (universal connector + Machine Family base)
 
-Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachineBlock**. All Machine Family blocks extend AbstractMachineBlock (shared lifecycle, GUI, drops, stickiness, frame activation via markDirty()). MachineType.FRAME (universal connector). Specializations: MachineTrackBlock (TRACK), MachineTrolleyBlock (TROLLEY), MachineConductorBlock (CONDUCTOR), MachinePipeBlock (PIPE, own BE subclass).
+Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachineBlock**. All Machine Family blocks extend AbstractMachineBlock (shared lifecycle, GUI, drops, stickiness, frame activation via markDirty()). MachineType.FRAME (universal connector). Specializations: MachineTrackBlock (TRACK), MachineTrolleyBlock (TROLLEY), MachineConductorBlock (CONDUCTOR), MachinePipeBlock (PIPE, own BE subclass), MachineFluidPipeBlock (FLUID_PIPE, own BE subclass), MachinePistonBlock (PISTON), MachineStickyPistonBlock (STICKY_PISTON), MachineBraceBlock (BRACE), MachineRepeaterBlock (REPEATER), MachineToggleBlock (TOGGLE), MachineTransformerBlock (TRANSFORMER), MachineTimerBlock (TIMER).
 
 1. **Universal stickiness**: MachineType.FRAME sticks to ALL machine types. canStickTo delegates to `IMachineFamily.canMachineFamilyStickTo(MachineType.FRAME, other)`. Permissive to slime/honey/odd_slime (grab immunity handles restriction).
-2. **Block entity with GUI**: Most machine blocks share MachineFrameBlockEntity (single item slot). Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes. GUI renders from ideomod_gui.png spritesheet (151px fixed height).
+2. **Block entity with GUI**: Most machine blocks share MachineFrameBlockEntity (single item slot). Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. MachineSwapHelper handles block replacement when slot changes. GUI renders from ideomod_gui.png spritesheet (187px fixed height, 89px content area).
 3. **Anti-signal emission**: Only Machine Frame suppresses frame networks (powered = anti-signal). All other specializations always activate.
 4. **Drop preservation**: getDrops() override -- conditional BlockEntityTag only when slot has content. getCloneItemStack() uses registry-based createCloneStack() (client-safe).
 
@@ -343,7 +348,7 @@ Registry ID: `machine_block`. Class: MachineFrameBlock extends **AbstractMachine
 
 **MachineSwapHelper** (`block/machine/MachineSwapHelper.java`): Central utility. Bidirectional registry (Powered Rail <-> Track, Minecart <-> Trolley, Redstone <-> Conductor, Hopper <-> Pipe). `checkAndSwap()` with isSwapping ThreadLocal. `createPreloadedStack()` for creative tab. `createDrop()` conditional NBT. `createCloneStack()` registry-based middle-click.
 
-**PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Reports 2 slots. Slot 0 resolves to any MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity (returns empty for non-pipes). isPipe() for live type checking. Survives block swaps without close/reopen.
+**PositionBoundContainer** (`block/machine/PositionBoundContainer.java`): Container backed by Level + BlockPos. Reports 2 slots. Slot 0 resolves to any MachineFrameBlockEntity. Slot 1 delegates to MachinePipeBlockEntity (returns empty for non-pipes). isPipe(), isRepeater(), isTransformer(), isTimer() for live type checking. getTimerDuration(), getRepeaterDelay(), getTransformerLevel() for ContainerData sync. Survives block swaps without close/reopen.
 
 **Static helpers** (on MachineFrameBlock): `isRedstoneConduit(Block)` -- MachineTrackBlock only.
 
@@ -440,7 +445,11 @@ Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop / T-l
 
 ### 9h. Machine Transformer (signal level setter)
 
-Extends AbstractMachineBlock. MachineType.TRANSFORMER. Omnidirectional signal level setter. Receives signal on one face, outputs user-configured strength (1-15) on all other 5 faces. POWERED + OUTPUT_LEVEL (IntegerProperty 1-15) blockstates. Specialization item: vanilla Comparator. 5-layer anti-feedback (same as Repeater). No delay (1-tick response). Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns OUTPUT_LEVEL when POWERED. GUI shows 15 buttons in 2 rows (8+7) with dynamic content height (71px). TransformerLevelPacket via Forge SimpleChannel. Dual-cuboid model with level-aware tinted indicator (POWER_COLORS[outputLevel] when powered). Single model for all 30 blockstate variants.
+Extends AbstractMachineBlock. MachineType.TRANSFORMER. Omnidirectional signal level setter. Receives signal on one face, outputs user-configured strength (1-15) on all other 5 faces. POWERED + OUTPUT_LEVEL (IntegerProperty 1-15) blockstates. Specialization item: vanilla Comparator. 5-layer anti-feedback (same as Repeater). No delay (1-tick response). Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns OUTPUT_LEVEL when POWERED. GUI shows 15 buttons in 2 rows (8+7). Fixed content height (89px, shared by all machines). TransformerLevelPacket via Forge SimpleChannel (packet ID 1). Dual-cuboid model with level-aware tinted indicator (POWER_COLORS[outputLevel] when powered). Single model for all 30 blockstate variants.
+
+### 9i. Machine Timer (edge-triggered timed output)
+
+Extends AbstractMachineBlock. MachineType.TIMER. Edge-triggered timed output. Receives signal on one face, emits full-strength 15 on all other 5 faces for a player-configured duration in ticks, then turns off. Requires fresh signal (drop + rise) after timer expires to re-trigger — same edge detection as Toggle (inputWasLow). POWERED blockstate. Specialization item: vanilla Clock. 5-layer anti-feedback (same as Repeater/Transformer). Self-rescheduling countdown: each game tick decrements timerTicksRemaining, turns off at 0. Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. GUI shows "Pulse Tick Duration" label + 16 buttons in 2 rows (8+8), values from config timer.durations array. TimerDurationPacket via Forge SimpleChannel (packet ID 2). Fixed content height (89px, shared by all machines). Dual-cuboid model with binary tinted indicator (dark maroon off, bright red on). MachineFrameBlockEntity fields: timerDuration (configurable output length), timerTicksRemaining (countdown). Placement signal absorption (same as Toggle).
 
 ### 10. Odd Slime Block
 

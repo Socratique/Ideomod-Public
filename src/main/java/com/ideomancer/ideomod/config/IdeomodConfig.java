@@ -26,6 +26,7 @@ import java.util.Set;
  * - Portals: teleport cooldown, scatter distance range, scatter damage
  * - Judgement Effect: trigger chance, search radius, stare duration
  * - Furnace Array: max cluster dimensions
+ * - Timer: duration presets, default selection index
  *
  * On first launch, the file is auto-generated with sensible defaults.
  * Players can then modify values to tune gameplay.
@@ -121,6 +122,16 @@ public class IdeomodConfig {
 
     /** Maximum furnace array cluster height. */
     private static int furnaceArrayMaxHeight = 5;
+
+    // ========================================================================
+    // TIMER
+    // ========================================================================
+
+    /** Available duration presets for the Machine Timer, in game ticks. */
+    private static int[] timerDurations = {5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80};
+
+    /** Default selected index into timerDurations array (0-based). Index 3 = 20 ticks. */
+    private static int timerDefaultIndex = 3;
 
     // ========================================================================
     // GETTERS — Oddstone
@@ -241,6 +252,38 @@ public class IdeomodConfig {
     }
 
     // ========================================================================
+    // GETTERS — Timer
+    // ========================================================================
+
+    /**
+     * Get the array of available timer duration presets (in game ticks).
+     * Returns a defensive copy.
+     */
+    public static int[] getTimerDurations() {
+        ensureLoaded();
+        return timerDurations.clone();
+    }
+
+    /**
+     * Get the default selected index into the timer durations array.
+     */
+    public static int getTimerDefaultIndex() {
+        ensureLoaded();
+        return timerDefaultIndex;
+    }
+
+    /**
+     * Get the default timer duration in ticks (resolves the default index).
+     */
+    public static int getTimerDefaultDuration() {
+        ensureLoaded();
+        if (timerDefaultIndex >= 0 && timerDefaultIndex < timerDurations.length) {
+            return timerDurations[timerDefaultIndex];
+        }
+        return 20; // Fallback
+    }
+
+    // ========================================================================
     // LOADING & PARSING
     // ========================================================================
 
@@ -268,8 +311,8 @@ public class IdeomodConfig {
             if (Files.exists(configFile)) {
                 String json = Files.readString(configFile);
                 parseConfig(json);
-                Ideomod.LOGGER.info("Loaded Ideomod config (sympathetic radius={}, push limit={}, {} affected mobs)",
-                        sympatheticRadius, basePushLimit, affectedMobs.size());
+                Ideomod.LOGGER.info("Loaded Ideomod config (sympathetic radius={}, push limit={}, {} affected mobs, {} timer presets)",
+                        sympatheticRadius, basePushLimit, affectedMobs.size(), timerDurations.length);
             } else {
                 populateDefaultMobs();
                 createDefaultConfig(configFile);
@@ -353,6 +396,22 @@ public class IdeomodConfig {
             furnaceArrayMaxWidth = clamp(getInt(furnaceArray, "max_width", furnaceArrayMaxWidth), 1, 16);
             furnaceArrayMaxHeight = clamp(getInt(furnaceArray, "max_height", furnaceArrayMaxHeight), 1, 16);
         }
+
+        // --- Timer ---
+        JsonObject timer = getSection(root, "timer");
+        if (timer != null) {
+            if (timer.has("durations") && timer.get("durations").isJsonArray()) {
+                JsonArray durArray = timer.getAsJsonArray("durations");
+                int[] parsed = new int[durArray.size()];
+                for (int i = 0; i < durArray.size(); i++) {
+                    parsed[i] = clamp(durArray.get(i).getAsInt(), 1, 6000);
+                }
+                if (parsed.length > 0) {
+                    timerDurations = parsed;
+                }
+            }
+            timerDefaultIndex = clamp(getInt(timer, "default_index", timerDefaultIndex), 0, timerDurations.length - 1);
+        }
     }
 
     // ========================================================================
@@ -418,6 +477,17 @@ public class IdeomodConfig {
         furnaceArray.addProperty("max_width", furnaceArrayMaxWidth);
         furnaceArray.addProperty("max_height", furnaceArrayMaxHeight);
         root.add("furnace_array", furnaceArray);
+
+        // --- Timer ---
+        JsonObject timer = new JsonObject();
+        timer.addProperty("_comment", "Machine Timer duration presets in game ticks (20 ticks = 1 second). default_index selects which button is pre-selected.");
+        JsonArray durArray = new JsonArray();
+        for (int d : timerDurations) {
+            durArray.add(d);
+        }
+        timer.add("durations", durArray);
+        timer.addProperty("default_index", timerDefaultIndex);
+        root.add("timer", timer);
 
         String jsonStr = GSON.toJson(root);
         Files.writeString(configFile, jsonStr);

@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block.machine;
 
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -31,9 +32,9 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * automatically sees the new block entity after a swap — no rebind needed.
  *
  * Also stores an inputFace for redstone-active specializations (Conductor,
- * Repeater, Toggle, Transformer, future Pulser/Arm). The input face is the
- * direction from which signal is received; the block outputs on all other
- * faces. Specializations that don't use redstone (Track, Trolley, Frame)
+ * Repeater, Toggle, Timer, Transformer, future Pulser/Arm). The input face
+ * is the direction from which signal is received; the block outputs on all
+ * other faces. Specializations that don't use redstone (Track, Trolley, Frame)
  * ignore this field. inputFace is reset to null on every specialization swap
  * to prevent stale directional data from leaking between specialization types.
  *
@@ -43,10 +44,14 @@ import com.ideomancer.ideomod.block.movement.IPistonMovable;
  * Also stores transformerLevel for the Machine Transformer specialization
  * (1-15 signal strength output). Reset to 1 on every specialization swap.
  *
- * Also stores inputWasLow for the Machine Toggle specialization (edge
- * detection — tracks whether the input signal has dropped to 0 since the
- * last toggle, arming the block for the next rising edge). Reset to false
- * on every specialization swap.
+ * Also stores inputWasLow for edge-triggered specializations (Toggle, Timer).
+ * Tracks whether the input signal has dropped to 0 since the last activation,
+ * arming the block for the next rising edge. Reset to false on every swap.
+ *
+ * Also stores timerDuration and timerTicksRemaining for the Machine Timer
+ * specialization. timerDuration is the player-configured output duration
+ * in ticks. timerTicksRemaining counts down while the timer is active.
+ * Both reset on specialization swap.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -60,12 +65,14 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_REPEATER_DELAY = "RepeaterDelay";
     private static final String TAG_TRANSFORMER_LEVEL = "TransformerLevel";
     private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
+    private static final String TAG_TIMER_DURATION = "TimerDuration";
+    private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
 
     /**
      * The face from which this block receives redstone signal.
      * Null = no input (unpowered). Used by Conductor, Repeater, Toggle,
-     * Transformer, and future redstone specializations. Signal is output
-     * on all faces EXCEPT this one.
+     * Timer, Transformer, and future redstone specializations. Signal is
+     * output on all faces EXCEPT this one.
      *
      * IMPORTANT: This field is reset to null whenever the specialization
      * item changes (via triggerSwapCheck) to prevent stale directional
@@ -96,17 +103,32 @@ public class MachineFrameBlockEntity extends BlockEntity
     private int transformerLevel = 1;
 
     /**
-     * Edge detection state for the Machine Toggle specialization.
+     * Edge detection state for edge-triggered specializations (Toggle, Timer).
      * Tracks whether the input signal has been seen at 0 since the last
-     * toggle-on event. When true, the next rising edge on the input face
-     * triggers toggle-off.
-     *
-     * Only meaningful when the block is a MachineToggleBlock; other
-     * specializations ignore this field.
+     * activation event. When true, the next rising edge on the input face
+     * triggers the block's action.
      *
      * Reset to false on every specialization swap (via triggerSwapCheck).
      */
     private boolean inputWasLow = false;
+
+    /**
+     * Configured output duration for the Machine Timer, in game ticks.
+     * Default comes from config (first entry in timer durations array).
+     * Only meaningful when the block is a MachineTimerBlock.
+     *
+     * Reset to config default on every specialization swap.
+     */
+    private int timerDuration = 20;
+
+    /**
+     * Countdown ticks remaining for the Machine Timer. When the timer
+     * turns on, this is set to timerDuration and decrements each tick.
+     * When it reaches 0, the timer turns off.
+     *
+     * Reset to 0 on every specialization swap.
+     */
+    private int timerTicksRemaining = 0;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -217,12 +239,12 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
-    // TOGGLE EDGE DETECTION (for Machine Toggle)
+    // TOGGLE / TIMER EDGE DETECTION
     // ========================================================================
 
     /**
-     * Whether the input signal has been seen at 0 since the last toggle-on.
-     * When true, the next rising edge on the input face triggers toggle-off.
+     * Whether the input signal has been seen at 0 since the last activation.
+     * Used by Toggle (toggle-off arming) and Timer (re-trigger arming).
      */
     public boolean isInputWasLow() {
         return this.inputWasLow;
@@ -236,6 +258,44 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.inputWasLow = value;
             this.setChanged();
         }
+    }
+
+    // ========================================================================
+    // TIMER DURATION AND COUNTDOWN (for Machine Timer)
+    // ========================================================================
+
+    /**
+     * Get the configured timer duration in game ticks.
+     */
+    public int getTimerDuration() {
+        return this.timerDuration;
+    }
+
+    /**
+     * Set the configured timer duration in game ticks.
+     * Does NOT affect a currently-running timer — only the next activation.
+     */
+    public void setTimerDuration(int duration) {
+        duration = Math.max(1, duration);
+        if (this.timerDuration != duration) {
+            this.timerDuration = duration;
+            this.setChanged();
+        }
+    }
+
+    /**
+     * Get the remaining countdown ticks. 0 = timer not running.
+     */
+    public int getTimerTicksRemaining() {
+        return this.timerTicksRemaining;
+    }
+
+    /**
+     * Set the remaining countdown ticks.
+     */
+    public void setTimerTicksRemaining(int ticks) {
+        this.timerTicksRemaining = Math.max(0, ticks);
+        this.setChanged();
     }
 
     // ========================================================================
@@ -294,6 +354,12 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
         }
+        if (this.timerDuration != 20) {
+            tag.putInt(TAG_TIMER_DURATION, this.timerDuration);
+        }
+        if (this.timerTicksRemaining > 0) {
+            tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
+        }
     }
 
     @Override
@@ -317,6 +383,16 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.transformerLevel = 1;
         }
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
+        if (tag.contains(TAG_TIMER_DURATION)) {
+            this.timerDuration = Math.max(1, tag.getInt(TAG_TIMER_DURATION));
+        } else {
+            this.timerDuration = 20;
+        }
+        if (tag.contains(TAG_TIMER_TICKS_REMAINING)) {
+            this.timerTicksRemaining = Math.max(0, tag.getInt(TAG_TIMER_TICKS_REMAINING));
+        } else {
+            this.timerTicksRemaining = 0;
+        }
     }
 
     // ========================================================================
@@ -343,6 +419,12 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
+        }
+        if (this.timerDuration != 20) {
+            tag.putInt(TAG_TIMER_DURATION, this.timerDuration);
+        }
+        if (this.timerTicksRemaining > 0) {
+            tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
         }
         return tag;
     }
@@ -375,6 +457,12 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.inputWasLow) {
             tag.putBoolean(TAG_INPUT_WAS_LOW, true);
         }
+        if (this.timerDuration != 20) {
+            tag.putInt(TAG_TIMER_DURATION, this.timerDuration);
+        }
+        if (this.timerTicksRemaining > 0) {
+            tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
+        }
         return tag;
     }
 
@@ -398,6 +486,16 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.transformerLevel = 1;
         }
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
+        if (tag.contains(TAG_TIMER_DURATION)) {
+            this.timerDuration = Math.max(1, tag.getInt(TAG_TIMER_DURATION));
+        } else {
+            this.timerDuration = 20;
+        }
+        if (tag.contains(TAG_TIMER_TICKS_REMAINING)) {
+            this.timerTicksRemaining = Math.max(0, tag.getInt(TAG_TIMER_TICKS_REMAINING));
+        } else {
+            this.timerTicksRemaining = 0;
+        }
         this.setChanged();
     }
 
@@ -470,8 +568,14 @@ public class MachineFrameBlockEntity extends BlockEntity
         this.repeaterDelay = 1;
         // Reset transformer level to default (prevents stale level leaking)
         this.transformerLevel = 1;
-        // Reset toggle edge detection state
+        // Reset toggle/timer edge detection state
         this.inputWasLow = false;
+        // Reset timer fields to defaults
+        int[] durations = IdeomodConfig.getTimerDurations();
+        int defaultIdx = IdeomodConfig.getTimerDefaultIndex();
+        this.timerDuration = (defaultIdx >= 0 && defaultIdx < durations.length)
+                ? durations[defaultIdx] : 20;
+        this.timerTicksRemaining = 0;
 
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));

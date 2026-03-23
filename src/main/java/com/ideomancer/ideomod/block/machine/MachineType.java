@@ -42,6 +42,9 @@ public enum MachineType {
     /** Machine Transformer -- configurable signal level setter. */
     TRANSFORMER,
 
+    /** Machine Timer -- edge-triggered timed output. */
+    TIMER,
+
     /** Machine Clock -- configurable redstone pulse emitter. */
     CLOCK,
 

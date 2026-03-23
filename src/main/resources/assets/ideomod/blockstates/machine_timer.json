@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "powered=false": { "model": "ideomod:block/machine_timer" },
+    "powered=true":  { "model": "ideomod:block/machine_timer" }
+  }
+}

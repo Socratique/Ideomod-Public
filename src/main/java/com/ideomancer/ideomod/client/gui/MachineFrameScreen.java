@@ -2,8 +2,10 @@ package com.ideomancer.ideomod.client.gui;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.machine.MachineFrameMenu;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.network.ModNetworking;
 import com.ideomancer.ideomod.network.RepeaterDelayPacket;
+import com.ideomancer.ideomod.network.TimerDurationPacket;
 import com.ideomancer.ideomod.network.TransformerLevelPacket;
 import com.mojang.blaze3d.systems.RenderSystem;
 import net.minecraft.client.gui.GuiGraphics;
@@ -17,45 +19,31 @@ import net.minecraft.world.level.block.Block;
 /**
  * Client-side GUI screen for all Machine Family blocks.
  *
- * DYNAMIC CONTENT HEIGHT:
- * =======================
- * The menu determines content height based on specialization type.
- * The screen reads this via menu.getContentHeight() and adjusts all
- * rendering and click zones accordingly.
+ * FIXED-HEIGHT GUI:
+ * =================
+ * All Machine Family GUIs share the same fixed height (187px total:
+ * 4px top border + 89px content + 90px inventory + 4px bottom border).
+ * This is sized for the tallest specialization (Timer). Shorter
+ * specializations have extra grey background between their controls
+ * and the player inventory — visually clean and avoids the need to
+ * reposition slots at runtime (Slot.y is final in Forge 1.20.1).
  *
- * FIXED-SIZE LAYOUT (per specialization):
- * ========================================
- * The transit slot area exists in the pipe layout but the slot tile is
- * only rendered when the BE is a pipe.
- *
- * For Machine Repeater, 4 numbered delay buttons (1-4) are rendered in
- * the same zone where the transit slot would be for Pipes.
- *
- * For Machine Transformer, 15 numbered level buttons (1-15) are rendered
- * in two rows: 8 on top, 7 on bottom (centered). The content area is
- * taller (71px vs 53px) to accommodate the extra row.
- *
- * Since Repeater, Transformer, and Pipe never coexist, sharing the zone
- * below the spec slot is safe.
- *
- * GUI ASSEMBLY FROM SPRITESHEET (ideomod_gui.png):
- * =================================================
- *   1. Top border strip (176x4)
- *   2. Content area: left/right edges + background fill (176 x contentH)
- *   3. Spec slot tile stamped at (79, 19) -- always
- *   4. Transit slot tile stamped at (79, 37) -- only when pipe
- *      OR: 4 delay buttons -- only when repeater
- *      OR: 15 level buttons in 2 rows -- only when transformer
- *   5. Player inventory section (176x90) -- pre-assembled with slots
- *   6. Bottom border strip (176x4)
+ * Specialization-specific controls (buttons, labels, transit slot) are
+ * rendered conditionally within the fixed content area. The GUI swaps
+ * its rendered controls seamlessly when the specialization item changes,
+ * without closing or reopening.
  *
  * BUTTON SPRITESHEET (ideomod_numbered_buttons.png, 256x256):
- *   Buttons 1-64 at 16x16 each, 16 per row.
- *   Unselected: rows 0-3 (Y 0-63)
- *   Selected:   rows 4-7 (Y 64-127)
- *   UV for button N: col=(N-1)%16, row=(N-1)/16
- *     unselected: u=col*16, v=row*16
- *     selected:   u=col*16, v=row*16+64
+ *   128 buttons at 16x16 each, 16 per row.
+ *   Buttons 1-64:
+ *     Unselected: rows 0-3 (Y 0-63)
+ *     Selected:   rows 4-7 (Y 64-127)
+ *   Buttons 65-128:
+ *     Unselected: rows 8-11 (Y 128-191)
+ *     Selected:   rows 12-15 (Y 192-255)
+ *
+ * TODO: Add label text above buttons in Repeater and Transformer GUIs
+ *       in a future pass (matching Timer's "Pulse Tick Duration" label).
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -67,7 +55,7 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
     private static final ResourceLocation BUTTON_SHEET =
             new ResourceLocation(Ideomod.MOD_ID, "textures/gui/ideomod_numbered_buttons.png");
 
-    private static final int TEX = 256; // spritesheet texture size
+    private static final int TEX = 256;
 
     // GUI spritesheet UV coordinates
     private static final int SLOT_U = 0, SLOT_V = 0;
@@ -81,28 +69,33 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
     private static final int GUI_WIDTH = 176;
     private static final int BORDER_H = 4;
     private static final int INV_H = 90;
-    private static final int BG_COLOR = 0xFFC6C6C6; // rgb(198,198,198)
+    private static final int BG_COLOR = 0xFFC6C6C6;
 
-    // Button layout constants (shared)
+    // Button layout constants
     private static final int BUTTON_SIZE = 16;
-    private static final int BUTTON_GAP = 2;  // gap between buttons
+    private static final int BUTTON_GAP = 2;
 
-    // Repeater button layout: 4 buttons in 1 row
+    // Repeater: 4 buttons in 1 row
     private static final int REPEATER_BUTTON_COUNT = 4;
-    // Total width: 4*16 + 3*2 = 70, center: (176-70)/2 = 53
     private static final int REPEATER_BUTTONS_START_X = 53;
     private static final int REPEATER_BUTTONS_Y = 37;
 
-    // Transformer button layout: 15 buttons in 2 rows (8 top, 7 bottom)
+    // Transformer: 15 buttons in 2 rows (8 top, 7 bottom)
     private static final int TRANSFORMER_ROW1_COUNT = 8;
     private static final int TRANSFORMER_ROW2_COUNT = 7;
-    // Row 1: 8*16 + 7*2 = 142, center: (176-142)/2 = 17
     private static final int TRANSFORMER_ROW1_START_X = 17;
-    // Row 2: 7*16 + 6*2 = 124, center: (176-124)/2 = 26
     private static final int TRANSFORMER_ROW2_START_X = 26;
-    // Y positions: spec slot ends at ~37, leave a gap for visual breathing room
     private static final int TRANSFORMER_ROW1_Y = 40;
-    private static final int TRANSFORMER_ROW2_Y = 40 + BUTTON_SIZE + BUTTON_GAP; // 58
+    private static final int TRANSFORMER_ROW2_Y = 40 + BUTTON_SIZE + BUTTON_GAP;
+
+    // Timer: label + 16 buttons in 2 rows (8+8)
+    private static final int TIMER_BUTTONS_PER_ROW = 8;
+    private static final int TIMER_ROW_START_X = 17;
+    private static final int TIMER_LABEL_Y = 40;
+    private static final int TIMER_ROW1_Y = 52;
+    private static final int TIMER_ROW2_Y = 52 + BUTTON_SIZE + BUTTON_GAP;
+
+    private static final int LABEL_COLOR = 4210752;
 
     private final Component playerInventoryTitle;
 
@@ -110,8 +103,8 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
         super(menu, playerInv, title);
         this.playerInventoryTitle = playerInv.getDisplayName();
         this.imageWidth = GUI_WIDTH;
-        this.imageHeight = this.menu.getGuiHeight();
-        this.inventoryLabelY = BORDER_H + this.menu.getContentHeight() + 1;
+        this.imageHeight = menu.getGuiHeight();
+        this.inventoryLabelY = BORDER_H + MachineFrameMenu.CONTENT_HEIGHT + 1;
     }
 
     @Override
@@ -121,7 +114,7 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
 
         int x = (this.width - this.imageWidth) / 2;
         int y = (this.height - this.imageHeight) / 2;
-        int contentH = this.menu.getContentHeight();
+        int contentH = MachineFrameMenu.CONTENT_HEIGHT;
 
         // 1. Top border strip
         g.blit(GUI_SHEET, x, y, TOP_BORDER_U, TOP_BORDER_V, GUI_WIDTH, BORDER_H, TEX, TEX);
@@ -136,22 +129,22 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
         }
 
         // 3. Slot tiles
-        // Spec slot: always at (79, 19)
         g.blit(GUI_SHEET, x + 79, y + 19, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
 
-        // Transit slot: only rendered for pipe (empty background otherwise)
         if (this.menu.isPipe()) {
             g.blit(GUI_SHEET, x + 79, y + 37, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
         }
 
-        // Delay buttons: only rendered for repeater
         if (this.menu.isRepeater()) {
             renderDelayButtons(g, x, y);
         }
 
-        // Level buttons: only rendered for transformer
         if (this.menu.isTransformer()) {
             renderTransformerButtons(g, x, y);
+        }
+
+        if (this.menu.isTimer()) {
+            renderTimerButtons(g, x, y);
         }
 
         // 4. Player inventory section
@@ -163,39 +156,24 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
         g.blit(GUI_SHEET, x, bottomY, BOT_BORDER_U, BOT_BORDER_V, GUI_WIDTH, BORDER_H, TEX, TEX);
     }
 
-    /**
-     * Renders the 4 delay buttons (1-4) from the numbered buttons spritesheet.
-     * The currently selected delay shows the "selected" (pressed) variant.
-     */
     private void renderDelayButtons(GuiGraphics g, int guiX, int guiY) {
         int currentDelay = this.menu.getRepeaterDelay();
-
         for (int i = 0; i < REPEATER_BUTTON_COUNT; i++) {
-            int buttonNumber = i + 1; // 1-4
+            int buttonNumber = i + 1;
             int btnX = guiX + REPEATER_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
             int btnY = guiY + REPEATER_BUTTONS_Y;
-
             renderNumberedButton(g, btnX, btnY, buttonNumber, buttonNumber == currentDelay);
         }
     }
 
-    /**
-     * Renders the 15 level buttons (1-15) in two rows from the numbered buttons
-     * spritesheet. Row 1: buttons 1-8, Row 2: buttons 9-15 (centered).
-     * The currently selected level shows the "selected" (pressed) variant.
-     */
     private void renderTransformerButtons(GuiGraphics g, int guiX, int guiY) {
         int currentLevel = this.menu.getTransformerLevel();
-
-        // Row 1: buttons 1-8
         for (int i = 0; i < TRANSFORMER_ROW1_COUNT; i++) {
             int buttonNumber = i + 1;
             int btnX = guiX + TRANSFORMER_ROW1_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
             int btnY = guiY + TRANSFORMER_ROW1_Y;
             renderNumberedButton(g, btnX, btnY, buttonNumber, buttonNumber == currentLevel);
         }
-
-        // Row 2: buttons 9-15
         for (int i = 0; i < TRANSFORMER_ROW2_COUNT; i++) {
             int buttonNumber = i + 9;
             int btnX = guiX + TRANSFORMER_ROW2_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
@@ -204,18 +182,59 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
         }
     }
 
+    private void renderTimerButtons(GuiGraphics g, int guiX, int guiY) {
+        int[] durations = IdeomodConfig.getTimerDurations();
+        int currentDuration = this.menu.getTimerDuration();
+        int buttonCount = Math.min(durations.length, 16);
+
+        // Label
+        String labelText = "Pulse Tick Duration";
+        int labelWidth = this.font.width(labelText);
+        int labelX = guiX + (GUI_WIDTH - labelWidth) / 2;
+        g.drawString(this.font, labelText, labelX, guiY + TIMER_LABEL_Y, LABEL_COLOR, false);
+
+        // Row 1
+        int row1Count = Math.min(buttonCount, TIMER_BUTTONS_PER_ROW);
+        for (int i = 0; i < row1Count; i++) {
+            int tickValue = durations[i];
+            int btnX = guiX + TIMER_ROW_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+            int btnY = guiY + TIMER_ROW1_Y;
+            renderNumberedButton(g, btnX, btnY, tickValue, tickValue == currentDuration);
+        }
+
+        // Row 2
+        int row2Count = Math.min(buttonCount - TIMER_BUTTONS_PER_ROW, TIMER_BUTTONS_PER_ROW);
+        if (row2Count > 0) {
+            int row2Width = row2Count * BUTTON_SIZE + (row2Count - 1) * BUTTON_GAP;
+            int row2StartX = (GUI_WIDTH - row2Width) / 2;
+            for (int i = 0; i < row2Count; i++) {
+                int durationIndex = TIMER_BUTTONS_PER_ROW + i;
+                int tickValue = durations[durationIndex];
+                int btnX = guiX + row2StartX + i * (BUTTON_SIZE + BUTTON_GAP);
+                int btnY = guiY + TIMER_ROW2_Y;
+                renderNumberedButton(g, btnX, btnY, tickValue, tickValue == currentDuration);
+            }
+        }
+    }
+
     /**
-     * Renders a single numbered button from the spritesheet.
-     * @param buttonNumber 1-64
-     * @param selected whether to show pressed/selected state
+     * Renders a single numbered button from the spritesheet (1-128).
      */
     private void renderNumberedButton(GuiGraphics g, int x, int y, int buttonNumber, boolean selected) {
-        int col = (buttonNumber - 1) % 16;
-        int row = (buttonNumber - 1) / 16;
-        int u = col * BUTTON_SIZE;
-        int v = row * BUTTON_SIZE;
-        if (selected) {
-            v += 64; // Selected buttons start at Y=64
+        buttonNumber = Math.max(1, Math.min(128, buttonNumber));
+        int u, v;
+        if (buttonNumber <= 64) {
+            int col = (buttonNumber - 1) % 16;
+            int row = (buttonNumber - 1) / 16;
+            u = col * BUTTON_SIZE;
+            v = row * BUTTON_SIZE;
+            if (selected) v += 64;
+        } else {
+            int col = (buttonNumber - 65) % 16;
+            int row = (buttonNumber - 65) / 16;
+            u = col * BUTTON_SIZE;
+            v = 128 + row * BUTTON_SIZE;
+            if (selected) v += 64;
         }
         g.blit(BUTTON_SHEET, x, y, u, v, BUTTON_SIZE, BUTTON_SIZE, TEX, TEX);
     }
@@ -251,49 +270,71 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
             int guiX = (this.width - this.imageWidth) / 2;
             int guiY = (this.height - this.imageHeight) / 2;
 
-            // Check repeater delay buttons
             if (this.menu.isRepeater()) {
                 for (int i = 0; i < REPEATER_BUTTON_COUNT; i++) {
                     int btnX = guiX + REPEATER_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
                     int btnY = guiY + REPEATER_BUTTONS_Y;
-
                     if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
                             && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
-                        int newDelay = i + 1;
                         ModNetworking.CHANNEL.sendToServer(
-                                new RepeaterDelayPacket(this.menu.getBlockPos(), newDelay));
+                                new RepeaterDelayPacket(this.menu.getBlockPos(), i + 1));
                         return true;
                     }
                 }
             }
 
-            // Check transformer level buttons
             if (this.menu.isTransformer()) {
-                // Row 1: buttons 1-8
                 for (int i = 0; i < TRANSFORMER_ROW1_COUNT; i++) {
                     int btnX = guiX + TRANSFORMER_ROW1_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
                     int btnY = guiY + TRANSFORMER_ROW1_Y;
-
                     if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
                             && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
-                        int newLevel = i + 1;
                         ModNetworking.CHANNEL.sendToServer(
-                                new TransformerLevelPacket(this.menu.getBlockPos(), newLevel));
+                                new TransformerLevelPacket(this.menu.getBlockPos(), i + 1));
+                        return true;
+                    }
+                }
+                for (int i = 0; i < TRANSFORMER_ROW2_COUNT; i++) {
+                    int btnX = guiX + TRANSFORMER_ROW2_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + TRANSFORMER_ROW2_Y;
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        ModNetworking.CHANNEL.sendToServer(
+                                new TransformerLevelPacket(this.menu.getBlockPos(), i + 9));
+                        return true;
+                    }
+                }
+            }
+
+            if (this.menu.isTimer()) {
+                int[] durations = IdeomodConfig.getTimerDurations();
+                int buttonCount = Math.min(durations.length, 16);
+
+                int row1Count = Math.min(buttonCount, TIMER_BUTTONS_PER_ROW);
+                for (int i = 0; i < row1Count; i++) {
+                    int btnX = guiX + TIMER_ROW_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + TIMER_ROW1_Y;
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        ModNetworking.CHANNEL.sendToServer(
+                                new TimerDurationPacket(this.menu.getBlockPos(), i));
                         return true;
                     }
                 }
 
-                // Row 2: buttons 9-15
-                for (int i = 0; i < TRANSFORMER_ROW2_COUNT; i++) {
-                    int btnX = guiX + TRANSFORMER_ROW2_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
-                    int btnY = guiY + TRANSFORMER_ROW2_Y;
-
-                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
-                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
-                        int newLevel = i + 9;
-                        ModNetworking.CHANNEL.sendToServer(
-                                new TransformerLevelPacket(this.menu.getBlockPos(), newLevel));
-                        return true;
+                int row2Count = Math.min(buttonCount - TIMER_BUTTONS_PER_ROW, TIMER_BUTTONS_PER_ROW);
+                if (row2Count > 0) {
+                    int row2Width = row2Count * BUTTON_SIZE + (row2Count - 1) * BUTTON_GAP;
+                    int row2StartX = (GUI_WIDTH - row2Width) / 2;
+                    for (int i = 0; i < row2Count; i++) {
+                        int btnX = guiX + row2StartX + i * (BUTTON_SIZE + BUTTON_GAP);
+                        int btnY = guiY + TIMER_ROW2_Y;
+                        if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                                && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                            ModNetworking.CHANNEL.sendToServer(
+                                    new TimerDurationPacket(this.menu.getBlockPos(), TIMER_BUTTONS_PER_ROW + i));
+                            return true;
+                        }
                     }
                 }
             }

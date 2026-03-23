@@ -276,7 +276,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
 | Repeater | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
 | Comparator | Transformer | MachineTransformerBlock | TRANSFORMER | [DONE] |
-| Clock (item TBD) | Clock | TBD | CLOCK | [IDEA] |
+| Clock | Timer | MachineTimerBlock | TIMER | [DONE] |
 | Redstone torch | Pulser | TBD | PULSER | [IDEA] |
 | Lever | Toggle | MachineToggleBlock | TOGGLE | [DONE] |
 | Piston | Machine Piston | MachinePistonBlock | PISTON | [DONE] |
@@ -331,11 +331,11 @@ Omnidirectional redstone repeater. Receives signal on any face, outputs full-str
 **Machine Transformer:** [DONE]
 Omnidirectional redstone signal level setter. Receives signal on any face, outputs a user-configured signal strength (1-15) on all other faces. Specialization item: vanilla Comparator (Items.COMPARATOR). Shares MachineFrameBlockEntity with transformerLevel field. Blockstate: POWERED (boolean) + OUTPUT_LEVEL (IntegerProperty 1-15). No delay -- responds on 1-tick schedule. Input signal is purely an on/off gate; output level is always whatever the player sets in the GUI. GUI shows 15 numbered buttons in two rows (8 top + 7 bottom centered). Dynamic GUI content height (71px vs 53px default) to accommodate two button rows. Anti-feedback via same 5-layer architecture as Repeater. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns OUTPUT_LEVEL when POWERED. Dual-cuboid visual model with level-aware tinted underlay: unpowered = dark maroon, powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Single block model for all 30 blockstate variants. Custom networking (TransformerLevelPacket via existing Forge SimpleChannel).
 
-**Machine Clock:**
-Emits a configurable redstone pulse at a set interval. Right-click to cycle intervals.
+**Machine Timer:** [DONE]
+Edge-triggered timed output. Receives signal on any face, emits full-strength 15 on all other faces for a player-configured duration in ticks, then turns off. Requires a fresh signal (drop + rise) after the timer expires to re-trigger — same edge detection pattern as Toggle using inputWasLow. Specialization item: vanilla Clock (Items.CLOCK). Shares MachineFrameBlockEntity with timerDuration and timerTicksRemaining fields. Blockstate: POWERED (boolean). Duration configurable via GUI: 16 preset buttons in 2 rows with "Pulse Tick Duration" label, values from config timer.durations array (default 5-80 in steps of 5). Self-rescheduling countdown: each game tick decrements remaining, turns off at 0. Anti-feedback via same 5-layer architecture as Repeater/Transformer. Signal detection delegated to MachineRedstoneHelper. Placement signal absorption prevents activation from pre-existing signals. Custom networking (TimerDurationPacket via Forge SimpleChannel). Dual-cuboid visual model with tinted indicator overlay (binary: dark maroon off, bright red on).
 
 **Machine Pulser:**
-Emits a single redstone pulse on placement or activation. One-shot signal source.
+Emits a single redstone pulse on rising edge. One-shot signal source. Specialization item: any button item (tag-based). Fixed pulse length from config (default 2 game ticks).
 
 **Machine Toggle:** [DONE]
 Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).

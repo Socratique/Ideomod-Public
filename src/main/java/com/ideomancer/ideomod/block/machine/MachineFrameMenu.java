@@ -14,19 +14,17 @@ import net.minecraft.world.item.ItemStack;
 /**
  * Universal menu for all Machine Family blocks.
  *
- * DYNAMIC CONTENT HEIGHT:
- * =======================
- * The content area height adjusts based on the specialization type:
- *   - Default (Frame, Track, Trolley, Conductor, Brace, Pipe, etc.): 53px
- *   - Repeater (4 buttons): 53px (fits in one row)
- *   - Transformer (15 buttons in 2 rows): 71px (needs extra vertical space)
+ * FIXED CONTENT HEIGHT:
+ * =====================
+ * All Machine Family GUIs use the same fixed content height (89px), sized
+ * to fit the tallest specialization (Timer: label + 2 rows of buttons).
+ * Shorter specializations (Frame, Pipe, Repeater, Transformer, etc.) have
+ * extra grey background space between their controls and the player inventory.
  *
- * Content height is determined at construction time from the block type at
- * the position. Both server and client constructors resolve this identically
- * since the block type is synced before the GUI opens.
- *
- * Player inventory slot Y positions are computed from the content height,
- * so they shift down automatically when the content area is taller.
+ * This avoids needing to reposition slots at runtime (Slot.y is final in
+ * Forge 1.20.1) and keeps the GUI architecture simple — no dynamic height,
+ * no reflection, no AT. The PositionBoundContainer seamlessly handles block
+ * swaps while the GUI stays open.
  *
  * DATA SYNC:
  * Server constructor: live-reading ContainerData from BE.
@@ -38,6 +36,8 @@ import net.minecraft.world.item.ItemStack;
  *   1 = is repeater (0 or 1)
  *   2 = transformer level (1-15)
  *   3 = is transformer (0 or 1)
+ *   4 = timer duration (ticks)
+ *   5 = is timer (0 or 1)
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -46,19 +46,22 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     private final PositionBoundContainer container;
     private final BlockPos blockPos;
     private final ContainerData machineData;
-    private final int contentHeight;
 
-    /** Default content height for most specializations. */
-    public static final int DEFAULT_CONTENT_HEIGHT = 53;
-
-    /** Taller content height for transformer (2 rows of buttons). */
-    public static final int TRANSFORMER_CONTENT_HEIGHT = 71;
+    /**
+     * Fixed content height for ALL Machine Family GUIs. Sized to fit the
+     * tallest specialization (Timer: label + 2 rows of 8 buttons = 89px).
+     * Shorter specializations get extra background space — visually clean.
+     */
+    public static final int CONTENT_HEIGHT = 89;
 
     private static final int TOP_BORDER = 4;
     private static final int INV_SECTION = 90;
     private static final int BOTTOM_BORDER = 4;
     private static final int INV_SLOT_OFFSET = 12;
     private static final int HOTBAR_OFFSET = 70;
+
+    /** Total GUI height: 4 + 89 + 90 + 4 = 187px. */
+    public static final int GUI_HEIGHT = TOP_BORDER + CONTENT_HEIGHT + INV_SECTION + BOTTOM_BORDER;
 
     public static final int SPEC_SLOT_INDEX = 0;
     public static final int TRANSIT_SLOT_INDEX = 1;
@@ -69,7 +72,9 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     private static final int DATA_IS_REPEATER = 1;
     private static final int DATA_TRANSFORMER_LEVEL = 2;
     private static final int DATA_IS_TRANSFORMER = 3;
-    private static final int DATA_SIZE = 4;
+    private static final int DATA_TIMER_DURATION = 4;
+    private static final int DATA_IS_TIMER = 5;
+    private static final int DATA_SIZE = 6;
 
     /** Server-side constructor. */
     public MachineFrameMenu(int containerId, Inventory playerInv, BlockPos pos) {
@@ -78,9 +83,6 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         this.container = new PositionBoundContainer(playerInv.player.level(), pos);
         this.container.startOpen(playerInv.player);
 
-        // Determine content height from current block type
-        this.contentHeight = computeContentHeight(this.container);
-
         this.machineData = new ContainerData() {
             @Override
             public int get(int index) {
@@ -88,6 +90,8 @@ public class MachineFrameMenu extends AbstractContainerMenu {
                 if (index == DATA_IS_REPEATER) return container.isRepeater() ? 1 : 0;
                 if (index == DATA_TRANSFORMER_LEVEL) return container.getTransformerLevel();
                 if (index == DATA_IS_TRANSFORMER) return container.isTransformer() ? 1 : 0;
+                if (index == DATA_TIMER_DURATION) return container.getTimerDuration();
+                if (index == DATA_IS_TIMER) return container.isTimer() ? 1 : 0;
                 return 0;
             }
             @Override public void set(int index, int value) { }
@@ -105,27 +109,13 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         this.container = new PositionBoundContainer(playerInv.player.level(), pos);
         this.container.startOpen(playerInv.player);
 
-        // Determine content height from current block type (client has block synced)
-        this.contentHeight = computeContentHeight(this.container);
-
         this.machineData = new SimpleContainerData(DATA_SIZE);
         this.addDataSlots(this.machineData);
         addAllSlots(playerInv);
     }
 
-    /**
-     * Compute the content area height based on the current specialization.
-     * Transformer needs extra height for 2 rows of buttons.
-     */
-    private static int computeContentHeight(PositionBoundContainer container) {
-        if (container.isTransformer()) {
-            return TRANSFORMER_CONTENT_HEIGHT;
-        }
-        return DEFAULT_CONTENT_HEIGHT;
-    }
-
     private void addAllSlots(Inventory playerInv) {
-        int invBaseY = TOP_BORDER + contentHeight;
+        int invBaseY = TOP_BORDER + CONTENT_HEIGHT;
         this.addSlot(new SpecSlot(this.container, 0, 80, 20));
         this.addSlot(new TransitSlot(this.container, 1, 80, 38));
         for (int row = 0; row < 3; row++) {
@@ -143,6 +133,7 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     public boolean isPipe() { return this.container.isPipe(); }
     public boolean isRepeater() { return this.machineData.get(DATA_IS_REPEATER) == 1; }
     public boolean isTransformer() { return this.machineData.get(DATA_IS_TRANSFORMER) == 1; }
+    public boolean isTimer() { return this.machineData.get(DATA_IS_TIMER) == 1; }
 
     public int getRepeaterDelay() {
         int delay = this.machineData.get(DATA_REPEATER_DELAY);
@@ -154,11 +145,14 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         return level >= 1 && level <= 15 ? level : 1;
     }
 
-    public int getContentHeight() { return contentHeight; }
-
-    public int getGuiHeight() {
-        return TOP_BORDER + contentHeight + INV_SECTION + BOTTOM_BORDER;
+    public int getTimerDuration() {
+        int duration = this.machineData.get(DATA_TIMER_DURATION);
+        return duration >= 1 ? duration : 20;
     }
+
+    public int getContentHeight() { return CONTENT_HEIGHT; }
+
+    public int getGuiHeight() { return GUI_HEIGHT; }
 
     @Override
     public boolean stillValid(Player player) { return this.container.stillValid(player); }

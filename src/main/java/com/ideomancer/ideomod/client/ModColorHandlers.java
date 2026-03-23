@@ -5,6 +5,7 @@ import com.ideomancer.ideomod.block.machine.FluidType;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
+import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
@@ -36,6 +37,9 @@ import net.minecraftforge.fml.common.Mod;
  * when powered — so a transformer set to level 5 glows dimmer than one
  * set to 15.
  *
+ * Machine Timer uses tintIndex 1 for its inner underlay cuboid.
+ * Binary: dark maroon when unpowered, bright red when powered.
+ *
  * Machine Fluid Pipe uses tintIndex 0 for the water texture inner cuboid.
  * Vanilla water_still.png is greyscale — the colour handler applies
  * biome water colour (or default blue) when the pipe holds water.
@@ -60,18 +64,11 @@ public class ModColorHandlers {
     private static final int[] POWER_COLORS = new int[16];
 
     static {
-        // Vanilla RedStoneWireBlock color formula (adapted):
-        //   power 0: f=0, red = 0.3 baseline
-        //   power 1-15: f = power/15, red = 0.4 + f*0.6
-        //   green = clamp(f*f * 0.7 - 0.5) [very low, subtle warmth at high power]
-        //   blue  = clamp(f*f * 0.6 - 0.7) [negligible except at max power]
         for (int power = 0; power <= 15; power++) {
             float f = (float) power / 15.0F;
 
             float r, g, b;
             if (power == 0) {
-                // Dark maroon baseline — visible but dim.
-                // Vanilla dust uses ~0.3 red at power 0.
                 r = 0.3F;
                 g = 0.0F;
                 b = 0.0F;
@@ -122,7 +119,6 @@ public class ModColorHandlers {
 
         // Machine Transformer: tintIndex 1 on inner underlay cuboid.
         // Level-aware: off = dark maroon, on = POWER_COLORS[outputLevel].
-        // A transformer set to level 5 glows dimmer than one set to 15.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {
                 if (state.getValue(MachineTransformerBlock.POWERED)) {
@@ -133,6 +129,16 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_TRANSFORMER.get());
+
+        // Machine Timer: tintIndex 1 on inner underlay cuboid.
+        // Binary: off = dark maroon, on = bright red.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                return state.getValue(MachineTimerBlock.POWERED)
+                        ? POWER_COLORS[15] : POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_TIMER.get());
 
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
@@ -179,6 +185,14 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModItems.MACHINE_TRANSFORMER.get());
+
+        // Machine Timer item: show unpowered (dark maroon)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_TIMER.get());
 
         // Machine Fluid Pipe item: no tint needed
         event.register((stack, tintIndex) -> {

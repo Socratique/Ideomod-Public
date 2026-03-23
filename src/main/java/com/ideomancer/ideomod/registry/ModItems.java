@@ -75,6 +75,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_TRANSFORMER = ITEMS.register("machine_transformer",
             () -> new BlockItem(ModBlocks.MACHINE_TRANSFORMER.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_TIMER = ITEMS.register("machine_timer",
+            () -> new BlockItem(ModBlocks.MACHINE_TIMER.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));
 

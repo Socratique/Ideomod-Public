@@ -6,6 +6,7 @@ import net.minecraft.world.Container;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 
 /**
@@ -29,15 +30,13 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * When a player inserts an item into slot 1 via GUI, this is treated as
  * input from Direction.UP (top of block) for the pipe's round-robin system.
  *
- * REPEATER SUPPORT:
- * =================
- * isRepeater() checks if the current block is a MachineRepeaterBlock.
- * getRepeaterDelay() reads the delay from the BE for ContainerData sync.
- *
- * TRANSFORMER SUPPORT:
- * ====================
- * isTransformer() checks if the current block is a MachineTransformerBlock.
- * getTransformerLevel() reads the output level from the BE for ContainerData sync.
+ * SPECIALIZATION QUERIES:
+ * =======================
+ * isRepeater() / getRepeaterDelay() - for Repeater ContainerData sync.
+ * isTransformer() / getTransformerLevel() - for Transformer ContainerData sync.
+ * isTimer() / getTimerDuration() - for Timer ContainerData sync.
+ * getBlockContentHeight() - reads GUI height from the current block class,
+ *   enabling fully dynamic GUI resizing without hardcoded type checks.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -51,68 +50,69 @@ public class PositionBoundContainer implements Container {
         this.pos = pos.immutable();
     }
 
-    /**
-     * Look up the current block entity at our position.
-     * Returns null if not present or not a MachineFrameBlockEntity (or subclass).
-     */
     private MachineFrameBlockEntity getBE() {
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachineFrameBlockEntity mfbe ? mfbe : null;
     }
 
-    /**
-     * Get the pipe-specific BE, or null if the block is not a pipe.
-     */
     private MachinePipeBlockEntity getPipeBE() {
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachinePipeBlockEntity pipe ? pipe : null;
     }
 
-    /**
-     * Check if the current BE is a pipe (has transit slot).
-     */
     public boolean isPipe() {
         return getPipeBE() != null;
     }
 
-    /**
-     * Check if the current block is a Machine Repeater.
-     */
     public boolean isRepeater() {
         return level.getBlockState(pos).getBlock() instanceof MachineRepeaterBlock;
     }
 
-    /**
-     * Get the repeater delay from the BE. Returns 1 if not a repeater.
-     */
     public int getRepeaterDelay() {
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getRepeaterDelay() : 1;
     }
 
-    /**
-     * Check if the current block is a Machine Transformer.
-     */
     public boolean isTransformer() {
         return level.getBlockState(pos).getBlock() instanceof MachineTransformerBlock;
     }
 
-    /**
-     * Get the transformer output level from the BE. Returns 1 if not a transformer.
-     */
     public int getTransformerLevel() {
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getTransformerLevel() : 1;
+    }
+
+    public boolean isTimer() {
+        return level.getBlockState(pos).getBlock() instanceof MachineTimerBlock;
+    }
+
+    public int getTimerDuration() {
+        MachineFrameBlockEntity be = getBE();
+        return be != null ? be.getTimerDuration() : 20;
+    }
+
+    /**
+     * Get the GUI content height declared by the current block at this position.
+     * Reads from AbstractMachineBlock.getGuiContentHeight() on the live block.
+     * Returns the default height if the block is not an AbstractMachineBlock.
+     *
+     * This is the single entry point for dynamic GUI height. Each specialization
+     * declares its own height by overriding getGuiContentHeight() on its block
+     * class. No hardcoded type checks needed here or in the menu.
+     */
+    public int getBlockContentHeight() {
+        Block block = level.getBlockState(pos).getBlock();
+        if (block instanceof AbstractMachineBlock machineBlock) {
+            return machineBlock.getGuiContentHeight();
+        }
+        return AbstractMachineBlock.DEFAULT_GUI_CONTENT_HEIGHT;
     }
 
     // ========================================================================
     // CONTAINER FORWARDING
     // ========================================================================
 
-    @Override
-    public int getContainerSize() {
-        return 2; // Always 2 — slot 1 is no-op when not a pipe
-    }
+    @Override public int getContainerSize() { return 2; }
 
     @Override
     public boolean isEmpty() {
@@ -156,7 +156,6 @@ public class PositionBoundContainer implements Container {
             MachinePipeBlockEntity pipe = getPipeBE();
             if (pipe != null) {
                 pipe.setItem(slot, stack);
-                // Player GUI insertion into transit slot = input from top
                 if (!stack.isEmpty()) {
                     pipe.onItemReceived(Direction.UP);
                 }
@@ -186,10 +185,7 @@ public class PositionBoundContainer implements Container {
         if (be != null) be.clearContent();
     }
 
-    @Override
-    public int getMaxStackSize() {
-        return 64; // Transit slot allows 64; spec slot enforces 1 via Slot subclass
-    }
+    @Override public int getMaxStackSize() { return 64; }
 
     @Override
     public void startOpen(Player player) {
@@ -206,7 +202,6 @@ public class PositionBoundContainer implements Container {
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
-            // Transit slot only accepts items when the BE is a pipe
             return getPipeBE() != null;
         }
         MachineFrameBlockEntity be = getBE();

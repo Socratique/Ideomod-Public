@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-22 (Machine Transformer specialization, MachineRedstoneHelper refactor, dynamic GUI height)*
+*Last updated: 2026-03-22b (Machine Timer specialization, fixed GUI height, button spritesheet expansion)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -104,8 +104,8 @@ com.ideomancer.ideomod
   |     |     |                                updateShape validates parent piston. No drops.
   |     |     |-- MachineBraceBlock.java      Extends AbstractMachineBlock. MachineType.BRACE.
   |     |     |                                Structural reinforcement. Push limit constants.
-  |     |     |-- MachineFrameMenu.java        Position-bound menu. Dynamic content height (53px default,
-  |     |     |                                71px for Transformer). ContainerData size 4.
+  |     |     |-- MachineFrameMenu.java        Position-bound menu. Fixed content height (89px for
+  |     |     |                                all machines). ContainerData size 6.
   |     |     |-- MachineTrackBlock.java       Extends AbstractMachineBlock. MachineType.TRACK. Custom redstone + push.
   |     |     |-- MachineTrolleyBlock.java     Extends AbstractMachineBlock. MachineType.TROLLEY. ~20 lines.
   |     |     |-- MachineConductorBlock.java   Extends AbstractMachineBlock. MachineType.CONDUCTOR. Custom redstone.
@@ -113,8 +113,11 @@ com.ideomancer.ideomod
   |     |     |                                Signal detection via MachineRedstoneHelper.
   |     |     |-- MachineToggleBlock.java     Extends AbstractMachineBlock. MachineType.TOGGLE. Edge-triggered flip-flop.
   |     |     |                                Signal detection via MachineRedstoneHelper.
-  |     |     \-- MachineTransformerBlock.java Extends AbstractMachineBlock. MachineType.TRANSFORMER.
-  |     |                                      Configurable signal level setter. Signal detection via
+  |     |     |-- MachineTransformerBlock.java Extends AbstractMachineBlock. MachineType.TRANSFORMER.
+  |     |     |                                Configurable signal level setter. Signal detection via
+  |     |     |                                MachineRedstoneHelper.
+  |     |     \-- MachineTimerBlock.java       Extends AbstractMachineBlock. MachineType.TIMER.
+  |     |                                      Edge-triggered timed output. Signal detection via
   |     |                                      MachineRedstoneHelper.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -217,6 +220,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_repeater` | MachineRepeaterBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.REPEATER. Omnidirectional redstone repeater. POWERED + DELAY (1-4). |
 | `machine_toggle` | MachineToggleBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TOGGLE. Edge-triggered flip-flop. POWERED + INPUT_FACE. |
 | `machine_transformer` | MachineTransformerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TRANSFORMER. Configurable signal level setter. POWERED + OUTPUT_LEVEL (1-15). |
+| `machine_timer` | MachineTimerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TIMER. Edge-triggered timed output. POWERED. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -226,7 +230,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
@@ -1151,7 +1155,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 
 **PositionBoundContainer**: Container backed by Level + BlockPos. Every method call does `level.getBlockEntity(pos)` and forwards to the current MachineFrameBlockEntity (or subclass). Reports container size 2: slot 0 works with any MachineFrameBlockEntity, slot 1 delegates to MachinePipeBlockEntity when present (returns empty otherwise). isPipe() method enables live checking. Used by MachineFrameMenu on both server and client sides. Survives block swaps automatically.
 
-**MachineFrameMenu**: Unified menu for all Machine Family blocks. Two custom slot types: SpecSlot (max 1) and TransitSlot. TransitSlot overrides isActive()/mayPlace()/mayPickup() to disable when BE is not a pipe. Fixed CONTENT_HEIGHT (53px) for all machines. Player inventory Y = 4 + 53 + 12 = 69. Hotbar Y = 4 + 53 + 70 = 127. Total GUI height = 151px always.
+**MachineFrameMenu**: Unified menu for all Machine Family blocks. Two custom slot types: SpecSlot (max 1) and TransitSlot. TransitSlot overrides isActive()/mayPlace()/mayPickup() to disable when BE is not a pipe. Fixed CONTENT_HEIGHT=89px for all machines (sized for tallest specialization: Timer). Shorter specializations have extra grey background space. Player inventory Y = 4 + 89 + 12 = 105. Hotbar Y = 4 + 89 + 70 = 163. Total GUI height = 187px always. ContainerData size 6: repeater delay (0), isRepeater (1), transformer level (2), isTransformer (3), timer duration (4), isTimer (5).
 
 **MachineFrameScreen**: Renders GUI dynamically from ideomod_gui.png spritesheet (256x256). Assembly: top border (0,110 176x4) + content area (edges + BG fill + slot tiles) + player inv section (0,20 176x90) + bottom border (0,114 176x4). Slot tile at (0,0 18x18). Transit slot tile only rendered when isPipe(). Dynamic title reads block name each frame.
 
@@ -1310,17 +1314,71 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing comparator in slot
 
 **Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
 
-**GUI Buttons**: 15 numbered buttons from `ideomod_numbered_buttons.png` in two rows: row 1 = buttons 1-8 (centered at X=17), row 2 = buttons 9-15 (centered at X=26). Row 1 at Y=40, row 2 at Y=58. `MachineFrameScreen.mouseClicked()` sends `TransformerLevelPacket`. Dynamic content height: 71px (vs 53px default) to accommodate two button rows. `MachineFrameMenu` uses `computeContentHeight()` at construction time to determine height from `PositionBoundContainer.isTransformer()`.
+**GUI Buttons**: 15 numbered buttons from `ideomod_numbered_buttons.png` in two rows: row 1 = buttons 1-8 (centered at X=17), row 2 = buttons 9-15 (centered at X=26). Row 1 at Y=40, row 2 at Y=58. `MachineFrameScreen.mouseClicked()` sends `TransformerLevelPacket`. Fixed content height (89px, shared by all machines).
 
-**Networking**: `TransformerLevelPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates level range (1-15), player distance (64 blocks), block type.
+**Networking**: `TransformerLevelPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates level range (1-15), player distance (64 blocks), block type. Packet ID 1.
 
 **MachineFrameBlockEntity fields**: `transformerLevel` (int, 1-15, default 1). Saved in saveAdditional, load, getUpdateTag, saveMovementData, loadMovementData. Reset to 1 in triggerSwapCheck(). `setTransformerLevel()` syncs OUTPUT_LEVEL blockstate with setBlock flag 3.
 
-**ContainerData**: MachineFrameMenu ContainerData size 4: DATA_REPEATER_DELAY=0, DATA_IS_REPEATER=1, DATA_TRANSFORMER_LEVEL=2, DATA_IS_TRANSFORMER=3.
+**ContainerData**: MachineFrameMenu ContainerData size 6: DATA_REPEATER_DELAY=0, DATA_IS_REPEATER=1, DATA_TRANSFORMER_LEVEL=2, DATA_IS_TRANSFORMER=3, DATA_TIMER_DURATION=4, DATA_IS_TIMER=5.
 
 **Visual**: Dual-cuboid model (same pattern as Repeater/Toggle). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1. Level-aware tint: unpowered = POWER_COLORS[0] (dark maroon), powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Outer shell uses `machine_transformer.png` texture with transparent indicator windows. Single block model for all 30 blockstate variants (15 levels x 2 powered states) -- tint handles visual differentiation.
 
 Stickiness: MachineType.TRANSFORMER -- sticks to other Transformers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Tracks, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Timer -- Edge-Triggered Timed Output
+
+Registry ID: `machine_timer`. Class: MachineTimerBlock extends AbstractMachineBlock. `MachineType.TIMER`.
+
+Edge-triggered timed output. Receives signal on one face (input), emits full-strength 15 on all other 5 faces for a player-configured duration in ticks, then turns off. Requires a fresh signal (drop to 0, then rise) after the timer expires to re-trigger. Specialization item: vanilla Clock.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing clock in slot + "Pulse Tick Duration" label + 16 duration buttons in 2 rows).
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) |
+| **Output** | Always strength 15 when POWERED, on all non-input faces |
+| **Trigger** | Rising edge only (same as Toggle). Signal must drop to 0 and timer must have expired before re-triggering. |
+| **Duration** | Player-configurable via GUI buttons. 16 presets from config (default 5-80 ticks in steps of 5). |
+| **Default duration** | 20 ticks (config timer.default_index = 3) |
+
+**Input/Output Face Model**: Same concept as Conductor/Repeater/Toggle/Transformer -- receives on one face, outputs on other 5. Input face stored as `inputFace` in MachineFrameBlockEntity (NOT in blockstate -- Timer has no directional model variants, unlike Toggle's INPUT_FACE property).
+
+**Edge Detection**: Same pattern as MachineToggleBlock. `inputWasLow` boolean in MachineFrameBlockEntity tracks whether the input signal has dropped to 0 since the last activation. Timer cycle: (1) signal arrives → start timer, POWERED=true, inputWasLow=false; (2) timer counts down each tick; (3) timer expires → POWERED=false; (4) if signal still present, absorbed (inputWasLow=false); (5) signal drops → inputWasLow=true (armed); (6) signal rises → new timer starts.
+
+While the timer is running, input signal changes are tracked for arming but don't affect the countdown -- the timer always runs to completion.
+
+**Placement Signal Absorption**: Same pattern as Toggle. When placed next to an already-active signal, onPlace() snapshots the signal landscape and absorbs it via `absorbing` ThreadLocal. Signal must drop and rise before Timer responds.
+
+**Anti-feedback Architecture** (5 layers, same as Repeater/Transformer):
+
+1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+
+2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
+
+3. updatingPos ThreadLocal: during tick()'s setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately.
+
+4. absorbing ThreadLocal: during onPlace signal snapshot, prevents neighborChanged from scheduling ticks.
+
+5. Self-rescheduling countdown: when POWERED, tick() decrements timerTicksRemaining and schedules next tick at 1 game tick. When remaining reaches 0, sets POWERED=false.
+
+**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth. `getRedstoneOutput()` returns 15 when POWERED.
+
+**Tick Scheduling**: neighborChanged schedules initial tick via `level.scheduleTick()` at 2 game ticks. Once POWERED, tick() self-reschedules every 1 game tick for countdown. tick() is the ONLY place where POWERED state changes.
+
+**GUI**: "Pulse Tick Duration" label centered above 16 buttons in 2 rows (8+8). Each button shows the tick value from IdeomodConfig.getTimerDurations(). Selected duration shows pressed state. Click sends `TimerDurationPacket`. Fixed content height (89px, shared by all machines).
+
+**Networking**: `TimerDurationPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates duration index against config array, player distance (64 blocks), block type. Packet ID 2.
+
+**MachineFrameBlockEntity fields**: `timerDuration` (int, default from config, persisted in all 4 NBT paths), `timerTicksRemaining` (int, countdown, persisted). Both reset in triggerSwapCheck().
+
+**ContainerData**: MachineFrameMenu ContainerData size 6: DATA_TIMER_DURATION=4, DATA_IS_TIMER=5 (added to existing 0-3).
+
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses `machine_timer.png` texture (placeholder -- needs user art). Single block model for both powered variants.
+
+Stickiness: MachineType.TIMER -- sticks to other Timers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1525,7 +1583,7 @@ Centralized JSON config for all mod systems. Auto-generated on first launch with
 
 Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneConfig.java` (deprecated, safe to delete).
 
-**JSON structure** (7 sections):
+**JSON structure** (8 sections):
 
 ```json
 {
@@ -1561,6 +1619,10 @@ Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneCon
   "furnace_array": {
     "max_width": 5,
     "max_height": 5
+  },
+  "timer": {
+    "durations": [5, 10, 15, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80],
+    "default_index": 3
   }
 }
 ```
@@ -1617,6 +1679,13 @@ Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneCon
 |-----|------|---------|-------|-------------|
 | `max_width` | int | 5 | 1-16 | Maximum furnace array cluster width. |
 | `max_height` | int | 5 | 1-16 | Maximum furnace array cluster height. |
+
+**Section: timer**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `durations` | int[] | [5,10,15,...,80] | each 1-6000 | Available duration presets for Machine Timer GUI buttons, in game ticks. Array can be any length (GUI shows up to 16 in 2 rows). |
+| `default_index` | int | 3 | 0 to len-1 | Index into durations array for the pre-selected default when a new Timer is created. Index 3 = 20 ticks. |
 
 **Reload**: `/ideomod reload` command (op level 2) calls `IdeomodConfig.reloadConfig()`. Also available programmatically for future use.
 
@@ -1771,7 +1840,7 @@ Same pattern for all block items -- just parent the block model.
 
 Pattern: `"block.ideomod.registry_name": "Display Name"` for blocks, `"itemGroup.ideomod.tab_name": "Tab Name"` for creative tabs.
 
-Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, machine_toggle, machine_transformer, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
+Current entries: ideoblock, drill, oddstone, machine_block, oddstone_portal, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, machine_conductor, machine_pipe, machine_fluid_pipe, machine_piston, machine_sticky_piston, machine_brace, machine_repeater, machine_toggle, machine_transformer, machine_timer, iron_frame, copper_frame, iron_framed_block, copper_framed_block, plus creative tabs (ideomod_tab, framed_blocks_tab).
 
 ---
 
