@@ -32,10 +32,12 @@
 |  |           |  |  +-- MachinePipeBlockEntity.java
 |  |           |  |  +-- MachinePistonBlock.java
 |  |           |  |  +-- MachinePistonHeadBlock.java
+|  |           |  |  +-- MachinePulserBlock.java
 |  |           |  |  +-- MachineRedstoneHelper.java
 |  |           |  |  +-- MachineRepeaterBlock.java
 |  |           |  |  +-- MachineStickyPistonBlock.java
 |  |           |  |  +-- MachineSwapHelper.java
+|  |           |  |  +-- MachineTimerBlock.java
 |  |           |  |  +-- MachineToggleBlock.java
 |  |           |  |  +-- MachineTrackBlock.java
 |  |           |  |  +-- MachineTransformerBlock.java
@@ -108,6 +110,7 @@
 |  |           +-- network
 |  |           |  +-- ModNetworking.java
 |  |           |  +-- RepeaterDelayPacket.java
+|  |           |  +-- TimerDurationPacket.java
 |  |           |  \\-- TransformerLevelPacket.java
 |  |           +-- registry
 |  |           |  +-- ModBlockEntities.java
@@ -136,8 +139,10 @@
 |     |     |  +-- machine_pipe.json
 |     |     |  +-- machine_piston.json
 |     |     |  +-- machine_piston_head.json
+|     |     |  +-- machine_pulser.json
 |     |     |  +-- machine_repeater.json
 |     |     |  +-- machine_sticky_piston.json
+|     |     |  +-- machine_timer.json
 |     |     |  +-- machine_toggle.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_transformer.json
@@ -173,11 +178,13 @@
 |     |     |  |  +-- machine_piston.json
 |     |     |  |  +-- machine_piston_head.json
 |     |     |  |  +-- machine_piston_head_sticky.json
+|     |     |  |  +-- machine_pulser.json
 |     |     |  |  +-- machine_repeater_1.json
 |     |     |  |  +-- machine_repeater_2.json
 |     |     |  |  +-- machine_repeater_3.json
 |     |     |  |  +-- machine_repeater_4.json
 |     |     |  |  +-- machine_sticky_piston.json
+|     |     |  |  +-- machine_timer.json
 |     |     |  |  +-- machine_toggle_off.json
 |     |     |  |  +-- machine_toggle_on.json
 |     |     |  |  +-- machine_track.json
@@ -202,8 +209,10 @@
 |     |     |     +-- machine_fluid_pipe.json
 |     |     |     +-- machine_pipe.json
 |     |     |     +-- machine_piston.json
+|     |     |     +-- machine_pulser.json
 |     |     |     +-- machine_repeater.json
 |     |     |     +-- machine_sticky_piston.json
+|     |     |     +-- machine_timer.json
 |     |     |     +-- machine_toggle.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_transformer.json
@@ -235,12 +244,14 @@
 |     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_piston.png
 |     |        |  +-- machine_piston_arm.png
+|     |        |  +-- machine_pulser.png
 |     |        |  +-- machine_repeater_1.png
 |     |        |  +-- machine_repeater_2.png
 |     |        |  +-- machine_repeater_3.png
 |     |        |  +-- machine_repeater_4.png
 |     |        |  +-- machine_repeater_indicator.png
 |     |        |  +-- machine_sticky_piston.png
+|     |        |  +-- machine_timer.png
 |     |        |  +-- machine_toggle.png
 |     |        |  +-- machine_toggle_on.png
 |     |        |  +-- machine_track.png
@@ -275,6 +286,7 @@
 |     |  |  |     +-- machine_fluid_pipe.json
 |     |  |  |     +-- machine_pipe.json
 |     |  |  |     +-- machine_piston.json
+|     |  |  |     +-- machine_pulser.json
 |     |  |  |     +-- machine_repeater.json
 |     |  |  |     +-- machine_sticky_piston.json
 |     |  |  |     +-- machine_toggle.json
@@ -295,11 +307,13 @@
 |     |  |  |  +-- odd_slime.json
 |     |  |  |  \\-- oddstone.json
 |     |  |  +-- tags
-|     |  |  |  \\-- blocks
-|     |  |  |     +-- frameable_blocks.json
-|     |  |  |     +-- furnace_array_frame.json
-|     |  |  |     +-- immovable_when_framed.json
-|     |  |  |     \\-- portal_corner_blocks.json
+|     |  |  |  +-- blocks
+|     |  |  |  |  +-- frameable_blocks.json
+|     |  |  |  |  +-- furnace_array_frame.json
+|     |  |  |  |  +-- immovable_when_framed.json
+|     |  |  |  |  \\-- portal_corner_blocks.json
+|     |  |  |  \\-- items
+|     |  |  |     \\-- pulser_items.json
 |     |  |  \\-- worldgen
 |     |  |     +-- world_preset
 |     |  |     \\-- chunky_geology_settings.json

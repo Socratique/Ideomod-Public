@@ -134,6 +134,13 @@ public class IdeomodConfig {
     private static int timerDefaultIndex = 3;
 
     // ========================================================================
+    // PULSER
+    // ========================================================================
+
+    /** Fixed pulse duration for the Machine Pulser, in game ticks. */
+    private static int pulserPulseDuration = 2;
+
+    // ========================================================================
     // GETTERS — Oddstone
     // ========================================================================
 
@@ -284,6 +291,19 @@ public class IdeomodConfig {
     }
 
     // ========================================================================
+    // GETTERS — Pulser
+    // ========================================================================
+
+    /**
+     * Get the fixed pulse duration for the Machine Pulser, in game ticks.
+     * Default: 2 (= 1 redstone tick).
+     */
+    public static int getPulserPulseDuration() {
+        ensureLoaded();
+        return pulserPulseDuration;
+    }
+
+    // ========================================================================
     // LOADING & PARSING
     // ========================================================================
 
@@ -412,6 +432,12 @@ public class IdeomodConfig {
             }
             timerDefaultIndex = clamp(getInt(timer, "default_index", timerDefaultIndex), 0, timerDurations.length - 1);
         }
+
+        // --- Pulser ---
+        JsonObject pulser = getSection(root, "pulser");
+        if (pulser != null) {
+            pulserPulseDuration = clamp(getInt(pulser, "pulse_duration", pulserPulseDuration), 1, 100);
+        }
     }
 
     // ========================================================================
@@ -488,6 +514,12 @@ public class IdeomodConfig {
         timer.add("durations", durArray);
         timer.addProperty("default_index", timerDefaultIndex);
         root.add("timer", timer);
+
+        // --- Pulser ---
+        JsonObject pulser = new JsonObject();
+        pulser.addProperty("_comment", "Machine Pulser fixed pulse duration in game ticks (2 game ticks = 1 redstone tick). Range: 1-100.");
+        pulser.addProperty("pulse_duration", pulserPulseDuration);
+        root.add("pulser", pulser);
 
         String jsonStr = GSON.toJson(root);
         Files.writeString(configFile, jsonStr);

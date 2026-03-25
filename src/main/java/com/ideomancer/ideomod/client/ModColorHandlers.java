@@ -5,6 +5,7 @@ import com.ideomancer.ideomod.block.machine.FluidType;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
+import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
@@ -140,6 +141,16 @@ public class ModColorHandlers {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_TIMER.get());
 
+        // Machine Pulser: tintIndex 1 on inner underlay cuboid.
+        // Binary: off = dark maroon, on = bright red.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                return state.getValue(MachinePulserBlock.POWERED)
+                        ? POWER_COLORS[15] : POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_PULSER.get());
+
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 0 && state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == FluidType.WATER) {
@@ -193,6 +204,14 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModItems.MACHINE_TIMER.get());
+
+        // Machine Pulser item: show unpowered (dark maroon)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_PULSER.get());
 
         // Machine Fluid Pipe item: no tint needed
         event.register((stack, tintIndex) -> {

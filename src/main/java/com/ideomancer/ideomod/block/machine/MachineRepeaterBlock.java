@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.ticks.TickPriority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -154,7 +155,7 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
                 int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, inputFace, shouldSignal);
                 if (inputSignal <= 0) {
                     if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                        level.scheduleTick(pos, this, state.getValue(DELAY) * 2);
+                        level.scheduleTick(pos, this, state.getValue(DELAY) * 2, TickPriority.HIGH);
                     }
                 }
             }
@@ -169,7 +170,7 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
 
             if (bestSignal > 0) {
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                    level.scheduleTick(pos, this, state.getValue(DELAY) * 2);
+                    level.scheduleTick(pos, this, state.getValue(DELAY) * 2, TickPriority.HIGH);
                 }
             }
         }

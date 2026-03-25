@@ -3,7 +3,9 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.tags.BlockTags;
+import net.minecraft.tags.ItemTags;
 import net.minecraft.tags.TagKey;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.level.block.Block;
 
 /**
@@ -72,4 +74,18 @@ public class ModTags {
      */
     public static final TagKey<Block> IMMOVABLE_WHEN_FRAMED =
             BlockTags.create(new ResourceLocation(Ideomod.MOD_ID, "immovable_when_framed"));
+
+    /**
+     * Item tags for Ideomod.
+     */
+    public static class Items {
+        /**
+         * Items that trigger the Machine Pulser specialization when inserted
+         * into a Machine Frame. Contains all vanilla button items.
+         *
+         * Tag file: data/ideomod/tags/items/pulser_items.json
+         */
+        public static final TagKey<Item> PULSER_ITEMS =
+                ItemTags.create(new ResourceLocation(Ideomod.MOD_ID, "pulser_items"));
+    }
 }

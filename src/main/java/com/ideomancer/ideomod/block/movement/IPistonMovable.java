@@ -1,6 +1,8 @@
 package com.ideomancer.ideomod.block.movement;
 
+import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.world.level.Level;
 
 /**
  * Marker interface for block entities that can survive piston movement.
@@ -52,4 +54,21 @@ public interface IPistonMovable {
      * @param tag The CompoundTag previously returned by saveMovementData()
      */
     void loadMovementData(CompoundTag tag);
+
+    /**
+     * Called AFTER loadMovementData() has restored all block entity data
+     * at the destination position. Use this to re-schedule ticks or perform
+     * any post-restoration logic that depends on both the block entity data
+     * AND the block's position in the world.
+     *
+     * Scheduled ticks are lost during piston movement (Minecraft's tick
+     * scheduler doesn't transfer them). Blocks that rely on scheduled ticks
+     * for countdown timers or state re-evaluation must re-schedule here.
+     *
+     * Default implementation does nothing — override only if needed.
+     *
+     * @param level The world (guaranteed server-side)
+     * @param pos   The block's new position after movement
+     */
+    default void onMovementRestored(Level level, BlockPos pos) {}
 }

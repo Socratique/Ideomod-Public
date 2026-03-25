@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
+import net.minecraft.world.ticks.TickPriority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -200,7 +201,7 @@ public class MachineTimerBlock extends AbstractMachineBlock {
                 // Genuine rising edge — schedule turn on.
                 machineBE.setInputFace(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                    level.scheduleTick(pos, this, 2);
+                    level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                 }
             } else if (bestSignal <= 0) {
                 // Signal dropped — arm for next trigger

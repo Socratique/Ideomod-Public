@@ -1,5 +1,53 @@
 # Ideomod Changelog
 
+## [2026-03-24] Machine Pulser Specialization + Observer Tick Fix + Piston Movement Tick Restoration
+
+New Machine Family specialization: Machine Pulser. Rising-edge-triggered fixed-duration
+pulse generator. Converts any incoming signal edge into a clean, config-driven pulse
+(default 2 game ticks). Specialization item: any vanilla button (tag-based:
+`ideomod:pulser_items`, 13 button types).
+
+Also: fixed observer compatibility bug across all 5 tick-based machine blocks, and added
+piston movement tick restoration via new IPistonMovable.onMovementRestored() callback.
+
+### Machine Pulser -- Behaviour
+
+- Specialization item: Any vanilla button (tag: `ideomod:pulser_items`)
+- MachineType.PULSER, shares MachineFrameBlockEntity
+- Blockstate: POWERED (boolean)
+- Output: strength 15 on all non-input faces while pulse is active
+- Edge-triggered: same rising-edge-only pattern as Toggle/Timer
+- Duration: fixed from config (`pulser.pulse_duration`, default 2 game ticks, range 1-100)
+- No GUI controls beyond specialization slot (unlike Timer's duration buttons)
+- Tag-based specialization: FIRST machine to use item tag instead of single Items.XXX constant
+
+### Observer Tick Priority Fix
+
+All 5 tick-based machine blocks (Repeater, Transformer, Toggle, Timer, Pulser) now use
+TickPriority.HIGH for scheduleTick calls in neighborChanged. Previously used default
+NORMAL priority, causing a race condition with observer 2-tick pulses: the observer's
+turn-off tick ran before the machine's response tick (FIFO within same priority),
+so the machine read zero signal. Matches vanilla DiodeBlock approach.
+
+### Piston Movement Tick Restoration
+
+New IPistonMovable.onMovementRestored(Level, BlockPos) callback, called by
+PistonMovingBlockEntityMixin after loadMovementData() restores block entity data.
+MachineFrameBlockEntity implementation schedules a 1-tick re-evaluation for any
+AbstractMachineBlock, ensuring powered blocks resume their countdowns after piston
+movement (scheduled ticks are lost during transit).
+
+### Known Issue: Pulse Jump on Piston Movement
+
+When multiple edge-triggered machine blocks form a signal chain (e.g., a ring of
+Pulsers with a pulse circulating), moving the group by piston can cause the active
+pulse to "jump" forward, instantly powering several blocks ahead of where it should
+be. Root cause: onMovementRestored schedules ticks for ALL machine blocks (not just
+powered ones), and loadMovementData overwrites onPlace's absorption state, restoring
+inputWasLow=true on unpowered-but-armed blocks. These blocks then see adjacent
+still-powered blocks as new rising edges and fire prematurely. See Known Issue #6
+in documentation. Not game-breaking; only affects moving signal chains.
+
 ## [2026-03-22b] Machine Timer Specialization + Fixed GUI Height + Button Spritesheet Expansion
 
 New Machine Family specialization: Machine Timer. Edge-triggered timed output

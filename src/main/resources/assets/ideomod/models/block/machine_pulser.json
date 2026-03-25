@@ -1,0 +1,37 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "cutout",
+  "textures": {
+    "indicator": "ideomod:block/machine_repeater_indicator",
+    "pulser": "ideomod:block/machine_pulser",
+    "particle": "ideomod:block/machine_pulser"
+  },
+  "elements": [
+    {
+      "comment": "Inner underlay cuboid — tinted indicator (tintIndex 1)",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "north": { "texture": "#indicator", "tintindex": 1 },
+        "south": { "texture": "#indicator", "tintindex": 1 },
+        "east":  { "texture": "#indicator", "tintindex": 1 },
+        "west":  { "texture": "#indicator", "tintindex": 1 },
+        "up":    { "texture": "#indicator", "tintindex": 1 },
+        "down":  { "texture": "#indicator", "tintindex": 1 }
+      }
+    },
+    {
+      "comment": "Outer shell — machine_pulser texture with transparent indicator windows",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#pulser" },
+        "south": { "texture": "#pulser" },
+        "east":  { "texture": "#pulser" },
+        "west":  { "texture": "#pulser" },
+        "up":    { "texture": "#pulser" },
+        "down":  { "texture": "#pulser" }
+      }
+    }
+  ]
+}

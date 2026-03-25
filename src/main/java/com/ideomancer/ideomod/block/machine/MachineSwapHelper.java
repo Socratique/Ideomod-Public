@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.registry.ModBlocks;
+import com.ideomancer.ideomod.registry.ModTags;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
@@ -77,9 +78,11 @@ public final class MachineSwapHelper {
         // Vanilla items (above) are fine — they exist at construction time.
         // Our own items don't exist yet. Registered lazily via ensureBraceMapping().
 
+        // Pulser: tag-based (any button item) — handled via tag fallback
+        //         in getSpecializationBlock(). Reverse mapping in ensureBlockToItem().
+
         // Future specializations:
         // itemToBlock.put(Items.FURNACE,         () -> ModBlocks.MACHINE_ENGINE.get());
-        // Pulser: tag-based (any button item) — needs special handling
         // Grabber: slime/honey block items — needs special handling
     }
 
@@ -115,7 +118,14 @@ public final class MachineSwapHelper {
     public static Block getSpecializationBlock(net.minecraft.world.item.Item item) {
         ensureBraceMapping();
         RegistrySupplier supplier = itemToBlock.get(item);
-        return supplier != null ? supplier.get() : null;
+        if (supplier != null) return supplier.get();
+
+        // Tag-based fallback: any button item -> Machine Pulser
+        if (item.builtInRegistryHolder().is(ModTags.Items.PULSER_ITEMS)) {
+            return ModBlocks.MACHINE_PULSER.get();
+        }
+
+        return null;
     }
 
     public static ItemStack getSpecializationItem(Block block) {
@@ -136,6 +146,8 @@ public final class MachineSwapHelper {
         for (Map.Entry<net.minecraft.world.item.Item, RegistrySupplier> entry : itemToBlock.entrySet()) {
             blockToItem.put(entry.getValue().get(), entry.getKey());
         }
+        // Pulser: tag-based mapping uses stone_button as canonical reverse item
+        blockToItem.put(ModBlocks.MACHINE_PULSER.get(), Items.STONE_BUTTON);
     }
 
     // ========================================================================

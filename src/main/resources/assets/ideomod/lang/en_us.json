@@ -29,5 +29,6 @@
   "block.ideomod.machine_repeater": "Machine Repeater",
   "block.ideomod.machine_toggle": "Machine Toggle",
   "block.ideomod.machine_transformer": "Machine Transformer",
-  "block.ideomod.machine_timer": "Machine Timer"
+  "block.ideomod.machine_timer": "Machine Timer",
+  "block.ideomod.machine_pulser": "Machine Pulser"
 }

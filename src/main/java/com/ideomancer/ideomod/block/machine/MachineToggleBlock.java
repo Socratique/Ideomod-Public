@@ -15,6 +15,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.EnumProperty;
+import net.minecraft.world.ticks.TickPriority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -215,7 +216,7 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                     if (machineBE.isInputWasLow()) {
                         // Armed and signal returned → schedule toggle-off.
                         if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                            level.scheduleTick(pos, this, 2);
+                            level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                         }
                     }
                 }
@@ -240,7 +241,7 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                 // Genuine rising edge — schedule turn on.
                 machineBE.setInputFace(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                    level.scheduleTick(pos, this, 2);
+                    level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                 }
             } else if (bestSignal <= 0) {
                 if (machineBE.getInputFace() != null && !machineBE.isInputWasLow()) {

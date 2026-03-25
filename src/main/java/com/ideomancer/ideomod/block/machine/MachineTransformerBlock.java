@@ -14,6 +14,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
+import net.minecraft.world.ticks.TickPriority;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -147,7 +148,7 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
                 if (inputSignal <= 0) {
                     // Input face has lost signal — schedule tick to turn off.
                     if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                        level.scheduleTick(pos, this, 2); // 1 redstone tick = 2 game ticks
+                        level.scheduleTick(pos, this, 2, TickPriority.HIGH); // 1 redstone tick = 2 game ticks
                     }
                 }
             }
@@ -164,7 +165,7 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
             if (bestSignal > 0) {
                 // Found a signal — schedule tick to turn on.
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
-                    level.scheduleTick(pos, this, 2); // 1 redstone tick = 2 game ticks
+                    level.scheduleTick(pos, this, 2, TickPriority.HIGH); // 1 redstone tick = 2 game ticks
                 }
             }
         }

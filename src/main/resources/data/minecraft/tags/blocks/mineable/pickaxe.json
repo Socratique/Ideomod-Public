@@ -22,6 +22,7 @@
     "ideomod:machine_repeater",
     "ideomod:machine_toggle",
     "ideomod:machine_transformer",
-    "ideomod:machine_timer"
+    "ideomod:machine_timer",
+    "ideomod:machine_pulser"
   ]
 }

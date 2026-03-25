@@ -17,6 +17,8 @@ import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -67,6 +69,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
     private static final String TAG_TIMER_DURATION = "TimerDuration";
     private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
+    private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
 
     /**
      * The face from which this block receives redstone signal.
@@ -129,6 +132,16 @@ public class MachineFrameBlockEntity extends BlockEntity
      * Reset to 0 on every specialization swap.
      */
     private int timerTicksRemaining = 0;
+
+    /**
+     * Countdown ticks remaining for the Machine Pulser. When the pulser
+     * activates, this is set from config (IdeomodConfig.getPulserPulseDuration())
+     * and decrements each tick. When it reaches 0, the pulser turns off.
+     * No per-block-entity duration field needed — reads from config each time.
+     *
+     * Reset to 0 on every specialization swap.
+     */
+    private int pulserTicksRemaining = 0;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -299,6 +312,25 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
+    // PULSER COUNTDOWN (for Machine Pulser)
+    // ========================================================================
+
+    /**
+     * Get the remaining countdown ticks for the Pulser. 0 = not pulsing.
+     */
+    public int getPulserTicksRemaining() {
+        return this.pulserTicksRemaining;
+    }
+
+    /**
+     * Set the remaining countdown ticks for the Pulser.
+     */
+    public void setPulserTicksRemaining(int ticks) {
+        this.pulserTicksRemaining = Math.max(0, ticks);
+        this.setChanged();
+    }
+
+    // ========================================================================
     // ARM ANIMATION ACCESSORS
     // ========================================================================
 
@@ -360,6 +392,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.timerTicksRemaining > 0) {
             tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
         }
+        if (this.pulserTicksRemaining > 0) {
+            tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
+        }
     }
 
     @Override
@@ -393,6 +428,11 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.timerTicksRemaining = 0;
         }
+        if (tag.contains(TAG_PULSER_TICKS_REMAINING)) {
+            this.pulserTicksRemaining = Math.max(0, tag.getInt(TAG_PULSER_TICKS_REMAINING));
+        } else {
+            this.pulserTicksRemaining = 0;
+        }
     }
 
     // ========================================================================
@@ -425,6 +465,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.timerTicksRemaining > 0) {
             tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
+        }
+        if (this.pulserTicksRemaining > 0) {
+            tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
         }
         return tag;
     }
@@ -463,6 +506,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.timerTicksRemaining > 0) {
             tag.putInt(TAG_TIMER_TICKS_REMAINING, this.timerTicksRemaining);
         }
+        if (this.pulserTicksRemaining > 0) {
+            tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
+        }
         return tag;
     }
 
@@ -496,7 +542,29 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.timerTicksRemaining = 0;
         }
+        if (tag.contains(TAG_PULSER_TICKS_REMAINING)) {
+            this.pulserTicksRemaining = Math.max(0, tag.getInt(TAG_PULSER_TICKS_REMAINING));
+        } else {
+            this.pulserTicksRemaining = 0;
+        }
         this.setChanged();
+    }
+
+    @Override
+    public void onMovementRestored(Level level, BlockPos pos) {
+        // Scheduled ticks are lost during piston movement. If the block at
+        // this position is a redstone machine that uses tick-based processing
+        // (Repeater, Transformer, Toggle, Timer, Pulser), schedule a tick so
+        // it can resume its countdown or re-evaluate its power state.
+        if (level instanceof ServerLevel serverLevel) {
+            BlockState state = level.getBlockState(pos);
+            Block block = state.getBlock();
+            if (block instanceof AbstractMachineBlock) {
+                if (!serverLevel.getBlockTicks().willTickThisTick(pos, block)) {
+                    serverLevel.scheduleTick(pos, block, 1);
+                }
+            }
+        }
     }
 
     // ========================================================================
@@ -576,6 +644,8 @@ public class MachineFrameBlockEntity extends BlockEntity
         this.timerDuration = (defaultIdx >= 0 && defaultIdx < durations.length)
                 ? durations[defaultIdx] : 20;
         this.timerTicksRemaining = 0;
+        // Reset pulser countdown
+        this.pulserTicksRemaining = 0;
 
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));

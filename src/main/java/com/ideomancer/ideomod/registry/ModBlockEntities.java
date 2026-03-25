@@ -43,7 +43,8 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_REPEATER.get(),
                             ModBlocks.MACHINE_TOGGLE.get(),
                             ModBlocks.MACHINE_TRANSFORMER.get(),
-                            ModBlocks.MACHINE_TIMER.get()
+                            ModBlocks.MACHINE_TIMER.get(),
+                            ModBlocks.MACHINE_PULSER.get()
                     ).build(null));
 
     /**

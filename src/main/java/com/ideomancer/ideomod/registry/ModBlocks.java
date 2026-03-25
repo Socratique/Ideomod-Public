@@ -15,6 +15,7 @@ import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonHeadBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
 import com.ideomancer.ideomod.block.machine.MachineStickyPistonBlock;
+import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
@@ -251,6 +252,18 @@ public class ModBlocks {
     // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_TIMER = BLOCKS.register("machine_timer",
             () -> new MachineTimerBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Pulser: fixed-duration pulse generator. Rising-edge triggered.
+    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
+    public static final RegistryObject<Block> MACHINE_PULSER = BLOCKS.register("machine_pulser",
+            () -> new MachinePulserBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
