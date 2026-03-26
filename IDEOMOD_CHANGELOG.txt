@@ -1,5 +1,44 @@
 # Ideomod Changelog
 
+## [2026-03-25] Machine Toggle Piston Movement Bugfix -- Latch State Preservation
+
+Fixed a bug where moving a powered Machine Toggle via piston would reset it to OFF.
+The Toggle is a latch (holds ON without continuous input), but the post-movement tick
+restoration from [2026-03-24] unconditionally scheduled a re-evaluation tick for ALL
+machine blocks. The Toggle's tick() treats any tick on a POWERED toggle as a "toggle OFF"
+event, so the scheduled tick immediately undid the latch state.
+
+### Root Cause
+
+onMovementRestored() scheduled a tick for every AbstractMachineBlock after piston movement.
+For signal-following blocks (Repeater, Transformer, Timer, Pulser) this is correct -- they
+re-evaluate their input and settle into the right state. But the Toggle is edge-triggered:
+its tick() method's POWERED branch unconditionally sets POWERED=false (it's the "toggle OFF"
+handler, only meant to fire in response to a rising edge detected by neighborChanged).
+
+Vanilla preserves the original blockstate (including POWERED=true) through the
+MovingPistonBlockEntity's movedState field. So the blockstate was correct after placement,
+but the tick immediately turned it off again.
+
+### Changes
+
+**MachineFrameBlockEntity.java**:
+- New `movementPowered` transient field + `TAG_MOVEMENT_POWERED` constant
+- `saveMovementData()` now captures the block's powered state via `getRedstoneOutput() > 0`
+- `loadMovementData()` restores `movementPowered` from the tag
+- `onMovementRestored()`:
+  - For powered Toggles: restores POWERED=true + INPUT_FACE blockstate as safety net,
+    and SKIPS scheduling a tick (latch holds -- no re-evaluation needed)
+  - For all other machine blocks: schedules tick as before
+
+### Why Only Toggle Is Affected
+
+The other 4 tick-based machine blocks (Repeater, Transformer, Timer, Pulser) are all
+signal-following -- they're ON when input signal is present, OFF when it's gone. Their
+tick() methods correctly re-evaluate the current signal and settle into the right state.
+The Toggle is the only latch in the Machine Family: its ON state persists independently
+of input signal. The tick's POWERED branch is a "toggle OFF" handler, not a re-evaluation.
+
 ## [2026-03-24] Machine Pulser Specialization + Observer Tick Fix + Piston Movement Tick Restoration
 
 New Machine Family specialization: Machine Pulser. Rising-edge-triggered fixed-duration

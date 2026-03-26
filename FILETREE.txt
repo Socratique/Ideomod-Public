@@ -266,7 +266,8 @@
 |     |        |  +-- oddstone_attractor_side.png
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
-|     |        |  \\-- oddstone_repulser_side.png
+|     |        |  +-- oddstone_repulser_side.png
+|     |        |  \\-- oddstone1.png
 |     |        \\-- gui
 |     |           +-- ideomod_gui.png
 |     |           \\-- ideomod_numbered_buttons.png

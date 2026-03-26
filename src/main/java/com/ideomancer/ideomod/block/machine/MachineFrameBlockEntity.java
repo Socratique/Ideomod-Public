@@ -70,6 +70,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_TIMER_DURATION = "TimerDuration";
     private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
     private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
+    private static final String TAG_MOVEMENT_POWERED = "MovementPowered";
 
     /**
      * The face from which this block receives redstone signal.
@@ -142,6 +143,16 @@ public class MachineFrameBlockEntity extends BlockEntity
      * Reset to 0 on every specialization swap.
      */
     private int pulserTicksRemaining = 0;
+
+    /**
+     * Transient field used only during piston movement to preserve the
+     * POWERED blockstate across the move. Saved in saveMovementData(),
+     * restored in loadMovementData(), and applied to the blockstate in
+     * onMovementRestored(). Critical for the Toggle (a latch that holds
+     * ON without continuous input) — without this, movement resets the
+     * default blockstate to POWERED=false.
+     */
+    private boolean movementPowered = false;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -509,6 +520,16 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.pulserTicksRemaining > 0) {
             tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
         }
+        // Save the POWERED blockstate so it survives piston movement.
+        // Critical for the Toggle (a latch), but saved generically for all
+        // machine blocks so none of them flicker OFF during movement.
+        if (this.level != null) {
+            BlockState currentState = this.level.getBlockState(this.getBlockPos());
+            if (currentState.getBlock() instanceof AbstractMachineBlock) {
+                tag.putBoolean(TAG_MOVEMENT_POWERED,
+                        ((AbstractMachineBlock) currentState.getBlock()).getRedstoneOutput(currentState) > 0);
+            }
+        }
         return tag;
     }
 
@@ -547,6 +568,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.pulserTicksRemaining = 0;
         }
+        this.movementPowered = tag.getBoolean(TAG_MOVEMENT_POWERED);
         this.setChanged();
     }
 
@@ -560,7 +582,30 @@ public class MachineFrameBlockEntity extends BlockEntity
             BlockState state = level.getBlockState(pos);
             Block block = state.getBlock();
             if (block instanceof AbstractMachineBlock) {
-                if (!serverLevel.getBlockTicks().willTickThisTick(pos, block)) {
+                boolean skipTick = false;
+
+                // Restore POWERED blockstate for the Toggle (a latch).
+                // Vanilla preserves the original blockstate through movedState,
+                // so POWERED=true should already be set. We also restore from
+                // movementPowered as a safety net. Critically, we must NOT
+                // schedule a tick for a powered toggle — tick() treats any
+                // tick on a POWERED toggle as a "toggle OFF" event, which
+                // would immediately undo the latch state.
+                if (block instanceof MachineToggleBlock && this.movementPowered) {
+                    MachineToggleBlock.InputFace inputFaceEnum = this.inputFace != null
+                            ? MachineToggleBlock.InputFace.fromDirection(this.inputFace)
+                            : MachineToggleBlock.InputFace.NONE;
+                    BlockState restoredState = state
+                            .setValue(MachineToggleBlock.POWERED, true)
+                            .setValue(MachineToggleBlock.INPUT_FACE, inputFaceEnum);
+                    if (!restoredState.equals(state)) {
+                        level.setBlock(pos, restoredState, 2); // UPDATE_CLIENTS only
+                    }
+                    skipTick = true; // latch holds — no re-evaluation needed
+                }
+                this.movementPowered = false; // consumed
+
+                if (!skipTick && !serverLevel.getBlockTicks().willTickThisTick(pos, block)) {
                     serverLevel.scheduleTick(pos, block, 1);
                 }
             }
