@@ -337,6 +337,8 @@
     "minecraft:target",
 
     "ideomod:oddstone",
+    "ideomod:cobbled_oddstone",
+    "ideomod:oddstone_bricks",
     "ideomod:odd_slime"
   ]
 }

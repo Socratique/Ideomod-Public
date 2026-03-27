@@ -203,6 +203,17 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `ideoblock` | Block | Basic decorative stone. Hardness 1.5/6.0, pickaxe. |
 | `drill` | DrillBlock | DirectionalBlock. FACING + POWERED. Hardness 3.5/6.0, pickaxe. **ON HOLD.** |
 | `oddstone` | OddstoneBlock | Hardness 2.0/6.0, pickaxe, stone sound. `isRedstoneConductor=false`. |
+| `cobbled_oddstone` | CobbledOddstoneBlock | Hardness 2.0/6.0, pickaxe, stone sound. `isRedstoneConductor=false`. Full block, sympathetic channel "cobbled_oddstone". |
+| `oddstone_bricks` | OddstoneBricksBlock | Hardness 2.0/6.0, pickaxe, stone sound. `isRedstoneConductor=false`. Full block, sympathetic channel "oddstone_bricks". |
+| `oddstone_wall` | SympatheticWallBlock | Wall variant, sympathetic channel "oddstone_wall". `isStickyBlock=true`, `canStickTo=false`. |
+| `oddstone_stairs` | SympatheticStairBlock | Stair variant, sympathetic channel "oddstone_stairs". `isStickyBlock=true`, `canStickTo=false`. |
+| `oddstone_slab` | SympatheticSlabBlock | Slab variant, sympathetic channel "oddstone_slab". `isStickyBlock=true`, `canStickTo=false`. |
+| `cobbled_oddstone_wall` | SympatheticWallBlock | Wall variant, sympathetic channel "cobbled_oddstone_wall". `isStickyBlock=true`, `canStickTo=false`. |
+| `cobbled_oddstone_stairs` | SympatheticStairBlock | Stair variant, sympathetic channel "cobbled_oddstone_stairs". `isStickyBlock=true`, `canStickTo=false`. |
+| `cobbled_oddstone_slab` | SympatheticSlabBlock | Slab variant, sympathetic channel "cobbled_oddstone_slab". `isStickyBlock=true`, `canStickTo=false`. |
+| `oddstone_brick_wall` | SympatheticWallBlock | Wall variant, sympathetic channel "oddstone_brick_wall". `isStickyBlock=true`, `canStickTo=false`. |
+| `oddstone_brick_stairs` | SympatheticStairBlock | Stair variant, sympathetic channel "oddstone_brick_stairs". `isStickyBlock=true`, `canStickTo=false`. |
+| `oddstone_brick_slab` | SympatheticSlabBlock | Slab variant, sympathetic channel "oddstone_brick_slab". `isStickyBlock=true`, `canStickTo=false`. |
 | `machine_block` | MachineFrameBlock | Block entity. Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL` (movable by pistons via PistonBaseBlockMixin). |
 | `odd_slime` | OddSlimeBlock | Friction 0.8F (slippery), slime sound, `noOcclusion()`. |
 | `oddstone_portal` | OddstonePortalBlock | `noCollission()`, hardness -1 (indestructible), light 11, `PushReaction.BLOCK`, glass sound, `noLootTable()`. |
@@ -228,7 +239,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 ### ModItems (DeferredRegister<Item>)
 
-BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
+BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, cobbled_oddstone, oddstone_bricks, oddstone_wall, oddstone_stairs, oddstone_slab, cobbled_oddstone_wall, cobbled_oddstone_stairs, cobbled_oddstone_slab, oddstone_brick_wall, oddstone_brick_stairs, oddstone_brick_slab, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
 BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
@@ -284,6 +295,8 @@ Also in `StickinessRules.java`. Each rule is a `BiPredicate<BlockState, Directio
 
 The `StickyType` enum (in `block/movement/StickyType.java`) serves as the single source of truth for classifying sticky blocks. Values: NONE, SLIME, HONEY, ODD_SLIME, ODDSTONE. This enum centralizes logic that was previously scattered across multiple block classes and rules. Methods like `StickyType.of(BlockState)`, `StickyType.canGrab(BlockState)`, and `StickyType.canBeGrabbedBy()` encapsulate stickiness behavior, reducing code duplication and making rule logic more maintainable.
 
+**ODDSTONE grab changes**: `StickyType.ODDSTONE.canGrab()` now returns true ONLY for SLIME, HONEY, ODD_SLIME -- NOT for ODDSTONE targets. All oddstone-to-oddstone connections resolve through sympathetic movement channels, not direct stickiness.
+
 ### The Golden Rule
 
 > `canStickTo` = "CAN these types interact?" (permissive, both sides must agree)
@@ -335,7 +348,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 ### canStickTo Implementations (Layer 1)
 
-**OddstoneBlock**: Returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock, and FramedBlock with INNER_STICKY matching any of SLIME/HONEY/ODD_SLIME/ODDSTONE. Now uses `StickyType.of()` to classify blocks and `StickyType.ODDSTONE.canGrab()` for grab decisions. False for everything else (including MachineBlock, Frame Family without sticky inner).
+**OddstoneBlock**: Now uses `StickyType.ODDSTONE.canGrab()` which returns true only for SLIME, HONEY, ODD_SLIME (not ODDSTONE). Also returns true for FramedBlock with INNER_STICKY matching any of SLIME/HONEY/ODD_SLIME/ODDSTONE. Oddstone-to-oddstone connections no longer happen via direct stickiness -- all resolve through sympathetic channels. False for everything else (including MachineBlock, Frame Family without sticky inner, OddstoneBlock targets).
 
 **Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All implement IMachineFamily with a MachineType. `canStickTo()` delegates to `IMachineFamily.canMachineFamilyStickTo(myType, other)`. Machine Frame (MachineType.FRAME) returns true for ANY Machine Family block. Specializations return true only for same-type + FRAME. All types return true for Frame Family (via `FrameActivation.isActive(other)`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. Inter-specialization isolation (Track doesn't stick to Trolley) handled at Layer 1, not by grab immunity.
 
@@ -439,13 +452,22 @@ Second-chance logic (`ideomod$wouldFrameStickinessAllow`): when directional gati
 @Inject(method = "addBranchingBlocks", at = @At("TAIL"), cancellable = true)
 ```
 
-After vanilla finishes checking all distance-1 sticky neighbors, this extends the search for Oddstone blocks. Delegates to `MovementScanHelper.scanSympathetic()` for the actual scanning. For each Oddstone already in `toPush`, scans along all 6 axis directions up to `sympatheticRadius` (configurable, default 5). If another Oddstone is found within range and isn't already in the push list, calls `addBlockLine` to add it.
+After vanilla finishes checking all distance-1 sticky neighbors, extends the search for sympathetic blocks. Blocks declare their channel via the `ISympathetic` interface's `getSympatheticChannel()` method. Delegates to `MovementScanHelper.scanAllChannels()` which groups blocks by channel and scans each independently.
 
-Key details:
+**Channel system**: 12 channels total, one for each full block type + shape variant:
+- Oddstone family: `oddstone` (full), `oddstone_wall`, `oddstone_stairs`, `oddstone_slab`
+- Cobbled Oddstone family: `cobbled_oddstone` (full), `cobbled_oddstone_wall`, `cobbled_oddstone_stairs`, `cobbled_oddstone_slab`
+- Oddstone Bricks family: `oddstone_bricks` (full), `oddstone_brick_wall`, `oddstone_brick_stairs`, `oddstone_brick_slab`
+
+Blocks only link sympathetically with others on the SAME channel. This allows multiple independent sympathetic networks in the same area using different block types.
+
+**Key details**:
+- Groups toPush entries by channel (via `ISympathetic.getSympatheticChannel()` or FramedBlock inner block check)
+- For each channel group, scans along all 6 axis directions up to `sympatheticRadius` (configurable, default 5) at distance 1, finding adjacent same-channel blocks
+- MovementScanHelper also checks FramedBlock inner blocks for ISympathetic interface
+- Wall/stair/slab blocks set `isStickyBlock()=true` to trigger vanilla's `addBranchingBlocks` call + `canStickTo()=false` to prevent direct-contact grabbing (only sympathetic search via mixin at TAIL applies)
 - Takes a snapshot of `toPush` before iterating (avoids ConcurrentModificationException as new blocks get added)
-- Only checks blocks matching `ModBlocks.ODDSTONE` -- other block types don't participate
-- Scans each direction independently, stops at first Oddstone found per direction (finds nearest)
-- If any new blocks were added, sets return value to `true`, which tells the resolver's main loop in `resolve()` to re-run branching. This enables chaining: Oddstone A finds Oddstone B, next iteration B finds Oddstone C, etc.
+- If any new blocks were added, sets return value to `true`, enabling chaining: Block A finds Block B, next iteration B finds Block C, etc.
 - All sympathetic blocks count toward the vanilla 12-block push limit
 
 ### Feature 4: Ranged Piston startPos Redirect (HEAD of resolve)
@@ -1126,8 +1148,8 @@ Zero overhead when nobody holds it (just a player list scan).
 |---------|---------------|
 | **Mob avoidance** | `isPathfindable()` returns false. `getBlockPathType()` returns `DAMAGE_OTHER` for affected mobs (checked against JSON config list). `getAdjacentBlockPathType()` returns `DANGER_OTHER` for the 1-block avoidance radius. |
 | **Redstone insulation** | `isRedstoneConductor=false` set in ModBlocks properties lambda. Acts like glass for redstone. |
-| **Sympathetic movement** | Handled entirely by PistonStructureResolverMixin Feature 3. Block itself has no sympathetic code. |
-| **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` returns true for SlimeBlock, HoneyBlock, OddSlimeBlock, OddstoneBlock. Uses `StickyType.of()` for classification and `StickyType.ODDSTONE.canGrab()` for grab decisions. Reverse grabs blocked by immunity rules 1-3. |
+| **Sympathetic movement** | Handled by PistonStructureResolverMixin Feature 3. Declares channel "oddstone" via `ISympathetic` interface. Block itself has no sympathetic code. Blocks only link with same-channel blocks. |
+| **One-way stickiness** | `isStickyBlock()` returns true. `canStickTo()` now returns true only for SlimeBlock, HoneyBlock, OddSlimeBlock (NOT OddstoneBlock). Uses `StickyType.ODDSTONE.canGrab()` which excludes ODDSTONE targets. Oddstone-to-oddstone grabs disabled -- all such connections resolve through sympathetic channels. Reverse grabs blocked by immunity rules 1-3. |
 | **Portal frame** | `neighborChanged()` delegates to `OddstonePortalHandler.onNeighborChanged()`. `onRemove()` delegates to `OddstonePortalHandler.onBlockRemoved()`. |
 
 ### AbstractMachineBlock -- Shared Base Class
@@ -1877,7 +1899,7 @@ Blocks that should be immovable when wrapped in a FramedBlock. Default: obsidian
 
 `data/ideomod/tags/blocks/frameable_blocks.json`:
 
-Whitelist of blocks that can be wrapped in frames. Contains approximately 310 vanilla blocks plus Ideomod blocks (oddstone, odd_slime). Extensible by datapacks or other mods. Used by FrameabilityHelper to determine valid wrapping targets.
+Whitelist of blocks that can be wrapped in frames. Contains approximately 310 vanilla blocks plus Ideomod blocks (oddstone, odd_slime, cobbled_oddstone, oddstone_bricks). Extensible by datapacks or other mods. Used by FrameabilityHelper to determine valid wrapping targets.
 
 ---
 

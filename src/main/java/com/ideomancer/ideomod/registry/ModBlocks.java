@@ -21,7 +21,12 @@ import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachineTrolleyBlock;
+import com.ideomancer.ideomod.block.CobbledOddstoneBlock;
+import com.ideomancer.ideomod.block.OddstoneBricksBlock;
 import com.ideomancer.ideomod.block.OddSlimeBlock;
+import com.ideomancer.ideomod.block.SympatheticWallBlock;
+import com.ideomancer.ideomod.block.SympatheticStairBlock;
+import com.ideomancer.ideomod.block.SympatheticSlabBlock;
 import com.ideomancer.ideomod.block.piston.OddstoneAttractorBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.portal.OddstonePortalBlock;
@@ -85,6 +90,109 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
                     .isRedstoneConductor((state, level, pos) -> false)
+            ));
+
+    // ========================================================================
+    // ODDSTONE VARIANTS (Cobbled, Bricks) + Walls/Stairs/Slabs
+    // ========================================================================
+
+    public static final RegistryObject<Block> COBBLED_ODDSTONE = BLOCKS.register("cobbled_oddstone",
+            () -> new CobbledOddstoneBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
+            ));
+
+    public static final RegistryObject<Block> ODDSTONE_BRICKS = BLOCKS.register("oddstone_bricks",
+            () -> new OddstoneBricksBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
+            ));
+
+    // --- Oddstone walls/stairs/slabs (each shape = own isolated channel) ---
+    public static final RegistryObject<Block> ODDSTONE_WALL = BLOCKS.register("oddstone_wall",
+            () -> new SympatheticWallBlock("oddstone_wall", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> ODDSTONE_STAIRS = BLOCKS.register("oddstone_stairs",
+            () -> new SympatheticStairBlock("oddstone_stairs",
+                    () -> ODDSTONE.get().defaultBlockState(),
+                    BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.COLOR_PURPLE)
+                            .strength(2.0f, 6.0f)
+                            .requiresCorrectToolForDrops()
+                            .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> ODDSTONE_SLAB = BLOCKS.register("oddstone_slab",
+            () -> new SympatheticSlabBlock("oddstone_slab", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    // --- Cobbled Oddstone walls/stairs/slabs (each shape = own isolated channel) ---
+    public static final RegistryObject<Block> COBBLED_ODDSTONE_WALL = BLOCKS.register("cobbled_oddstone_wall",
+            () -> new SympatheticWallBlock("cobbled_oddstone_wall", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> COBBLED_ODDSTONE_STAIRS = BLOCKS.register("cobbled_oddstone_stairs",
+            () -> new SympatheticStairBlock("cobbled_oddstone_stairs",
+                    () -> COBBLED_ODDSTONE.get().defaultBlockState(),
+                    BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.COLOR_PURPLE)
+                            .strength(2.0f, 6.0f)
+                            .requiresCorrectToolForDrops()
+                            .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> COBBLED_ODDSTONE_SLAB = BLOCKS.register("cobbled_oddstone_slab",
+            () -> new SympatheticSlabBlock("cobbled_oddstone_slab", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    // --- Oddstone Brick walls/stairs/slabs (each shape = own isolated channel) ---
+    public static final RegistryObject<Block> ODDSTONE_BRICK_WALL = BLOCKS.register("oddstone_brick_wall",
+            () -> new SympatheticWallBlock("oddstone_brick_wall", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> ODDSTONE_BRICK_STAIRS = BLOCKS.register("oddstone_brick_stairs",
+            () -> new SympatheticStairBlock("oddstone_brick_stairs",
+                    () -> ODDSTONE_BRICKS.get().defaultBlockState(),
+                    BlockBehaviour.Properties.of()
+                            .mapColor(MapColor.COLOR_PURPLE)
+                            .strength(2.0f, 6.0f)
+                            .requiresCorrectToolForDrops()
+                            .sound(SoundType.STONE)
+            ));
+
+    public static final RegistryObject<Block> ODDSTONE_BRICK_SLAB = BLOCKS.register("oddstone_brick_slab",
+            () -> new SympatheticSlabBlock("oddstone_brick_slab", BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.COLOR_PURPLE)
+                    .strength(2.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
             ));
 
     // Registry ID remains "machine_block" for world compatibility.

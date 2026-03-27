@@ -30,5 +30,16 @@
   "block.ideomod.machine_toggle": "Machine Toggle",
   "block.ideomod.machine_transformer": "Machine Transformer",
   "block.ideomod.machine_timer": "Machine Timer",
-  "block.ideomod.machine_pulser": "Machine Pulser"
+  "block.ideomod.machine_pulser": "Machine Pulser",
+  "block.ideomod.cobbled_oddstone": "Cobbled Oddstone",
+  "block.ideomod.oddstone_bricks": "Oddstone Bricks",
+  "block.ideomod.oddstone_wall": "Oddstone Wall",
+  "block.ideomod.oddstone_stairs": "Oddstone Stairs",
+  "block.ideomod.oddstone_slab": "Oddstone Slab",
+  "block.ideomod.cobbled_oddstone_wall": "Cobbled Oddstone Wall",
+  "block.ideomod.cobbled_oddstone_stairs": "Cobbled Oddstone Stairs",
+  "block.ideomod.cobbled_oddstone_slab": "Cobbled Oddstone Slab",
+  "block.ideomod.oddstone_brick_wall": "Oddstone Brick Wall",
+  "block.ideomod.oddstone_brick_stairs": "Oddstone Brick Stairs",
+  "block.ideomod.oddstone_brick_slab": "Oddstone Brick Slab"
 }

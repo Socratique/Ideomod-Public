@@ -29,6 +29,12 @@ com.ideomancer.ideomod
   |-- block/
   |     |-- OddstoneBlock.java           6-feature core block (see Oddstone section)
   |     |-- OddSlimeBlock.java           Directional slime (sticky only in FACING dir)
+  |     |-- ISympathetic.java            Interface: getSympatheticChannel(). Channel marker.
+  |     |-- CobbledOddstoneBlock.java    Cobbled oddstone full block. Channel "cobbled_oddstone".
+  |     |-- OddstoneBricksBlock.java     Oddstone bricks full block. Channel "oddstone_bricks".
+  |     |-- SympatheticWallBlock.java    WallBlock + ISympathetic. isStickyBlock=true, canStickTo=false.
+  |     |-- SympatheticStairBlock.java   StairBlock + ISympathetic. isStickyBlock=true, canStickTo=false.
+  |     |-- SympatheticSlabBlock.java    SlabBlock + ISympathetic. isStickyBlock=true, canStickTo=false.
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- frame/
   |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker.
@@ -119,10 +125,10 @@ com.ideomancer.ideomod
   |     |     |-- StickyType.java              Enum: NONE, SLIME, HONEY, ODD_SLIME, ODDSTONE.
   |     |     |                                Single source of truth for sticky classification.
   |     |     |                                fromBlock(), of(), isExcludedFrom(), canGrab().
-  |     |     \-- MovementScanHelper.java      Shared algorithms: isOddstoneOrFramedOddstone(),
-  |     |                                      scanSympathetic(), scanStickyGroup(). Single source
-  |     |                                      of truth for sticky group scanning. Vanilla metal
-  |     |                                      awareness via isVanillaMetalConnection().
+  |     |     \-- MovementScanHelper.java      Shared algorithms: getSympatheticChannel(),
+  |     |                                      scanSympatheticChannel(), scanAllChannels(),
+  |     |                                      scanStickyGroup(). Channel-aware sympathetic
+  |     |                                      scanning. Vanilla metal via isVanillaMetalConnection().
   |     |-- piston/
   |     |     |-- AbstractRangedPistonBlock.java  Shared base for Repulser/Attractor variants
   |     |     |-- OddstoneRepulserBlock.java   Pushes Oddstone at range (extends Abstract)
@@ -331,7 +337,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 1. **Mob avoidance**: `isPathfindable=false` + `BlockPathTypes.DAMAGE_OTHER`. JSON config per-mob whitelist.
 2. **Redstone insulation**: `isRedstoneConductor=false` in properties.
 3. **Sympathetic movement**: Handled by PistonStructureResolverMixin. BFS within configurable radius (default 5). Chains count toward 12-block limit.
-4. **One-way stickiness**: Grabs all slime types (real+framed) + other Oddstone (real+framed). Cannot be grabbed back (grab immunity rules). canStickTo recognizes FramedBlock targets via INNER_STICKY check.
+4. **One-way stickiness**: Grabs all slime types (real+framed) via `StickyType.ODDSTONE.canGrab()`, which returns true only for SLIME, HONEY, ODD_SLIME. Cannot grab other Oddstone blocks (real or framed) -- all oddstone-to-oddstone connections resolve purely through sympathetic movement channels. Cannot be grabbed back (grab immunity rules). canStickTo recognizes FramedBlock targets via INNER_STICKY check.
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 6. **Pull immunity**: Cannot be directly pulled by sticky pistons. PistonBaseBlockMixin position-specific check. Oddstone dragged by own stickiness (e.g., stuck to slime being pulled) still moves correctly.
 

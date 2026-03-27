@@ -108,10 +108,12 @@ public class Ideomod {
         // GRAB IMMUNITY RULES (type-based)
         // ================================================================
 
-        // --- Rule 1: Non-Oddstone can't grab Oddstone (real or framed) ---
+        // --- Rule 1: Non-Oddstone can't grab Oddstone (real, variants, or framed) ---
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
-                    boolean targetIsOddstone = target.getBlock() instanceof OddstoneBlock;
+                    boolean targetIsOddstone = target.getBlock() instanceof OddstoneBlock
+                            || target.getBlock() instanceof com.ideomancer.ideomod.block.CobbledOddstoneBlock
+                            || target.getBlock() instanceof com.ideomancer.ideomod.block.OddstoneBricksBlock;
                     boolean targetIsFramedOddstone = StickinessRules.isFramedOddstone(target);
                     if (!targetIsOddstone && !targetIsFramedOddstone) return false;
 

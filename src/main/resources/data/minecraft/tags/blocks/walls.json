@@ -1,0 +1,8 @@
+{
+  "replace": false,
+  "values": [
+    "ideomod:oddstone_wall",
+    "ideomod:cobbled_oddstone_wall",
+    "ideomod:oddstone_brick_wall"
+  ]
+}

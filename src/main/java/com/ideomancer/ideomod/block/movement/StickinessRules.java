@@ -156,6 +156,8 @@ public class StickinessRules {
      */
     public static boolean isOddstoneType(BlockState state) {
         if (state.getBlock() instanceof OddstoneBlock) return true;
+        if (state.getBlock() instanceof com.ideomancer.ideomod.block.CobbledOddstoneBlock) return true;
+        if (state.getBlock() instanceof com.ideomancer.ideomod.block.OddstoneBricksBlock) return true;
         if (state.getBlock() instanceof FramedBlock) {
             return state.getValue(FramedBlock.INNER_STICKY) == FramedBlock.STICKY_ODDSTONE;
         }
@@ -185,15 +187,19 @@ public class StickinessRules {
 
     /**
      * Check if a FramedBlock grabber's INNER_STICKY matches or covers the target type.
-     * "Covers" means: Framed Oddstone (INNER_STICKY=ODDSTONE) covers all sticky types
-     * (since real Oddstone is the universal grabber).
+     * "Covers" means: Framed Oddstone (INNER_STICKY=ODDSTONE) covers slime-family types
+     * (since real Oddstone grabs slime/honey/odd_slime). Note: oddstone-to-oddstone
+     * connections resolve via sympathetic movement, not direct stickiness, but this
+     * method is used for grab immunity carve-outs where canStickTo is the final gate.
      */
     public static boolean hasMatchingInnerSticky(BlockState grabber, StickyType targetType) {
         if (!(grabber.getBlock() instanceof FramedBlock)) return false;
         StickyType grabberType = StickyType.fromInnerStickyValue(
             grabber.getValue(FramedBlock.INNER_STICKY));
         if (grabberType == targetType) return true;
-        // Framed Oddstone covers all sticky types (universal grabber)
+        // Framed Oddstone covers slime-family types (oddstone grabs slime/honey/odd_slime).
+        // Note: canGrab(ODDSTONE) now returns false, so oddstone-to-oddstone
+        // connections are blocked at the canStickTo level even if this returns true.
         if (grabberType == StickyType.ODDSTONE && targetType != StickyType.NONE) return true;
         return false;
     }

@@ -27,7 +27,44 @@ public class ModItems {
     
     public static final RegistryObject<Item> ODDSTONE = ITEMS.register("oddstone",
             () -> new BlockItem(ModBlocks.ODDSTONE.get(), new Item.Properties()));
-    
+
+    // Oddstone variants
+    public static final RegistryObject<Item> COBBLED_ODDSTONE = ITEMS.register("cobbled_oddstone",
+            () -> new BlockItem(ModBlocks.COBBLED_ODDSTONE.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ODDSTONE_BRICKS = ITEMS.register("oddstone_bricks",
+            () -> new BlockItem(ModBlocks.ODDSTONE_BRICKS.get(), new Item.Properties()));
+
+    // Oddstone walls/stairs/slabs
+    public static final RegistryObject<Item> ODDSTONE_WALL = ITEMS.register("oddstone_wall",
+            () -> new BlockItem(ModBlocks.ODDSTONE_WALL.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ODDSTONE_STAIRS = ITEMS.register("oddstone_stairs",
+            () -> new BlockItem(ModBlocks.ODDSTONE_STAIRS.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ODDSTONE_SLAB = ITEMS.register("oddstone_slab",
+            () -> new BlockItem(ModBlocks.ODDSTONE_SLAB.get(), new Item.Properties()));
+
+    // Cobbled Oddstone walls/stairs/slabs
+    public static final RegistryObject<Item> COBBLED_ODDSTONE_WALL = ITEMS.register("cobbled_oddstone_wall",
+            () -> new BlockItem(ModBlocks.COBBLED_ODDSTONE_WALL.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> COBBLED_ODDSTONE_STAIRS = ITEMS.register("cobbled_oddstone_stairs",
+            () -> new BlockItem(ModBlocks.COBBLED_ODDSTONE_STAIRS.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> COBBLED_ODDSTONE_SLAB = ITEMS.register("cobbled_oddstone_slab",
+            () -> new BlockItem(ModBlocks.COBBLED_ODDSTONE_SLAB.get(), new Item.Properties()));
+
+    // Oddstone Brick walls/stairs/slabs
+    public static final RegistryObject<Item> ODDSTONE_BRICK_WALL = ITEMS.register("oddstone_brick_wall",
+            () -> new BlockItem(ModBlocks.ODDSTONE_BRICK_WALL.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ODDSTONE_BRICK_STAIRS = ITEMS.register("oddstone_brick_stairs",
+            () -> new BlockItem(ModBlocks.ODDSTONE_BRICK_STAIRS.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> ODDSTONE_BRICK_SLAB = ITEMS.register("oddstone_brick_slab",
+            () -> new BlockItem(ModBlocks.ODDSTONE_BRICK_SLAB.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
             () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
     

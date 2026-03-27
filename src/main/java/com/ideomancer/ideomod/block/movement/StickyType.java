@@ -45,6 +45,12 @@ public enum StickyType {
         if (block instanceof HoneyBlock) return HONEY;
         if (block instanceof OddSlimeBlock) return ODD_SLIME;
         if (block instanceof OddstoneBlock) return ODDSTONE;
+        // Oddstone variants (CobbledOddstoneBlock, OddstoneBricksBlock) are
+        // standalone blocks (not OddstoneBlock subclasses) with oddstone-type
+        // stickiness. They share the ODDSTONE sticky type for all stickiness
+        // rules; only their sympathetic channel differs.
+        if (block instanceof com.ideomancer.ideomod.block.CobbledOddstoneBlock) return ODDSTONE;
+        if (block instanceof com.ideomancer.ideomod.block.OddstoneBricksBlock) return ODDSTONE;
         return NONE;
     }
 
@@ -98,7 +104,10 @@ public enum StickyType {
      * Check if this type can grab (stick to) a target type.
      * Used for oddstone's selective grabbing behavior.
      *
-     * - ODDSTONE can grab: other ODDSTONE + all slime types (SLIME, HONEY, ODD_SLIME)
+     * - ODDSTONE can grab: all slime types (SLIME, HONEY, ODD_SLIME) but NOT other ODDSTONE.
+     *   Oddstone-to-oddstone connections resolve exclusively via sympathetic movement,
+     *   not direct-contact stickiness. This prevents cross-variant sticking (e.g.
+     *   cobbled oddstone sticking to oddstone bricks when adjacent).
      * - SLIME/HONEY/ODD_SLIME can grab: everything except their excluded types
      * - NONE: cannot grab anything
      */
@@ -106,8 +115,9 @@ public enum StickyType {
         if (this == NONE) return false;
 
         if (this == ODDSTONE) {
-            // Oddstone grabs other oddstone and all slime-family types
-            return target == ODDSTONE || target == SLIME || target == HONEY || target == ODD_SLIME;
+            // Oddstone grabs slime-family types only. Oddstone-to-oddstone
+            // connections are handled by sympathetic movement (ISympathetic channels).
+            return target == SLIME || target == HONEY || target == ODD_SLIME;
         }
 
         // Slime family types: grab everything except excluded types

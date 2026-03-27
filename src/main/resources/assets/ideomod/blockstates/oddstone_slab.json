@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "type=bottom": { "model": "ideomod:block/oddstone_slab" },
+    "type=top": { "model": "ideomod:block/oddstone_slab_top" },
+    "type=double": { "model": "ideomod:block/oddstone" }
+  }
+}

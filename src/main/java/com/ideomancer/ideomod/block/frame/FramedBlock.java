@@ -531,9 +531,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
      *     ✓ Vanilla iron blocks (inner conductor match)
      *     ✓ Vanilla copper blocks (frame material match)
      *     ✓ Machine Family (always)
-     *
-     * DEBUG LOGGING: Temporary logging for bug #10 investigation.
-     * Search for "BUG10" to find all debug lines. Remove once resolved.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {

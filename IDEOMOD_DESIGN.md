@@ -93,8 +93,8 @@
 |---------|--------|-------|
 | Mob avoidance | [DONE] | `isPathfindable=false` + Forge `DAMAGE_OTHER` hook. JSON config for per-mob control. |
 | Redstone insulation | [DONE] | `isRedstoneConductor=false` -- acts like glass for redstone. |
-| Sympathetic movement | [DONE] | Wireless slime -- each face searches for nearest Oddstone within radius (default 5). BFS chaining. Push chains count toward 12-block limit. |
-| One-way stickiness | [DONE] | Oddstone grabs slime; slime does NOT grab Oddstone. Via mixin + StickinessRules. |
+| Sympathetic movement | [DONE] | Channel-aware wireless via ISympathetic interface (channel "oddstone"). Scans adjacent blocks at distance 1 via MovementScanHelper. BFS chaining. Only links to same-channel blocks. Push chains count toward 12-block limit. |
+| One-way stickiness | [DONE] | Oddstone grabs only SLIME, HONEY, ODD_SLIME via StickyType.ODDSTONE.canGrab(). Cannot grab other Oddstone blocks (real or framed) -- those connections resolve purely through sympathetic channels. Slime does NOT grab Oddstone. Via mixin + StickinessRules. |
 | Sticky piston immunity | [DONE] | Sticky pistons cannot directly pull Oddstone. Implemented via PistonBaseBlockMixin position-specific ThreadLocal check -- during retraction, only the block at the exact pull position is checked. Oddstone dragged by its own stickiness (e.g., stuck to slime being pulled) still moves correctly. |
 
 **Known issues:**
@@ -114,20 +114,24 @@
 
 **Entry point:** Cobbled Oddstone is obtained by smelting raw Oddstone in a furnace or mining with Silk Touch. This is the inverse of vanilla stone's relationship with cobblestone. From Cobbled Oddstone, standard stonecutter/crafting recipes produce all other variants.
 
-**Variants (planned):**
-- Cobbled Oddstone (base processed form -- entry to all other variants)
-- Polished Oddstone
-- Oddstone Bricks
-- Chiseled Oddstone
-- Oddstone Stairs, Slabs, Walls
+**Variants (implemented):**
+- Cobbled Oddstone (full block, base processed form -- entry to all other variants)
+- Oddstone Bricks (full block)
+- Oddstone Stairs, Slabs, Walls (wall/stair/slab shapes)
+- Cobbled Oddstone Stairs, Slabs, Walls (wall/stair/slab shapes)
+- Oddstone Brick Stairs, Slabs, Walls (wall/stair/slab shapes)
+
+**Planned variants:**
+- Polished Oddstone, Chiseled Oddstone, and their variants
 - (Others as needed -- cracked bricks, mossy, etc.)
 
 **Features:**
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Full Oddstone behavior | [IDEA] | All variants have mob avoidance, redstone insulation, one-way stickiness, and sympathetic movement. |
-| Per-variant sympathetic frequency | [IDEA] | Each variant type forms its own sympathetic network. Oddstone links to Oddstone. Oddstone Bricks link to Oddstone Bricks. They do NOT cross-link. |
+| Full Oddstone behavior | [DONE] | All implemented variants have mob avoidance, redstone insulation, one-way stickiness (grabs slime only, not other oddstone), and sympathetic movement via ISympathetic interface. |
+| Per-variant sympathetic frequency | [DONE] | Each variant type forms its own sympathetic network via ISympathetic interface. Oddstone links to Oddstone (channel "oddstone"). Oddstone Bricks link only to Oddstone Bricks (channel "oddstone_bricks"). Cobbled Oddstone forms separate network (channel "cobbled_oddstone"). All wall/stair/slab variants have dedicated channels. They do NOT cross-link. |
+| Wall/stair/slab special handling | [DONE] | Wall, stair, and slab blocks implement `isStickyBlock()=true` and `canStickTo()=false` to trigger vanilla's `addBranchingBlocks` mechanism (which then calls the sympathetic search mixin at TAIL). This allows shape variants to participate in sympathetic movement chains. |
 | Crafting between variants | [IDEA] | Standard stonecutter/crafting recipes to convert between forms (like vanilla stone family). |
 | Portal frames | [IDEA] | Can any variant be used in portal frames, or only base Oddstone? TBD -- restricting to base Oddstone keeps portal building simple. |
 
@@ -410,9 +414,9 @@ Reference: FramedBlocks mod uses this same pattern (block entity + BESR for dyna
 | Piston transit rendering | [DONE] | Client-side mixin renders inner block during 2-tick piston animation. Brightest-of-neighbors light sampling blended by progress. FrameTransitInfo carries facing + innerSticky. |
 | Item/inventory rendering | [DONE] | Custom BakedModel (FramedBlockItemModel) reads inner block from NBT, composites inner + frame quads. Items show correct inner texture. Translucent inners render opaque (cosmetic limitation). |
 | Machine-activated stickiness | [DONE] | Uses Frame Activation system (redstone-style batched wipe-and-rebuild (markDirty + end-of-tick processing)). BooleanProperty ACTIVE set by FrameActivation.markDirty(). Implements IFrameBlock interface. isStickyBlock() ACTIVE-gated for frame stickiness. |
-| Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional), Framed Oddstone grabs all slime types + oddstone (universal grabber). Grab immunity Rules 1 and 4 have carve-outs for matching inner types and oddstone universal grabber. |
+| Inner block stickiness | [DONE] | INNER_STICKY-gated. Framed Slime grabs like real slime, Framed Honey like honey, Framed Odd Slime like odd slime (directional), Framed Oddstone grabs all slime types (via StickyType.ODDSTONE.canGrab()) but NOT other oddstone (connects via sympathetic channels). Grab immunity Rules 1 and 4 have carve-outs for matching inner types and oddstone universal grabber. |
 | Material exclusivity | [DONE] | Iron framed sticks to iron framed only. Copper to copper only. Neither type sticks to the other. Both types stick to Machine Blocks when activated. |
-| Base behavior preservation | [DONE] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement. The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
+| Base behavior preservation | [DONE] | Framed blocks retain the functional behavior of their inner block. A Framed Redstone Block still conducts redstone. A Framed Slime Block is still sticky like slime. A Framed Oddstone retains mob avoidance and sympathetic movement (via ISympathetic interface on the inner block check). The frame adds Machine-activated stickiness ON TOP of whatever the inner block already does -- augmentation, not replacement. |
 
 **Stickiness matrix (when activated by Machine Block):**
 
@@ -434,7 +438,7 @@ Framed Blocks use the same FrameActivation system as Frame Blocks. Signal streng
 **Completed improvements (2026-02-22f):**
 
 *[DONE] Inner block stickiness override:*
-Implemented via INNER_STICKY blockstate property (IntegerProperty 0-4: none/slime/honey/odd_slime/oddstone). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). ODDSTONE case mirrors real oddstone: grabs all slime types + oddstone. Grab immunity Rules 1 and 4 have carve-outs: matching inner type, oddstone universal grabber, and active same-material frame connections for framed oddstone targets.
+Implemented via INNER_STICKY blockstate property (IntegerProperty 0-4: none/slime/honey/odd_slime/oddstone). isStickyBlock() returns true when ACTIVE || INNER_STICKY > 0. canStickTo() combines frame rules (ACTIVE-gated) + inner sticky rules (INNER_STICKY-gated with vanilla exclusions). ODDSTONE case mirrors real oddstone: grabs all slime types via StickyType.ODDSTONE.canGrab() but NOT other oddstone (connects via sympathetic channels). Grab immunity Rules 1 and 4 have carve-outs: matching inner type, oddstone universal grabber, and active same-material frame connections for framed oddstone targets.
 
 *[DONE] Facing/orientation properties:*
 FACING (DirectionProperty) set from player look direction on placement. Transferred to inner block's orientation property during rendering via buildInnerState() -- handles DirectionalBlock.FACING (6-way), HorizontalDirectionalBlock.FACING (4-way, vertical clamped to NORTH), RotatedPillarBlock.AXIS (mapped from FACING). Also controls Framed Odd Slime directional stickiness.

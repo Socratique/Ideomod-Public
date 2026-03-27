@@ -23,6 +23,17 @@
     "ideomod:machine_toggle",
     "ideomod:machine_transformer",
     "ideomod:machine_timer",
-    "ideomod:machine_pulser"
+    "ideomod:machine_pulser",
+    "ideomod:cobbled_oddstone",
+    "ideomod:oddstone_bricks",
+    "ideomod:oddstone_wall",
+    "ideomod:oddstone_stairs",
+    "ideomod:oddstone_slab",
+    "ideomod:cobbled_oddstone_wall",
+    "ideomod:cobbled_oddstone_stairs",
+    "ideomod:cobbled_oddstone_slab",
+    "ideomod:oddstone_brick_wall",
+    "ideomod:oddstone_brick_stairs",
+    "ideomod:oddstone_brick_slab"
   ]
 }

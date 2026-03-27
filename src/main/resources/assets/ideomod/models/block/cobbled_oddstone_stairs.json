@@ -1,0 +1,8 @@
+{
+  "parent": "minecraft:block/stairs",
+  "textures": {
+    "bottom": "ideomod:block/cobbled_oddstone",
+    "top": "ideomod:block/cobbled_oddstone",
+    "side": "ideomod:block/cobbled_oddstone"
+  }
+}

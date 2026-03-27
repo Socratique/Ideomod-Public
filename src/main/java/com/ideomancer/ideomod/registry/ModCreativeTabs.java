@@ -54,6 +54,17 @@ public class ModCreativeTabs {
                         output.accept(ModItems.IDEOBLOCK.get());
                         output.accept(ModItems.DRILL.get());
                         output.accept(ModItems.ODDSTONE.get());
+                        output.accept(ModItems.COBBLED_ODDSTONE.get());
+                        output.accept(ModItems.ODDSTONE_BRICKS.get());
+                        output.accept(ModItems.ODDSTONE_WALL.get());
+                        output.accept(ModItems.ODDSTONE_STAIRS.get());
+                        output.accept(ModItems.ODDSTONE_SLAB.get());
+                        output.accept(ModItems.COBBLED_ODDSTONE_WALL.get());
+                        output.accept(ModItems.COBBLED_ODDSTONE_STAIRS.get());
+                        output.accept(ModItems.COBBLED_ODDSTONE_SLAB.get());
+                        output.accept(ModItems.ODDSTONE_BRICK_WALL.get());
+                        output.accept(ModItems.ODDSTONE_BRICK_STAIRS.get());
+                        output.accept(ModItems.ODDSTONE_BRICK_SLAB.get());
                         output.accept(ModItems.MACHINE_BLOCK.get());
                         output.accept(ModItems.ODD_SLIME.get());
                         output.accept(ModItems.ODDSTONE_REPULSER.get());

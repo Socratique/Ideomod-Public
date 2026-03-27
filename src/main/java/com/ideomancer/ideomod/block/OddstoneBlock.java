@@ -26,8 +26,10 @@ import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
  * 3. SYMPATHETIC MOVEMENT: Wireless slime block behavior via piston events.
  *    (Handled by PistonStructureResolver mixin)
  * 4. ONE-WAY STICKINESS: Oddstone grabs ALL slime types (slime, honey, odd slime).
- *    No slime type can grab Oddstone back. Oddstone also sticks to other Oddstone.
- *    Also sticks to Framed versions of all the above (via INNER_STICKY check).
+ *    No slime type can grab Oddstone back. Oddstone does NOT stick to other
+ *    oddstone-family blocks via direct contact — those connections resolve
+ *    exclusively through sympathetic movement (Feature 3).
+ *    Also sticks to Framed versions of slime types (via INNER_STICKY check).
  * 5. PORTAL FRAME: Oddstone blocks form the edges of portal frames. Portals
  *    are activated by throwing an ender pearl into the frame interior (handled
  *    by EnderPearlPortalHandler). Deactivation occurs when the frame structure
@@ -35,10 +37,21 @@ import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
-public class OddstoneBlock extends Block {
+public class OddstoneBlock extends Block implements ISympathetic {
+
+    public static final String CHANNEL = "oddstone";
 
     public OddstoneBlock(Properties properties) {
         super(properties);
+    }
+
+    // ========================================================================
+    // ISympathetic
+    // ========================================================================
+
+    @Override
+    public String getSympatheticChannel() {
+        return CHANNEL;
     }
 
     // ========================================================================
@@ -83,17 +96,17 @@ public class OddstoneBlock extends Block {
     }
 
     /**
-     * Oddstone sticks to ALL slime-type blocks and other Oddstone,
-     * including their Framed variants.
-     * It's the universal grabber — the "parent" of all sticky systems.
+     * Oddstone sticks to ALL slime-type blocks, including their Framed variants.
+     * Oddstone does NOT stick to other oddstone-family blocks via direct contact;
+     * those connections resolve exclusively through sympathetic movement.
      *
      * - Oddstone + Slime: YES (Oddstone grabs slime)
      * - Oddstone + Honey: YES (Oddstone grabs honey)
      * - Oddstone + Odd Slime: YES (Oddstone grabs odd slime)
-     * - Oddstone + Oddstone: YES (for sympathetic movement)
-     * - Oddstone + Framed Slime/Honey/OddSlime/Oddstone: YES (via INNER_STICKY)
+     * - Oddstone + Framed Slime/Honey/OddSlime: YES (via INNER_STICKY)
+     * - Oddstone + Oddstone: NO (resolved via sympathetic movement only)
      * - Oddstone + Machine Block: NO (Machine Block is its own exclusive family)
-     * - Oddstone + anything else: NO (Oddstone only grabs sticky things + itself)
+     * - Oddstone + anything else: NO (Oddstone only grabs sticky things)
      *
      * The reverse (slime/honey/odd slime grabbing Oddstone) is BLOCKED
      * by StickinessRules grab immunity rules registered in Ideomod.java.

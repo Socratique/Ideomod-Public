@@ -1,5 +1,90 @@
 # Ideomod Changelog
 
+<<<<<<< Updated upstream
+=======
+## [2026-03-27] Oddstone Variants + Sympathetic Movement Bugfixes
+
+Added cobbled oddstone and oddstone bricks as new full block variants, plus wall, stair,
+and slab shape variants for all three oddstone types (12 new blocks total). Sympathetic
+movement is now channel-aware with 12 isolated channels. Fixed two bugs: cross-variant
+direct sticking and wall/stair/slab sympathetic movement not working.
+
+### New Blocks
+
+- `cobbled_oddstone` (CobbledOddstoneBlock) -- full block, channel "cobbled_oddstone"
+- `oddstone_bricks` (OddstoneBricksBlock) -- full block, channel "oddstone_bricks"
+- 9 shape variants using SympatheticWallBlock, SympatheticStairBlock, SympatheticSlabBlock:
+  oddstone_wall, oddstone_stairs, oddstone_slab, cobbled_oddstone_wall,
+  cobbled_oddstone_stairs, cobbled_oddstone_slab, oddstone_brick_wall,
+  oddstone_brick_stairs, oddstone_brick_slab
+- Cobbled oddstone and oddstone bricks added to frameable_blocks.json whitelist
+- All wall variants added to `minecraft:walls` block tag for model connections
+
+### New Interface: ISympathetic
+
+`ISympathetic` interface in `block/` with `getSympatheticChannel()` method. Blocks
+implement this to declare which sympathetic movement channel they belong to.
+OddstoneBlock, CobbledOddstoneBlock, OddstoneBricksBlock implement it directly.
+SympatheticWallBlock/StairBlock/SlabBlock implement it with a channel string passed
+at construction. MovementScanHelper.getSympatheticChannel() also checks FramedBlock
+inner blocks for ISympathetic, so framed oddstone participates in sympathetic channels.
+
+### Channel-Aware Sympathetic Movement (Feature 3)
+
+Sympathetic movement now operates on 12 independent channels (3 block families x
+4 shape types). Blocks only link with others on the SAME channel. A pushed oddstone
+wall will pull other oddstone walls within range, but not oddstone bricks or oddstone
+stairs. MovementScanHelper.scanAllChannels() groups toPush by channel and scans each
+independently via scanSympatheticChannel().
+
+### Bug Fix: Oddstone Cross-Variant Direct Sticking
+
+Different oddstone variants (e.g. oddstone and oddstone bricks) were sticking to each
+other when directly adjacent via StickyType.ODDSTONE.canGrab(). Fixed by removing
+ODDSTONE from the grab targets -- ODDSTONE.canGrab() now only returns true for SLIME,
+HONEY, ODD_SLIME. All oddstone-to-oddstone connections now resolve purely through
+sympathetic movement channels.
+
+### Bug Fix: Wall/Stair/Slab Sympathetic Movement Not Working
+
+Root cause: vanilla's resolve() only calls addBranchingBlocks for blocks where
+isStickyBlock() returns true. The sympathetic search mixin injects at addBranchingBlocks
+TAIL, so it never fired for walls/stairs/slabs (which defaulted to isStickyBlock=false).
+Full oddstone blocks worked because they override isStickyBlock()=true.
+
+Fix: SympatheticWallBlock, SympatheticStairBlock, and SympatheticSlabBlock now override
+isStickyBlock()=true (so addBranchingBlocks is called, triggering the sympathetic search)
+and canStickTo()=false (so they never grab neighbors via direct contact).
+
+### Bug Fix: Sympathetic Scan Missing Adjacent Blocks
+
+MovementScanHelper.scanSympatheticChannel() was starting its distance loop at 2, missing
+adjacent same-channel blocks at distance 1. Changed loop start from dist=2 to dist=1
+and guard from `radius <= 1` to `radius < 1`.
+
+### Changes
+
+**New files:**
+- `block/ISympathetic.java` -- channel marker interface
+- `block/CobbledOddstoneBlock.java` -- extends OddstoneBlock, channel "cobbled_oddstone"
+- `block/OddstoneBricksBlock.java` -- extends OddstoneBlock, channel "oddstone_bricks"
+- `block/SympatheticWallBlock.java` -- WallBlock + ISympathetic, isStickyBlock=true, canStickTo=false
+- `block/SympatheticStairBlock.java` -- StairBlock + ISympathetic, isStickyBlock=true, canStickTo=false
+- `block/SympatheticSlabBlock.java` -- SlabBlock + ISympathetic, isStickyBlock=true, canStickTo=false
+- `data/minecraft/tags/blocks/walls.json` -- wall tag for model connections
+- All blockstate, model, loot table, and recipe JSONs for 12 new blocks
+
+**Modified files:**
+- `block/OddstoneBlock.java` -- implements ISympathetic, channel "oddstone"
+- `block/movement/StickyType.java` -- ODDSTONE.canGrab() no longer grabs ODDSTONE
+- `block/movement/MovementScanHelper.java` -- channel-aware scanning (scanAllChannels,
+  scanSympatheticChannel, getSympatheticChannel), distance fix (dist starts at 1)
+- `mixin/PistonStructureResolverMixin.java` -- Feature 3 uses scanAllChannels per-channel,
+  removed all BUG10 diagnostic logging
+- `registry/ModBlocks.java` -- 12 new block registrations with channel strings
+- `data/ideomod/tags/blocks/frameable_blocks.json` -- added cobbled_oddstone, oddstone_bricks
+
+>>>>>>> Stashed changes
 ## [2026-03-25] Machine Toggle Piston Movement Bugfix -- Latch State Preservation
 
 Fixed a bug where moving a powered Machine Toggle via piston would reset it to OFF.
