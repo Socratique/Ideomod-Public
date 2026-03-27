@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "ideomod:oddstone"
+  },
+  "result": "ideomod:oddstone_brick_slab",
+  "count": 2
+}

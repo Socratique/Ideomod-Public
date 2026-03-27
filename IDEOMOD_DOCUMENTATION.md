@@ -1861,6 +1861,25 @@ Same pattern for all block items -- just parent the block model.
 }
 ```
 
+### Oddstone Family Recipes
+
+Oddstone is NOT craftable (natural resource only). The placeholder `oddstone.json` recipe has been removed.
+
+**Smelting**: `oddstone_smelting.json` -- oddstone -> cobbled_oddstone (200 ticks, 0.1 XP).
+
+**Crafting recipes** (11 total):
+- `oddstone_bricks.json` -- 2x2 oddstone -> 4 oddstone bricks (shaped, like vanilla stone bricks)
+- Stairs (3): `oddstone_stairs.json`, `cobbled_oddstone_stairs.json`, `oddstone_brick_stairs.json` -- standard stair pattern (6 -> 4)
+- Slabs (3): `oddstone_slab.json`, `cobbled_oddstone_slab.json`, `oddstone_brick_slab.json` -- 3 in a row (3 -> 6)
+- Walls (3): `oddstone_wall.json`, `cobbled_oddstone_wall.json`, `oddstone_brick_wall.json` -- 2 rows of 3 (6 -> 6)
+
+**Stonecutter recipes** (13 total):
+- From oddstone (7): stairs (1), slab (2), wall (1), bricks (1), brick stairs (1), brick slab (2), brick wall (1)
+- From cobbled_oddstone (3): stairs (1), slab (2), wall (1)
+- From oddstone_bricks (3): brick stairs (1), brick slab (2), brick wall (1)
+
+Stonecutter naming: `<output>_from_<input>_stonecutting.json` (e.g. `oddstone_brick_stairs_from_oddstone_stonecutting.json`). Slabs produce 2 per block via stonecutter; all others produce 1.
+
 ### Language File
 
 `assets/ideomod/lang/en_us.json`:

@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "ideomod:cobbled_oddstone"
+  },
+  "result": "ideomod:cobbled_oddstone_stairs",
+  "count": 1
+}

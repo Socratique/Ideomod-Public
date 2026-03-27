@@ -1,0 +1,17 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "#  ",
+    "## ",
+    "###"
+  ],
+  "key": {
+    "#": {
+      "item": "ideomod:oddstone"
+    }
+  },
+  "result": {
+    "item": "ideomod:oddstone_stairs",
+    "count": 4
+  }
+}

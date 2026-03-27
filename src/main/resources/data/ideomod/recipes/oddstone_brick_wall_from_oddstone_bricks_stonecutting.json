@@ -1,0 +1,8 @@
+{
+  "type": "minecraft:stonecutting",
+  "ingredient": {
+    "item": "ideomod:oddstone_bricks"
+  },
+  "result": "ideomod:oddstone_brick_wall",
+  "count": 1
+}

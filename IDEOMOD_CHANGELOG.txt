@@ -1,7 +1,31 @@
 # Ideomod Changelog
 
-<<<<<<< Updated upstream
-=======
+## [2026-03-27b] Oddstone Family Recipes
+
+Added crafting, stonecutter, and smelting recipes for all oddstone variants. Removed the
+placeholder oddstone crafting recipe (oddstone is a natural-only resource).
+
+### Removed
+- `data/ideomod/recipes/oddstone.json` -- placeholder crafting recipe (Stone + Redstone = Oddstone)
+
+### New Recipe Files (24 total)
+
+**Smelting (1):**
+- `oddstone_smelting.json` -- oddstone -> cobbled_oddstone
+
+**Crafting (10):**
+- `oddstone_bricks.json` -- 2x2 oddstone -> 4 oddstone bricks
+- Stairs: oddstone_stairs, cobbled_oddstone_stairs, oddstone_brick_stairs (6 -> 4)
+- Slabs: oddstone_slab, cobbled_oddstone_slab, oddstone_brick_slab (3 -> 6)
+- Walls: oddstone_wall, cobbled_oddstone_wall, oddstone_brick_wall (6 -> 6)
+
+**Stonecutter (13):**
+- From oddstone: stairs, slab, wall, bricks, brick stairs, brick slab, brick wall
+- From cobbled_oddstone: stairs, slab, wall
+- From oddstone_bricks: brick stairs, brick slab, brick wall
+
+---
+
 ## [2026-03-27] Oddstone Variants + Sympathetic Movement Bugfixes
 
 Added cobbled oddstone and oddstone bricks as new full block variants, plus wall, stair,
@@ -84,7 +108,6 @@ and guard from `radius <= 1` to `radius < 1`.
 - `registry/ModBlocks.java` -- 12 new block registrations with channel strings
 - `data/ideomod/tags/blocks/frameable_blocks.json` -- added cobbled_oddstone, oddstone_bricks
 
->>>>>>> Stashed changes
 ## [2026-03-25] Machine Toggle Piston Movement Bugfix -- Latch State Preservation
 
 Fixed a bug where moving a powered Machine Toggle via piston would reset it to OFF.

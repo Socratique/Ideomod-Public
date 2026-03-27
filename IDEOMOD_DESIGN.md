@@ -83,7 +83,7 @@
 | ID | `oddstone` |
 | Hardness | 2.0 / Blast 6.0 |
 | Tool | Pickaxe |
-| Recipe | None -- natural resource only. Must be mined. **NOTE:** A crafting recipe (Stone corners + Redstone center = 4x Oddstone) exists in `data/ideomod/recipes/oddstone.json` as an auto-generated placeholder from early development. This recipe should be removed -- Oddstone is intended as a natural-only resource. |
+| Recipe | None -- natural resource only. Must be mined. The placeholder crafting recipe (`oddstone.json`) from early development has been removed. |
 | Mining | Drops itself (raw Oddstone) by default. Silk Touch drops Cobbled Oddstone. Inverse of vanilla stone (stone -> cobble, Oddstone -> Oddstone raw, silk touch flips). |
 | Smelting | Oddstone in furnace -> Cobbled Oddstone. Another inversion of stone (stone cooks from cobble; Oddstone cooks INTO cobble). |
 
@@ -112,7 +112,7 @@
 ### Oddstone Variants [IDEA]
 > Full stone-family variants of Oddstone (cobbled, polished, bricks, chiseled, stairs, slabs, walls, etc.). All retain Oddstone behavior but each variant is its own sympathetic frequency. Also serve as wireless channel selectors for Machine Linker (see Machine Linker specialization).
 
-**Entry point:** Cobbled Oddstone is obtained by smelting raw Oddstone in a furnace or mining with Silk Touch. This is the inverse of vanilla stone's relationship with cobblestone. From Cobbled Oddstone, standard stonecutter/crafting recipes produce all other variants.
+**Entry point:** Cobbled Oddstone is obtained by smelting raw Oddstone in a furnace or mining with Silk Touch. This is the inverse of vanilla stone's relationship with cobblestone. Oddstone Bricks are crafted from raw Oddstone (2x2 -> 4, like vanilla stone bricks). All three base types (oddstone, cobbled oddstone, oddstone bricks) have standard crafting recipes for their stairs, slabs, and walls. All variants are also available via stonecutter.
 
 **Variants (implemented):**
 - Cobbled Oddstone (full block, base processed form -- entry to all other variants)
@@ -132,7 +132,7 @@
 | Full Oddstone behavior | [DONE] | All implemented variants have mob avoidance, redstone insulation, one-way stickiness (grabs slime only, not other oddstone), and sympathetic movement via ISympathetic interface. |
 | Per-variant sympathetic frequency | [DONE] | Each variant type forms its own sympathetic network via ISympathetic interface. Oddstone links to Oddstone (channel "oddstone"). Oddstone Bricks link only to Oddstone Bricks (channel "oddstone_bricks"). Cobbled Oddstone forms separate network (channel "cobbled_oddstone"). All wall/stair/slab variants have dedicated channels. They do NOT cross-link. |
 | Wall/stair/slab special handling | [DONE] | Wall, stair, and slab blocks implement `isStickyBlock()=true` and `canStickTo()=false` to trigger vanilla's `addBranchingBlocks` mechanism (which then calls the sympathetic search mixin at TAIL). This allows shape variants to participate in sympathetic movement chains. |
-| Crafting between variants | [IDEA] | Standard stonecutter/crafting recipes to convert between forms (like vanilla stone family). |
+| Crafting between variants | [DONE] | Standard crafting + stonecutter recipes for all implemented variants. Bricks from oddstone (2x2). Stairs (6->4), slabs (3->6), walls (6->6) from each base type. Stonecutter produces all shape variants from their base type, plus bricks and brick shapes from oddstone. Smelting: oddstone -> cobbled oddstone. |
 | Portal frames | [IDEA] | Can any variant be used in portal frames, or only base Oddstone? TBD -- restricting to base Oddstone keeps portal building simple. |
 
 **Design notes:**

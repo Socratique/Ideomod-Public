@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "###"
+  ],
+  "key": {
+    "#": {
+      "item": "ideomod:cobbled_oddstone"
+    }
+  },
+  "result": {
+    "item": "ideomod:cobbled_oddstone_slab",
+    "count": 6
+  }
+}
