@@ -1,0 +1,37 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "cutout",
+  "textures": {
+    "indicator": "ideomod:block/machine_repeater_indicator",
+    "engine": "ideomod:block/machine_engine",
+    "particle": "ideomod:block/machine_engine"
+  },
+  "elements": [
+    {
+      "comment": "Inner underlay cuboid — tinted indicator (tintIndex 1)",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "north": { "texture": "#indicator", "tintindex": 1 },
+        "south": { "texture": "#indicator", "tintindex": 1 },
+        "east":  { "texture": "#indicator", "tintindex": 1 },
+        "west":  { "texture": "#indicator", "tintindex": 1 },
+        "up":    { "texture": "#indicator", "tintindex": 1 },
+        "down":  { "texture": "#indicator", "tintindex": 1 }
+      }
+    },
+    {
+      "comment": "Outer shell — machine_engine texture with transparent indicator windows",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#engine" },
+        "south": { "texture": "#engine" },
+        "east":  { "texture": "#engine" },
+        "west":  { "texture": "#engine" },
+        "up":    { "texture": "#engine" },
+        "down":  { "texture": "#engine" }
+      }
+    }
+  ]
+}

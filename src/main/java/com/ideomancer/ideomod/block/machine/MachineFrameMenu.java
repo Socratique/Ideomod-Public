@@ -38,6 +38,10 @@ import net.minecraft.world.item.ItemStack;
  *   3 = is transformer (0 or 1)
  *   4 = timer duration (ticks)
  *   5 = is timer (0 or 1)
+ *   6 = engine litTime (current burn ticks remaining)
+ *   7 = engine litDuration (total burn time for flame progress)
+ *   8 = engine pulseInterval (selected interval)
+ *   9 = is engine (0 or 1)
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -74,7 +78,11 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     private static final int DATA_IS_TRANSFORMER = 3;
     private static final int DATA_TIMER_DURATION = 4;
     private static final int DATA_IS_TIMER = 5;
-    private static final int DATA_SIZE = 6;
+    private static final int DATA_ENGINE_LIT_TIME = 6;
+    private static final int DATA_ENGINE_LIT_DURATION = 7;
+    private static final int DATA_ENGINE_INTERVAL = 8;
+    private static final int DATA_IS_ENGINE = 9;
+    private static final int DATA_SIZE = 10;
 
     /** Server-side constructor. */
     public MachineFrameMenu(int containerId, Inventory playerInv, BlockPos pos) {
@@ -92,6 +100,10 @@ public class MachineFrameMenu extends AbstractContainerMenu {
                 if (index == DATA_IS_TRANSFORMER) return container.isTransformer() ? 1 : 0;
                 if (index == DATA_TIMER_DURATION) return container.getTimerDuration();
                 if (index == DATA_IS_TIMER) return container.isTimer() ? 1 : 0;
+                if (index == DATA_ENGINE_LIT_TIME) return container.getEngineLitTime();
+                if (index == DATA_ENGINE_LIT_DURATION) return container.getEngineLitDuration();
+                if (index == DATA_ENGINE_INTERVAL) return container.getEnginePulseInterval();
+                if (index == DATA_IS_ENGINE) return container.isEngine() ? 1 : 0;
                 return 0;
             }
             @Override public void set(int index, int value) { }
@@ -134,6 +146,20 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     public boolean isRepeater() { return this.machineData.get(DATA_IS_REPEATER) == 1; }
     public boolean isTransformer() { return this.machineData.get(DATA_IS_TRANSFORMER) == 1; }
     public boolean isTimer() { return this.machineData.get(DATA_IS_TIMER) == 1; }
+    public boolean isEngine() { return this.machineData.get(DATA_IS_ENGINE) == 1; }
+
+    public int getEngineLitTime() {
+        return this.machineData.get(DATA_ENGINE_LIT_TIME);
+    }
+
+    public int getEngineLitDuration() {
+        return this.machineData.get(DATA_ENGINE_LIT_DURATION);
+    }
+
+    public int getEnginePulseInterval() {
+        int interval = this.machineData.get(DATA_ENGINE_INTERVAL);
+        return interval >= 1 ? interval : 10;
+    }
 
     public int getRepeaterDelay() {
         int delay = this.machineData.get(DATA_REPEATER_DELAY);
@@ -171,6 +197,8 @@ public class MachineFrameMenu extends AbstractContainerMenu {
                 boolean moved = false;
                 if (isPipe())
                     moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
+                if (!moved && isEngine() && net.minecraftforge.common.ForgeHooks.getBurnTime(slotItem, null) > 0)
+                    moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
                 if (!moved)
                     if (!this.moveItemStackTo(slotItem, SPEC_SLOT_INDEX, SPEC_SLOT_INDEX + 1, false))
                         return ItemStack.EMPTY;
@@ -200,8 +228,14 @@ public class MachineFrameMenu extends AbstractContainerMenu {
             super(container, slot, x, y);
             this.container = container;
         }
-        @Override public boolean mayPlace(ItemStack stack) { return container.isPipe(); }
-        @Override public boolean mayPickup(Player player) { return container.isPipe() && this.hasItem(); }
-        @Override public boolean isActive() { return container.isPipe(); }
+        @Override public boolean mayPlace(ItemStack stack) {
+            if (container.isPipe()) return true;
+            if (container.isEngine()) return net.minecraftforge.common.ForgeHooks.getBurnTime(stack, null) > 0;
+            return false;
+        }
+        @Override public boolean mayPickup(Player player) {
+            return (container.isPipe() || container.isEngine()) && this.hasItem();
+        }
+        @Override public boolean isActive() { return container.isPipe() || container.isEngine(); }
     }
 }

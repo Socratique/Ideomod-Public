@@ -58,7 +58,10 @@ public enum MachineType {
     PISTON,
 
     /** Machine Sticky Piston -- sticky piston as Machine Family member. */
-    STICKY_PISTON;
+    STICKY_PISTON,
+
+    /** Machine Engine -- fuel-burning pulse clock. */
+    ENGINE;
 
     /**
      * Can this type stick to another machine type?

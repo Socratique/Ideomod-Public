@@ -113,6 +113,15 @@ com.ideomancer.ideomod
   |     |     |                                Edge-triggered timed output. POWERED blockstate.
   |     |     |                                Self-rescheduling countdown. Signal detection via
   |     |     |                                MachineRedstoneHelper.
+  |     |     |-- MachineEngineBlock.java      Extends AbstractMachineBlock. MachineType.ENGINE.
+  |     |     |                                Fuel-burning pulse clock. LIT + POWERED blockstates.
+  |     |     |                                2-game-tick pulse via scheduleTick. Anti-feedback
+  |     |     |                                5-layer architecture. Signal via MachineRedstoneHelper.
+  |     |     |-- MachineEngineBlockEntity.java Extends MachineFrameBlockEntity. Own BE type
+  |     |     |                                (MACHINE_ENGINE). Fuel slot (slot 1), litTime,
+  |     |     |                                litDuration, pulseInterval, pulseCounter. Server
+  |     |     |                                ticker. IItemHandler capability. Fuel freezes when
+  |     |     |                                unpowered.
   |     |     \-- FluidType.java               StringRepresentable enum: EMPTY, WATER, LAVA.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
@@ -162,8 +171,9 @@ com.ideomancer.ideomod
   |-- config/
   |     |-- IdeomodConfig.java           Centralized JSON config for all mod systems.
   |     |                                Sections: oddstone, pistons, machine_braces, pipes,
-  |     |                                portals, judgement, furnace_array. Lazy-load with
-  |     |                                double-checked locking. /ideomod reload support.
+  |     |                                portals, judgement, furnace_array, timer, engine,
+  |     |                                pulser. Lazy-load with double-checked locking.
+  |     |                                /ideomod reload support.
   |     \-- OddstoneConfig.java          @Deprecated. Replaced by IdeomodConfig.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
@@ -205,6 +215,7 @@ com.ideomancer.ideomod
         |                                Piston, Sticky Piston, Brace, Repeater, Toggle,
         |                                Transformer), MACHINE_PIPE (pipe subclass),
         |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
+        |                                MACHINE_ENGINE (engine subclass),
         |                                FRAMED_BLOCK (shared iron/copper).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
         |                                (unified for all machine types).
@@ -456,6 +467,10 @@ Extends AbstractMachineBlock. MachineType.TRANSFORMER. Omnidirectional signal le
 ### 9i. Machine Timer (edge-triggered timed output)
 
 Extends AbstractMachineBlock. MachineType.TIMER. Edge-triggered timed output. Receives signal on one face, emits full-strength 15 on all other 5 faces for a player-configured duration in ticks, then turns off. Requires fresh signal (drop + rise) after timer expires to re-trigger — same edge detection as Toggle (inputWasLow). POWERED blockstate. Specialization item: vanilla Clock. 5-layer anti-feedback (same as Repeater/Transformer). Self-rescheduling countdown: each game tick decrements timerTicksRemaining, turns off at 0. Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. GUI shows "Pulse Tick Duration" label + 16 buttons in 2 rows (8+8), values from config timer.durations array. TimerDurationPacket via Forge SimpleChannel (packet ID 2). Fixed content height (89px, shared by all machines). Dual-cuboid model with binary tinted indicator (dark maroon off, bright red on). MachineFrameBlockEntity fields: timerDuration (configurable output length), timerTicksRemaining (countdown). Placement signal absorption (same as Toggle).
+
+### 9j. Machine Engine (fuel-burning pulse clock)
+
+Extends AbstractMachineBlock. MachineType.ENGINE. Fuel-burning pulse clock. Burns fuel items (Forge burn times) and emits periodic 2-game-tick (1 redstone tick) redstone pulses at a player-configurable interval. LIT + POWERED blockstates (LIT = sustained burning+powered state, POWERED = transient pulse output). Specialization item: vanilla Furnace. Own BE subclass: MachineEngineBlockEntity (BlockEntityType: MACHINE_ENGINE). Extends MachineFrameBlockEntity with fuel slot (slot 1), litTime/litDuration, pulseInterval, pulseCounter. Server-side ticker (not scheduled ticks — uses BlockEntityTicker). 5-layer anti-feedback (same as Repeater/Transformer/Timer). Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Fuel freezes when unpowered (litTime paused, resumes on re-power). Force-clears POWERED+LIT when unpowered (safety net for high-rate stale state). GUI shows fuel slot + flame indicator (vanilla furnace textures) + "Pulse Interval" label + 8 buttons in 1 row, values from config engine.durations array (increments of 5). EnginePulseIntervalPacket via Forge SimpleChannel. Comparator output scales fuel slot fullness (0-15). Particles: flame on all 6 faces + campfire cosy smoke from top (only when LIT). Piston-safe: movedByPiston + isSwapping guards in onRemove. ejectSecondaryItems on specialization removal. IItemHandler capability for hopper/pipe automation. WorldlyContainer: fuel slot (1) external, specialization slot (0) GUI-only. Dual-cuboid model with binary tinted indicator (dark maroon off, bright red on).
 
 ### 10. Odd Slime Block
 

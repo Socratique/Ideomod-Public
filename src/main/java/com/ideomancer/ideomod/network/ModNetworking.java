@@ -45,6 +45,12 @@ public class ModNetworking {
                 .consumerMainThread(TimerDurationPacket::handle)
                 .add();
 
+        CHANNEL.messageBuilder(EnginePulseIntervalPacket.class, packetId++, NetworkDirection.PLAY_TO_SERVER)
+                .encoder(EnginePulseIntervalPacket::encode)
+                .decoder(EnginePulseIntervalPacket::decode)
+                .consumerMainThread(EnginePulseIntervalPacket::handle)
+                .add();
+
         Ideomod.LOGGER.info("Registered {} network packet(s)", packetId);
     }
 }

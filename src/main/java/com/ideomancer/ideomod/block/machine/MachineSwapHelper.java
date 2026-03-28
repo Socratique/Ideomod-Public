@@ -81,8 +81,7 @@ public final class MachineSwapHelper {
         // Pulser: tag-based (any button item) — handled via tag fallback
         //         in getSpecializationBlock(). Reverse mapping in ensureBlockToItem().
 
-        // Future specializations:
-        // itemToBlock.put(Items.FURNACE,         () -> ModBlocks.MACHINE_ENGINE.get());
+        itemToBlock.put(Items.FURNACE,         () -> ModBlocks.MACHINE_ENGINE.get());
         // Grabber: slime/honey block items — needs special handling
     }
 
@@ -223,6 +222,10 @@ public final class MachineSwapHelper {
 
         if (currentBlock == targetBlock) return false;
 
+        // Eject secondary slot items before the swap destroys the old BE.
+        // Without this, items in slot 1+ (fuel, transit items) would be lost.
+        ejectSecondaryItems(level, pos);
+
         // Swap the block. The menu's PositionBoundContainer will
         // automatically find the new block entity on its next read.
         isSwapping.set(true);
@@ -239,5 +242,33 @@ public final class MachineSwapHelper {
         }
 
         return true;
+    }
+
+    /**
+     * Ejects any items in secondary slots (slot 1+) from the current block entity
+     * before a specialization swap. Items are dropped as entities at the block position
+     * so the player (who is standing at the GUI) can pick them up.
+     *
+     * Affected specializations:
+     * - Machine Engine: fuel slot (slot 1)
+     * - Machine Pipe: transit slot (slot 1)
+     */
+    private static void ejectSecondaryItems(Level level, BlockPos pos) {
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof MachineEngineBlockEntity engineBE) {
+            ItemStack fuel = engineBE.getFuelItem();
+            if (!fuel.isEmpty()) {
+                net.minecraft.world.Containers.dropItemStack(
+                        level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, fuel);
+                engineBE.setFuelItem(ItemStack.EMPTY);
+            }
+        } else if (be instanceof MachinePipeBlockEntity pipeBE) {
+            ItemStack transit = pipeBE.getTransitItem();
+            if (!transit.isEmpty()) {
+                net.minecraft.world.Containers.dropItemStack(
+                        level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, transit);
+                pipeBE.setTransitItem(ItemStack.EMPTY);
+            }
+        }
     }
 }

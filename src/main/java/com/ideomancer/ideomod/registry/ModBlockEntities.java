@@ -2,6 +2,7 @@ package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineEngineBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlockEntity;
@@ -45,6 +46,18 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_TRANSFORMER.get(),
                             ModBlocks.MACHINE_TIMER.get(),
                             ModBlocks.MACHINE_PULSER.get()
+                    ).build(null));
+
+    /**
+     * Machine Engine block entity type. Separate from MACHINE_FRAME because
+     * the engine has a fuel slot, ticker, and fuel-specific NBT.
+     * Only used by MachineEngineBlock.
+     */
+    public static final RegistryObject<BlockEntityType<MachineEngineBlockEntity>> MACHINE_ENGINE =
+            BLOCK_ENTITIES.register("machine_engine",
+                    () -> BlockEntityType.Builder.of(
+                            MachineEngineBlockEntity::new,
+                            ModBlocks.MACHINE_ENGINE.get()
                     ).build(null));
 
     /**

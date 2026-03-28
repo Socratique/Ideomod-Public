@@ -35,6 +35,8 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * isRepeater() / getRepeaterDelay() - for Repeater ContainerData sync.
  * isTransformer() / getTransformerLevel() - for Transformer ContainerData sync.
  * isTimer() / getTimerDuration() - for Timer ContainerData sync.
+ * isEngine() / getEngineLitTime() / getEngineLitDuration() / getEnginePulseInterval()
+ *   - for Engine ContainerData sync.
  * getBlockContentHeight() - reads GUI height from the current block class,
  *   enabling fully dynamic GUI resizing without hardcoded type checks.
  *
@@ -58,6 +60,11 @@ public class PositionBoundContainer implements Container {
     private MachinePipeBlockEntity getPipeBE() {
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachinePipeBlockEntity pipe ? pipe : null;
+    }
+
+    private MachineEngineBlockEntity getEngineBE() {
+        BlockEntity be = level.getBlockEntity(pos);
+        return be instanceof MachineEngineBlockEntity engine ? engine : null;
     }
 
     public boolean isPipe() {
@@ -89,6 +96,25 @@ public class PositionBoundContainer implements Container {
     public int getTimerDuration() {
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getTimerDuration() : 20;
+    }
+
+    public boolean isEngine() {
+        return getEngineBE() != null;
+    }
+
+    public int getEngineLitTime() {
+        MachineEngineBlockEntity engine = getEngineBE();
+        return engine != null ? engine.getLitTime() : 0;
+    }
+
+    public int getEngineLitDuration() {
+        MachineEngineBlockEntity engine = getEngineBE();
+        return engine != null ? engine.getLitDuration() : 0;
+    }
+
+    public int getEnginePulseInterval() {
+        MachineEngineBlockEntity engine = getEngineBE();
+        return engine != null ? engine.getPulseInterval() : 10;
     }
 
     /**
@@ -124,7 +150,10 @@ public class PositionBoundContainer implements Container {
     public ItemStack getItem(int slot) {
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
-            return pipe != null ? pipe.getTransitItem() : ItemStack.EMPTY;
+            if (pipe != null) return pipe.getTransitItem();
+            MachineEngineBlockEntity engine = getEngineBE();
+            if (engine != null) return engine.getFuelItem();
+            return ItemStack.EMPTY;
         }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.getItem(slot) : ItemStack.EMPTY;
@@ -134,7 +163,10 @@ public class PositionBoundContainer implements Container {
     public ItemStack removeItem(int slot, int amount) {
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
-            return pipe != null ? pipe.removeItem(slot, amount) : ItemStack.EMPTY;
+            if (pipe != null) return pipe.removeItem(slot, amount);
+            MachineEngineBlockEntity engine = getEngineBE();
+            if (engine != null) return engine.removeItem(slot, amount);
+            return ItemStack.EMPTY;
         }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.removeItem(slot, amount) : ItemStack.EMPTY;
@@ -144,7 +176,10 @@ public class PositionBoundContainer implements Container {
     public ItemStack removeItemNoUpdate(int slot) {
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
-            return pipe != null ? pipe.removeItemNoUpdate(slot) : ItemStack.EMPTY;
+            if (pipe != null) return pipe.removeItemNoUpdate(slot);
+            MachineEngineBlockEntity engine = getEngineBE();
+            if (engine != null) return engine.removeItemNoUpdate(slot);
+            return ItemStack.EMPTY;
         }
         MachineFrameBlockEntity be = getBE();
         return be != null ? be.removeItemNoUpdate(slot) : ItemStack.EMPTY;
@@ -159,6 +194,11 @@ public class PositionBoundContainer implements Container {
                 if (!stack.isEmpty()) {
                     pipe.onItemReceived(Direction.UP);
                 }
+                return;
+            }
+            MachineEngineBlockEntity engine = getEngineBE();
+            if (engine != null) {
+                engine.setItem(slot, stack);
             }
             return;
         }
@@ -202,7 +242,9 @@ public class PositionBoundContainer implements Container {
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
-            return getPipeBE() != null;
+            if (getPipeBE() != null) return true;
+            if (getEngineBE() != null) return net.minecraftforge.common.ForgeHooks.getBurnTime(stack, null) > 0;
+            return false;
         }
         MachineFrameBlockEntity be = getBE();
         return be != null && be.canPlaceItem(slot, stack);

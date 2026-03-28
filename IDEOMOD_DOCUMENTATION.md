@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-22b (Machine Timer specialization, fixed GUI height, button spritesheet expansion)*
+*Last updated: 2026-03-28 (Machine Engine specialization, fuel-burning pulse clock)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -232,6 +232,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_toggle` | MachineToggleBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TOGGLE. Edge-triggered flip-flop. POWERED + INPUT_FACE. |
 | `machine_transformer` | MachineTransformerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TRANSFORMER. Configurable signal level setter. POWERED + OUTPUT_LEVEL (1-15). |
 | `machine_timer` | MachineTimerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TIMER. Edge-triggered timed output. POWERED. |
+| `machine_engine` | MachineEngineBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.ENGINE. Fuel-burning pulse clock. LIT + POWERED. Own BE type (MACHINE_ENGINE). |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
@@ -241,7 +242,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, cobbled_oddstone, oddstone_bricks, oddstone_wall, oddstone_stairs, oddstone_slab, cobbled_oddstone_wall, cobbled_oddstone_stairs, cobbled_oddstone_slab, oddstone_brick_wall, oddstone_brick_stairs, oddstone_brick_slab, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock, `MACHINE_ENGINE` for MachineEngineBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
 
@@ -640,7 +641,7 @@ Opt-in interface for block entities that need to preserve data through piston mo
 - `void loadMovementData(CompoundTag data)` -- restore data after move.
 - `void onMovementRestored(Level, BlockPos)` -- called after loadMovementData. Schedules re-evaluation ticks and restores blockstate properties that vanilla's movedState might not cover.
 
-**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory, inputFace, repeaterDelay, transformerLevel, inputWasLow, timerDuration, timerTicksRemaining, pulserTicksRemaining, movementPowered via ContainerHelper; protected constructor for subclass BE types), MachinePipeBlockEntity (extends MachineFrameBlockEntity; transit slot + cooldown + round-robin + IItemHandler capability), FramedBlockEntity (saves/loads inner block ResourceLocation).
+**Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory, inputFace, repeaterDelay, transformerLevel, inputWasLow, timerDuration, timerTicksRemaining, pulserTicksRemaining, movementPowered via ContainerHelper; protected constructor for subclass BE types), MachinePipeBlockEntity (extends MachineFrameBlockEntity; transit slot + cooldown + round-robin + IItemHandler capability), MachineEngineBlockEntity (extends MachineFrameBlockEntity; fuel slot + litTime + litDuration + pulseInterval + pulseCounter + IItemHandler capability), FramedBlockEntity (saves/loads inner block ResourceLocation).
 
 **Latch state preservation**: `movementPowered` (transient boolean in MachineFrameBlockEntity) captures whether the block was powered before movement. Saved in `saveMovementData()` via `getRedstoneOutput() > 0`, restored in `loadMovementData()`. In `onMovementRestored()`, powered Toggles get their POWERED+INPUT_FACE blockstate restored as a safety net and SKIP the re-evaluation tick (the Toggle's tick() treats any tick on a POWERED toggle as "toggle OFF", which would immediately undo the latch). All other machine blocks get a tick scheduled as before.
 
@@ -1409,6 +1410,67 @@ Stickiness: MachineType.TIMER -- sticks to other Timers + Machine Frames + Frame
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
+### Machine Engine -- Fuel-Burning Pulse Clock
+
+Registry ID: `machine_engine`. Class: MachineEngineBlock extends AbstractMachineBlock. `MachineType.ENGINE`.
+
+Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits periodic redstone pulses at a player-configurable interval. Specialization item: vanilla Furnace (Items.FURNACE). Own BE subclass: MachineEngineBlockEntity (BlockEntityType: MACHINE_ENGINE). Extends MachineFrameBlockEntity with fuel slot (slot 1), burn state (litTime/litDuration), pulse interval, and pulse counter.
+
+| Property | Value |
+|----------|-------|
+| **Block entity** | MachineEngineBlockEntity extends MachineFrameBlockEntity |
+| **BE type** | ModBlockEntities.MACHINE_ENGINE (separate from MACHINE_FRAME) |
+| **Specialization item** | Furnace |
+| **Blockstate properties** | LIT (BooleanProperty), POWERED (BooleanProperty) |
+| **Container size** | 2 (slot 0 = specialization, slot 1 = fuel) |
+
+**Blockstate semantics**: LIT = sustained (burning fuel AND receiving redstone signal, drives outer texture swap and particle visibility). POWERED = transient (1-redstone-tick pulse output state, drives indicator tint and redstone signal). These are independent states: LIT can be true with POWERED false (between pulses), POWERED is briefly true during each pulse.
+
+**Three prerequisites to pulse**: (1) Redstone signal on at least one face (input face), (2) Fuel burning (litTime > 0), (3) Pulse interval elapsed (pulseCounter >= pulseInterval).
+
+**Server tick logic** (MachineEngineBlockEntity.serverTick, runs every game tick):
+1. Fuel burn: litTime decrements ONLY when powered (isPowered = inputFace != null). Fuel timer freezes when the engine loses signal and resumes when re-powered. This means toggling the signal on/off preserves remaining fuel.
+2. Auto-feed: when litTime reaches 0 and fuel slot has a valid fuel item and engine is powered, consume one fuel item (using ForgeHooks.getBurnTime), set litTime = litDuration = burn time. Lava bucket leaves empty bucket.
+3. Pulse: when isLit (litTime > 0) AND isPowered, increment pulseCounter. When pulseCounter >= pulseInterval, reset counter and call MachineEngineBlock.emitPulse().
+4. Safety clear: when NOT powered, reset pulseCounter to 0 and force-clear both POWERED and LIT blockstates to false. This belt-and-suspenders approach prevents stale visual state at high pulse rates where rapid POWERED toggling could race with the signal drop.
+5. LIT update (powered path only): when powered, set LIT = (litTime > 0). When unpowered, handled by step 4.
+
+**Pulse emission** (MachineEngineBlock.emitPulse): if POWERED is currently false, sets POWERED=true via level.setBlock(flag 3), then schedules a tick at +2 game ticks (1 redstone tick) with TickPriority.HIGH. The scheduled tick (MachineEngineBlock.tick) sets POWERED=false. Pulse duration of 2 game ticks is the minimum for Minecraft's client-side rendering to visually register state changes on dust and color-tinted blocks.
+
+**Anti-feedback Architecture** (5 layers, same as Repeater/Transformer/Timer):
+
+1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+
+2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
+
+3. updatingPos ThreadLocal: during emitPulse/tick setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately.
+
+4. absorbing ThreadLocal: during onPlace signal snapshot, prevents neighborChanged from processing.
+
+5. Signal detection delegated to MachineRedstoneHelper.scanAllFaces().
+
+**Fuel slot automation**: WorldlyContainer exposes only fuel slot (slot 1) to external faces via getSlotsForFace. canPlaceItemThroughFace accepts items with burn time > 0. canTakeItemThroughFace allows extraction only for non-fuel items (empty buckets after lava bucket consumption). IItemHandler capability via SidedInvWrapper for Forge-compatible automation (pipes, hoppers).
+
+**Item preservation on specialization removal**: When the furnace is removed from slot 0 (triggering a swap back to Machine Frame), MachineSwapHelper.ejectSecondaryItems() drops the fuel slot contents as item entities at the block position before the swap replaces the BE. MachineEngineBlock.onRemove() has `!MachineSwapHelper.isSwapping()` guard to avoid double-drop.
+
+**Piston safety**: onRemove checks `!movedByPiston` -- skips fuel item drop when moved by piston (items preserved via IPistonMovable save/loadMovementData). MachineEngineBlockEntity overrides saveMovementData/loadMovementData to persist fuel item, litTime, litDuration, pulseInterval, pulseCounter through piston moves.
+
+**Comparator output**: Scales fuel slot stack fullness to 0-15. Empty = 0, any items = 1 + (count * 14 / maxStackSize).
+
+**Particles**: Flame particles on all 6 faces + campfire cosy smoke (ParticleTypes.CAMPFIRE_COSY_SMOKE) rising from top face. Only visible when LIT blockstate is true (powered AND burning). animateTick checks state.getValue(LIT), not the BE's litTime directly, so particles correctly disappear when signal is cut (even though litTime is frozen, not zeroed).
+
+**GUI**: Uses unified MachineFrameMenu with dynamic fuel slot. Fuel slot rendered at position matching vanilla furnace fuel slot. Flame indicator uses vanilla furnace GUI texture: empty flame outline at UV(56,36) always visible, lit flame at UV(176,0) overlaid proportionally from bottom up based on litTime/litDuration. "Pulse Interval" label centered above 8 buttons in 1 row. Each button shows the tick value from IdeomodConfig.getEngineDurations(). Selected interval shows pressed state. Click sends `EnginePulseIntervalPacket`. Fixed content height (89px, shared by all machines).
+
+**Networking**: `EnginePulseIntervalPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates interval index against config array, player distance (64 blocks), block type.
+
+**ContainerData**: MachineFrameMenu ContainerData size 10: DATA_ENGINE_LIT_TIME=6, DATA_ENGINE_LIT_DURATION=7, DATA_ENGINE_INTERVAL=8, DATA_IS_ENGINE=9 (added to existing 0-5).
+
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer/Timer). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when POWERED=false, bright red (POWER_COLORS[15]) when POWERED=true. Outer shell uses `machine_engine.png` / `machine_engine_lit.png` textures (placeholder -- needs user art). LIT blockstate drives texture variant swap.
+
+Stickiness: MachineType.ENGINE -- sticks to other Engines + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
 ### Machine Pipe -- Push-Only Item Transport
 
 Registry ID: `machine_pipe`. Class: MachinePipeBlock extends AbstractMachineBlock. `MachineType.PIPE`.
@@ -1429,7 +1491,9 @@ Non-directional Machine Family block. Own BE subclass: MachinePipeBlockEntity (B
 
 **FILLED blockstate**: Set to true when transit slot has items, drives texture swap between machine_pipe and machine_pipe_filled models. updateFilledState() guarded with MachineSwapHelper.isSwapping() check to prevent re-placing block during removal.
 
-**Piston safety**: onRemove checks movedByPiston -- skips transit item drop when moved by piston (items preserved via IPistonMovable save/loadMovementData). loadMovementData enforces minimum TRANSFER_COOLDOWN after piston landing to prevent immediate push at new position.
+**Piston safety**: onRemove checks `!movedByPiston` -- skips transit item drop when moved by piston (items preserved via IPistonMovable save/loadMovementData). Also checks `!MachineSwapHelper.isSwapping()` to avoid double-drop during specialization removal (ejectSecondaryItems handles that case). loadMovementData enforces minimum TRANSFER_COOLDOWN after piston landing to prevent immediate push at new position.
+
+**Item preservation on specialization removal**: When the hopper is removed from slot 0, MachineSwapHelper.ejectSecondaryItems() drops the transit slot contents as item entities before the swap.
 
 **Automation interaction**: WorldlyContainer exposes only transit slot (slot 1) to external faces. Specialization slot (0) is GUI-only. canPlaceItemThroughFace records the insertion direction in a ThreadLocal which setItem reads to call onItemReceived with the correct face.
 
@@ -1713,6 +1777,19 @@ Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneCon
 |-----|------|---------|-------|-------------|
 | `durations` | int[] | [5,10,15,...,80] | each 1-6000 | Available duration presets for Machine Timer GUI buttons, in game ticks. Array can be any length (GUI shows up to 16 in 2 rows). |
 | `default_index` | int | 3 | 0 to len-1 | Index into durations array for the pre-selected default when a new Timer is created. Index 3 = 20 ticks. |
+
+**Section: engine**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `durations` | int[] | [5,10,15,...,40] | each 1-6000 | Available pulse interval presets for Machine Engine GUI buttons, in game ticks. Increments of 5. Array can be any length (GUI shows up to 8 in 1 row). |
+| `default_index` | int | 3 | 0 to len-1 | Index into durations array for the pre-selected default when a new Engine is created. Index 3 = 20 ticks. |
+
+**Section: pulser**
+
+| Key | Type | Default | Range | Description |
+|-----|------|---------|-------|-------------|
+| `pulse_duration` | int | 2 | 1-100 | Fixed pulse duration for the Machine Pulser, in game ticks (2 = 1 redstone tick). |
 
 **Reload**: `/ideomod reload` command (op level 2) calls `IdeomodConfig.reloadConfig()`. Also available programmatically for future use.
 

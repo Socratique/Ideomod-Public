@@ -134,6 +134,16 @@ public class IdeomodConfig {
     private static int timerDefaultIndex = 3;
 
     // ========================================================================
+    // ENGINE
+    // ========================================================================
+
+    /** Available interval presets for the Machine Engine, in game ticks. Increments of 5. */
+    private static int[] engineDurations = {5, 10, 15, 20, 25, 30, 35, 40};
+
+    /** Default selected index into engineDurations array (0-based). Index 3 = 20 ticks. */
+    private static int engineDefaultIndex = 3;
+
+    // ========================================================================
     // PULSER
     // ========================================================================
 
@@ -291,6 +301,38 @@ public class IdeomodConfig {
     }
 
     // ========================================================================
+    // GETTERS — Engine
+    // ========================================================================
+
+    /**
+     * Get the array of available engine interval presets (in game ticks).
+     * Returns a defensive copy.
+     */
+    public static int[] getEngineDurations() {
+        ensureLoaded();
+        return engineDurations.clone();
+    }
+
+    /**
+     * Get the default selected index into the engine durations array.
+     */
+    public static int getEngineDefaultIndex() {
+        ensureLoaded();
+        return engineDefaultIndex;
+    }
+
+    /**
+     * Get the default engine pulse interval in ticks (resolves the default index).
+     */
+    public static int getEngineDefaultDuration() {
+        ensureLoaded();
+        if (engineDefaultIndex >= 0 && engineDefaultIndex < engineDurations.length) {
+            return engineDurations[engineDefaultIndex];
+        }
+        return 10; // Fallback
+    }
+
+    // ========================================================================
     // GETTERS — Pulser
     // ========================================================================
 
@@ -433,6 +475,22 @@ public class IdeomodConfig {
             timerDefaultIndex = clamp(getInt(timer, "default_index", timerDefaultIndex), 0, timerDurations.length - 1);
         }
 
+        // --- Engine ---
+        JsonObject engine = getSection(root, "engine");
+        if (engine != null) {
+            if (engine.has("durations") && engine.get("durations").isJsonArray()) {
+                JsonArray engDurArray = engine.getAsJsonArray("durations");
+                int[] parsed = new int[engDurArray.size()];
+                for (int i = 0; i < engDurArray.size(); i++) {
+                    parsed[i] = clamp(engDurArray.get(i).getAsInt(), 1, 6000);
+                }
+                if (parsed.length > 0) {
+                    engineDurations = parsed;
+                }
+            }
+            engineDefaultIndex = clamp(getInt(engine, "default_index", engineDefaultIndex), 0, engineDurations.length - 1);
+        }
+
         // --- Pulser ---
         JsonObject pulser = getSection(root, "pulser");
         if (pulser != null) {
@@ -514,6 +572,17 @@ public class IdeomodConfig {
         timer.add("durations", durArray);
         timer.addProperty("default_index", timerDefaultIndex);
         root.add("timer", timer);
+
+        // --- Engine ---
+        JsonObject engine = new JsonObject();
+        engine.addProperty("_comment", "Machine Engine pulse interval presets in game ticks. default_index selects which button is pre-selected.");
+        JsonArray engDurArray = new JsonArray();
+        for (int d : engineDurations) {
+            engDurArray.add(d);
+        }
+        engine.add("durations", engDurArray);
+        engine.addProperty("default_index", engineDefaultIndex);
+        root.add("engine", engine);
 
         // --- Pulser ---
         JsonObject pulser = new JsonObject();

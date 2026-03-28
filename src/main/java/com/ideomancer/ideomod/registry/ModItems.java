@@ -115,6 +115,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_TIMER = ITEMS.register("machine_timer",
             () -> new BlockItem(ModBlocks.MACHINE_TIMER.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_ENGINE = ITEMS.register("machine_engine",
+            () -> new BlockItem(ModBlocks.MACHINE_ENGINE.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> MACHINE_PULSER = ITEMS.register("machine_pulser",
             () -> new BlockItem(ModBlocks.MACHINE_PULSER.get(), new Item.Properties()));
 

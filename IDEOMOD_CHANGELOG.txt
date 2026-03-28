@@ -1,5 +1,63 @@
 # Ideomod Changelog
 
+## [2026-03-28] Machine Engine Specialization
+
+Added Machine Engine -- a fuel-burning pulse clock for the Machine Family. Burns any Forge-
+recognized fuel item and emits periodic redstone pulses at a configurable interval. Also fixed
+item duplication on piston movement for secondary slots and added item ejection when removing
+specializations.
+
+### New Files
+- `MachineEngineBlock.java` -- Extends AbstractMachineBlock. MachineType.ENGINE. LIT + POWERED
+  blockstates. 5-layer anti-feedback architecture. 2-game-tick (1 redstone tick) pulse via
+  scheduleTick. Campfire cosy smoke + flame particles when LIT.
+- `MachineEngineBlockEntity.java` -- Extends MachineFrameBlockEntity. Own BE type (MACHINE_ENGINE).
+  Fuel slot (slot 1), litTime/litDuration, pulseInterval, pulseCounter. Server-side ticker.
+  IItemHandler capability for hopper/pipe automation. Fuel timer freezes when unpowered.
+- `EnginePulseIntervalPacket.java` -- Client-to-server packet for pulse interval GUI button clicks.
+
+### Changes
+- `MachineSwapHelper.java` -- Added ejectSecondaryItems() method. Before any specialization swap,
+  drops items from slot 1+ (engine fuel, pipe transit) as entities at the block position. Prevents
+  item loss when removing the specialization item from slot 0.
+- `MachineEngineBlock.onRemove()` -- Added !movedByPiston and !isSwapping guards. Fuel items only
+  drop on actual block break, not during piston moves or specialization swaps. Fixes item
+  duplication where fuel was both dropped and preserved via IPistonMovable.
+- `MachinePipeBlock.onRemove()` -- Already had correct guards (!movedByPiston, !isSwapping).
+  Documented in comments.
+- `IdeomodConfig.java` -- Added engine section: durations [5,10,15,20,25,30,35,40] (increments
+  of 5), default_index 3 (= 20 ticks). Added pulser section: pulse_duration 2.
+- `MachineFrameMenu.java` -- ContainerData expanded to size 10. Indices 6-9 for engine:
+  DATA_ENGINE_LIT_TIME, DATA_ENGINE_LIT_DURATION, DATA_ENGINE_INTERVAL, DATA_IS_ENGINE.
+- `MachineFrameScreen.java` -- Engine GUI rendering: fuel slot, flame indicator (vanilla furnace
+  texture: empty outline at UV 56,36 + lit flame at UV 176,0), "Pulse Interval" label, 8 interval
+  buttons in 1 row.
+- `PositionBoundContainer.java` -- Added getEngineBE(), isEngine(), getEngineLitTime(),
+  getEngineLitDuration(), getEnginePulseInterval() for dynamic engine slot delegation.
+- `ModBlockEntities.java` -- Registered MACHINE_ENGINE BlockEntityType.
+- `ModBlocks.java` -- Registered MACHINE_ENGINE with isRedstoneConductor=false.
+- `ModNetworking.java` -- Registered EnginePulseIntervalPacket.
+
+### Bug Fixes
+- Fixed engine pulse not rendering on redstone dust: pulse duration was 1 game tick, too short
+  for client-side visual updates. Changed to 2 game ticks (1 redstone tick).
+- Fixed POWERED/LIT blockstates stuck on at high pulse rates: added force-clear in serverTick
+  when engine is unpowered (belt-and-suspenders safety net).
+- Fixed particles (flame + smoke) remaining visible when engine is off: animateTick now checks
+  LIT blockstate instead of litTime, so particles disappear when signal is cut (even though
+  frozen litTime > 0).
+- Changed smoke particles from SMOKE to CAMPFIRE_COSY_SMOKE for better visual.
+- Fixed fuel item duplication on piston movement: onRemove was dropping fuel as an entity
+  while saveMovementData also preserved it in the new block entity.
+
+### Design Decisions
+- Fuel timer freezes (not resets) when unpowered. Remaining burn time is preserved and resumes
+  when signal returns. This allows toggling the engine on/off without wasting fuel.
+- Pulse durations in increments of 5 ticks (5-40). Sub-5-tick intervals caused visual issues
+  where the duty cycle was too high for the client to render individual pulses.
+
+---
+
 ## [2026-03-27b] Oddstone Family Recipes
 
 Added crafting, stonecutter, and smelting recipes for all oddstone variants. Removed the

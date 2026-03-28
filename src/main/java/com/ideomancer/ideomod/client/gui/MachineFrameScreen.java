@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.client.gui;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.machine.MachineFrameMenu;
 import com.ideomancer.ideomod.config.IdeomodConfig;
+import com.ideomancer.ideomod.network.EnginePulseIntervalPacket;
 import com.ideomancer.ideomod.network.ModNetworking;
 import com.ideomancer.ideomod.network.RepeaterDelayPacket;
 import com.ideomancer.ideomod.network.TimerDurationPacket;
@@ -95,6 +96,32 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
     private static final int TIMER_ROW1_Y = 52;
     private static final int TIMER_ROW2_Y = 52 + BUTTON_SIZE + BUTTON_GAP;
 
+    // Engine: fuel slot + flame + label + 8 buttons in 1 row
+    // Fuel slot uses transit slot position (80, 38) — directly below spec slot.
+    // This is the slot index 1 position, same as pipe's transit slot.
+    // Slot bottom edge is at y=37+18=55, so controls start below that.
+    private static final int ENGINE_BUTTONS_COUNT = 8;
+    private static final int ENGINE_BUTTONS_START_X = 17;
+    private static final int ENGINE_LABEL_Y = 58;
+    private static final int ENGINE_ROW1_Y = 70;
+
+    // Flame indicator: to the left of the fuel slot (at 80,38), offset left by flame width + gap
+    // Slot left edge = 79. Flame (14px wide) at 79 - 14 - 2 = 63
+    private static final int ENGINE_FLAME_X = 63;
+    private static final int ENGINE_FLAME_Y = 40; // Vertically centered with fuel slot
+    private static final int FLAME_WIDTH = 14;
+    private static final int FLAME_HEIGHT = 14;
+
+    // Vanilla furnace flame sprites from furnace.png (256x256 texture):
+    //   Lit flame sprite: U=176, V=0, 14x14 (progress overlay, drawn bottom-up)
+    //   Empty flame outline: U=56, V=36, 14x14 (baked into the GUI background)
+    private static final ResourceLocation FURNACE_GUI_TEXTURE =
+            new ResourceLocation("minecraft", "textures/gui/container/furnace.png");
+    private static final int FLAME_LIT_U = 176;
+    private static final int FLAME_LIT_V = 0;
+    private static final int FLAME_EMPTY_U = 56;
+    private static final int FLAME_EMPTY_V = 36;
+
     private static final int LABEL_COLOR = 4210752;
 
     private final Component playerInventoryTitle;
@@ -131,7 +158,7 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
         // 3. Slot tiles
         g.blit(GUI_SHEET, x + 79, y + 19, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
 
-        if (this.menu.isPipe()) {
+        if (this.menu.isPipe() || this.menu.isEngine()) {
             g.blit(GUI_SHEET, x + 79, y + 37, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
         }
 
@@ -145,6 +172,10 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
 
         if (this.menu.isTimer()) {
             renderTimerButtons(g, x, y);
+        }
+
+        if (this.menu.isEngine()) {
+            renderEngineControls(g, x, y);
         }
 
         // 4. Player inventory section
@@ -214,6 +245,50 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
                 int btnY = guiY + TIMER_ROW2_Y;
                 renderNumberedButton(g, btnX, btnY, tickValue, tickValue == currentDuration);
             }
+        }
+    }
+
+    private void renderEngineControls(GuiGraphics g, int guiX, int guiY) {
+        // Fuel slot tile is rendered in the main slot section (shared with pipe).
+
+        // Flame indicator (to the left of fuel slot)
+        // Step 1: Always render the empty flame outline from the vanilla furnace GUI background
+        int litTime = this.menu.getEngineLitTime();
+        int litDuration = this.menu.getEngineLitDuration();
+
+        g.blit(FURNACE_GUI_TEXTURE,
+                guiX + ENGINE_FLAME_X, guiY + ENGINE_FLAME_Y,
+                FLAME_EMPTY_U, FLAME_EMPTY_V,
+                FLAME_WIDTH, FLAME_HEIGHT, 256, 256);
+
+        // Step 2: Overlay lit flame portion from bottom up (when burning)
+        if (litTime > 0 && litDuration > 0) {
+            int flameHeight = (int) ((float) litTime / (float) litDuration * FLAME_HEIGHT);
+            if (flameHeight > 0) {
+                int yOffset = FLAME_HEIGHT - flameHeight;
+                g.blit(FURNACE_GUI_TEXTURE,
+                        guiX + ENGINE_FLAME_X, guiY + ENGINE_FLAME_Y + yOffset,
+                        FLAME_LIT_U, FLAME_LIT_V + yOffset,
+                        FLAME_WIDTH, flameHeight, 256, 256);
+            }
+        }
+
+        // "Pulse Interval" label
+        int[] durations = IdeomodConfig.getEngineDurations();
+        int currentInterval = this.menu.getEnginePulseInterval();
+
+        String labelText = "Pulse Interval";
+        int labelWidth = this.font.width(labelText);
+        int labelX = guiX + (GUI_WIDTH - labelWidth) / 2;
+        g.drawString(this.font, labelText, labelX, guiY + ENGINE_LABEL_Y, LABEL_COLOR, false);
+
+        // Duration buttons (1 row of 8)
+        int buttonCount = Math.min(durations.length, ENGINE_BUTTONS_COUNT);
+        for (int i = 0; i < buttonCount; i++) {
+            int tickValue = durations[i];
+            int btnX = guiX + ENGINE_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+            int btnY = guiY + ENGINE_ROW1_Y;
+            renderNumberedButton(g, btnX, btnY, tickValue, tickValue == currentInterval);
         }
     }
 
@@ -301,6 +376,21 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
                             && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
                         ModNetworking.CHANNEL.sendToServer(
                                 new TransformerLevelPacket(this.menu.getBlockPos(), i + 9));
+                        return true;
+                    }
+                }
+            }
+
+            if (this.menu.isEngine()) {
+                int[] engineDurations = IdeomodConfig.getEngineDurations();
+                int engineButtonCount = Math.min(engineDurations.length, ENGINE_BUTTONS_COUNT);
+                for (int i = 0; i < engineButtonCount; i++) {
+                    int btnX = guiX + ENGINE_BUTTONS_START_X + i * (BUTTON_SIZE + BUTTON_GAP);
+                    int btnY = guiY + ENGINE_ROW1_Y;
+                    if (mouseX >= btnX && mouseX < btnX + BUTTON_SIZE
+                            && mouseY >= btnY && mouseY < btnY + BUTTON_SIZE) {
+                        ModNetworking.CHANNEL.sendToServer(
+                                new EnginePulseIntervalPacket(this.menu.getBlockPos(), i));
                         return true;
                     }
                 }

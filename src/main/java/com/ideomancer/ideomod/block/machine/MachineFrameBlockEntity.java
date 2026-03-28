@@ -692,6 +692,11 @@ public class MachineFrameBlockEntity extends BlockEntity
         // Reset pulser countdown
         this.pulserTicksRemaining = 0;
 
+        // Reset engine fields (if switching away from engine)
+        // Note: MachineEngineBlockEntity has its own fuel fields that are
+        // not stored here; the block entity itself is replaced on swap.
+        // This reset is a safety net for the base class fields.
+
         if (this.level != null && !this.level.isClientSide()) {
             MachineSwapHelper.checkAndSwap(this.level, this.worldPosition, this.items.get(0));
         }

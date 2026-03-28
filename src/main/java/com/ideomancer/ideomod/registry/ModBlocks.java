@@ -8,6 +8,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
+import com.ideomancer.ideomod.block.machine.MachineEngineBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlock;
@@ -360,6 +361,18 @@ public class ModBlocks {
     // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
     public static final RegistryObject<Block> MACHINE_TIMER = BLOCKS.register("machine_timer",
             () -> new MachineTimerBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Engine: fuel-burning pulse clock. Combines furnace fuel with configurable intervals.
+    // isRedstoneConductor=false so vanilla doesn't treat it as a solid conductor.
+    public static final RegistryObject<Block> MACHINE_ENGINE = BLOCKS.register("machine_engine",
+            () -> new MachineEngineBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()
