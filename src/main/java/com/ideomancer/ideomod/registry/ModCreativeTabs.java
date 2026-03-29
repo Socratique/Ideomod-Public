@@ -65,6 +65,8 @@ public class ModCreativeTabs {
                         output.accept(ModItems.ODDSTONE_BRICK_WALL.get());
                         output.accept(ModItems.ODDSTONE_BRICK_STAIRS.get());
                         output.accept(ModItems.ODDSTONE_BRICK_SLAB.get());
+                        output.accept(ModItems.HOLLOW_STONE.get());
+                        output.accept(ModItems.HOLLOW_STONE_SHARD.get());
                         output.accept(ModItems.MACHINE_BLOCK.get());
                         output.accept(ModItems.ODD_SLIME.get());
                         output.accept(ModItems.ODDSTONE_REPULSER.get());

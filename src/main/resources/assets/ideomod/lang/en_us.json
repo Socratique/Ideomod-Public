@@ -42,5 +42,8 @@
   "block.ideomod.cobbled_oddstone_slab": "Cobbled Oddstone Slab",
   "block.ideomod.oddstone_brick_wall": "Oddstone Brick Wall",
   "block.ideomod.oddstone_brick_stairs": "Oddstone Brick Stairs",
-  "block.ideomod.oddstone_brick_slab": "Oddstone Brick Slab"
+  "block.ideomod.oddstone_brick_slab": "Oddstone Brick Slab",
+  "block.ideomod.hollow_stone": "Hollowstone",
+  "item.ideomod.hollow_stone_shard": "Hollowstone Shard",
+  "generator.ideomod.ore_only": "Ore Only (Debug)"
 }

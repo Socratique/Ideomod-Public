@@ -16,7 +16,9 @@ import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.block.portal.EnderPearlPortalHandler;
 import com.ideomancer.ideomod.client.render.FramedBlockItemModel;
 import com.ideomancer.ideomod.client.render.FramedBlockRenderer;
+import com.ideomancer.ideomod.client.render.HollowstoneRenderer;
 import com.ideomancer.ideomod.client.render.MachinePistonArmRenderer;
+import com.ideomancer.ideomod.worldgen.ModFeatures;
 import com.ideomancer.ideomod.client.gui.MachineFrameScreen;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import com.ideomancer.ideomod.registry.ModBlocks;
@@ -67,6 +69,8 @@ public class Ideomod {
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModMenuTypes.MENUS.register(modEventBus);
         ModRecipeSerializers.RECIPE_SERIALIZERS.register(modEventBus);
+        ModFeatures.FEATURES.register(modEventBus);
+        ModFeatures.CHUNK_GENERATORS.register(modEventBus);
 
         // Register specialization mappings (item -> block) for machine swap system.
         MachineSwapHelper.registerMappings();
@@ -218,6 +222,10 @@ public class Ideomod {
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.IRON_FRAMED_BLOCK.get(), RenderType.cutoutMipped());
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.COPPER_FRAMED_BLOCK.get(), RenderType.cutoutMipped());
 
+            // Hollowstone: cutoutMipped for filled variant (transparent center pixels)
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.HOLLOW_STONE.get(), RenderType.cutoutMipped());
+
+            BlockEntityRenderers.register(ModBlockEntities.HOLLOW_STONE.get(), HollowstoneRenderer::new);
             BlockEntityRenderers.register(ModBlockEntities.FRAMED_BLOCK.get(), FramedBlockRenderer::new);
             BlockEntityRenderers.register(ModBlockEntities.MACHINE_FRAME.get(), MachinePistonArmRenderer::new);
 

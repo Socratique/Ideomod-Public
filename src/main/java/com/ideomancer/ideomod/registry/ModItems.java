@@ -65,6 +65,13 @@ public class ModItems {
     public static final RegistryObject<Item> ODDSTONE_BRICK_SLAB = ITEMS.register("oddstone_brick_slab",
             () -> new BlockItem(ModBlocks.ODDSTONE_BRICK_SLAB.get(), new Item.Properties()));
 
+    // Hollowstone
+    public static final RegistryObject<Item> HOLLOW_STONE = ITEMS.register("hollow_stone",
+            () -> new BlockItem(ModBlocks.HOLLOW_STONE.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> HOLLOW_STONE_SHARD = ITEMS.register("hollow_stone_shard",
+            () -> new Item(new Item.Properties()));
+
     public static final RegistryObject<Item> MACHINE_BLOCK = ITEMS.register("machine_block",
             () -> new BlockItem(ModBlocks.MACHINE_BLOCK.get(), new Item.Properties()));
     

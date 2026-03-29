@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-28 (Machine Engine specialization, fuel-burning pulse clock)*
+*Last updated: 2026-03-29 (Hollowstone system, world generation, ore-only debug world type)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -57,6 +57,8 @@ com.ideomancer.ideomod
   |-- block/
   |     |-- OddstoneBlock.java           Core block: 6 features (see section 9)
   |     |-- OddSlimeBlock.java           Directional slime (FACING-gated stickiness)
+  |     |-- HollowstoneBlock.java        Transparent shell block (FILLED, EntityBlock)
+  |     |-- HollowstoneBlockEntity.java  Inner block storage + client sync
   |     |-- DrillBlock.java              3x3 redstone miner [ON HOLD]
   |     |-- frame/
   |     |     |-- IFrameBlock.java             Interface: getFrameMaterial(). Frame Family marker. Static isActive(BlockState) helper.
@@ -149,10 +151,15 @@ com.ideomancer.ideomod
   |           |-- FramedBlockRenderer.java     BESR for framed blocks (inner texture at rest)
   |           |-- FramedBlockItemModel.java    Custom BakedModel for framed items (inner texture in inventory)
   |           |-- FramedBlockRenderTypes.java  Custom RenderType for framed block overlays
-  |           \-- MovingFrameData.java         Client-side cache for inner block IDs during piston transit
+  |           |-- MovingFrameData.java         Client-side cache for inner block IDs during piston transit
+  |           |-- HollowstoneRenderer.java     BESR for Hollowstone (inner block at 0.998 scale)
   |           \-- MachinePistonArmRenderer.java  BESR for piston arm animation. Renders head model
   |                                              at interpolated offset during 2-tick extend/retract.
   |                                              Registered for MACHINE_FRAME BE type.
+  |-- worldgen/
+  |     |-- ModFeatures.java             DeferredRegister for Features + ChunkGenerator codecs
+  |     |-- HollowstoneLavaFormation.java  Custom Feature: lava shore oddstone + hollowstone
+  |     \-- OreOnlyChunkGenerator.java   Debug ChunkGenerator: strips non-ore blocks
   |-- config/
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
@@ -237,6 +244,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
 | `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
+| `hollow_stone` | HollowstoneBlock | MapColor.STONE, strength 1.5/6.0, pickaxe, stone sound. `noOcclusion()`. EntityBlock. FILLED BooleanProperty. BE type: HOLLOW_STONE. |
 
 ### ModItems (DeferredRegister<Item>)
 
@@ -244,7 +252,13 @@ BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same 
 
 BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock, `MACHINE_ENGINE` for MachineEngineBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
-Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`.
+Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`. `HOLLOW_STONE` is a standard BlockItem. `HOLLOW_STONE_SHARD` is a plain Item (crafting ingredient, 9 shards → 1 hollowstone).
+
+### ModFeatures (DeferredRegister<Feature<?>> + DeferredRegister<Codec<? extends ChunkGenerator>>)
+
+Two deferred registers in `worldgen/ModFeatures.java`:
+- `FEATURES`: Registers `HOLLOWSTONE_LAVA_FORMATION` — custom `Feature<NoneFeatureConfiguration>` for lava shore oddstone/hollowstone placement.
+- `CHUNK_GENERATORS`: Registers `ORE_ONLY` — `Codec<OreOnlyChunkGenerator>` for the debug ore-only world type. Registered against `Registries.CHUNK_GENERATOR`.
 
 ### ModCreativeTabs
 
@@ -1646,6 +1660,74 @@ Extends `DirectionalBlock`. FACING + POWERED properties. On rising redstone edge
 ### Oddstone Repulser / Attractor
 
 Both extend `AbstractRangedPistonBlock`. FACING + POWERED properties. Block event pattern for client-server sync. Repulser finds nearest Oddstone in line, pushes away. Attractor finds farthest Oddstone, pulls toward device. Each is ~15 lines -- all shared logic lives in the base class. Movement delegated to BlockMoveHelper via RangedPistonUtil.
+
+### Hollowstone Block
+
+Registry ID: `hollow_stone`. Class: `HollowstoneBlock` (implements `EntityBlock`). Block entity: `HollowstoneBlockEntity`. Properties: `MapColor.STONE`, strength 1.5/6.0, `requiresCorrectToolForDrops()`, `SoundType.STONE`, `noOcclusion()`.
+
+**Blockstate**: BooleanProperty `FILLED` (default false). Two variants: `filled=false` → hollow_stone model, `filled=true` → hollow_stone_filled model (transparent center pixels showing inner block).
+
+**Fill interaction**: Right-click with any `BlockItem` when `FILLED=false` → sets `FILLED=true`, stores inner block ID in `HollowstoneBlockEntity`, consumes 1 item from player hand. Sound + hand swing feedback.
+
+**Mining behavior**: Drops 5-7 Hollowstone Shards (fortune `ore_drops` bonus, `explosion_decay`). Silk touch → drops the block itself. Filled variant: `playerWillDestroy()` sets `markForInnerBlockPlacement()` flag → `onRemove()` reads flag and places inner block at the position. This coordination prevents the inner block from being lost.
+
+**Block entity** (`HollowstoneBlockEntity`): Stores inner block `ResourceLocation`. Lazy-cached `Block` instance. NBT key `"InnerBlock"`. Client sync via `getUpdateTag()`/`getUpdatePacket()`/`ClientboundBlockEntityDataPacket`. `placeInnerOnRemove` flag consumed once during coordinated break.
+
+**Rendering**: `HollowstoneRenderer` BESR — simplified `FramedBlockRenderer`. No FACING transfer, no property delegation. Renders inner block at 0.998 scale with best-of-6-neighbors lighting via `BlockRenderDispatcher.renderSingleBlock()`. Only renders when `hasInnerBlock()` is true. Registered in `Ideomod.clientSetup()`. Render layer: `cutoutMipped` for transparent texture pixels.
+
+**Crafting**: 9 Hollowstone Shards (3x3) → 1 Hollowstone (shaped recipe at `data/ideomod/recipes/hollow_stone.json`).
+
+**Loot table**: `data/ideomod/loot_tables/blocks/hollow_stone.json`. Uses `minecraft:alternatives`: silk touch → block drop, else → 5-7 shards with fortune `ore_drops` and `explosion_decay`.
+
+**Tags**: Added to `minecraft:mineable/pickaxe`.
+
+### World Generation
+
+#### Oddstone Ore Generation
+
+JSON data-driven via configured features, placed features, and Forge biome modifiers.
+
+| Parameter | Value |
+|-----------|-------|
+| Configured feature | `ideomod:oddstone_ore` — `minecraft:ore` type |
+| Vein size | 7 |
+| Air exposure discard | 0.0 (no culling near caves) |
+| Targets | `minecraft:stone_ore_replaceables`, `minecraft:deepslate_ore_replaceables` |
+| Deep placement | `oddstone_ore_deep` — 5 attempts/chunk, uniform Y-64 to Y0 |
+| Upper placement | `oddstone_ore_upper` — 3 attempts/chunk, uniform Y0 to Y63 |
+| Total | **8 attempts/chunk** at size 7 (between lapis and redstone rarity) |
+| Biome modifier | `forge:add_features`, `#minecraft:is_overworld`, step `underground_ores` |
+
+#### Hollowstone Lava Formation
+
+Custom `Feature<NoneFeatureConfiguration>` class: `HollowstoneLavaFormation`. Registered as `ideomod:hollowstone_lava_formation` via `ModFeatures`.
+
+**Algorithm**: Picks random position → scans radius 8 for lava source blocks → identifies shore blocks adjacent to lava (must be in `BASE_STONE_OVERWORLD` tag) → places 2-3 Oddstone on shore → for each Oddstone placed, spreads Hollowstone into up to 2 adjacent lava source blocks + 50% chance of secondary spread into neighbors of those.
+
+| Parameter | Value |
+|-----------|-------|
+| Placed feature | `hollowstone_lava_formation` — 3 attempts/chunk, uniform Y-64 to Y63 |
+| Biome modifier | `forge:add_features`, `#minecraft:is_overworld`, step `underground_decoration` |
+
+**OddstoneBlock Feature 6 — Lava Transformation**: `neighborChanged()` and `onPlace()` in `OddstoneBlock` call `convertAdjacentLava()` — converts adjacent lava SOURCE blocks (not flowing) to Hollowstone with sound effect + steam particles. This means player-placed Oddstone near lava also creates Hollowstone.
+
+#### Ore-Only Debug World Type
+
+Custom `OreOnlyChunkGenerator` extending `NoiseBasedChunkGenerator`. For visualizing ore distribution.
+
+**Behavior**:
+- `buildSurface()` → no-op (skips grass, dirt, sand surface rules)
+- `applyBiomeDecoration()` → calls super (vanilla feature placement including ores), then iterates every block in the chunk and replaces non-ore blocks with air
+- Ore identification: `forge:ores` tag (all vanilla + mod-tagged ores) + explicit checks for `ideomod:oddstone` and `ideomod:hollow_stone`
+
+**Registration**: Codec registered via `DeferredRegister<Codec<? extends ChunkGenerator>>` in `ModFeatures` against `Registries.CHUNK_GENERATOR`. World preset JSON at `data/ideomod/worldgen/world_preset/ore_only.json`. Added to `data/minecraft/tags/worldgen/world_preset/normal.json` tag so it appears in the World Type button cycle during world creation.
+
+**Translation**: `generator.ideomod.ore_only` → "Ore Only (Debug)"
+
+**Files**:
+- `worldgen/OreOnlyChunkGenerator.java` — chunk generator class
+- `data/ideomod/worldgen/world_preset/ore_only.json` — world preset (overworld uses `ideomod:ore_only` generator, nether/end standard)
+- `data/minecraft/tags/worldgen/world_preset/normal.json` — tag append
 
 
 ## 10. JUDGEMENT EFFECT

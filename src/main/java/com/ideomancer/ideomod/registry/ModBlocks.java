@@ -28,6 +28,7 @@ import com.ideomancer.ideomod.block.OddSlimeBlock;
 import com.ideomancer.ideomod.block.SympatheticWallBlock;
 import com.ideomancer.ideomod.block.SympatheticStairBlock;
 import com.ideomancer.ideomod.block.SympatheticSlabBlock;
+import com.ideomancer.ideomod.block.HollowstoneBlock;
 import com.ideomancer.ideomod.block.piston.OddstoneAttractorBlock;
 import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.portal.OddstonePortalBlock;
@@ -194,6 +195,19 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+            ));
+
+    // ========================================================================
+    // HOLLOWSTONE
+    // ========================================================================
+
+    public static final RegistryObject<Block> HOLLOW_STONE = BLOCKS.register("hollow_stone",
+            () -> new HollowstoneBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.STONE)
+                    .strength(1.5f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.STONE)
+                    .noOcclusion()
             ));
 
     // Registry ID remains "machine_block" for world compatibility.

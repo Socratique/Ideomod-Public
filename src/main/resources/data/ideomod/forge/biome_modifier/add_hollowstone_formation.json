@@ -1,0 +1,6 @@
+{
+  "type": "forge:add_features",
+  "biomes": "#minecraft:is_overworld",
+  "features": "ideomod:hollowstone_lava_formation",
+  "step": "underground_decoration"
+}

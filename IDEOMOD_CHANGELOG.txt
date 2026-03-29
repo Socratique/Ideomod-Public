@@ -1,5 +1,108 @@
 # Ideomod Changelog
 
+## [2026-03-29b] Oddstone Ore Generation Tuning
+
+Increased oddstone ore spawn rates to sit between lapis and redstone rarity. Oddstone drops
+1:1 as a block (unlike lapis/redstone which drop multiple items per ore), so it needs more
+veins to feel equivalent in terms of material acquisition.
+
+### Changes
+- `configured_feature/oddstone_ore.json` -- Vein size: 4 → 7
+- `placed_feature/oddstone_ore_deep.json` -- Attempts per chunk: 2 → 5 (Y-64 to Y0)
+- `placed_feature/oddstone_ore_upper.json` -- Attempts per chunk: 1 → 3 (Y0 to Y63)
+- Total: 8 attempts/chunk at size 7 (was 3 attempts at size 4)
+
+### Context
+- For comparison: lapis = 6 attempts size 7, redstone = 12 attempts size 8, diamond = 7 attempts size 4
+- Oddstone also generates around lava pools via HollowstoneLavaFormation, providing additional sources
+- discard_chance_on_air_exposure remains 0.0 (veins are not culled near caves)
+
+---
+
+## [2026-03-29a] Hollowstone System + Ore-Only Debug World Type
+
+Added Hollowstone block system (transparent shell that can hold inner blocks), world generation
+for both oddstone ore and hollowstone lava formations, and a debug world type that strips all
+non-ore blocks for visualizing ore distribution.
+
+### New Java Files
+- `block/HollowstoneBlock.java` -- Block with FILLED BooleanProperty, implements EntityBlock.
+  Right-click to fill with any block item. Mining drops 5-7 shards (fortune-affected). Filled
+  variant leaves inner block in-world via coordinated playerWillDestroy + onRemove using
+  markForInnerBlockPlacement() flag.
+- `block/HollowstoneBlockEntity.java` -- Stores inner block ResourceLocation. Lazy-cached Block
+  instance. NBT key "InnerBlock". Client sync via getUpdateTag()/getUpdatePacket().
+  placeInnerOnRemove flag for coordinated break behavior.
+- `client/render/HollowstoneRenderer.java` -- Simplified FramedBlockRenderer. No FACING transfer.
+  Renders inner block at 0.998 scale with best-of-6-neighbors lighting. Only renders when
+  hasInnerBlock() is true.
+- `worldgen/HollowstoneLavaFormation.java` -- Custom Feature<NoneFeatureConfiguration>. Scans
+  radius 8 for lava source → finds shore blocks (BASE_STONE_OVERWORLD) → places 2-3 Oddstone
+  → spreads Hollowstone into adjacent lava sources (2 per Oddstone + 50% secondary spread).
+- `worldgen/OreOnlyChunkGenerator.java` -- Debug ChunkGenerator extending
+  NoiseBasedChunkGenerator. No-ops buildSurface (no grass/dirt/sand). Overrides
+  applyBiomeDecoration: runs vanilla decoration (placing ores), then strips all non-ore blocks
+  using forge:ores tag + explicit oddstone/hollowstone checks.
+
+### Modified Java Files
+- `block/OddstoneBlock.java` -- Added Feature 6: Lava Transformation. neighborChanged() and
+  onPlace() call convertAdjacentLava() to convert adjacent lava SOURCE blocks to Hollowstone
+  with sound + steam particles.
+- `worldgen/ModFeatures.java` -- Added DeferredRegister<Codec<? extends ChunkGenerator>> for
+  chunk generators. Registered HOLLOWSTONE_LAVA_FORMATION feature and ORE_ONLY chunk generator
+  codec.
+- `registry/ModBlocks.java` -- Registered HOLLOW_STONE with MapColor.STONE, strength 1.5/6.0,
+  requiresCorrectToolForDrops(), SoundType.STONE, noOcclusion().
+- `registry/ModBlockEntities.java` -- Registered HOLLOW_STONE block entity type.
+- `registry/ModItems.java` -- Added HOLLOW_STONE (BlockItem) and HOLLOW_STONE_SHARD (plain Item).
+- `registry/ModCreativeTabs.java` -- Added HOLLOW_STONE and HOLLOW_STONE_SHARD to Ideomod tab.
+- `Ideomod.java` -- Added ModFeatures.CHUNK_GENERATORS.register(modEventBus). Client setup:
+  added cutoutMipped render layer for HOLLOW_STONE, registered HollowstoneRenderer for
+  HOLLOW_STONE block entity.
+
+### New JSON Data Files
+- `worldgen/configured_feature/oddstone_ore.json` -- minecraft:ore, size 7,
+  discard_chance_on_air_exposure 0.0, targets stone + deepslate ore replaceables.
+- `worldgen/placed_feature/oddstone_ore_deep.json` -- 5 attempts, uniform Y-64 to Y0.
+- `worldgen/placed_feature/oddstone_ore_upper.json` -- 3 attempts, uniform Y0 to Y63.
+- `worldgen/configured_feature/hollowstone_lava_formation.json` -- ideomod:hollowstone_lava_formation, config {}.
+- `worldgen/placed_feature/hollowstone_lava_formation.json` -- 3 attempts, uniform Y-64 to Y63.
+- `forge/biome_modifier/add_oddstone_ore_deep.json` -- #minecraft:is_overworld, underground_ores.
+- `forge/biome_modifier/add_oddstone_ore_upper.json` -- #minecraft:is_overworld, underground_ores.
+- `forge/biome_modifier/add_hollowstone_formation.json` -- #minecraft:is_overworld, underground_decoration.
+- `worldgen/world_preset/ore_only.json` -- World preset with ideomod:ore_only generator for
+  overworld, standard nether/end.
+- `tags/worldgen/world_preset/normal.json` (minecraft namespace) -- Appends ideomod:ore_only
+  to normal tag so it appears in World Type button cycle.
+- `loot_tables/blocks/hollow_stone.json` -- Alternatives: silk touch → block, else → 5-7 shards
+  with fortune ore_drops and explosion_decay.
+- `recipes/hollow_stone.json` -- 9 shards shaped → 1 hollowstone.
+
+### New JSON Asset Files
+- `blockstates/hollow_stone.json` -- Two variants: filled=false → hollow_stone, filled=true → hollow_stone_filled.
+- `models/block/hollow_stone.json` -- cube_all, texture ideomod:block/hollow_stone.
+- `models/block/hollow_stone_filled.json` -- cube_all, texture ideomod:block/hollow_stone_filled.
+- `models/item/hollow_stone.json` -- Parent: ideomod:block/hollow_stone.
+- `models/item/hollow_stone_shard.json` -- item/generated, layer0 ideomod:item/hollow_stone_shard.
+- `textures/block/hollow_stone.png` -- Copied from root (user-provided).
+- `textures/block/hollow_stone_filled.png` -- Copied from root (user-provided).
+- `textures/item/hollow_stone_shard.png` -- Generated programmatically (16x16, angular shard
+  using hollowstone color palette).
+- `lang/en_us.json` -- Added "Hollowstone", "Hollowstone Shard", "Ore Only (Debug)".
+
+### Modified JSON Files
+- `tags/blocks/mineable/pickaxe.json` -- Added ideomod:hollow_stone.
+
+### Bug Fixes (from initial implementation)
+- Fixed data pack loading error: used wrong field name `discard_on_air_exposure` instead of
+  `discard_chance_on_air_exposure` in oddstone_ore.json.
+- Fixed biome modifier tag: used nonexistent `#forge:is_overworld` instead of correct
+  `#minecraft:is_overworld` in all three biome modifier files.
+- Fixed loot table format: removed extra `bonus_rolls` and pool-level `survives_explosion`
+  that don't match vanilla patterns. Rewrote to match vanilla diamond ore loot table exactly.
+
+---
+
 ## [2026-03-28] Machine Engine Specialization
 
 Added Machine Engine -- a fuel-burning pulse clock for the Machine Family. Burns any Forge-

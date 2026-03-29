@@ -1,0 +1,6 @@
+{
+  "variants": {
+    "filled=false": { "model": "ideomod:block/hollow_stone" },
+    "filled=true": { "model": "ideomod:block/hollow_stone_filled" }
+  }
+}

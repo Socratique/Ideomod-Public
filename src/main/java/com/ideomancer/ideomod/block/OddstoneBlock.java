@@ -3,15 +3,22 @@ package com.ideomancer.ideomod.block;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.movement.StickyType;
 import com.ideomancer.ideomod.config.IdeomodConfig;
+import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.HoneyBlock;
 import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import org.jetbrains.annotations.Nullable;
@@ -72,7 +79,56 @@ public class OddstoneBlock extends Block implements ISympathetic {
         if (level.isClientSide()) return;
         if (!(level instanceof ServerLevel serverLevel)) return;
 
+        // Feature 6: Lava Transformation — convert adjacent lava sources to Hollowstone
+        convertAdjacentLava(level, pos);
+
         OddstonePortalHandler.onNeighborChanged(serverLevel, pos, neighborPos);
+    }
+
+    /**
+     * When Oddstone is placed next to existing lava, convert it immediately.
+     */
+    @Override
+    public void onPlace(BlockState state, Level level, BlockPos pos,
+                         BlockState oldState, boolean movedByPiston) {
+        super.onPlace(state, level, pos, oldState, movedByPiston);
+        if (!level.isClientSide()) {
+            convertAdjacentLava(level, pos);
+        }
+    }
+
+    // ========================================================================
+    // FEATURE 6: Lava Transformation — lava sources become Hollowstone
+    // ========================================================================
+
+    /**
+     * Check all 6 cardinal neighbors. If any are lava source blocks,
+     * replace them with Hollowstone. Oddstone is NOT consumed.
+     */
+    private void convertAdjacentLava(Level level, BlockPos pos) {
+        for (Direction dir : Direction.values()) {
+            BlockPos neighborPos = pos.relative(dir);
+            BlockState neighborState = level.getBlockState(neighborPos);
+            if (neighborState.is(Blocks.LAVA)) {
+                FluidState fluidState = level.getFluidState(neighborPos);
+                if (fluidState.isSource()) {
+                    level.setBlock(neighborPos,
+                            ModBlocks.HOLLOW_STONE.get().defaultBlockState(),
+                            Block.UPDATE_ALL);
+                    // Play sizzling/cooling sound
+                    level.playSound(null, neighborPos,
+                            SoundEvents.LAVA_EXTINGUISH, SoundSource.BLOCKS,
+                            0.5f, 2.2f + level.getRandom().nextFloat() * 0.4f);
+                    // Spawn steam particles
+                    if (level instanceof ServerLevel serverLevel) {
+                        serverLevel.sendParticles(ParticleTypes.LARGE_SMOKE,
+                                neighborPos.getX() + 0.5, neighborPos.getY() + 1.0,
+                                neighborPos.getZ() + 0.5,
+                                8, 0.3, 0.3, 0.3, 0.0);
+                    }
+                }
+            }
+        }
     }
 
     @Override

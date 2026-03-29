@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "SSS",
+    "SSS",
+    "SSS"
+  ],
+  "key": {
+    "S": { "item": "ideomod:hollow_stone_shard" }
+  },
+  "result": {
+    "item": "ideomod:hollow_stone",
+    "count": 1
+  }
+}

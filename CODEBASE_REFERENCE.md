@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-22b (Machine Timer specialization, fixed GUI height, button spritesheet expansion)*
+*Last updated: 2026-03-29 (Hollowstone system, world generation, ore-only debug world type)*
 
 ---
 
@@ -154,6 +154,28 @@ com.ideomancer.ideomod
   |           |                                detect(), forEachOddstonePosition(), parseAxis().
   |           |-- PortalUtils.java             Corner validation, interior nav, clearing
   |           \-- EnderPearlPortalHandler.java Ender pearl portal activation (Forge event)
+  |-- block/
+  |     |-- HollowstoneBlock.java        Transparent shell block. FILLED BooleanProperty.
+  |     |                                EntityBlock. Right-click fills with block items.
+  |     |                                Mining drops shards; filled variant leaves inner
+  |     |                                block in world. markForInnerBlockPlacement() flag
+  |     |                                coordinates playerWillDestroy + onRemove.
+  |     \-- HollowstoneBlockEntity.java  Stores inner block ResourceLocation. Lazy-cached
+  |                                      Block instance. NBT key "InnerBlock". Client sync
+  |                                      via getUpdateTag()/getUpdatePacket(). placeInnerOnRemove
+  |                                      flag for break behavior.
+  |-- worldgen/
+  |     |-- ModFeatures.java             DeferredRegister<Feature<?>> + DeferredRegister<Codec<? extends ChunkGenerator>>.
+  |     |                                Registers HOLLOWSTONE_LAVA_FORMATION feature and
+  |     |                                ORE_ONLY chunk generator codec.
+  |     |-- HollowstoneLavaFormation.java  Custom Feature<NoneFeatureConfiguration>. Scans
+  |     |                                radius 8 for lava source -> finds shore blocks
+  |     |                                (BASE_STONE_OVERWORLD) -> places 2-3 Oddstone ->
+  |     |                                spreads Hollowstone into adjacent lava sources.
+  |     \-- OreOnlyChunkGenerator.java   Debug ChunkGenerator extending NoiseBasedChunkGenerator.
+  |                                      No-ops buildSurface, runs vanilla decoration then
+  |                                      strips all non-ore blocks (forge:ores tag + oddstone
+  |                                      + hollowstone). Registered codec "ideomod:ore_only".
   |-- client/
   |     |-- ModColorHandlers.java        Block/item color tinting (Conductor power indicator,
   |     |                                Fluid Pipe biome water tint)
@@ -164,7 +186,10 @@ com.ideomancer.ideomod
   |           |-- FramedBlockRenderer.java    BESR for framed blocks (renderSingleBlock with facing transfer)
   |           |-- FramedBlockItemModel.java   Custom BakedModel for framed block items (composites inner + frame quads)
   |           |-- FramedBlockRenderTypes.java Custom RenderType for framed block overlays
-  |           \-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
+  |           |-- MovingFrameData.java        Client-side cache for FrameTransitInfo during piston transit
+  |           |-- HollowstoneRenderer.java   BESR for Hollowstone. Simplified FramedBlockRenderer.
+  |           |                              No FACING transfer. Renders inner block at 0.998
+  |           |                              scale with best-of-6-neighbors lighting.
   |           \-- MachinePistonArmRenderer.java  BESR for Machine Piston arm animation.
   |                                              Renders head model at interpolated offset.
   |                                              Registered for MACHINE_FRAME BE type.
@@ -216,7 +241,8 @@ com.ideomancer.ideomod
         |                                Transformer), MACHINE_PIPE (pipe subclass),
         |                                MACHINE_FLUID_PIPE (fluid pipe subclass),
         |                                MACHINE_ENGINE (engine subclass),
-        |                                FRAMED_BLOCK (shared iron/copper).
+        |                                FRAMED_BLOCK (shared iron/copper),
+        |                                HOLLOW_STONE (HollowstoneBlockEntity).
         |-- ModMenuTypes.java            DeferredRegister<MenuType<?>>. MACHINE_FRAME only
         |                                (unified for all machine types).
         \-- ModTags.java                 PORTAL_CORNER_BLOCKS, FRAMEABLE_BLOCKS,
@@ -472,11 +498,32 @@ Extends AbstractMachineBlock. MachineType.TIMER. Edge-triggered timed output. Re
 
 Extends AbstractMachineBlock. MachineType.ENGINE. Fuel-burning pulse clock. Burns fuel items (Forge burn times) and emits periodic 2-game-tick (1 redstone tick) redstone pulses at a player-configurable interval. LIT + POWERED blockstates (LIT = sustained burning+powered state, POWERED = transient pulse output). Specialization item: vanilla Furnace. Own BE subclass: MachineEngineBlockEntity (BlockEntityType: MACHINE_ENGINE). Extends MachineFrameBlockEntity with fuel slot (slot 1), litTime/litDuration, pulseInterval, pulseCounter. Server-side ticker (not scheduled ticks — uses BlockEntityTicker). 5-layer anti-feedback (same as Repeater/Transformer/Timer). Signal detection via MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Fuel freezes when unpowered (litTime paused, resumes on re-power). Force-clears POWERED+LIT when unpowered (safety net for high-rate stale state). GUI shows fuel slot + flame indicator (vanilla furnace textures) + "Pulse Interval" label + 8 buttons in 1 row, values from config engine.durations array (increments of 5). EnginePulseIntervalPacket via Forge SimpleChannel. Comparator output scales fuel slot fullness (0-15). Particles: flame on all 6 faces + campfire cosy smoke from top (only when LIT). Piston-safe: movedByPiston + isSwapping guards in onRemove. ejectSecondaryItems on specialization removal. IItemHandler capability for hopper/pipe automation. WorldlyContainer: fuel slot (1) external, specialization slot (0) GUI-only. Dual-cuboid model with binary tinted indicator (dark maroon off, bright red on).
 
-### 10. Odd Slime Block
+### 10. Hollowstone (transparent shell block)
+
+Registry ID: `hollow_stone`. Class: HollowstoneBlock (implements EntityBlock). Block entity: HollowstoneBlockEntity.
+
+1. **Transparent shell**: BooleanProperty FILLED (default false). `noOcclusion()` in properties. `cutoutMipped` render layer for transparent center pixels in filled texture.
+2. **Fill interaction**: Right-click with any block item fills the shell (sets FILLED=true, stores inner block in BE). Sound + hand swing feedback.
+3. **Mining behavior**: Drops 5-7 Hollowstone Shards (fortune-affected, explosion-safe). Silk touch drops the block itself. Filled variant: mining leaves the inner block in-world via coordinated `playerWillDestroy()` + `onRemove()` using `markForInnerBlockPlacement()` flag.
+4. **Rendering**: HollowstoneRenderer BESR. Simplified FramedBlockRenderer — no FACING transfer, no property delegation. Renders inner block at 0.998 scale with best-of-6-neighbors lighting. Only renders when `hasInnerBlock()` is true.
+5. **Crafting**: 9 Hollowstone Shards → 1 Hollowstone (shaped recipe).
+6. **Loot table**: `alternatives` with silk touch → block, else → 5-7 shards with fortune `ore_drops` and `explosion_decay`.
+
+### 10a. World Generation
+
+**Oddstone Ore**: JSON data-driven via configured/placed features + Forge biome modifiers. Configured feature `oddstone_ore` uses `minecraft:ore` type, size 7, `discard_chance_on_air_exposure: 0.0`, targets `stone_ore_replaceables` and `deepslate_ore_replaceables`. Two placed features: `oddstone_ore_deep` (5 attempts, uniform Y-64 to Y0) and `oddstone_ore_upper` (3 attempts, uniform Y0 to Y63). Total: 8 attempts/chunk at size 7 — between lapis and redstone rarity. Biome modifiers add to `#minecraft:is_overworld`, step `underground_ores`.
+
+**Hollowstone Lava Formation**: Custom `Feature<NoneFeatureConfiguration>` registered as `ideomod:hollowstone_lava_formation`. Algorithm: scan radius 8 for lava source → find shore blocks (`BASE_STONE_OVERWORLD` tag) → place 2-3 Oddstone → spread Hollowstone into adjacent lava sources (2 per Oddstone + 50% secondary spread). Placed feature: 3 attempts, uniform Y-64 to Y63. Biome modifier: `#minecraft:is_overworld`, step `underground_decoration`.
+
+**OddstoneBlock Feature 6 — Lava Transformation**: `neighborChanged()` and `onPlace()` call `convertAdjacentLava()` — converts adjacent lava SOURCE blocks (not flowing) to Hollowstone with sound + steam particles.
+
+**Ore-Only Debug World Type**: Custom `OreOnlyChunkGenerator` extending `NoiseBasedChunkGenerator`. No-ops `buildSurface` (no grass/dirt/sand). Overrides `applyBiomeDecoration` to run vanilla decoration (placing ores), then strips all non-ore blocks using `forge:ores` tag + explicit oddstone/hollowstone checks. Codec registered via `DeferredRegister<Codec<? extends ChunkGenerator>>` against `Registries.CHUNK_GENERATOR`. World preset at `data/ideomod/worldgen/world_preset/ore_only.json`. Added to `data/minecraft/tags/worldgen/world_preset/normal.json` so it appears in the World Type button cycle. Translation key: `generator.ideomod.ore_only` → "Ore Only (Debug)".
+
+### 11. Odd Slime Block
 
 Directional slime variant. `extends DirectionalBlock`. FACING property set on placement (piston-style). Only sticky when pushed in FACING direction (directional rule in Layer 3). Mutual exclusion with vanilla slime and honey via canStickTo.
 
-### 11. Judgement Effect
+### 12. Judgement Effect
 
 Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 32 blocks freeze (`setNoAi(true)`), stare at player for 5 seconds (manual yaw/pitch per tick), then unfreeze. Triggered by LivingDeathEvent. Also available via `/judgement` command (op level 2).
 
@@ -484,9 +531,11 @@ Rare event (1/200) when player kills a passive mob. All non-hostile mobs within 
 
 ## REGISTRIES
 
-**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD, MACHINE_BRACE, MACHINE_REPEATER, MACHINE_TOGGLE, MACHINE_TRANSFORMER, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK
+**ModBlocks**: IDEOBLOCK, DRILL, ODDSTONE, MACHINE_BLOCK, ODD_SLIME, ODDSTONE_PORTAL, ODDSTONE_REPULSER, ODDSTONE_ATTRACTOR, MACHINE_TRACK, MACHINE_TROLLEY, MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_PISTON_HEAD, MACHINE_BRACE, MACHINE_REPEATER, MACHINE_TOGGLE, MACHINE_TRANSFORMER, IRON_FRAME, COPPER_FRAME, IRON_FRAMED_BLOCK, COPPER_FRAMED_BLOCK, HOLLOW_STONE, + oddstone variants (cobbled, bricks, walls, stairs, slabs)
 
-**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_BRACE, MACHINE_REPEATER, MACHINE_TOGGLE, and MACHINE_TRANSFORMER. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1).
+**ModItems**: BlockItems for all standard blocks EXCEPT ODDSTONE_PORTAL. Includes MACHINE_CONDUCTOR, MACHINE_PIPE, MACHINE_FLUID_PIPE, MACHINE_PISTON, MACHINE_STICKY_PISTON, MACHINE_BRACE, MACHINE_REPEATER, MACHINE_TOGGLE, and MACHINE_TRANSFORMER. FramedBlockItem instances for IRON_FRAMED_BLOCK and COPPER_FRAMED_BLOCK (custom BlockItem with dynamic name + NBT). Plus STRUCTURE_DEBUG_STICK (standalone Item, stacksTo 1), HOLLOW_STONE (BlockItem), HOLLOW_STONE_SHARD (plain Item).
+
+**ModFeatures**: HOLLOWSTONE_LAVA_FORMATION (Feature), ORE_ONLY (Codec<? extends ChunkGenerator>).
 
 **ModTags**: PORTAL_CORNER_BLOCKS (14 mineral blocks), FRAMEABLE_BLOCKS (~310+ blocks whitelist for framing), FURNACE_ARRAY_FRAME (18 stone-family blocks), IMMOVABLE_WHEN_FRAMED (blocks that should be immovable when wrapped in frames — obsidian, crying_obsidian, reinforced_deepslate). Note: FurnaceArrayDefinition still uses inline tag reference — should be updated to use ModTags.FURNACE_ARRAY_FRAME.
 

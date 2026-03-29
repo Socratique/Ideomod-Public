@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.block.HollowstoneBlockEntity;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineEngineBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlockEntity;
@@ -82,6 +83,17 @@ public class ModBlockEntities {
                     () -> BlockEntityType.Builder.of(
                             MachineFluidPipeBlockEntity::new,
                             ModBlocks.MACHINE_FLUID_PIPE.get()
+                    ).build(null));
+
+    /**
+     * Hollowstone block entity type. Stores the inner decorative block identity.
+     * Only used by HollowstoneBlock.
+     */
+    public static final RegistryObject<BlockEntityType<HollowstoneBlockEntity>> HOLLOW_STONE =
+            BLOCK_ENTITIES.register("hollow_stone",
+                    () -> BlockEntityType.Builder.of(
+                            HollowstoneBlockEntity::new,
+                            ModBlocks.HOLLOW_STONE.get()
                     ).build(null));
 
     /**
