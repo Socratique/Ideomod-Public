@@ -657,7 +657,12 @@ Opt-in interface for block entities that need to preserve data through piston mo
 
 **Implementing blocks**: MachineFrameBlockEntity (saves/loads inventory, inputFace, repeaterDelay, transformerLevel, inputWasLow, timerDuration, timerTicksRemaining, pulserTicksRemaining, movementPowered via ContainerHelper; protected constructor for subclass BE types), MachinePipeBlockEntity (extends MachineFrameBlockEntity; transit slot + cooldown + round-robin + IItemHandler capability), MachineEngineBlockEntity (extends MachineFrameBlockEntity; fuel slot + litTime + litDuration + pulseInterval + pulseCounter + IItemHandler capability), FramedBlockEntity (saves/loads inner block ResourceLocation).
 
-**Latch state preservation**: `movementPowered` (transient boolean in MachineFrameBlockEntity) captures whether the block was powered before movement. Saved in `saveMovementData()` via `getRedstoneOutput() > 0`, restored in `loadMovementData()`. In `onMovementRestored()`, powered Toggles get their POWERED+INPUT_FACE blockstate restored as a safety net and SKIP the re-evaluation tick (the Toggle's tick() treats any tick on a POWERED toggle as "toggle OFF", which would immediately undo the latch). All other machine blocks get a tick scheduled as before.
+**POWERED state preservation**: `movementPowered` (transient boolean in MachineFrameBlockEntity) captures whether the block was powered before movement. Saved in `saveMovementData()` via `getRedstoneOutput() > 0`, restored in `loadMovementData()`. In `onMovementRestored()`:
+
+- **All machine blocks** with a "powered" BooleanProperty get their POWERED blockstate restored generically via state definition property lookup. This prevents powered blocks from arriving at their destination with POWERED=false even though vanilla's movedState should preserve it (neighbor updates from piston head removal can cause transient state changes).
+- **Toggle special case**: POWERED + INPUT_FACE restored, then the re-evaluation tick is SKIPPED (the Toggle's tick() treats any tick on a POWERED toggle as "toggle OFF", which would immediately undo the latch).
+- **Staggered tick delays**: POWERED blocks get their re-evaluation tick at delay **2**, UNPOWERED blocks at delay **1**. This preserves pulse cascades through movement — the receiving (UNPOWERED) block gets a 1-tick head start to detect the sender's signal before the sender's countdown expires. Without this stagger, same-delay tick ordering is non-deterministic and the sender can expire before the receiver processes.
+- **Post-movement scan recovery**: All edge-triggered machine blocks (Pulser, Timer, Toggle) have a scan guard in their tick() UNPOWERED path. If inputFace is null after movement (pulse expired "clean" before the move), the tick does a full `scanAllFaces()` to recover the input direction. In normal gameplay this path is unreachable (neighborChanged always sets inputFace before scheduling tick). MachineRepeaterBlock already does an unconditional scan so no guard is needed.
 
 **Data registry** (`MovingBlockEntityData`):
 - Static `ConcurrentHashMap<String, CompoundTag>` keyed by `"dimension:x,y,z"` at DESTINATION.
@@ -707,11 +712,11 @@ Saves IPistonMovable block entity data before vanilla destroys the block entitie
 | Mode | Method | Notes |
 |------|--------|-------|
 | Extension | PistonStructureResolver | Standard resolver finds toPush list, save each IPistonMovable |
-| Retraction | Direct position scan + BFS + sympathetic | Resolver fails for IPistonMovable blocks (Bug 3). Scans pistonPos+dir*2 directly, then BFS for sticky group, then sympathetic scan for distant oddstone |
+| Retraction | Piston head removal + PistonStructureResolver | Remove piston head before resolver (mirroring vanilla's timing), then standard resolver finds toPush list |
 
-Retraction sticky group BFS: Starting from the pulled block, scans all 6 neighbors. For each neighbor: checks if any visited block is sticky to it (both directions via canStickTo). If stuck, saves its data and (if itself sticky) queues its neighbors. Limit: 12 blocks (vanilla push limit). Shares savedPositions set with sympathetic scanner.
+**Retraction timing fix** (2026-03-31c): Vanilla's `moveBlocks()` removes the piston head BEFORE creating its resolver. Our mixin injects at HEAD, which runs BEFORE that removal. Without intervention, our resolver's forward walk from startPos hits the still-present piston head (not pushable), causing `addBlockLine` → `resolve()` to return false, skipping the save entirely. Fix: explicitly remove the piston head before creating our resolver via `level.removeBlock(headPos, false)` (flag 3, matching vanilla's exact call). Safe because vanilla has already set the piston base to EXTENDED=false in `triggerEvent` before calling `moveBlocks`, so `PistonHeadBlock.onRemove`'s EXTENDED check won't destroy the piston base. If our resolver fails, we restore the head so vanilla finds the expected world state.
 
-Retraction sympathetic scan (scanSympathetic): After BFS, scans from each oddstone/framed oddstone in savedPositions along all 6 axes up to OddstoneConfig.getSympatheticRadius(). Finds distant oddstone blocks (separated by air) and saves their BE data. After saving each found oddstone, also calls scanStickyGroup() on it if sticky — this ensures blocks attached to the remote oddstone via stickiness (machine frames, activated framed blocks) also get their data saved. Chains iteratively — newly found blocks become seeds for next pass. Mirrors PistonStructureResolverMixin's sympathetic search logic.
+**Historical note**: Prior to 2026-03-31c, retraction used a fallback path (direct position scan + BFS + sympathetic scan) because the resolver was failing due to this timing bug. The fallback masked the real problem. It was removed in 2026-03-31b (which was then superseded by 2026-03-31c). The resolver is now the sole save path for both extension and retraction.
 
 **PistonMovingBlockEntityMixin** (`com.ideomancer.ideomod.mixin.PistonMovingBlockEntityMixin`):
 
@@ -1209,7 +1214,7 @@ Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI sho
 
 Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
 
-Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.markDirty().
+Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.markDirty(). onPlace and onRemove guarded by `!movedByPiston` to skip neighbor updates and FrameActivation during piston movement.
 
 ### Machine Trolley -- Passive Cargo Carrier
 
@@ -1262,7 +1267,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 **Anti-feedback Architecture** (5 layers, derived from vanilla DiodeBlock analysis):
 
-1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. `shouldSignal` ThreadLocal (static on block class) suppresses `isSignalSource` and `getDirectSignal` during own scan to prevent self-reads through solid blocks.
+1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. `shouldSignal` ThreadLocal<BlockPos> (static on block class) stores the position of the instance currently scanning. getSignal/getDirectSignal return 0 ONLY when `pos.equals(shouldSignal.get())` — this prevents self-reads through solid blocks while allowing other instances of the same class to output normally. `isSignalSource` always returns true (position-based suppression handled in getSignal/getDirectSignal). FIX 2026-03-29: changed from ThreadLocal<Boolean> to ThreadLocal<BlockPos> to enable same-type power through solid blocks.
 
 2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face (determined via `getFaceFromSourcePos(pos, sourcePos)`), return immediately. Only input-face updates proceed to logic.
 
@@ -1272,9 +1277,9 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 5. updatingPos ThreadLocal: during tick()'s setBlock(flag 3), stores current BlockPos. neighborChanged at THIS position returns immediately (prevents stale dust reads during synchronous cascade). Adjacent repeaters at different positions proceed normally.
 
-**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. Handles: MachineConductorBlock (getSignal with -1 decay), any AbstractMachineBlock with getRedstoneOutput() > 0 (device neighbor, input-face check), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal=false).
+**Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. Handles: MachineConductorBlock (getSignal with -1 decay), any AbstractMachineBlock with getRedstoneOutput() > 0 (device neighbor, input-face check), RedStoneWireBlock (POWER with -1 decay), everything else (vanilla level.getSignal with shouldSignal set to scanning position for self-read prevention).
 
-**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at configured delay (DELAY * 2 game ticks). Uses `willTickThisTick()` guard. tick() uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at configured delay (DELAY * 2 game ticks). Uses `willTickThisTick()` guard. tick() uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). On POWERED state change, also calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks (matching vanilla repeater behavior). onRemove guarded by `!movedByPiston` to skip neighbor updates during piston movement.
 
 **GUI Buttons**: 4 numbered buttons from `ideomod_numbered_buttons.png` rendered in transit slot zone (Y=37, same space as pipe transit slot). `MachineFrameScreen.mouseClicked()` sends `RepeaterDelayPacket`. `MachineFrameMenu` uses split constructor pattern with `ContainerData` for cross-side delay sync.
 
@@ -1311,7 +1316,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Us
 
 **Anti-feedback Architecture** (4 layers, simplified from Repeater):
 
-1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. INPUT_FACE read from blockstate (not BE) for BlockGetter compatibility. `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. INPUT_FACE read from blockstate (not BE) for BlockGetter compatibility. `shouldSignal` ThreadLocal<BlockPos> stores scanning position — suppresses only at that position (same-type power through solid blocks enabled).
 
 2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
 
@@ -1321,7 +1326,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Us
 
 **Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. Same handler set as Repeater/Transformer. `getRedstoneOutput()` returns 15 when POWERED.
 
-**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). On POWERED state change (both ON and OFF transitions), also calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks. onRemove guarded by `!movedByPiston`.
 
 **Visual**: Dual-cuboid model (Repeater pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (shared white texture) tinted via tintIndex 1 -- dark maroon when unpowered, bright red when powered. Outer shell uses 2 model files: `machine_toggle_off` (all faces use machine_toggle texture) and `machine_toggle_on` (north face = machine_toggle, other 5 = machine_toggle_on). Blockstate rotates the on model via x/y to point input face at correct direction. 14 blockstate variants (7 input_face values x 2 powered states), 2 model files.
 
@@ -1354,7 +1359,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing comparator in slot
 
 **Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth for all Machine Family redstone specializations. `getRedstoneOutput()` returns OUTPUT_LEVEL when POWERED.
 
-**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). No manual `updateNeighborsAt` except in onRemove.
+**Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). On POWERED or OUTPUT_LEVEL state change, also calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks. onRemove guarded by `!movedByPiston`.
 
 **GUI Buttons**: 15 numbered buttons from `ideomod_numbered_buttons.png` in two rows: row 1 = buttons 1-8 (centered at X=17), row 2 = buttons 9-15 (centered at X=26). Row 1 at Y=40, row 2 at Y=58. `MachineFrameScreen.mouseClicked()` sends `TransformerLevelPacket`. Fixed content height (89px, shared by all machines).
 
@@ -1396,7 +1401,7 @@ While the timer is running, input signal changes are tracked for arming but don'
 
 **Anti-feedback Architecture** (5 layers, same as Repeater/Transformer):
 
-1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal<BlockPos> stores scanning position — suppresses only at that position (same-type power through solid blocks enabled).
 
 2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
 
@@ -1408,7 +1413,7 @@ While the timer is running, input signal changes are tracked for arming but don'
 
 **Signal Detection**: Delegated to `MachineRedstoneHelper.getIncomingSignalFromFace()` -- shared single source of truth. `getRedstoneOutput()` returns 15 when POWERED.
 
-**Tick Scheduling**: neighborChanged schedules initial tick via `level.scheduleTick()` at 2 game ticks. Once POWERED, tick() self-reschedules every 1 game tick for countdown. tick() is the ONLY place where POWERED state changes.
+**Tick Scheduling**: neighborChanged schedules initial tick via `level.scheduleTick()` at 2 game ticks. Once POWERED, tick() self-reschedules every 1 game tick for countdown. tick() is the ONLY place where POWERED state changes. On POWERED state change (both ON and timer-expired OFF), also calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks. onRemove guarded by `!movedByPiston`.
 
 **GUI**: "Pulse Tick Duration" label centered above 16 buttons in 2 rows (8+8). Each button shows the tick value from IdeomodConfig.getTimerDurations(). Selected duration shows pressed state. Click sends `TimerDurationPacket`. Fixed content height (89px, shared by all machines).
 
@@ -1449,11 +1454,11 @@ Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits pe
 4. Safety clear: when NOT powered, reset pulseCounter to 0 and force-clear both POWERED and LIT blockstates to false. This belt-and-suspenders approach prevents stale visual state at high pulse rates where rapid POWERED toggling could race with the signal drop.
 5. LIT update (powered path only): when powered, set LIT = (litTime > 0). When unpowered, handled by step 4.
 
-**Pulse emission** (MachineEngineBlock.emitPulse): if POWERED is currently false, sets POWERED=true via level.setBlock(flag 3), then schedules a tick at +2 game ticks (1 redstone tick) with TickPriority.HIGH. The scheduled tick (MachineEngineBlock.tick) sets POWERED=false. Pulse duration of 2 game ticks is the minimum for Minecraft's client-side rendering to visually register state changes on dust and color-tinted blocks.
+**Pulse emission** (MachineEngineBlock.emitPulse): if POWERED is currently false, sets POWERED=true via level.setBlock(flag 3), then calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks, then schedules a tick at +2 game ticks (1 redstone tick) with TickPriority.HIGH. The scheduled tick (MachineEngineBlock.tick) sets POWERED=false and also calls `updateNeighborsAt` for all 6 directions. Pulse duration of 2 game ticks is the minimum for Minecraft's client-side rendering to visually register state changes on dust and color-tinted blocks.
 
 **Anti-feedback Architecture** (5 layers, same as Repeater/Transformer/Timer):
 
-1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal suppresses `isSignalSource` and `getDirectSignal` during own scan.
+1. getSignal/getDirectSignal: return 0 toward input face, 15 on others. Input face read from BE via Level cast (not blockstate). `shouldSignal` ThreadLocal<BlockPos> stores scanning position — suppresses only at that position (same-type power through solid blocks enabled).
 
 2. neighborChanged output-face early-return: when POWERED and update comes from a non-input face, return immediately.
 

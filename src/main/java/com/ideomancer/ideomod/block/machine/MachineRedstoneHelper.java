@@ -46,15 +46,18 @@ public final class MachineRedstoneHelper {
      * Get the incoming signal strength from a specific face for a machine device.
      *
      * @param level The world
-     * @param pos Our block position
+     * @param pos Our block position (the block doing the scanning)
      * @param face The face to check (direction from us to the neighbor)
-     * @param shouldSignal The calling block's shouldSignal ThreadLocal — will be
-     *                     set to false during vanilla signal reads to prevent
-     *                     self-reads through solid blocks
+     * @param scanningPos The calling block's scanningPos ThreadLocal — will be
+     *                    set to our position during vanilla signal reads so that
+     *                    our OWN getDirectSignal returns 0 (preventing self-reads
+     *                    through solid blocks) while OTHER instances of the same
+     *                    class can still output normally. For Conductors (wire
+     *                    behavior), any non-null value suppresses all instances.
      * @return Signal strength (0-15)
      */
     public static int getIncomingSignalFromFace(Level level, BlockPos pos, Direction face,
-                                                 ThreadLocal<Boolean> shouldSignal) {
+                                                 ThreadLocal<BlockPos> scanningPos) {
         BlockPos neighborPos = pos.relative(face);
         BlockState neighborState = level.getBlockState(neighborPos);
         Block neighborBlock = neighborState.getBlock();
@@ -96,13 +99,16 @@ public final class MachineRedstoneHelper {
 
         // --- Everything else: vanilla source ---
         // Levers, buttons, redstone blocks, comparators, etc.
-        // Read via vanilla level.getSignal with shouldSignal=false to prevent
-        // reading our own output through adjacent solid blocks.
-        shouldSignal.set(false);
+        // Read via vanilla level.getSignal with scanningPos set to OUR position.
+        // This makes our own getDirectSignal return 0 (preventing self-reads
+        // through solid blocks) while other instances of the same class can
+        // still output normally. For Conductors, any non-null scanningPos
+        // suppresses all instances (wire behavior, like vanilla dust).
+        scanningPos.set(pos);
         try {
             return level.getSignal(neighborPos, face);
         } finally {
-            shouldSignal.set(true);
+            scanningPos.set(null);
         }
     }
 
@@ -111,11 +117,11 @@ public final class MachineRedstoneHelper {
      *
      * @return int[2]: [bestSignal, bestFaceOrdinal]. bestFaceOrdinal is -1 if no signal.
      */
-    public static int[] scanAllFaces(Level level, BlockPos pos, ThreadLocal<Boolean> shouldSignal) {
+    public static int[] scanAllFaces(Level level, BlockPos pos, ThreadLocal<BlockPos> scanningPos) {
         int bestSignal = 0;
         int bestFaceOrd = -1;
         for (Direction dir : Direction.values()) {
-            int signal = getIncomingSignalFromFace(level, pos, dir, shouldSignal);
+            int signal = getIncomingSignalFromFace(level, pos, dir, scanningPos);
             if (signal > bestSignal) {
                 bestSignal = signal;
                 bestFaceOrd = dir.ordinal();

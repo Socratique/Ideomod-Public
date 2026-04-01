@@ -64,7 +64,11 @@ public class MachineEngineBlock extends AbstractMachineBlock {
      * Suppresses both isSignalSource and getDirectSignal during our own scan.
      * Prevents us from reading our own output through adjacent solid blocks.
      */
-    static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    /**
+     * Position-based anti-feedback. See MachineRepeaterBlock for full Javadoc.
+     * FIX 2026-03-29: Changed from Boolean to BlockPos for same-type power through solid blocks.
+     */
+    static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
     /**
      * Stores the position of the engine currently inside its setBlock call.
@@ -128,12 +132,12 @@ public class MachineEngineBlock extends AbstractMachineBlock {
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        return shouldSignal.get();
+        return true; // Always a signal source — position-based suppression in getSignal/getDirectSignal
     }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         if (!state.getValue(POWERED)) return 0;
 
         // Suppress output toward our input face.
@@ -152,7 +156,7 @@ public class MachineEngineBlock extends AbstractMachineBlock {
 
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         return getSignal(state, level, pos, direction);
     }
 
@@ -259,6 +263,12 @@ public class MachineEngineBlock extends AbstractMachineBlock {
             updatingPos.set(pos);
             try {
                 level.setBlock(pos, state.setValue(POWERED, true), 3);
+
+                // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+                // propagates through solid blocks (like vanilla repeaters do).
+                for (Direction dir : Direction.values()) {
+                    level.updateNeighborsAt(pos.relative(dir), this);
+                }
             } finally {
                 updatingPos.set(null);
             }
@@ -277,6 +287,12 @@ public class MachineEngineBlock extends AbstractMachineBlock {
             updatingPos.set(pos);
             try {
                 level.setBlock(pos, state.setValue(POWERED, false), 3);
+
+                // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+                // propagates through solid blocks (like vanilla repeaters do).
+                for (Direction dir : Direction.values()) {
+                    level.updateNeighborsAt(pos.relative(dir), this);
+                }
             } finally {
                 updatingPos.set(null);
             }
@@ -288,7 +304,10 @@ public class MachineEngineBlock extends AbstractMachineBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
-        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
+        // block entity data is restored via IPistonMovable.loadMovementData.
+        // Running the absorption scan would overwrite that restored state.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineEngineBlockEntity engineBE) {
                 absorbing.set(true);

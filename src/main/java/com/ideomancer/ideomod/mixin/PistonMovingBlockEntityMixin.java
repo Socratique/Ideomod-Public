@@ -93,11 +93,9 @@ public abstract class PistonMovingBlockEntityMixin {
             if (be instanceof IPistonMovable movable) {
                 movable.loadMovementData(savedData);
                 movable.onMovementRestored(level, pos);
-                Ideomod.LOGGER.info("[PistonBEMixin] RESTORED IPistonMovable data at {} (tags: {})",
-                        pos, savedData.getAllKeys());
-            } else {
-                Ideomod.LOGGER.warn("[PistonBEMixin] Retrieved data at {} but BE is not IPistonMovable: {}",
-                        pos, be != null ? be.getClass().getSimpleName() : "NULL");
+            } else if (be != null) {
+                Ideomod.LOGGER.warn("[RESTORE] Data found at {} but BE is {} (expected IPistonMovable)",
+                        pos, be.getClass().getSimpleName());
             }
         }
     }

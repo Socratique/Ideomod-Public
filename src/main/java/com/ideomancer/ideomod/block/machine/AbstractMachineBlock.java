@@ -177,7 +177,12 @@ public abstract class AbstractMachineBlock extends Block implements EntityBlock,
     public void onRemove(BlockState state, Level level, BlockPos pos,
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {
-            if (!level.isClientSide()) {
+            // FIX 2026-03-29: Added !movedByPiston guard to match FrameBlock/FramedBlock.
+            // During piston movement, blocks are temporarily removed and re-placed.
+            // Triggering FrameActivation.markDirty here would cause unnecessary
+            // frame network recalculations mid-move and could deactivate frames
+            // that are still part of the moving group.
+            if (!level.isClientSide() && !movedByPiston) {
                 FrameActivation.markDirty(level, pos);
             }
         }

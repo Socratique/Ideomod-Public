@@ -1,5 +1,313 @@
 # Ideomod Changelog
 
+## [2026-03-31e] Fix Pulse Cascade Dying During Piston Movement
+
+Fixed pulser rings "randomly" losing their cascading signal after piston
+movement. The pulse would sometimes survive and sometimes die, depending
+on which game tick the piston happened to fire during the 2-tick pulse.
+
+Root cause: two interacting timing problems in the post-movement tick
+scheduling.
+
+1. TICK ORDERING: onMovementRestored scheduled ALL machine blocks' ticks
+   at the same delay (1). So a POWERED pulser (mid-countdown) and its
+   UNPOWERED neighbor (waiting for the signal) both ticked at delay 1.
+   If the sender's tick fired first, it expired and turned off. When the
+   receiver's tick fired, the sender was already off — no signal detected.
+   Cascade dead.
+
+   Fix: POWERED blocks now tick at delay 2, UNPOWERED at delay 1. This
+   gives receivers a 1-tick head start to detect the sender's signal
+   before the sender's countdown expires. The movedState from vanilla
+   preserves POWERED=true, so the signal IS visible at the new position.
+
+2. MISSING SCAN: When a pulser expires "clean" (input signal already gone
+   at expiry time), it clears inputFace to null. After movement, the
+   UNPOWERED tick() path checked inputFace — if null, it did nothing.
+   A powered neighbor could be right there and the pulser would ignore it
+   because it had no tracked input direction.
+
+   Fix: Added a full face scan in tick()'s UNPOWERED path when inputFace
+   is null. In normal gameplay this path is unreachable (neighborChanged
+   always sets inputFace before scheduling tick), so it only activates
+   after piston movement when state was lost during the move cycle.
+
+Files modified:
+- `MachineFrameBlockEntity.java` -- onMovementRestored now schedules ticks
+  at delay 2 for POWERED blocks, delay 1 for UNPOWERED (staggered timing)
+- `MachinePulserBlock.java` -- tick() UNPOWERED path now scans all faces
+  when inputFace is null, recovering input direction after movement
+- `MachineTimerBlock.java` -- same scan guard added to UNPOWERED tick path
+- `MachineToggleBlock.java` -- same scan guard added to UNPOWERED tick path
+  (MachineRepeaterBlock already does an unconditional scan, so no change needed)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-31d] Fix Pulse State Lost During Piston Movement
+
+Fixed machine blocks (especially pulsers) randomly losing their POWERED
+blockstate during piston movement. A pulser mid-pulse would arrive at its
+destination unpowered, dropping the pulse entirely.
+
+Two contributing factors:
+
+1. Piston head removal used setBlock with flag 20 (UPDATE_INVISIBLE |
+   UPDATE_KNOWN_SHAPE) instead of matching vanilla's exact removeBlock call.
+   This meant our resolver saw slightly different world state than vanilla's,
+   potentially causing subtle mismatches in which blocks were saved.
+
+   Fix: Changed to `level.removeBlock(headPos, false)` which uses flag 3
+   (UPDATE_NEIGHBORS | UPDATE_CLIENTS) — exactly matching vanilla's call
+   in moveBlocks. Applied to both server and client mixins.
+
+2. onMovementRestored only restored POWERED blockstate for MachineToggleBlock.
+   All other machine blocks (Pulser, Timer, Repeater, Transformer) that were
+   powered when moved would arrive with POWERED=false (the default from
+   movedState) even though movementPowered was correctly saved and loaded.
+
+   Fix: Added generic POWERED restoration in onMovementRestored for ALL
+   machine blocks that have a "powered" BooleanProperty, not just toggles.
+   Uses state definition property lookup so it works for any current or
+   future machine block type.
+
+Files modified:
+- `PistonBaseBlockMixin.java` -- changed piston head removal from setBlock
+  flag 20 to level.removeBlock(pos, false); restore on failure uses flag 3
+- `PistonBaseBlockClientMixin.java` -- same removeBlock change, removed
+  unused Blocks import
+- `MachineFrameBlockEntity.java` -- onMovementRestored now restores POWERED
+  for all machine blocks with a "powered" property (generic property lookup)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-31c] Fix Retraction Save Timing — Remove Piston Head Before Resolver
+
+Fixed a critical timing bug where spec items were deleted and pulser states
+(powered, countdown, inputFace) were lost during piston retraction.
+
+Root cause: Our mixin injects at HEAD of moveBlocks(), but vanilla removes
+the piston head BEFORE creating its resolver. Our resolver's forward walk
+from startPos hit the still-present piston head (which isn't pushable),
+causing addBlockLine to return false, resolve() to return false, and the
+entire save to be skipped. Meanwhile, vanilla (running moments later after
+head removal) resolved successfully and moved the blocks — but without any
+saved data. Every retraction cycle lost all block entity data.
+
+Fix: Before creating our resolver for retraction, we now explicitly remove
+the piston head block (mirroring vanilla's behavior). We don't need to
+restore it because vanilla's very next line after our HEAD injection
+returns will remove it anyway. If our resolver fails, we restore the head
+so vanilla finds the world in the expected state.
+
+This also supersedes [2026-03-31b] which incorrectly removed the fallback
+path — the fallback was actually compensating for this timing issue. The
+correct fix is to match vanilla's world preparation, not add fallbacks.
+
+Symptoms fixed:
+- Spec items deleted from machine blocks during piston retraction
+- Pulsers stuck permanently in powered state after retraction
+- All machine block state (inputFace, countdown, edge detection) lost
+
+Files modified:
+- `PistonBaseBlockMixin.java` -- added piston head removal before retraction
+  resolver, updated Javadoc to explain timing requirement
+- `PistonBaseBlockClientMixin.java` -- same fix for client-side transit
+  rendering capture
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-31b] Remove Retraction Save Fallback Path (SUPERSEDED by 2026-03-31c)
+
+Removed the line-walk + BFS fallback from saveForRetraction (server) and
+captureRetraction (client). When the PistonStructureResolver returns false
+for retraction, vanilla's own moveBlocks() also returns false — no blocks
+actually move, so no data needs saving or capturing.
+
+NOTE: This change was INCORRECT. The resolver was returning false because
+the piston head hadn't been removed yet (timing bug), not because vanilla
+wouldn't move the blocks. See [2026-03-31c] for the real fix.
+
+Files modified:
+- `PistonBaseBlockMixin.java` -- fallback removed, WARN→DEBUG, Javadoc updated
+- `PistonBaseBlockClientMixin.java` -- fallback removed, unused imports cleaned
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-31] onPlace Piston Movement Guard
+
+Fixed machine blocks losing state (powered, countdown, input face) during
+piston movement. Root cause: onPlace fires when PistonMovingBlockEntity.finalTick()
+places the block at its new position (flag 67 includes isMoving=true). The
+oldState is the moving_piston block, so the `!oldState.is(state.getBlock())`
+check passes and onPlace runs. For edge-triggered blocks (Pulser, Timer, Toggle,
+Engine), the absorption scan overwrites inputFace and inputWasLow that were just
+restored via IPistonMovable.loadMovementData. For Repeater/Transformer, onPlace
+schedules a re-evaluation tick that could fire before neighbors have settled.
+
+### Fix: !movedByPiston Guard on onPlace
+
+Added `&& !movedByPiston` to onPlace condition in all machine blocks.
+onMovementRestored (in MachineFrameBlockEntity) already handles rescheduling
+ticks for countdown/evaluation after movement.
+
+Files modified:
+- `MachinePulserBlock.java` -- onPlace guarded
+- `MachineTimerBlock.java` -- onPlace guarded
+- `MachineToggleBlock.java` -- onPlace guarded
+- `MachineEngineBlock.java` -- onPlace guarded
+- `MachineRepeaterBlock.java` -- onPlace guarded
+- `MachineTransformerBlock.java` -- onPlace guarded
+- `MachineConductorBlock.java` -- onPlace guarded
+
+### Status
+- Powered state preserved through piston movement: fixed
+- Countdown/timer state preserved through piston movement: fixed
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-29e] Same-Type Power Through Solid Blocks
+
+Fixed machine device blocks (Toggle, Repeater, Timer, Pulser, Transformer,
+Engine) being unable to power other instances of the same type through solid
+blocks. Root cause: the shouldSignal ThreadLocal was a per-class boolean that
+suppressed ALL instances of a class during any instance's signal scan. When
+Toggle B scanned for input, Toggle A (behind a solid block) also returned 0.
+
+### Fix: Position-Based Signal Suppression
+
+Changed shouldSignal from ThreadLocal<Boolean> to ThreadLocal<BlockPos>.
+Now stores the position of the instance currently scanning. getSignal and
+getDirectSignal only return 0 when the queried position matches the scanning
+position — other instances of the same class output normally.
+
+Conductor INTENTIONALLY keeps class-wide suppression (null-check instead of
+pos-check), matching vanilla redstone dust behavior where all dust suppresses
+during any dust scan to prevent wire→solid→wire feedback loops.
+
+### Files Modified
+- `MachineRedstoneHelper.java` -- Parameter type changed from ThreadLocal<Boolean>
+  to ThreadLocal<BlockPos>. Sets scanning position instead of boolean false.
+- `MachineRepeaterBlock.java` -- ThreadLocal<BlockPos>, isSignalSource always true,
+  getSignal/getDirectSignal use pos.equals(shouldSignal.get()) for self-only suppression.
+- `MachineToggleBlock.java` -- Same pattern as Repeater.
+- `MachineTimerBlock.java` -- Same pattern as Repeater.
+- `MachinePulserBlock.java` -- Same pattern as Repeater.
+- `MachineTransformerBlock.java` -- Same pattern as Repeater.
+- `MachineEngineBlock.java` -- Same pattern as Repeater.
+- `MachineConductorBlock.java` -- ThreadLocal<BlockPos>, but isSignalSource uses
+  null-check (class-wide), getDirectSignal uses null-check (class-wide). Wire behavior.
+
+### Status
+- Same-type device power through solid blocks: working
+- Conductor class-wide suppression: preserved (wire behavior)
+- Self-read prevention: preserved (position-based for devices, class-wide for Conductor)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-29d] Movement Safety + Power-Through-Solid-Blocks
+
+Fixed piston movement safety across all Machine Family blocks, and added proper
+power-through-solid-blocks behavior to all redstone machine specializations.
+
+### Bug Fix: movedByPiston Guards
+
+During piston movement, blocks are temporarily removed and re-placed. Without
+checking the movedByPiston flag, onRemove/onPlace fire unnecessary neighbor
+updates and FrameActivation recalculations mid-move. This could cause:
+- Spurious redstone recalculations during movement
+- FrameActivation deactivating frames that are still part of the moving group
+- Wasted server-side work
+
+Files fixed (added !movedByPiston guard to onRemove):
+- `MachineToggleBlock.java` -- neighbor updates now skipped during piston move
+- `MachineRepeaterBlock.java` -- same
+- `MachineTimerBlock.java` -- same
+- `MachinePulserBlock.java` -- same
+- `MachineTransformerBlock.java` -- same
+- `MachineTrackBlock.java` -- both onRemove and onPlace now guarded
+
+Previously fixed in this session:
+- `AbstractMachineBlock.java` -- FrameActivation.markDirty guarded
+- `MachineConductorBlock.java` -- neighbor updates guarded
+
+### Feature: Power Through Solid Blocks
+
+All redstone machine specializations now properly power devices through solid
+blocks, matching vanilla repeater/comparator behavior. Previously, machine
+blocks only set POWERED blockstate (flag 3) which notifies immediate neighbors
+but NOT blocks on the other side of adjacent solid blocks. Now all POWERED
+state changes also call updateNeighborsAt(pos.relative(dir)) for all 6
+directions, which tells solid blocks to re-query their neighbors — allowing
+pistons, repeaters, and other devices behind a solid block to receive the signal.
+
+Files modified (added updateNeighborsAt to output faces):
+- `MachineRepeaterBlock.java` -- tick(): on POWERED change
+- `MachineToggleBlock.java` -- tick(): on both ON and OFF transitions
+- `MachineTimerBlock.java` -- tick(): on both ON and timer-expired OFF
+- `MachinePulserBlock.java` -- tick(): on both ON and pulse-expired OFF
+- `MachineTransformerBlock.java` -- tick(): on POWERED or OUTPUT_LEVEL change
+- `MachineEngineBlock.java` -- emitPulse() and tick(): on both ON and OFF
+
+The Conductor already had this behavior (updateNeighborsAt in updatePowerStrength).
+
+### Cleanup: Debug Logging Removed
+
+Removed verbose debug logging from movement system that was added during the
+Conductor spec item deletion investigation:
+- `PistonBaseBlockMixin.java` -- removed [MOVE-DEBUG] and [RETRACT-DEBUG] logs.
+  Kept single WARN for resolver fallback path (unexpected edge case).
+- `PistonMovingBlockEntityMixin.java` -- removed [RESTORE-DEBUG] logs. Kept
+  single WARN for data/BE type mismatch (indicates a real problem).
+- Removed unused imports (ResourceLocation, ForgeRegistries) from PistonBaseBlockMixin.
+
+### Status
+- movedByPiston guards: applied to all Machine Family blocks
+- Power-through-solid-blocks: all redstone specializations updated
+- Debug logging: cleaned up, production-ready
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-03-29c] Conductor Spec Item Deletion Fix + Retraction Save Rewrite
+
+Fixed Machine Conductor (and potentially other machine blocks) losing their
+specialization item when moved by pistons during retraction. Root cause: the
+saveForRetraction() method in PistonBaseBlockMixin used BFS-only scanning
+which couldn't find blocks reachable through vanilla's addBlockLine branching
+but not connected via stickiness (e.g., Conductor behind Engine on a different
+axis — different MachineTypes have no mutual stickiness).
+
+### Changes
+- `PistonBaseBlockMixin.java` -- saveForRetraction() rewritten to use
+  PistonStructureResolver as primary path (matching saveForExtension). The
+  resolver's addBlockLine + addBranchingBlocks recursion is the authoritative
+  answer for which blocks vanilla will move. Line-walk + BFS retained as
+  fallback if resolver returns false.
+- `PistonBaseBlockClientMixin.java` -- captureRetraction() rewritten with
+  same resolver-first approach for client-side FramedBlock rendering capture.
+
+### Status
+- Confirmed working: Conductor spec item preserved through piston retraction
+- All movement data paths now use PistonStructureResolver for both extension
+  and retraction
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-03-29b] Oddstone Ore Generation Tuning
 
 Increased oddstone ore spawn rates to sit between lapis and redstone rarity. Oddstone drops

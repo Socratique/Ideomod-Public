@@ -584,13 +584,15 @@ public class MachineFrameBlockEntity extends BlockEntity
             if (block instanceof AbstractMachineBlock) {
                 boolean skipTick = false;
 
-                // Restore POWERED blockstate for the Toggle (a latch).
-                // Vanilla preserves the original blockstate through movedState,
-                // so POWERED=true should already be set. We also restore from
-                // movementPowered as a safety net. Critically, we must NOT
-                // schedule a tick for a powered toggle — tick() treats any
-                // tick on a POWERED toggle as a "toggle OFF" event, which
-                // would immediately undo the latch state.
+                // FIX 2026-03-31c: Restore POWERED blockstate for ALL machine
+                // blocks that have it, not just Toggle. Vanilla preserves the
+                // original blockstate through movedState, but neighbor updates
+                // from piston head removal (which fires before vanilla captures
+                // blockstates) can cause transient state changes. Explicitly
+                // restoring from movementPowered acts as a safety net.
+                //
+                // Toggle special case: must also restore INPUT_FACE property
+                // and skip the tick (tick() on a POWERED toggle means "toggle OFF").
                 if (block instanceof MachineToggleBlock && this.movementPowered) {
                     MachineToggleBlock.InputFace inputFaceEnum = this.inputFace != null
                             ? MachineToggleBlock.InputFace.fromDirection(this.inputFace)
@@ -602,11 +604,42 @@ public class MachineFrameBlockEntity extends BlockEntity
                         level.setBlock(pos, restoredState, 2); // UPDATE_CLIENTS only
                     }
                     skipTick = true; // latch holds — no re-evaluation needed
+
+                } else if (this.movementPowered) {
+                    // Non-toggle machine blocks with POWERED property:
+                    // Pulser, Timer, Repeater, Transformer, Engine.
+                    // Restore POWERED=true and let the tick continue their
+                    // countdown / re-evaluation. Use property lookup so this
+                    // works generically for any machine block with a "powered"
+                    // property, without needing instanceof checks for each type.
+                    net.minecraft.world.level.block.state.properties.Property<?> poweredProp =
+                            state.getBlock().getStateDefinition().getProperty("powered");
+                    if (poweredProp instanceof net.minecraft.world.level.block.state.properties.BooleanProperty bp) {
+                        if (!state.getValue(bp)) {
+                            // movedState had POWERED=false but we saved POWERED=true.
+                            // Restore it.
+                            BlockState restoredState = state.setValue(bp, true);
+                            level.setBlock(pos, restoredState, 2);
+                            state = restoredState; // update local ref for tick scheduling
+                        }
+                    }
                 }
                 this.movementPowered = false; // consumed
 
                 if (!skipTick && !serverLevel.getBlockTicks().willTickThisTick(pos, block)) {
-                    serverLevel.scheduleTick(pos, block, 1);
+                    // FIX 2026-03-31d: Stagger tick delays to preserve pulse cascades.
+                    // POWERED blocks (mid-countdown) get delay 2 so that UNPOWERED
+                    // neighbors can process first at delay 1 and detect the signal
+                    // before the sender's countdown expires.  Without this stagger,
+                    // both fire at delay 1 and tick ordering is non-deterministic —
+                    // the sender can expire before the receiver sees the signal.
+                    boolean currentlyPowered = false;
+                    net.minecraft.world.level.block.state.properties.Property<?> tickProp =
+                            state.getBlock().getStateDefinition().getProperty("powered");
+                    if (tickProp instanceof net.minecraft.world.level.block.state.properties.BooleanProperty tbp) {
+                        currentlyPowered = state.getValue(tbp);
+                    }
+                    serverLevel.scheduleTick(pos, block, currentlyPowered ? 2 : 1);
                 }
             }
         }

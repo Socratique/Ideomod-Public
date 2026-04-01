@@ -2,7 +2,6 @@ package com.ideomancer.ideomod.mixin.client;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
-import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
 import com.ideomancer.ideomod.client.render.MovingFrameData;
 import com.ideomancer.ideomod.config.IdeomodConfig;
@@ -12,6 +11,7 @@ import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
+import net.minecraft.world.level.block.piston.PistonHeadBlock;
 import net.minecraft.world.level.block.piston.PistonStructureResolver;
 import net.minecraft.world.level.block.state.BlockState;
 import org.slf4j.Logger;
@@ -22,7 +22,6 @@ import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
-import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -35,10 +34,10 @@ import java.util.Set;
  * Stores them in MovingFrameData so the transit renderer can render
  * the inner block with correct orientation during the 2-tick animation.
  *
- * EXTENSION: Uses PistonStructureResolver (works reliably).
- *
- * RETRACTION: Resolver fails for our IPistonMovable blocks. Uses
- * sticky-group-aware BFS mirroring the server-side approach.
+ * EXTENSION and RETRACTION: Both use PistonStructureResolver.
+ * For retraction, the piston head must be removed before creating the
+ * resolver (mirrors vanilla's moveBlocks behavior and the server-side
+ * mixin fix). See PistonBaseBlockMixin for full explanation.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -105,33 +104,33 @@ public abstract class PistonBaseBlockClientMixin {
             return 0;
         }
 
-        // Walk the line of blocks being pulled (same as vanilla retraction)
-        List<BlockPos> lineBlocks = new ArrayList<>();
-        BlockPos current = pullPos;
-        for (int i = 0; i < ideomod$getMaxPushBlocks(); i++) {
-            BlockState state = level.getBlockState(current);
-            if (state.isAir()) break;
-            lineBlocks.add(current);
-            current = current.relative(direction);
+        // FIX 2026-03-31c: Remove piston head before resolver (mirrors server-side fix).
+        // Uses level.removeBlock to exactly match vanilla's call in moveBlocks.
+        // See PistonBaseBlockMixin.saveForRetraction for full explanation.
+        BlockPos headPos = pistonPos.relative(direction);
+        BlockState headState = level.getBlockState(headPos);
+        boolean removedHead = false;
+        if (headState.getBlock() instanceof PistonHeadBlock) {
+            level.removeBlock(headPos, false);
+            removedHead = true;
         }
 
-        // Use MovementScanHelper for sticky group expansion from each
-        // block in the line. This is the SINGLE SOURCE OF TRUTH for
-        // sticky group scanning — same code as server-side save path.
-        // Handles vanilla metal conductors, cross-frame mediation, etc.
-        Set<BlockPos> allBlocks = new HashSet<>(lineBlocks);
-        for (BlockPos linePos : lineBlocks) {
-            BlockState state = level.getBlockState(linePos);
-            if (state.isStickyBlock()
-                    || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
-                Set<BlockPos> group = MovementScanHelper.scanStickyGroup(level, linePos, ideomod$getMaxPushBlocks());
-                allBlocks.addAll(group);
+        PistonStructureResolver resolver = new PistonStructureResolver(
+                level, pistonPos, direction, false
+        );
+
+        if (!resolver.resolve()) {
+            if (removedHead) {
+                level.setBlock(headPos, headState, 3);
             }
+            return 0;
         }
+        // Don't restore — vanilla removes it next anyway.
 
-        // Sympathetic scan: find oddstone/framed oddstone at range and
-        // scan their sticky groups too. Mirrors the server-side logic in
-        // PistonBaseBlockMixin.scanSympathetic().
+        List<BlockPos> toPush = resolver.getToPush();
+        Set<BlockPos> allBlocks = new HashSet<>(toPush);
+
+        // Sympathetic scan: resolver doesn't know about our sympathetic system
         ideomod$captureSympathetic(level, allBlocks);
 
         int captured = 0;

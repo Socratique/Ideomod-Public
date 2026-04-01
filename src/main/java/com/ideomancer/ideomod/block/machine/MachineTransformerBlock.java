@@ -47,7 +47,11 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
      * Suppresses both isSignalSource and getDirectSignal during our own scan.
      * Prevents us from reading our own output through adjacent solid blocks.
      */
-    private static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    /**
+     * Position-based anti-feedback. See MachineRepeaterBlock for full Javadoc.
+     * FIX 2026-03-29: Changed from Boolean to BlockPos for same-type power through solid blocks.
+     */
+    private static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
     /**
      * Stores the position of the transformer currently inside its tick() setBlock call.
@@ -87,12 +91,12 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        return shouldSignal.get();
+        return true; // Always a signal source — position-based suppression in getSignal/getDirectSignal
     }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         if (!state.getValue(POWERED)) return 0;
 
         // Suppress output toward our input face.
@@ -111,7 +115,7 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
 
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         return getSignal(state, level, pos, direction);
     }
 
@@ -224,13 +228,16 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
         // Set updatingPos to block re-entrant neighborChanged at THIS position only.
         updatingPos.set(pos);
         try {
+            boolean poweredChanged = false;
             if (wasPowered && !shouldPower) {
                 // Turn OFF
                 level.setBlock(pos, state.setValue(POWERED, false).setValue(OUTPUT_LEVEL, outputLevel), 3);
+                poweredChanged = true;
 
             } else if (!wasPowered && shouldPower) {
                 // Turn ON
                 level.setBlock(pos, state.setValue(POWERED, true).setValue(OUTPUT_LEVEL, outputLevel), 3);
+                poweredChanged = true;
 
                 // Vanilla DiodeBlock trick: handle very short pulses
                 if (bestSignal == 0) {
@@ -239,10 +246,20 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
                 }
 
             } else if (state.getValue(OUTPUT_LEVEL) != outputLevel) {
-                // Power unchanged, just sync output level
+                // Power unchanged, just sync output level — neighbors still
+                // need to know the output strength changed.
                 level.setBlock(pos, state.setValue(OUTPUT_LEVEL, outputLevel), 3);
+                poweredChanged = true;
             }
             // else: no change needed
+
+            // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+            // propagates through solid blocks (like vanilla repeaters do).
+            if (poweredChanged) {
+                for (Direction dir : Direction.values()) {
+                    level.updateNeighborsAt(pos.relative(dir), this);
+                }
+            }
         } finally {
             updatingPos.set(null);
         }
@@ -253,7 +270,9 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
-        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
+        // onMovementRestored already handles rescheduling the evaluation tick.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             // Schedule a tick to evaluate initial power state.
             if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                 level.scheduleTick(pos, this, 1);
@@ -268,7 +287,10 @@ public class MachineTransformerBlock extends AbstractMachineBlock {
         if (!state.is(newState.getBlock())) {
             super.onRemove(state, level, pos, newState, movedByPiston);
             // If we were powered, neighbors need to know we're gone.
-            if (!level.isClientSide() && state.getValue(POWERED)) {
+            // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
+            // blocks are temporarily removed — firing neighbor updates here would
+            // cause unnecessary redstone recalculations mid-move.
+            if (!level.isClientSide() && !movedByPiston && state.getValue(POWERED)) {
                 for (Direction dir : Direction.values()) {
                     level.updateNeighborsAt(pos.relative(dir), this);
                 }

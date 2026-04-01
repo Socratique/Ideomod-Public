@@ -59,11 +59,16 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
     public static final IntegerProperty DELAY = IntegerProperty.create("delay", 1, 4);
 
     /**
-     * Suppresses both isSignalSource and getDirectSignal during our own scan.
-     * Prevents us from reading our own output through adjacent solid blocks.
-     * Passed to MachineRedstoneHelper for vanilla signal reads.
+     * Position-based anti-feedback for signal reads through solid blocks.
+     * When non-null, stores the position of the instance currently scanning.
+     * getSignal/getDirectSignal return 0 ONLY at the scanning position,
+     * allowing other instances of this class to output normally through solid
+     * blocks. Passed to MachineRedstoneHelper for vanilla signal reads.
+     *
+     * FIX 2026-03-29: Changed from ThreadLocal<Boolean> to ThreadLocal<BlockPos>
+     * to allow same-type machine blocks to power each other through solid blocks.
      */
-    static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
     /**
      * Stores the position of the repeater currently inside its tick() setBlock call.
@@ -98,12 +103,12 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        return shouldSignal.get();
+        return true; // Always a signal source — position-based suppression in getSignal/getDirectSignal
     }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         if (!state.getValue(POWERED)) return 0;
 
         // Suppress output toward our input face.
@@ -122,7 +127,7 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
 
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         return getSignal(state, level, pos, direction);
     }
 
@@ -232,6 +237,14 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
             } else if (state.getValue(DELAY) != beDelay) {
                 level.setBlock(pos, state.setValue(DELAY, beDelay), 3);
             }
+
+            // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+            // propagates through solid blocks (like vanilla repeaters do).
+            if (wasPowered != shouldPower) {
+                for (Direction dir : Direction.values()) {
+                    level.updateNeighborsAt(pos.relative(dir), this);
+                }
+            }
         } finally {
             updatingPos.set(null);
         }
@@ -242,7 +255,11 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
-        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
+        // onMovementRestored already handles rescheduling the evaluation tick.
+        // Scheduling a tick here could cause premature re-evaluation before
+        // neighboring blocks have settled at their new positions.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                 level.scheduleTick(pos, this, 1);
             }
@@ -255,7 +272,10 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {
             super.onRemove(state, level, pos, newState, movedByPiston);
-            if (!level.isClientSide() && state.getValue(POWERED)) {
+            // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
+            // blocks are temporarily removed — firing neighbor updates here would
+            // cause unnecessary redstone recalculations mid-move.
+            if (!level.isClientSide() && !movedByPiston && state.getValue(POWERED)) {
                 for (Direction dir : Direction.values()) {
                     level.updateNeighborsAt(pos.relative(dir), this);
                 }

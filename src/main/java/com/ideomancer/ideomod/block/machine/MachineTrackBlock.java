@@ -82,7 +82,10 @@ public class MachineTrackBlock extends AbstractMachineBlock {
 
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
-        if (!level.isClientSide() && !oldState.is(this)) {
+        // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
+        // blocks are temporarily removed and re-placed — firing neighbor updates
+        // and FrameActivation here would cause unnecessary recalculations mid-move.
+        if (!level.isClientSide() && !oldState.is(this) && !movedByPiston) {
             updatePowerState(level, pos, state);
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
             FrameActivation.markDirty(level, pos);
@@ -91,7 +94,8 @@ public class MachineTrackBlock extends AbstractMachineBlock {
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-29: Added !movedByPiston guard to match other machine blocks.
+        if (!state.is(newState.getBlock()) && !level.isClientSide() && !movedByPiston) {
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
             FrameActivation.markDirty(level, pos);
         }

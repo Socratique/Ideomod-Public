@@ -75,7 +75,18 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      * A plain boolean would race if two conductors run getIncomingSignalFromFace()
      * on different threads (e.g., during chunk loading or parallel neighbor updates).
      */
-    private static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    /**
+     * Class-wide anti-feedback for signal reads through solid blocks.
+     * When non-null (any Conductor is scanning), ALL Conductor instances
+     * suppress their signal — this is intentional wire behavior, matching
+     * how vanilla redstone dust works (all dust shares one block instance
+     * so shouldSignal suppresses ALL dust during any dust scan).
+     *
+     * FIX 2026-03-29: Changed from ThreadLocal<Boolean> to ThreadLocal<BlockPos>
+     * to match the new type used by MachineRedstoneHelper. Conductor keeps
+     * class-wide suppression (null-check) unlike device blocks (pos-check).
+     */
+    private static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
     public MachineConductorBlock(Properties properties) {
         super(properties);
@@ -103,7 +114,7 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      */
     @Override
     public boolean isSignalSource(BlockState state) {
-        return shouldSignal.get();
+        return shouldSignal.get() == null; // Suppress ALL instances during any Conductor scan (wire behavior)
     }
 
     /**
@@ -156,7 +167,7 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      */
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (shouldSignal.get() != null) return 0; // Suppress ALL instances during any Conductor scan (wire behavior)
 
         int power = state.getValue(POWER);
         if (power == 0) return 0;
@@ -242,8 +253,9 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      *   input face suppression), subtract 1 (decay)
      * - RedStoneWireBlock: wire type, read POWER directly, subtract 1 (decay)
      * - Anything else: source type, read via vanilla signal query, no decay.
-     *   shouldSignal=false during this read so our getDirectSignal returns 0,
-     *   preventing Conductor→SolidBlock→Conductor power-through.
+     *   shouldSignal set to our pos during this read, which makes ALL
+     *   Conductor getDirectSignal calls return 0 (class-wide suppression,
+     *   matching vanilla dust behavior), preventing Conductor→SolidBlock→Conductor.
      */
     private int getIncomingSignalFromFace(Level level, BlockPos pos, Direction face) {
         BlockPos neighborPos = pos.relative(face);
@@ -259,12 +271,12 @@ public class MachineConductorBlock extends AbstractMachineBlock {
             return Math.max(0, power - 1);
 
         } else {
-            shouldSignal.set(false);
+            shouldSignal.set(pos);
             try {
                 int signal = level.getSignal(neighborPos, face);
                 return signal;
             } finally {
-                shouldSignal.set(true);
+                shouldSignal.set(null);
             }
         }
     }
@@ -290,7 +302,10 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      */
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
-        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
+        // block entity data is restored via IPistonMovable.loadMovementData.
+        // onMovementRestored handles rescheduling evaluation.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             updatePowerStrength(level, pos, state);
 
             level.updateNeighborsAt(pos, this);
@@ -311,7 +326,10 @@ public class MachineConductorBlock extends AbstractMachineBlock {
         if (!state.is(newState.getBlock())) {
             super.onRemove(state, level, pos, newState, movedByPiston);
 
-            if (!level.isClientSide()) {
+            // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
+            // blocks are temporarily removed — firing neighbor updates here would
+            // cause unnecessary redstone recalculations mid-move.
+            if (!level.isClientSide() && !movedByPiston) {
                 for (Direction dir : Direction.values()) {
                     level.updateNeighborsAt(pos.relative(dir), this);
                 }

@@ -63,11 +63,16 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     public static final EnumProperty<InputFace> INPUT_FACE = EnumProperty.create("input_face", InputFace.class);
 
     /**
-     * Suppresses both isSignalSource and getDirectSignal during our own scan.
-     * Prevents us from reading our own output through adjacent solid blocks.
-     * Passed to MachineRedstoneHelper for vanilla signal reads.
+     * Position-based anti-feedback for signal reads through solid blocks.
+     * When non-null, stores the position of the instance currently scanning.
+     * getSignal/getDirectSignal return 0 ONLY at the scanning position,
+     * allowing other instances of this class to output normally through solid
+     * blocks. Passed to MachineRedstoneHelper for vanilla signal reads.
+     *
+     * FIX 2026-03-29: Changed from ThreadLocal<Boolean> to ThreadLocal<BlockPos>
+     * to allow same-type machine blocks to power each other through solid blocks.
      */
-    static final ThreadLocal<Boolean> shouldSignal = ThreadLocal.withInitial(() -> true);
+    static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
     /**
      * Stores the position of the toggle currently inside its tick() setBlock call.
@@ -155,12 +160,12 @@ public class MachineToggleBlock extends AbstractMachineBlock {
 
     @Override
     public boolean isSignalSource(BlockState state) {
-        return shouldSignal.get();
+        return true; // Always a signal source — position-based suppression in getSignal/getDirectSignal
     }
 
     @Override
     public int getSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         if (!state.getValue(POWERED)) return 0;
 
         // Suppress output toward our input face.
@@ -174,7 +179,7 @@ public class MachineToggleBlock extends AbstractMachineBlock {
 
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
-        if (!shouldSignal.get()) return 0;
+        if (pos.equals(shouldSignal.get())) return 0; // Suppress self-reads only
         return getSignal(state, level, pos, direction);
     }
 
@@ -271,6 +276,19 @@ public class MachineToggleBlock extends AbstractMachineBlock {
             // UNPOWERED → check if we should turn ON.
             Direction currentInput = machineBE.getInputFace();
 
+            // FIX 2026-03-31e: After piston movement, a toggle with cleared
+            // inputFace has null. Scan all faces to recover the input direction.
+            // In normal gameplay this is unreachable because neighborChanged
+            // always sets inputFace before scheduling tick().
+            if (currentInput == null) {
+                int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
+                if (scan[0] > 0 && scan[1] >= 0) {
+                    currentInput = Direction.values()[scan[1]];
+                    machineBE.setInputFace(currentInput);
+                    LOGGER.debug("[TOGGLE] tick scan found signal on {} at {} — recovering", currentInput, pos);
+                }
+            }
+
             if (currentInput != null) {
                 int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, currentInput, shouldSignal);
 
@@ -285,6 +303,12 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                         level.setBlock(pos, state
                                 .setValue(POWERED, true)
                                 .setValue(INPUT_FACE, inputFaceEnum), 3);
+
+                        // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+                        // propagates through solid blocks (like vanilla repeaters do).
+                        for (Direction dir : Direction.values()) {
+                            level.updateNeighborsAt(pos.relative(dir), this);
+                        }
                     } finally {
                         updatingPos.set(null);
                     }
@@ -316,6 +340,12 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                 level.setBlock(pos, state
                         .setValue(POWERED, false)
                         .setValue(INPUT_FACE, faceEnum), 3);
+
+                // FIX 2026-03-29: Notify neighbors of adjacent blocks so power
+                // propagates through solid blocks (like vanilla repeaters do).
+                for (Direction dir : Direction.values()) {
+                    level.updateNeighborsAt(pos.relative(dir), this);
+                }
             } finally {
                 updatingPos.set(null);
             }
@@ -327,7 +357,10 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
-        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
+        // block entity data is restored via IPistonMovable.loadMovementData.
+        // Running the absorption scan would overwrite that restored state.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineFrameBlockEntity machineBE) {
                 absorbing.set(true);
@@ -355,7 +388,10 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                           BlockState newState, boolean movedByPiston) {
         if (!state.is(newState.getBlock())) {
             super.onRemove(state, level, pos, newState, movedByPiston);
-            if (!level.isClientSide() && state.getValue(POWERED)) {
+            // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
+            // blocks are temporarily removed — firing neighbor updates here would
+            // cause unnecessary redstone recalculations mid-move.
+            if (!level.isClientSide() && !movedByPiston && state.getValue(POWERED)) {
                 for (Direction dir : Direction.values()) {
                     level.updateNeighborsAt(pos.relative(dir), this);
                 }
