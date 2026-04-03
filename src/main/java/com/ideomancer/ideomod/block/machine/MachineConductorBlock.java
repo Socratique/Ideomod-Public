@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.block.frame.FrameActivation;
+import com.ideomancer.ideomod.item.RedstoneRodSignalManager;
 import com.google.common.collect.Sets;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -259,6 +260,15 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      */
     private int getIncomingSignalFromFace(Level level, BlockPos pos, Direction face) {
         BlockPos neighborPos = pos.relative(face);
+
+        // --- Redstone Rod phantom signal (highest priority) ---
+        // Same as MachineRedstoneHelper: the special-case paths below bypass
+        // BlockStateBase.getSignal(), so we check the rod manager directly.
+        int rodSignal = RedstoneRodSignalManager.getInjectedSignal(level, neighborPos, face);
+        if (rodSignal > 0) {
+            return rodSignal;
+        }
+
         BlockState neighborState = level.getBlockState(neighborPos);
         Block neighborBlock = neighborState.getBlock();
 

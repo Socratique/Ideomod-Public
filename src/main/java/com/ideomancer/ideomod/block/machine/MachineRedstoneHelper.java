@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block.machine;
 
+import com.ideomancer.ideomod.item.RedstoneRodSignalManager;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.world.level.Level;
@@ -59,6 +60,18 @@ public final class MachineRedstoneHelper {
     public static int getIncomingSignalFromFace(Level level, BlockPos pos, Direction face,
                                                  ThreadLocal<BlockPos> scanningPos) {
         BlockPos neighborPos = pos.relative(face);
+
+        // --- Redstone Rod phantom signal (highest priority) ---
+        // The rod injects signals via a static map that our mixin on
+        // BlockStateBase.getSignal() reads. However, the special-case paths
+        // below (Conductor, Machine device, RedStoneWireBlock) bypass
+        // BlockStateBase.getSignal() and read block properties directly.
+        // This check ensures rod signals are visible even on those faces.
+        int rodSignal = RedstoneRodSignalManager.getInjectedSignal(level, neighborPos, face);
+        if (rodSignal > 0) {
+            return rodSignal;
+        }
+
         BlockState neighborState = level.getBlockState(neighborPos);
         Block neighborBlock = neighborState.getBlock();
 

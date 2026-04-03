@@ -1,5 +1,66 @@
 # Ideomod Changelog
 
+## [2026-04-03] Add Redstone Rod Tool
+
+New handheld tool that delivers a 1-redstone-tick pulse of signal strength 15
+to any block face on right-click. Designed for testing and activating redstone
+machinery without placing persistent signal sources.
+
+Features:
+- Right-click any block face to deliver a 2-game-tick (1-redstone-tick)
+  pulse of signal strength 15
+- Face-aware: the clicked face determines signal direction, critical for
+  Machine Family blocks that use input/output face models
+- Bypasses block GUIs: right-clicking a machine block with the rod fires
+  the pulse instead of opening the machine's interface (uses Forge's
+  onItemUseFirst() priority hook)
+- Infinite use, no cooldown, stack size 1
+- Visual/audio feedback: lever click sound + red dust particles on the
+  clicked face
+- Crafted with stick (bottom-left), iron ingot (center), redstone torch
+  (top-right) in a diagonal row
+
+Technical implementation:
+- Phantom signal injection via static ConcurrentHashMap registry
+  (RedstoneRodSignalManager) keyed by (dimension, sourcePos, direction)
+- Mixin on BlockBehaviour.BlockStateBase.getSignal() AND getDirectSignal()
+  intercepts vanilla signal queries and returns 15 when a rod pulse is active
+- Direct rod signal check in MachineRedstoneHelper.getIncomingSignalFromFace()
+  and MachineConductorBlock.getIncomingSignalFromFace() to bypass their
+  special-case paths that read block properties directly (Conductor,
+  Machine device, RedStoneWireBlock)
+- Server tick handler counts down pulses and triggers "signal off" neighbor
+  updates on expiry
+- Broad neighbor notification on both inject and expire: direct
+  neighborChanged on target, updateNeighborsAt on source position (covers
+  blocks that use hasNeighborSignal like Repulsers/Attractors), and
+  updateNeighborsAt on target position (covers indirect neighbors)
+
+Files added:
+- `item/RedstoneRodItem.java` -- Item class with onItemUseFirst() hook
+- `item/RedstoneRodSignalManager.java` -- Static pulse registry + tick handler
+- `mixin/LevelSignalMixin.java` -- Mixin on BlockStateBase for getSignal +
+  getDirectSignal injection
+- `assets/ideomod/models/item/redstone_rod.json` -- Item model (handheld)
+- `assets/ideomod/textures/item/redstone_rod.png` -- 16x16 texture (wood
+  handle, iron ferrule, redstone tip with glow)
+- `data/ideomod/recipes/redstone_rod.json` -- Shaped recipe
+
+Files modified:
+- `registry/ModItems.java` -- Added REDSTONE_ROD registration (stacksTo 1)
+- `registry/ModCreativeTabs.java` -- Added to creative tab before debug stick
+- `assets/ideomod/lang/en_us.json` -- Added "Redstone Rod" display name
+- `ideomod.mixins.json` -- Added LevelSignalMixin to mixins array
+- `Ideomod.java` -- Added ServerStoppingEvent listener to clear pulse registry
+- `block/machine/MachineRedstoneHelper.java` -- Added rod signal check at top
+  of getIncomingSignalFromFace() (before special-case paths)
+- `block/machine/MachineConductorBlock.java` -- Added rod signal check at top
+  of getIncomingSignalFromFace() (before special-case paths)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-03-31e] Fix Pulse Cascade Dying During Piston Movement
 
 Fixed pulser rings "randomly" losing their cascading signal after piston

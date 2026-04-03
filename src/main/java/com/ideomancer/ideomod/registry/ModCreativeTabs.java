@@ -93,6 +93,7 @@ public class ModCreativeTabs {
                         output.accept(ModItems.COPPER_FRAME.get());
 
                         // Tools / Debug
+                        output.accept(ModItems.REDSTONE_ROD.get());
                         output.accept(ModItems.STRUCTURE_DEBUG_STICK.get());
                     })
                     .build()

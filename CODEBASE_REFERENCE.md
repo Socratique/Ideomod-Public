@@ -1,6 +1,6 @@
 # IDEOMOD CODEBASE REFERENCE
 *Quick-reference documentation for the Ideomod codebase.*
-*Last updated: 2026-03-29 (Hollowstone system, world generation, ore-only debug world type)*
+*Last updated: 2026-04-03 (Redstone Rod tool, LevelSignalMixin, phantom signal injection)*
 
 ---
 
@@ -202,6 +202,17 @@ com.ideomancer.ideomod
   |     \-- OddstoneConfig.java          @Deprecated. Replaced by IdeomodConfig.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
+  |-- item/
+  |     |-- RedstoneRodItem.java         Handheld pulse tool. onItemUseFirst() bypasses
+  |     |                                block GUIs. Injects phantom signal via
+  |     |                                RedstoneRodSignalManager. Plays lever click
+  |     |                                sound + spawns red dust particles on clicked face.
+  |     \-- RedstoneRodSignalManager.java  Static pulse registry. ConcurrentHashMap keyed
+  |                                        by (dimension, sourcePos, direction). injectPulse()
+  |                                        stores pulse + triggers neighbor updates.
+  |                                        getInjectedSignal() returns 15 if active pulse.
+  |                                        Server tick handler for pulse expiry.
+  |                                        @Mod.EventBusSubscriber for auto-registration.
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner.
   |     |                                      Call-pair toggle for backward walk grab immunity.
@@ -213,6 +224,11 @@ com.ideomancer.ideomod
   |     |-- EntityMovementMixin.java           Entity speed/jump factor for framed blocks.
   |     |                                      Generic ideomod$getFramedFactor() helper.
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
+  |     |-- LevelSignalMixin.java            Redstone Rod phantom signal injection.
+  |     |                                      @Mixin(BlockBehaviour.BlockStateBase.class).
+  |     |                                      @Inject on getSignal() + getDirectSignal() at
+  |     |                                      HEAD. Returns 15 from RedstoneRodSignalManager
+  |     |                                      when active pulse matches (pos, direction).
   |     \-- client/
   |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
   |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
@@ -233,6 +249,7 @@ com.ideomancer.ideomod
   \-- registry/
         |-- ModBlocks.java               DeferredRegister<Block> -- all block registrations
         |-- ModItems.java                DeferredRegister<Item> -- BlockItems + debug stick
+        |                                + RedstoneRodItem (stacksTo 1)
         |-- ModCreativeTabs.java         Creative tab with all mod items
         |-- ModCommands.java             /judgement + /ideomod reload commands (Forge event bus)
         |-- ModRecipeSerializers.java    DeferredRegister<RecipeSerializer<?>>

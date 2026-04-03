@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-03-29 (Hollowstone system, world generation, ore-only debug world type)*
+*Last updated: 2026-04-03 (Redstone Rod tool, LevelSignalMixin, phantom signal injection)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -41,7 +41,7 @@
 
 Build config files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
-Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `EntityMovementMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array — Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
+Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `EntityMovementMixin`, `LevelSignalMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array -- Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
 
 gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.0`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
 
@@ -252,7 +252,7 @@ BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same 
 
 BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock, `MACHINE_ENGINE` for MachineEngineBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
-Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`. `HOLLOW_STONE` is a standard BlockItem. `HOLLOW_STONE_SHARD` is a plain Item (crafting ingredient, 9 shards → 1 hollowstone).
+Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`. `REDSTONE_ROD` is a `RedstoneRodItem` (custom Item subclass), `stacksTo(1)`. Uses `onItemUseFirst()` to bypass block GUIs and inject phantom redstone pulses via `RedstoneRodSignalManager`. `HOLLOW_STONE` is a standard BlockItem. `HOLLOW_STONE_SHARD` is a plain Item (crafting ingredient, 9 shards -> 1 hollowstone).
 
 ### ModFeatures (DeferredRegister<Feature<?>> + DeferredRegister<Codec<? extends ChunkGenerator>>)
 
@@ -1685,6 +1685,22 @@ Registry ID: `hollow_stone`. Class: `HollowstoneBlock` (implements `EntityBlock`
 **Loot table**: `data/ideomod/loot_tables/blocks/hollow_stone.json`. Uses `minecraft:alternatives`: silk touch → block drop, else → 5-7 shards with fortune `ore_drops` and `explosion_decay`.
 
 **Tags**: Added to `minecraft:mineable/pickaxe`.
+
+### Redstone Rod -- Handheld Pulse Tool
+
+Item class: `RedstoneRodItem` (`item/RedstoneRodItem.java`). Extends `Item`, overrides `onItemUseFirst()` (Forge hook that fires before `Block.use()`, preventing machine GUIs from opening).
+
+**Signal injection**: `RedstoneRodSignalManager` (`item/RedstoneRodSignalManager.java`). Static class with `@Mod.EventBusSubscriber`. Manages a `ConcurrentHashMap<PulseKey, PulseData>` where PulseKey = (dimension, sourcePos, direction) and PulseData = (ticksRemaining, targetPos). `injectPulse()` stores the pulse, triggers `neighborChanged` on the target block, `updateNeighborsAt` on the source position (covers blocks using `hasNeighborSignal` like Repulsers/Attractors), and `updateNeighborsAt` on the target position (covers indirect neighbors). `getInjectedSignal()` returns 15 if an active pulse matches, 0 otherwise (empty-map fast-path for zero overhead). Server tick handler (`TickEvent.ServerTickEvent` END phase) counts down and triggers "signal off" updates when pulses expire. `clearAll()` called on `ServerStoppingEvent` via listener in `Ideomod.java`.
+
+**Mixin**: `LevelSignalMixin` (`mixin/LevelSignalMixin.java`). Targets `BlockBehaviour.BlockStateBase.class`. Two `@Inject` at HEAD on `getSignal()` (weak power path) and `getDirectSignal()` (strong power path through solid blocks). Both check `RedstoneRodSignalManager.getInjectedSignal()` and return 15 if a pulse is active. `instanceof Level` guard ensures only game-level queries are intercepted.
+
+**Machine Family integration**: `MachineRedstoneHelper.getIncomingSignalFromFace()` and `MachineConductorBlock.getIncomingSignalFromFace()` both have a `RedstoneRodSignalManager.getInjectedSignal()` check at the top (before special-case paths for Conductor, Machine device, and RedStoneWireBlock that bypass `BlockStateBase.getSignal()`). This ensures rod signals are visible on any face regardless of what block occupies the source position.
+
+**Registration**: `ModItems.REDSTONE_ROD` via DeferredRegister, `stacksTo(1)`. Added to `ideomod_tab` creative tab (before debug stick). Language key: `item.ideomod.redstone_rod` = "Redstone Rod". Mixin registered in `ideomod.mixins.json`.
+
+**Recipe**: Shaped, `data/ideomod/recipes/redstone_rod.json`. Pattern: diagonal (stick bottom-left, iron ingot center, redstone torch top-right).
+
+**Resources**: Model at `assets/ideomod/models/item/redstone_rod.json` (parent: `minecraft:item/handheld`, layer0 texture). Texture at `assets/ideomod/textures/item/redstone_rod.png` (16x16 generated via Python/Pillow -- wood handle, iron ferrule, redstone tip with glow).
 
 ### World Generation
 

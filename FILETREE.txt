@@ -23,6 +23,8 @@
 |  |           |  |  +-- IMachineFamily.java
 |  |           |  |  +-- MachineBraceBlock.java
 |  |           |  |  +-- MachineConductorBlock.java
+|  |           |  |  +-- MachineEngineBlock.java
+|  |           |  |  +-- MachineEngineBlockEntity.java
 |  |           |  |  +-- MachineFluidPipeBlock.java
 |  |           |  |  +-- MachineFluidPipeBlockEntity.java
 |  |           |  |  +-- MachineFrameBlock.java
@@ -67,6 +69,8 @@
 |  |           |  |  \\-- PortalUtils.java
 |  |           |  +-- CobbledOddstoneBlock.java
 |  |           |  +-- DrillBlock.java
+|  |           |  +-- HollowstoneBlock.java
+|  |           |  +-- HollowstoneBlockEntity.java
 |  |           |  +-- ISympathetic.java
 |  |           |  +-- OddSlimeBlock.java
 |  |           |  +-- OddstoneBlock.java
@@ -81,6 +85,7 @@
 |  |           |  |  +-- FramedBlockItemModel.java
 |  |           |  |  +-- FramedBlockRenderer.java
 |  |           |  |  +-- FramedBlockRenderTypes.java
+|  |           |  |  +-- HollowstoneRenderer.java
 |  |           |  |  +-- MachinePistonArmRenderer.java
 |  |           |  |  \\-- MovingFrameData.java
 |  |           |  +-- FramedBlockDebugOverlay.java
@@ -114,6 +119,7 @@
 |  |           |  +-- StructureResult.java
 |  |           |  \\-- StructureScanner.java
 |  |           +-- network
+|  |           |  +-- EnginePulseIntervalPacket.java
 |  |           |  +-- ModNetworking.java
 |  |           |  +-- RepeaterDelayPacket.java
 |  |           |  +-- TimerDurationPacket.java
@@ -127,6 +133,10 @@
 |  |           |  +-- ModMenuTypes.java
 |  |           |  +-- ModRecipeSerializers.java
 |  |           |  \\-- ModTags.java
+|  |           +-- worldgen
+|  |           |  +-- HollowstoneLavaFormation.java
+|  |           |  +-- ModFeatures.java
+|  |           |  \\-- OreOnlyChunkGenerator.java
 |  |           \\-- Ideomod.java
 |  \\-- resources
 |     +-- assets
@@ -139,12 +149,14 @@
 |     |     |  +-- copper_frame.json
 |     |     |  +-- copper_framed_block.json
 |     |     |  +-- drill.json
+|     |     |  +-- hollow_stone.json
 |     |     |  +-- ideoblock.json
 |     |     |  +-- iron_frame.json
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
 |     |     |  +-- machine_brace.json
 |     |     |  +-- machine_conductor.json
+|     |     |  +-- machine_engine.json
 |     |     |  +-- machine_fluid_pipe.json
 |     |     |  +-- machine_pipe.json
 |     |     |  +-- machine_piston.json
@@ -189,6 +201,8 @@
 |     |     |  |  +-- copper_framed_block_active.json
 |     |     |  |  +-- drill.json
 |     |     |  |  +-- drill_on.json
+|     |     |  |  +-- hollow_stone.json
+|     |     |  |  +-- hollow_stone_filled.json
 |     |     |  |  +-- ideoblock.json
 |     |     |  |  +-- iron_frame.json
 |     |     |  |  +-- iron_frame_active.json
@@ -197,6 +211,8 @@
 |     |     |  |  +-- machine_block.json
 |     |     |  |  +-- machine_brace.json
 |     |     |  |  +-- machine_conductor.json
+|     |     |  |  +-- machine_engine.json
+|     |     |  |  +-- machine_engine_lit.json
 |     |     |  |  +-- machine_fluid_pipe_empty.json
 |     |     |  |  +-- machine_fluid_pipe_lava.json
 |     |     |  |  +-- machine_fluid_pipe_water.json
@@ -250,12 +266,15 @@
 |     |     |     +-- copper_frame.json
 |     |     |     +-- copper_framed_block.json
 |     |     |     +-- drill.json
+|     |     |     +-- hollow_stone.json
+|     |     |     +-- hollow_stone_shard.json
 |     |     |     +-- ideoblock.json
 |     |     |     +-- iron_frame.json
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
 |     |     |     +-- machine_brace.json
 |     |     |     +-- machine_conductor.json
+|     |     |     +-- machine_engine.json
 |     |     |     +-- machine_fluid_pipe.json
 |     |     |     +-- machine_pipe.json
 |     |     |     +-- machine_piston.json
@@ -289,6 +308,8 @@
 |     |        |  +-- drill_front_on.png
 |     |        |  +-- drill_side.png
 |     |        |  +-- drill_top.png
+|     |        |  +-- hollow_stone.png
+|     |        |  +-- hollow_stone_filled.png
 |     |        |  +-- ideoblock.png
 |     |        |  +-- iron_frame.png
 |     |        |  +-- iron_frame_active.png
@@ -300,6 +321,8 @@
 |     |        |  +-- machine_extender.png
 |     |        |  +-- machine_fluid_pipe.png
 |     |        |  +-- machine_fluid_pipe_inner_empty.png
+|     |        |  +-- machine_grabber.png
+|     |        |  +-- machine_grabber_on.png
 |     |        |  +-- machine_pipe.png
 |     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_piston.png
@@ -329,11 +352,18 @@
 |     |        |  +-- oddstone_repulser_front.png
 |     |        |  +-- oddstone_repulser_side.png
 |     |        |  \\-- oddstone1.png
-|     |        \\-- gui
-|     |           +-- ideomod_gui.png
-|     |           \\-- ideomod_numbered_buttons.png
+|     |        +-- gui
+|     |        |  +-- ideomod_gui.png
+|     |        |  \\-- ideomod_numbered_buttons.png
+|     |        \\-- item
+|     |           \\-- hollow_stone_shard.png
 |     +-- data
 |     |  +-- ideomod
+|     |  |  +-- forge
+|     |  |  |  \\-- biome_modifier
+|     |  |  |     +-- add_hollowstone_formation.json
+|     |  |  |     +-- add_oddstone_ore_deep.json
+|     |  |  |     \\-- add_oddstone_ore_upper.json
 |     |  |  +-- loot_tables
 |     |  |  |  \\-- blocks
 |     |  |  |     +-- cobbled_oddstone.json
@@ -343,12 +373,14 @@
 |     |  |  |     +-- copper_frame.json
 |     |  |  |     +-- copper_framed_block.json
 |     |  |  |     +-- drill.json
+|     |  |  |     +-- hollow_stone.json
 |     |  |  |     +-- ideoblock.json
 |     |  |  |     +-- iron_frame.json
 |     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
 |     |  |  |     +-- machine_brace.json
 |     |  |  |     +-- machine_conductor.json
+|     |  |  |     +-- machine_engine.json
 |     |  |  |     +-- machine_fluid_pipe.json
 |     |  |  |     +-- machine_pipe.json
 |     |  |  |     +-- machine_piston.json
@@ -380,6 +412,7 @@
 |     |  |  |  +-- copper_frame.json
 |     |  |  |  +-- drill.json
 |     |  |  |  +-- framed_block.json
+|     |  |  |  +-- hollow_stone.json
 |     |  |  |  +-- ideoblock.json
 |     |  |  |  +-- iron_frame.json
 |     |  |  |  +-- machine_block.json
@@ -411,7 +444,15 @@
 |     |  |  |  \\-- items
 |     |  |  |     \\-- pulser_items.json
 |     |  |  \\-- worldgen
+|     |  |     +-- configured_feature
+|     |  |     |  +-- hollowstone_lava_formation.json
+|     |  |     |  \\-- oddstone_ore.json
+|     |  |     +-- placed_feature
+|     |  |     |  +-- hollowstone_lava_formation.json
+|     |  |     |  +-- oddstone_ore_deep.json
+|     |  |     |  \\-- oddstone_ore_upper.json
 |     |  |     +-- world_preset
+|     |  |     |  \\-- ore_only.json
 |     |  |     \\-- chunky_geology_settings.json
 |     |  \\-- minecraft
 |     |     \\-- tags
@@ -421,6 +462,7 @@
 |     |        |  \\-- walls.json
 |     |        \\-- worldgen
 |     |           \\-- world_preset
+|     |              \\-- normal.json
 |     +-- META-INF
 |     |  \\-- mods.toml
 |     +-- ideomod.mixins.json

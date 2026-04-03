@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-03-22 (Machine Transformer specialization implemented. MachineRedstoneHelper refactor for shared signal detection.)*
+*Last updated: 2026-04-03 (Redstone Rod tool added. Phantom signal injection via mixin + static registry.)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -1178,6 +1178,37 @@ Branches express their connections as arms (additive geometry extending outward 
 | Recipe | None -- creative only for now |
 
 **Behavior:** When held in mainhand or offhand, StructureManager sends color-coded chat messages on structure formation (green) and removal (red). Shows structure type name, core position, and core count. Zero overhead when nobody holds it.
+
+---
+
+### Redstone Rod [DONE]
+> Handheld pulse tool. Right-click any block face to deliver a 1-redstone-tick signal-15 pulse. Bypasses block GUIs.
+
+| Property | Value |
+|----------|-------|
+| ID | `redstone_rod` |
+| Type | Item, stacksTo 1, no durability |
+| Tool class | None (utility item) |
+| Recipe | Shaped diagonal: stick (bottom-left) + iron ingot (center) + redstone torch (top-right) |
+| Texture | Custom 16x16 (wood handle -> iron ferrule -> redstone tip with glow) |
+
+**Behavior:**
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Pulse delivery | [DONE] | Right-click -> 2-game-tick (1-redstone-tick) pulse of signal strength 15 on clicked face |
+| Face awareness | [DONE] | Signal direction matches clicked face. Critical for Machine Family input/output face model |
+| GUI bypass | [DONE] | Uses Forge onItemUseFirst() -- fires before Block.use(), so machine GUIs never open |
+| Infinite use | [DONE] | No durability, no cooldown |
+| Feedback | [DONE] | Lever click sound + red dust particles on clicked face |
+
+**Signal injection architecture:**
+
+The rod cannot place a physical redstone source, so it injects a "phantom signal" via a static registry (ConcurrentHashMap) and a mixin on BlockStateBase.getSignal() + getDirectSignal(). When vanilla or mod code queries signal strength at the phantom source position during the 2-tick window, the mixin intercepts and returns 15. A server tick handler expires the pulse and triggers "signal off" neighbor updates.
+
+Machine Family blocks have special-case signal paths in MachineRedstoneHelper and MachineConductorBlock that bypass BlockStateBase.getSignal() (they read block properties directly for Conductors, Machine devices, and RedStoneWireBlock). Both files have a direct RedstoneRodSignalManager check at the top of getIncomingSignalFromFace() so rod signals take priority over those special-case paths.
+
+Blocks that use vanilla hasNeighborSignal() (Repulsers, Attractors, vanilla pistons, lamps, etc.) are covered by the mixin -- no special handling needed. Broad neighbor notifications (neighborChanged on target, updateNeighborsAt on source and target positions) ensure all signal detection paths are triggered.
 
 ---
 
@@ -2391,6 +2422,7 @@ launch. Missing sections or keys gracefully fall back to defaults.
 | `ideomod.mixins.json` | Mixin config |
 | `PistonStructureResolverMixin.java` | 8 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect, immovable inner check (framed obsidian anchors), vanilla metal conductors, frame anchor detection (post-gathering scan), dynamic push limit (Machine Brace) |
 | `AbstractFurnaceBlockEntityMixin.java` | Furnace array speed boost (50% cooking speed when part of registered structure) |
+| `LevelSignalMixin.java` | Redstone Rod phantom signal injection. Targets BlockBehaviour.BlockStateBase -- injects into getSignal() and getDirectSignal() at HEAD. Returns 15 when RedstoneRodSignalManager has an active pulse at the queried (pos, direction). |
 
 ---
 

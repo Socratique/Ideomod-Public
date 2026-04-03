@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.registry;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.FramedBlockItem;
+import com.ideomancer.ideomod.item.RedstoneRodItem;
 import net.minecraft.world.item.BlockItem;
 import net.minecraft.world.item.Item;
 import net.minecraftforge.registries.DeferredRegister;
@@ -127,6 +128,9 @@ public class ModItems {
 
     public static final RegistryObject<Item> MACHINE_PULSER = ITEMS.register("machine_pulser",
             () -> new BlockItem(ModBlocks.MACHINE_PULSER.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> REDSTONE_ROD = ITEMS.register("redstone_rod",
+            () -> new RedstoneRodItem(new Item.Properties().stacksTo(1)));
 
     public static final RegistryObject<Item> STRUCTURE_DEBUG_STICK = ITEMS.register(
             "structure_debug_stick", () -> new Item(new Item.Properties().stacksTo(1)));

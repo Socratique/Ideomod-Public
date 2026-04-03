@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod;
 
 import com.ideomancer.ideomod.config.IdeomodConfig;
+import com.ideomancer.ideomod.item.RedstoneRodSignalManager;
 import com.ideomancer.ideomod.block.frame.FrameActivation;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
@@ -41,6 +42,7 @@ import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraftforge.client.event.ModelEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.IEventBus;
+import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.fml.common.Mod;
 import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import net.minecraftforge.fml.event.lifecycle.FMLCommonSetupEvent;
@@ -80,6 +82,10 @@ public class Ideomod {
         modEventBus.addListener(this::onModifyBakingResult);
 
         MinecraftForge.EVENT_BUS.register(this);
+
+        // Clear Redstone Rod phantom signals on server shutdown
+        MinecraftForge.EVENT_BUS.addListener((ServerStoppingEvent e) ->
+                RedstoneRodSignalManager.clearAll());
 
         LOGGER.info("Ideomod initializing!");
     }
