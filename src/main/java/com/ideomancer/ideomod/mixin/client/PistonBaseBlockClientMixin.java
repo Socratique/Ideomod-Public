@@ -1,5 +1,7 @@
 package com.ideomancer.ideomod.mixin.client;
 
+import com.ideomancer.ideomod.block.HollowstoneBlock;
+import com.ideomancer.ideomod.block.HollowstoneBlockEntity;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
@@ -69,7 +71,7 @@ public abstract class PistonBaseBlockClientMixin {
         }
 
         if (captured > 0) {
-            IDEOMOD_LOGGER.info("[ClientCapture] Captured {} framed block(s) for {} at {}",
+            IDEOMOD_LOGGER.info("[ClientCapture] Captured {} inner-block(s) for {} at {}",
                     captured, extending ? "extension" : "retraction", pistonPos);
         }
     }
@@ -87,6 +89,8 @@ public abstract class PistonBaseBlockClientMixin {
 
         for (BlockPos sourcePos : toPush) {
             if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(direction))) {
+                captured++;
+            } else if (ideomod$captureIfHollowstone(level, sourcePos, sourcePos.relative(direction))) {
                 captured++;
             }
         }
@@ -136,6 +140,8 @@ public abstract class PistonBaseBlockClientMixin {
         int captured = 0;
         for (BlockPos sourcePos : allBlocks) {
             if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(moveDir))) {
+                captured++;
+            } else if (ideomod$captureIfHollowstone(level, sourcePos, sourcePos.relative(moveDir))) {
                 captured++;
             }
         }
@@ -212,6 +218,28 @@ public abstract class PistonBaseBlockClientMixin {
         int innerSticky = state.getValue(FramedBlock.INNER_STICKY);
 
         MovingFrameData.store(destPos, innerBlockId, facing, innerSticky);
+        return true;
+    }
+
+    /**
+     * If the block at sourcePos is a HollowstoneBlock with an inner block,
+     * store its inner block ID in MovingFrameData keyed by destPos.
+     * Uses Direction.NORTH and innerSticky=0 as placeholders (unused by
+     * the renderer for hollowstone — it renders default state only).
+     */
+    @Unique
+    private static boolean ideomod$captureIfHollowstone(Level level, BlockPos sourcePos, BlockPos destPos) {
+        BlockState state = level.getBlockState(sourcePos);
+        if (!(state.getBlock() instanceof HollowstoneBlock)) return false;
+
+        BlockEntity be = level.getBlockEntity(sourcePos);
+        if (!(be instanceof HollowstoneBlockEntity hollowBE)) return false;
+
+        ResourceLocation innerBlockId = hollowBE.getInnerBlockId();
+        if (innerBlockId == null) return false;
+
+        // Store with dummy facing/innerSticky — renderer uses defaultBlockState for hollowstone
+        MovingFrameData.store(destPos, innerBlockId, Direction.NORTH, 0);
         return true;
     }
 }

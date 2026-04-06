@@ -129,6 +129,15 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_PULSER = ITEMS.register("machine_pulser",
             () -> new BlockItem(ModBlocks.MACHINE_PULSER.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_SLIME_GRABBER = ITEMS.register("machine_slime_grabber",
+            () -> new BlockItem(ModBlocks.MACHINE_SLIME_GRABBER.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> MACHINE_HONEY_GRABBER = ITEMS.register("machine_honey_grabber",
+            () -> new BlockItem(ModBlocks.MACHINE_HONEY_GRABBER.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> MACHINE_TRANSMITTER = ITEMS.register("machine_transmitter",
+            () -> new BlockItem(ModBlocks.MACHINE_TRANSMITTER.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> REDSTONE_ROD = ITEMS.register("redstone_rod",
             () -> new RedstoneRodItem(new Item.Properties().stacksTo(1)));
 

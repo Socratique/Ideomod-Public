@@ -46,7 +46,10 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_TOGGLE.get(),
                             ModBlocks.MACHINE_TRANSFORMER.get(),
                             ModBlocks.MACHINE_TIMER.get(),
-                            ModBlocks.MACHINE_PULSER.get()
+                            ModBlocks.MACHINE_PULSER.get(),
+                            ModBlocks.MACHINE_SLIME_GRABBER.get(),
+                            ModBlocks.MACHINE_HONEY_GRABBER.get(),
+                            ModBlocks.MACHINE_TRANSMITTER.get()
                     ).build(null));
 
     /**

@@ -82,7 +82,13 @@ public final class MachineSwapHelper {
         //         in getSpecializationBlock(). Reverse mapping in ensureBlockToItem().
 
         itemToBlock.put(Items.FURNACE,         () -> ModBlocks.MACHINE_ENGINE.get());
-        // Grabber: slime/honey block items — needs special handling
+
+        // Grabber: slime/honey block items
+        itemToBlock.put(Items.SLIME_BLOCK,    () -> ModBlocks.MACHINE_SLIME_GRABBER.get());
+        itemToBlock.put(Items.HONEY_BLOCK,    () -> ModBlocks.MACHINE_HONEY_GRABBER.get());
+
+        // Transmitter: tag-based (any oddstone item) — handled via tag fallback
+        //              in getSpecializationBlock(). Reverse mapping in ensureBlockToItem().
     }
 
     // ========================================================================
@@ -124,6 +130,11 @@ public final class MachineSwapHelper {
             return ModBlocks.MACHINE_PULSER.get();
         }
 
+        // Tag-based fallback: any oddstone item -> Machine Transmitter
+        if (item.builtInRegistryHolder().is(ModTags.Items.TRANSMITTER_ITEMS)) {
+            return ModBlocks.MACHINE_TRANSMITTER.get();
+        }
+
         return null;
     }
 
@@ -147,6 +158,9 @@ public final class MachineSwapHelper {
         }
         // Pulser: tag-based mapping uses stone_button as canonical reverse item
         blockToItem.put(ModBlocks.MACHINE_PULSER.get(), Items.STONE_BUTTON);
+        // Transmitter: tag-based mapping uses oddstone as canonical reverse item
+        blockToItem.put(ModBlocks.MACHINE_TRANSMITTER.get(),
+                ModBlocks.ODDSTONE.get().asItem());
     }
 
     // ========================================================================

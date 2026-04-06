@@ -1,49 +1,49 @@
 package com.ideomancer.ideomod.client.render;
 
+import com.ideomancer.ideomod.block.machine.MachineGrabberBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonHeadBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.mojang.blaze3d.vertex.PoseStack;
-import net.minecraft.client.Minecraft;
+import net.minecraft.client.renderer.LightTexture;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.block.BlockRenderDispatcher;
 import net.minecraft.client.renderer.blockentity.BlockEntityRenderer;
 import net.minecraft.client.renderer.blockentity.BlockEntityRendererProvider;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.LightLayer;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.api.distmarker.OnlyIn;
 
 /**
- * Block Entity Special Renderer for Machine Piston arm animation.
+ * Block Entity Special Renderer for Machine Family blocks.
  *
  * Registered against the MACHINE_FRAME BlockEntityType (shared by all
- * Machine Family blocks). Only renders for MachinePistonBlock and
- * MachineStickyPistonBlock instances — all other machines get no
- * extra rendering from this BESR.
+ * Machine Family blocks). Handles multiple rendering modes:
  *
- * ANIMATION:
- * ==========
- * For each face with an active animation (armAnimDirection != 0),
- * renders the arm model at an interpolated offset:
+ * 1. PISTON ARM ANIMATION: For MachinePistonBlock and MachineStickyPistonBlock.
+ *    Renders the arm model at an interpolated offset during 2-tick extend/retract.
  *
- * Extension (animDir=+1): arm grows outward from the piston face.
- *   offset = progress * 1.0 in the extension direction.
- *   At progress 0 the arm is at the face, at 1.0 it's fully extended.
+ * 2. INNER BLOCK RENDERING: For MachineGrabberBlock.
+ *    Renders a smaller inner block (slime/honey) visible through the
+ *    transparent center of the outer texture. Same approach as
+ *    HollowstoneRenderer: 0.998 scale with best-of-6-neighbors lighting.
  *
- * Retraction (animDir=-1): arm shrinks back into the piston.
- *   offset = (1.0 - progress) * 1.0 in the extension direction.
- *   At progress 0 the arm is fully extended, at 1.0 it's at the face.
- *
- * The arm model (MachinePistonHeadBlock's JSON model) is an 8x8x16 bar.
- * We render it via renderSingleBlock() with the correct FACING and STICKY
- * blockstate properties.
+ * All other machine blocks get no extra rendering from this BESR.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 @OnlyIn(Dist.CLIENT)
 public class MachinePistonArmRenderer implements BlockEntityRenderer<MachineFrameBlockEntity> {
+
+    private static final float INNER_SCALE = 0.998f;
+    private static final float INNER_OFFSET = (1f - INNER_SCALE) / 2f;
 
     private final BlockRenderDispatcher blockRenderer;
 
@@ -55,9 +55,20 @@ public class MachinePistonArmRenderer implements BlockEntityRenderer<MachineFram
     public void render(MachineFrameBlockEntity be, float partialTick, PoseStack poseStack,
                         MultiBufferSource bufferSource, int packedLight, int packedOverlay) {
 
-        // Only render for piston blocks
         BlockState baseState = be.getBlockState();
-        if (!(baseState.getBlock() instanceof MachinePistonBlock pistonBlock)) return;
+        Block block = baseState.getBlock();
+
+        // --- Inner block rendering for Grabber ---
+        if (block instanceof MachineGrabberBlock grabber) {
+            Block innerBlock = grabber.getGrabberType() == MachineGrabberBlock.GrabberType.SLIME
+                    ? Blocks.SLIME_BLOCK : Blocks.HONEY_BLOCK;
+            renderInnerBlock(innerBlock.defaultBlockState(), be, poseStack, bufferSource,
+                    packedLight, packedOverlay);
+            return;
+        }
+
+        // --- Piston arm animation (existing behavior) ---
+        if (!(block instanceof MachinePistonBlock pistonBlock)) return;
 
         boolean sticky = pistonBlock.isSticky();
 
@@ -68,41 +79,70 @@ public class MachinePistonArmRenderer implements BlockEntityRenderer<MachineFram
             float progress = be.getArmRenderProgress(dir, partialTick);
 
             // Calculate how far along the extension axis the arm should be.
-            // Extension: arm grows from 0 (at face) to 1.0 (fully out)
-            // Retraction: arm shrinks from 1.0 (fully out) to 0 (at face)
             float extensionOffset;
             if (animDir > 0) {
-                // Extending: progress 0->1 maps to offset 0->1
                 extensionOffset = progress;
             } else {
-                // Retracting: progress 0->1 maps to offset 1->0
                 extensionOffset = 1.0f - progress;
             }
 
-            // Don't render if fully retracted (offset 0 = inside the base block)
+            // Don't render if fully retracted
             if (extensionOffset <= 0.001f) continue;
 
-            // Build the arm blockstate
             BlockState armState = ModBlocks.MACHINE_PISTON_HEAD.get().defaultBlockState()
                     .setValue(MachinePistonHeadBlock.FACING, dir)
                     .setValue(MachinePistonHeadBlock.STICKY, sticky);
 
             poseStack.pushPose();
 
-            // Translate to the arm position: extensionOffset along the direction.
-            // At offset 0, the arm is at the piston face (origin).
-            // At offset 1, the arm is one full block out (adjacent block space).
             poseStack.translate(
                     dir.getStepX() * extensionOffset,
                     dir.getStepY() * extensionOffset,
                     dir.getStepZ() * extensionOffset
             );
 
-            // Render the arm model
             blockRenderer.renderSingleBlock(armState, poseStack, bufferSource, packedLight, packedOverlay);
 
             poseStack.popPose();
         }
+    }
+
+    /**
+     * Renders an inner block at 0.998 scale inside the machine block.
+     * Visible through the transparent center of the outer texture.
+     * Same approach as HollowstoneRenderer.
+     */
+    private void renderInnerBlock(BlockState innerState, MachineFrameBlockEntity be,
+                                   PoseStack poseStack, MultiBufferSource bufferSource,
+                                   int packedLight, int packedOverlay) {
+        int light = sampleBestLight(be.getLevel(), be.getBlockPos(), packedLight);
+
+        poseStack.pushPose();
+        poseStack.translate(INNER_OFFSET, INNER_OFFSET, INNER_OFFSET);
+        poseStack.scale(INNER_SCALE, INNER_SCALE, INNER_SCALE);
+
+        blockRenderer.renderSingleBlock(innerState, poseStack, bufferSource, light, packedOverlay);
+
+        poseStack.popPose();
+    }
+
+    /**
+     * Sample the best (brightest) light from all 6 face neighbors.
+     * Same approach as HollowstoneRenderer and FramedBlockRenderer.
+     */
+    private static int sampleBestLight(Level level, BlockPos pos, int fallbackLight) {
+        if (level == null) return fallbackLight;
+
+        int maxBlock = 0;
+        int maxSky = 0;
+
+        for (Direction face : Direction.values()) {
+            BlockPos neighbor = pos.relative(face);
+            maxBlock = Math.max(maxBlock, level.getBrightness(LightLayer.BLOCK, neighbor));
+            maxSky = Math.max(maxSky, level.getBrightness(LightLayer.SKY, neighbor));
+        }
+
+        return LightTexture.pack(maxBlock, maxSky);
     }
 
     /**

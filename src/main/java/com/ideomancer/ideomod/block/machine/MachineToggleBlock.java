@@ -195,6 +195,9 @@ public class MachineToggleBlock extends AbstractMachineBlock {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof MachineFrameBlockEntity machineBE)) return;
 
+        // Suppress edge detection during piston settlement window
+        if (machineBE.isPistonSettling()) return;
+
         boolean currentlyPowered = state.getValue(POWERED);
 
         if (currentlyPowered) {
@@ -269,6 +272,30 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof MachineFrameBlockEntity machineBE)) return;
+
+        // Piston settlement: clear the flag and re-snapshot signal state
+        // so the edge detector is correctly armed after all blocks settle.
+        if (machineBE.isPistonSettling()) {
+            machineBE.setPistonSettling(false);
+            boolean isPowered = state.getValue(POWERED);
+            Direction inputFace = machineBE.getInputFace();
+            if (isPowered && inputFace != null) {
+                int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(
+                        level, pos, inputFace, shouldSignal);
+                machineBE.setInputWasLow(inputSignal <= 0);
+            } else if (!isPowered) {
+                int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
+                if (scan[0] > 0 && scan[1] >= 0) {
+                    machineBE.setInputFace(Direction.values()[scan[1]]);
+                    machineBE.setInputWasLow(false);
+                } else {
+                    machineBE.setInputWasLow(true);
+                }
+            }
+            LOGGER.debug("[TOGGLE] piston settled at {}, POWERED={}, inputWasLow={}",
+                    pos, isPowered, machineBE.isInputWasLow());
+            return;
+        }
 
         boolean wasPowered = state.getValue(POWERED);
 
@@ -357,26 +384,35 @@ public class MachineToggleBlock extends AbstractMachineBlock {
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos,
                          BlockState oldState, boolean movedByPiston) {
-        // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
-        // block entity data is restored via IPistonMovable.loadMovementData.
-        // Running the absorption scan would overwrite that restored state.
-        if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof MachineFrameBlockEntity machineBE) {
-                absorbing.set(true);
-                try {
-                    int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
-                    int bestSignal = scan[0];
-                    Direction bestFace = scan[1] >= 0 ? Direction.values()[scan[1]] : null;
+        if (!oldState.is(state.getBlock()) && !level.isClientSide()) {
+            if (movedByPiston) {
+                // Piston placement: suppress edge detection for 1 tick while
+                // the rest of the push group settles. The BE's inputWasLow and
+                // inputFace are already restored from movement data.
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof MachineFrameBlockEntity machineBE) {
+                    machineBE.setPistonSettling(true);
+                }
+                level.scheduleTick(pos, this, 1, TickPriority.HIGH);
+            } else {
+                // Normal placement: absorb any pre-existing signal silently.
+                BlockEntity be = level.getBlockEntity(pos);
+                if (be instanceof MachineFrameBlockEntity machineBE) {
+                    absorbing.set(true);
+                    try {
+                        int[] scan = MachineRedstoneHelper.scanAllFaces(level, pos, shouldSignal);
+                        int bestSignal = scan[0];
+                        Direction bestFace = scan[1] >= 0 ? Direction.values()[scan[1]] : null;
 
-                    if (bestSignal > 0 && bestFace != null) {
-                        machineBE.setInputFace(bestFace);
-                        machineBE.setInputWasLow(false);
-                        LOGGER.debug("[TOGGLE] placed at {} — absorbed pre-existing signal on {} (strength {})",
-                                pos, bestFace, bestSignal);
+                        if (bestSignal > 0 && bestFace != null) {
+                            machineBE.setInputFace(bestFace);
+                            machineBE.setInputWasLow(false);
+                            LOGGER.debug("[TOGGLE] placed at {} — absorbed pre-existing signal on {} (strength {})",
+                                    pos, bestFace, bestSignal);
+                        }
+                    } finally {
+                        absorbing.set(false);
                     }
-                } finally {
-                    absorbing.set(false);
                 }
             }
             FrameActivation.markDirty(level, pos);

@@ -7,6 +7,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.NonNullList;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.network.Connection;
 import net.minecraft.network.protocol.Packet;
 import net.minecraft.network.protocol.game.ClientGamePacketListener;
 import net.minecraft.network.protocol.game.ClientboundBlockEntityDataPacket;
@@ -70,6 +71,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_TIMER_DURATION = "TimerDuration";
     private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
     private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
+    private static final String TAG_TRANSMITTER_SIGNAL = "TransmitterSignal";
     private static final String TAG_MOVEMENT_POWERED = "MovementPowered";
 
     /**
@@ -145,6 +147,16 @@ public class MachineFrameBlockEntity extends BlockEntity
     private int pulserTicksRemaining = 0;
 
     /**
+     * Signal strength stored by Machine Transmitter. For a SOURCE, this
+     * is the external signal strength received. For a RECEIVER, this is
+     * the output strength (source strength minus 1). Other specializations
+     * ignore this field.
+     *
+     * Reset to 0 on every specialization swap.
+     */
+    private int transmitterSignalStrength = 0;
+
+    /**
      * Transient field used only during piston movement to preserve the
      * POWERED blockstate across the move. Saved in saveMovementData(),
      * restored in loadMovementData(), and applied to the blockstate in
@@ -153,6 +165,16 @@ public class MachineFrameBlockEntity extends BlockEntity
      * default blockstate to POWERED=false.
      */
     private boolean movementPowered = false;
+
+    /**
+     * Transient flag: true for 1 tick after this block is placed by piston
+     * movement. While true, edge-triggered machines (Grabber) suppress
+     * neighborChanged processing to avoid spurious toggles from intermediate
+     * states during the push group settlement period (blocks are placed one
+     * by one, so some neighbors are briefly missing). Cleared by scheduled
+     * tick. NOT saved to disk — only relevant during the settlement window.
+     */
+    private boolean pistonSettling = false;
 
     // ========================================================================
     // ARM ANIMATION STATE (for Machine Piston / Sticky Piston)
@@ -342,6 +364,52 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     // ========================================================================
+    // TRANSMITTER SIGNAL STRENGTH
+    // ========================================================================
+
+    /**
+     * Get the stored signal strength for the Machine Transmitter.
+     * For sources: the external strength received.
+     * For receivers: the output strength (source strength - 1).
+     */
+    public int getTransmitterSignalStrength() {
+        return this.transmitterSignalStrength;
+    }
+
+    /**
+     * Set the stored signal strength for the Machine Transmitter.
+     * Clamped to 0-15.
+     */
+    public void setTransmitterSignalStrength(int strength) {
+        int clamped = Math.max(0, Math.min(15, strength));
+        if (this.transmitterSignalStrength != clamped) {
+            this.transmitterSignalStrength = clamped;
+            this.setChanged();
+            syncToClients(); // Push updated strength to client for indicator tint
+        }
+    }
+
+    // ========================================================================
+    // PISTON SETTLEMENT
+    // ========================================================================
+
+    /**
+     * Whether this block entity is in the 1-tick piston settlement window.
+     * Edge-triggered machines should suppress neighborChanged while true.
+     */
+    public boolean isPistonSettling() {
+        return this.pistonSettling;
+    }
+
+    /**
+     * Set the piston settling flag. Called by onPlace(movedByPiston=true)
+     * to begin the settlement window, and by the scheduled tick to end it.
+     */
+    public void setPistonSettling(boolean settling) {
+        this.pistonSettling = settling;
+    }
+
+    // ========================================================================
     // ARM ANIMATION ACCESSORS
     // ========================================================================
 
@@ -406,6 +474,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.pulserTicksRemaining > 0) {
             tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
         }
+        if (this.transmitterSignalStrength > 0) {
+            tag.putInt(TAG_TRANSMITTER_SIGNAL, this.transmitterSignalStrength);
+        }
     }
 
     @Override
@@ -444,6 +515,11 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.pulserTicksRemaining = 0;
         }
+        if (tag.contains(TAG_TRANSMITTER_SIGNAL)) {
+            this.transmitterSignalStrength = Math.max(0, Math.min(15, tag.getInt(TAG_TRANSMITTER_SIGNAL)));
+        } else {
+            this.transmitterSignalStrength = 0;
+        }
     }
 
     // ========================================================================
@@ -453,6 +529,28 @@ public class MachineFrameBlockEntity extends BlockEntity
     @Override
     public Packet<ClientGamePacketListener> getUpdatePacket() {
         return ClientboundBlockEntityDataPacket.create(this);
+    }
+
+    /**
+     * Called on the CLIENT when a block entity data packet arrives
+     * (triggered by syncToClients / sendBlockUpdated on the server).
+     *
+     * Compares transmitter signal strength before and after loading
+     * the new data. If the strength changed, requests a model data
+     * update which triggers a chunk section rebuild — this causes
+     * the block color handler to re-query the BE and update the
+     * indicator tint without needing a blockstate property.
+     */
+    @Override
+    public void onDataPacket(Connection net, ClientboundBlockEntityDataPacket pkt) {
+        int oldStrength = this.transmitterSignalStrength;
+        CompoundTag tag = pkt.getTag();
+        if (tag != null) {
+            load(tag);
+        }
+        if (level != null && level.isClientSide() && this.transmitterSignalStrength != oldStrength) {
+            requestModelDataUpdate();
+        }
     }
 
     @Override
@@ -479,6 +577,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.pulserTicksRemaining > 0) {
             tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
+        }
+        if (this.transmitterSignalStrength > 0) {
+            tag.putInt(TAG_TRANSMITTER_SIGNAL, this.transmitterSignalStrength);
         }
         return tag;
     }
@@ -519,6 +620,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
         if (this.pulserTicksRemaining > 0) {
             tag.putInt(TAG_PULSER_TICKS_REMAINING, this.pulserTicksRemaining);
+        }
+        if (this.transmitterSignalStrength > 0) {
+            tag.putInt(TAG_TRANSMITTER_SIGNAL, this.transmitterSignalStrength);
         }
         // Save the POWERED blockstate so it survives piston movement.
         // Critical for the Toggle (a latch), but saved generically for all
@@ -567,6 +671,11 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.pulserTicksRemaining = Math.max(0, tag.getInt(TAG_PULSER_TICKS_REMAINING));
         } else {
             this.pulserTicksRemaining = 0;
+        }
+        if (tag.contains(TAG_TRANSMITTER_SIGNAL)) {
+            this.transmitterSignalStrength = Math.max(0, Math.min(15, tag.getInt(TAG_TRANSMITTER_SIGNAL)));
+        } else {
+            this.transmitterSignalStrength = 0;
         }
         this.movementPowered = tag.getBoolean(TAG_MOVEMENT_POWERED);
         this.setChanged();
@@ -687,12 +796,40 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     @Override
     public void setItem(int slot, ItemStack stack) {
+        ItemStack oldStack = this.items.get(slot).copy();
         this.items.set(slot, stack);
         if (stack.getCount() > this.getMaxStackSize()) {
             stack.setCount(this.getMaxStackSize());
         }
+
+        // PRE-SWAP: Let the current block clean up state tied to the old item
+        // (e.g., transmitter turning off old-channel receivers). Must happen
+        // BEFORE triggerSwapCheck, which may replace the block entirely.
+        if (this.level != null && !this.level.isClientSide()
+                && !ItemStack.isSameItemSameTags(oldStack, stack)) {
+            Block block = this.level.getBlockState(this.worldPosition).getBlock();
+            if (block instanceof AbstractMachineBlock machineBlock) {
+                machineBlock.onSpecItemChanging(this.level, this.worldPosition, oldStack);
+            }
+        }
+
         this.setChanged();
         triggerSwapCheck();
+
+        // POST-SWAP: Let the block at this position re-evaluate for the new
+        // item. This works for BOTH cases:
+        //   - Same block type (oddstone variant swap): this BE is still alive,
+        //     re-evaluates for the new channel.
+        //   - Cross block type (e.g., conductor → transmitter): checkAndSwap
+        //     replaced the block and set the item via setItemDirect. The NEW
+        //     block's onSpecItemChanged runs and can now see the spec item.
+        if (this.level != null && !this.level.isClientSide()
+                && !ItemStack.isSameItemSameTags(oldStack, stack)) {
+            Block block = this.level.getBlockState(this.worldPosition).getBlock();
+            if (block instanceof AbstractMachineBlock machineBlock) {
+                machineBlock.onSpecItemChanged(this.level, this.worldPosition, stack);
+            }
+        }
     }
 
     /**
@@ -724,6 +861,8 @@ public class MachineFrameBlockEntity extends BlockEntity
         this.timerTicksRemaining = 0;
         // Reset pulser countdown
         this.pulserTicksRemaining = 0;
+        // Reset transmitter signal strength
+        this.transmitterSignalStrength = 0;
 
         // Reset engine fields (if switching away from engine)
         // Note: MachineEngineBlockEntity has its own fuel fields that are

@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-04-03 (Redstone Rod tool added. Phantom signal injection via mixin + static registry.)*
+*Last updated: 2026-04-05 (Machine Transmitter wireless redstone, Machine Grabber toggleable sticky, piston settlement window for edge-triggered blocks)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -284,6 +284,9 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Any button (tag) | Pulser | MachinePulserBlock | PULSER | [DONE] |
 | Furnace | Engine | MachineEngineBlock | ENGINE | [DONE] |
 | Lever | Toggle | MachineToggleBlock | TOGGLE | [DONE] |
+| Slime Block | Slime Grabber | MachineGrabberBlock | SLIME_GRABBER | [DONE] |
+| Honey Block | Honey Grabber | MachineGrabberBlock | HONEY_GRABBER | [DONE] |
+| Any Oddstone | Transmitter | MachineTransmitterBlock | TRANSMITTER | [DONE] |
 | Piston | Machine Piston | MachinePistonBlock | PISTON | [DONE] |
 | Sticky Piston | Machine Sticky Piston | MachineStickyPistonBlock | STICKY_PISTON | [DONE] |
 
@@ -299,7 +302,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
 | Piston data preservation | [DONE] | All specializations implement IPistonMovable via shared block entity. |
 | AbstractMachineBlock | [DONE] | Shared base class for all Machine Family blocks. Default lifecycle, GUI, drops, stickiness. MachineFrameBlock/MachineTrolleyBlock ~20 lines each. |
-| Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 151px height. |
+| Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 187px height (89px content area). |
 | Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
 | Fluid Pipe subclass BE | [DONE] | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fluid type tracking, cooldown, round-robin, input face tracking. IFluidHandler capability. Biome water tint via ModColorHandlers. Lava light emission (level 10). |
 | Engine subclass BE | [DONE] | MachineEngineBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fuel slot, litTime/litDuration, pulseInterval, pulseCounter. Server ticker. IItemHandler capability. Fuel freezes when unpowered. |
@@ -312,6 +315,10 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | BESR arm animation | [DONE] | MachinePistonArmRenderer. Per-face interpolated animation. 2-tick duration. Transient state in MachineFrameBlockEntity. |
 | Brace push limit increase | [DONE] | Each Machine Brace in a push group adds +6 to the push limit (base 12), up to 60. Cascading: limit grows as Braces are discovered. Implemented via @ModifyConstant in PistonStructureResolverMixin. |
 | Lazy swap mapping | [DONE] | Specializations using mod items as triggers (Brace uses Machine Frame item) register lazily via ensureBraceMapping() to avoid DeferredRegister timing issues. |
+| Grabber toggleable stickiness | [DONE] | Edge-triggered toggle. POWERED=true adds vanilla slime/honey stickiness on top of Machine Family stickiness. Two variants: SLIME_GRABBER, HONEY_GRABBER. |
+| Transmitter wireless redstone | [DONE] | Oddstone-channel-based wireless. SOURCE/RECEIVER mutually exclusive modes. Signal attenuation (output = source - 1). Anti-feedback architecture. Level-aware indicator tint. |
+| Piston settlement window | [DONE] | 1-tick pistonSettling flag in MachineFrameBlockEntity. Suppresses neighborChanged during push group placement for Grabber, Toggle, and other edge-triggered blocks. Prevents spurious toggles. |
+| Spec item change callbacks | [DONE] | AbstractMachineBlock.onSpecItemChanging/onSpecItemChanged. Two-phase lifecycle for pre/post specialization item changes. Used by Transmitter for channel change cleanup. |
 
 ---
 
@@ -349,6 +356,12 @@ Fuel-burning pulse clock. Burns fuel items (any Forge-recognized fuel) to emit p
 
 **Machine Toggle:** [DONE]
 Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).
+
+**Machine Grabber (Slime/Honey):** [DONE]
+Edge-triggered toggleable sticky block. Two variants sharing MachineGrabberBlock class. Slime variant specialization item: Slime Block. Honey variant: Honey Block. When POWERED=false: standard Machine Family stickiness. When POWERED=true: additionally behaves like corresponding vanilla sticky block (with mutual exclusions). Rising-edge toggle via inputWasLow (same as Toggle). No redstone output. Piston settlement window (1-tick pistonSettling) prevents spurious toggles during push group placement. BESR renders inner slime/honey block through transparent outer texture.
+
+**Machine Transmitter:** [DONE]
+Wireless redstone link via Oddstone channels. Specialization item: any Oddstone variant (determines channel). Two mutually exclusive modes: SOURCE (external redstone in, broadcasts wirelessly) and RECEIVER (wireless in, redstone out on all faces). Signal attenuation: receiver outputs sourceStrength-1. Cubic range from config (sympathetic_radius). Immediate activation in neighborChanged (no tick delay) so even 1-tick pulses transmit. Anti-feedback: SOURCE blockstate enforces mode exclusivity, shouldSignal ThreadLocal for self-read suppression, receiver self-read guard in tick(), source-first power-off ordering. Spec item change lifecycle: onSpecItemChanging cleans up old channel, onSpecItemChanged re-evaluates for new channel. Level-aware indicator tint reads from BE (not blockstate), synced to client via onDataPacket.
 
 **Machine Piston / Machine Sticky Piston:** [DONE]
 Omnidirectional pistons as Machine Family members. No FACING property on the base block — signal on any face extends a head from the opposite face. Multiple heads can extend simultaneously. Pushes blocks via BlockMoveHelper (12-block limit, full sticky group resolution). Immovable while any head is extended (PistonBaseBlockMixin Feature 5). Head block (MachinePistonHeadBlock) is a real block in the world with 8×8×16 collision shape, FACING + STICKY properties. Breaking the head causes the piston to recognize that face is free (vanilla-like behavior — if signal is still present, re-extends immediately).

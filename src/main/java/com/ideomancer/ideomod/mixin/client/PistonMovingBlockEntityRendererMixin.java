@@ -1,6 +1,8 @@
 package com.ideomancer.ideomod.mixin.client;
 
+import com.ideomancer.ideomod.block.HollowstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
+import com.ideomancer.ideomod.block.machine.MachineGrabberBlock;
 import com.ideomancer.ideomod.client.render.MovingFrameData;
 import com.mojang.blaze3d.vertex.PoseStack;
 import net.minecraft.client.Minecraft;
@@ -32,10 +34,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /**
  * Client-side mixin into PistonHeadRenderer.
  *
- * Renders the inner block for FramedBlocks during piston transit using
- * BlockRenderDispatcher.renderSingleBlock(). Handles multi-element models,
- * translucency, tinting, and directional textures via FACING from
- * MovingFrameData.
+ * Renders the inner block for blocks with transparent centers during piston
+ * transit using BlockRenderDispatcher.renderSingleBlock(). Handles:
+ *
+ * 1. FramedBlocks — inner block from MovingFrameData cache, with directional
+ *    state transfer (FACING, AXIS, etc.).
+ * 2. MachineGrabberBlocks — deterministic inner block (slime/honey based on
+ *    GrabberType), no cache needed.
+ * 3. HollowstoneBlocks — inner block from MovingFrameData cache, default state
+ *    only (no directional transfer).
  *
  * LIGHTING:
  *   Brightest-of-neighbors at source and dest, blended by animation progress.
@@ -67,23 +74,46 @@ public abstract class PistonMovingBlockEntityRendererMixin {
         if (level == null) return;
 
         BlockState movedState = blockEntity.getMovedState();
+        Block movedBlock = movedState.getBlock();
 
         if (!ideomod$loggedOnce) {
             IDEOMOD_LOGGER.info("[RendererMixin] Mixin active - first render() call");
             ideomod$loggedOnce = true;
         }
 
-        if (!(movedState.getBlock() instanceof FramedBlock)) return;
+        // Determine the inner block state to render based on the moved block type.
+        BlockState innerState = null;
+
+        if (movedBlock instanceof FramedBlock) {
+            // FramedBlock: inner block from MovingFrameData cache with directional state
+            BlockPos destPos = blockEntity.getBlockPos();
+            MovingFrameData.FrameTransitInfo info = MovingFrameData.get(destPos);
+            if (info != null) {
+                Block innerBlock = BuiltInRegistries.BLOCK.get(info.innerBlockId());
+                if (innerBlock != Blocks.AIR) {
+                    innerState = ideomod$buildInnerState(innerBlock, info.facing());
+                }
+            }
+        } else if (movedBlock instanceof MachineGrabberBlock grabber) {
+            // MachineGrabber: deterministic inner block from GrabberType
+            Block innerBlock = grabber.getGrabberType() == MachineGrabberBlock.GrabberType.SLIME
+                    ? Blocks.SLIME_BLOCK : Blocks.HONEY_BLOCK;
+            innerState = innerBlock.defaultBlockState();
+        } else if (movedBlock instanceof HollowstoneBlock) {
+            // Hollowstone: inner block from MovingFrameData cache, default state
+            BlockPos destPos = blockEntity.getBlockPos();
+            MovingFrameData.FrameTransitInfo info = MovingFrameData.get(destPos);
+            if (info != null) {
+                Block innerBlock = BuiltInRegistries.BLOCK.get(info.innerBlockId());
+                if (innerBlock != Blocks.AIR) {
+                    innerState = innerBlock.defaultBlockState();
+                }
+            }
+        }
+
+        if (innerState == null) return;
 
         BlockPos destPos = blockEntity.getBlockPos();
-        MovingFrameData.FrameTransitInfo info = MovingFrameData.get(destPos);
-        if (info == null) return;
-
-        Block innerBlock = BuiltInRegistries.BLOCK.get(info.innerBlockId());
-        if (innerBlock == Blocks.AIR) return;
-
-        BlockState innerState = ideomod$buildInnerState(innerBlock, info.facing());
-
         BlockPos sourcePos = destPos.relative(blockEntity.getMovementDirection().getOpposite());
         float progress = blockEntity.getProgress(partialTick);
         int blendedLight = ideomod$blendLight(level, sourcePos, destPos, progress, packedLight);

@@ -10,7 +10,10 @@ import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
+import com.ideomancer.ideomod.block.machine.MachineTransmitterBlock;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.registry.ModBlocks;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import com.ideomancer.ideomod.registry.ModItems;
 import net.minecraft.client.renderer.BiomeColors;
 import net.minecraftforge.api.distmarker.Dist;
@@ -162,6 +165,22 @@ public class ModColorHandlers {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_ENGINE.get());
 
+        // Machine Transmitter: tintIndex 1 on inner underlay cuboid.
+        // Level-aware: reads signal strength from block entity so the
+        // indicator tint reflects actual signal strength (source or receiver).
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                if (level != null && pos != null) {
+                    BlockEntity be = level.getBlockEntity(pos);
+                    if (be instanceof MachineFrameBlockEntity machineBE) {
+                        return POWER_COLORS[machineBE.getTransmitterSignalStrength()];
+                    }
+                }
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_TRANSMITTER.get());
+
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 0 && state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == FluidType.WATER) {
@@ -231,6 +250,14 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModItems.MACHINE_ENGINE.get());
+
+        // Machine Transmitter item: show unpowered (dark maroon)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_TRANSMITTER.get());
 
         // Machine Fluid Pipe item: no tint needed
         event.register((stack, tintIndex) -> {

@@ -1,5 +1,149 @@
 # Ideomod Changelog
 
+## [2026-04-05] Machine Transmitter, Machine Grabber, Piston Settlement, Spec Item Lifecycle
+
+### Machine Transmitter -- Wireless Redstone
+
+New Machine Family specialization: wireless redstone link via Oddstone channels.
+Specialization item: any Oddstone variant (oddstone, cobbled_oddstone, oddstone_bricks,
+etc.). The specific variant determines the wireless channel.
+
+Two mutually exclusive modes:
+- SOURCE (POWERED=true, SOURCE=true): Receiving external redstone, broadcasts
+  wirelessly to matching-channel transmitters in range. Does NOT output redstone.
+  Activation is IMMEDIATE in neighborChanged (no tick delay) so even 1-tick pulses
+  are captured and transmitted.
+- RECEIVER (POWERED=true, SOURCE=false): Receiving wireless signal from a source,
+  outputs redstone at (sourceStrength - 1) on all faces, simulating signal
+  attenuation. Does NOT accept external input. Does NOT re-broadcast (no chaining).
+
+Anti-feedback architecture (5 layers):
+1. SOURCE blockstate enforces mode exclusivity (sources don't output, receivers
+   don't read external)
+2. shouldSignal ThreadLocal<BlockPos> for self-read suppression through solid blocks
+3. updatingPos ThreadLocal<BlockPos> for re-entrant protection during setBlock
+4. Receiver self-read guard in tick() -- receivers never call getExternalSignalStrength
+   (would read own output back through dust, flip to SOURCE, collapse circuit)
+5. Source power-off ordering -- receivers turned off BEFORE source notifies own
+   neighbors, preventing stale feedback through dust
+
+Channel system: channel = registry name of oddstone item in spec slot. Matching is
+exact string equality. Range is cubic (config sympathetic_radius, default 5).
+
+Level-aware indicator tint: reads transmitterSignalStrength from BE (not blockstate),
+returns POWER_COLORS[0-15] gradient. Avoids bloating blockstate JSON from 4 to 64
+entries. Client sync via syncToClients() + onDataPacket() with requestModelDataUpdate()
+for chunk re-render on strength change.
+
+### Machine Grabber -- Toggleable Sticky Block
+
+New Machine Family specialization: toggleable sticky block. Two variants:
+- Slime Grabber (MachineType.SLIME_GRABBER, specialization item: Slime Block)
+- Honey Grabber (MachineType.HONEY_GRABBER, specialization item: Honey Block)
+
+When POWERED=false: standard Machine Family stickiness only. When POWERED=true:
+additionally behaves like the corresponding vanilla sticky block (with mutual
+exclusions -- slime excludes honey/odd_slime, honey excludes slime/odd_slime).
+
+Rising-edge toggle via inputWasLow (same pattern as MachineToggleBlock). No redstone
+output, so no anti-feedback architecture needed.
+
+Visual: BESR renders inner slime/honey block through transparent outer texture.
+
+### Piston Settlement Window
+
+Fixed spurious toggles on Grabber and Toggle blocks during piston movement. When
+blocks in a push group are placed sequentially, edge-triggered blocks may see
+temporary signal drops (adjacent transmitter not placed yet) followed by rises
+(transmitter lands), falsely triggering a toggle.
+
+Fix: 1-tick pistonSettling flag in MachineFrameBlockEntity.
+- onPlace with movedByPiston=true: sets pistonSettling=true, schedules 1-tick tick
+- neighborChanged: returns immediately if isPistonSettling()
+- tick (settlement): clears flag, re-snapshots signal state for correct edge arming
+
+Applied to: MachineGrabberBlock, MachineToggleBlock. Field is transient (not saved
+to disk).
+
+### Spec Item Change Lifecycle
+
+New two-phase callback system for specialization item changes:
+
+1. AbstractMachineBlock.onSpecItemChanging(Level, BlockPos, ItemStack oldItem)
+   Called BEFORE triggerSwapCheck. Allows cleanup of old state (e.g., transmitter
+   turns off old-channel receivers).
+
+2. AbstractMachineBlock.onSpecItemChanged(Level, BlockPos, ItemStack newItem)
+   Called AFTER triggerSwapCheck on whatever block is at the position (covers both
+   same-block and cross-block swap cases).
+
+MachineFrameBlockEntity.setItem() rewritten to call onSpecItemChanging before
+triggerSwapCheck and onSpecItemChanged after. Captures old item copy for the
+pre-swap callback.
+
+Fixes resolved:
+- Receiver not updating when source's oddstone channel changes
+- Newly placed transmitters not receiving from active sources
+- Cross-block swap (conductor->transmitter) not notifying receivers when powered
+
+### Receiver Signal Strength Updates
+
+Fixed receiver output not updating when source signal strength changes while
+transmitting. Root cause: the !stateChanged branch in tick() only called
+updateNeighborsAt(pos.relative(dir)) for secondary/indirect neighbors but never
+updateNeighborsAt(pos) for direct neighbors like dust. No setBlock call meant
+direct neighbors weren't notified.
+
+Fix: added level.updateNeighborsAt(pos, this) before the secondary neighbor updates
+in the receiver's !stateChanged path.
+
+### Receiver Self-Read Anti-Feedback
+
+Fixed receiver signal cutting to zero randomly. Root cause: receiver in tick()
+read its own output back through adjacent dust via getExternalSignalStrength(),
+flipped to SOURCE (output=0), everything collapsed.
+
+Fix: receivers skip external signal check in tick() entirely
+(externalStrength = wasPowered && !wasSource ? 0 : getExternalSignalStrength).
+
+### Hollowstone Inner Block Transit Rendering
+
+Added hollowstone inner block capture alongside framed blocks in BlockMoveHelper's
+client-side capture loop. Reads innerBlockId from HollowstoneBlockEntity, stores to
+MovingFrameData with dummy facing=NORTH and innerSticky=0. The transit renderer
+(PistonMovingBlockEntityRendererMixin) draws the inner block during piston animation.
+
+Files added:
+- `block/machine/MachineTransmitterBlock.java` -- Wireless redstone block class
+- `block/machine/MachineGrabberBlock.java` -- Toggleable sticky block class
+- Block model/blockstate/texture/loot/lang files for all three new blocks
+
+Files modified:
+- `block/machine/AbstractMachineBlock.java` -- Added onSpecItemChanging/onSpecItemChanged
+  virtual callback methods
+- `block/machine/MachineFrameBlockEntity.java` -- Added transmitterSignalStrength field
+  + getter/setter with syncToClients(). Added pistonSettling field + getter/setter.
+  Added onDataPacket() override for client-side tint refresh. Rewritten setItem() with
+  two-phase pre/post swap callbacks.
+- `block/machine/MachineToggleBlock.java` -- Added pistonSettling guard in neighborChanged.
+  Updated tick() with settlement handling. Updated onPlace with settlement scheduling.
+- `block/machine/MachineGrabberBlock.java` -- New file (see above)
+- `block/machine/MachineTransmitterBlock.java` -- New file (see above)
+- `block/machine/MachineType.java` -- Added SLIME_GRABBER, HONEY_GRABBER, TRANSMITTER
+- `block/machine/MachineSwapHelper.java` -- Added transmitter/grabber swap mappings
+- `block/movement/BlockMoveHelper.java` -- Added hollowstone inner block capture in
+  client-side rendering loop
+- `client/ModColorHandlers.java` -- Added transmitter level-aware tint handler reading
+  from MachineFrameBlockEntity.getTransmitterSignalStrength()
+- `registry/ModBlocks.java` -- Registered machine_slime_grabber, machine_honey_grabber,
+  machine_transmitter
+- `registry/ModItems.java` -- Registered BlockItems for new blocks
+- `registry/ModCreativeTabs.java` -- Added new blocks to creative tab
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-04-03] Add Redstone Rod Tool
 
 New handheld tool that delivers a 1-redstone-tick pulse of signal strength 15
