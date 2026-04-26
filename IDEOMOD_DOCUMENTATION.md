@@ -1,6 +1,6 @@
 # IDEOMOD TECHNICAL DOCUMENTATION
 *Comprehensive reference for the Ideomod codebase -- architecture, systems, templates, and implementation details.*
-*Last updated: 2026-04-03 (Redstone Rod tool, LevelSignalMixin, phantom signal injection)*
+*Last updated: 2026-04-19 (Frame Family simplification: removed raw vanilla iron/copper as conductors and sticky members; removed cross-frame mediation and INNER_CONDUCTOR property)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 
@@ -79,6 +79,8 @@ com.ideomancer.ideomod
   |     |     |-- AbstractMachineBlock.java    Base class for all Machine Family blocks. Shared lifecycle,
   |     |     |                                GUI, drops, stickiness, frame activation markDirty().
   |     |     |                                getRedstoneOutput(BlockState) for MachineRedstoneHelper.
+  |     |     |                                onSpecItemChanging/onSpecItemChanged callbacks for
+  |     |     |                                pre/post specialization item change lifecycle.
   |     |     |-- MachineRedstoneHelper.java   Shared signal detection utility. Single source of truth
   |     |     |                                for getIncomingSignalFromFace(), scanAllFaces(),
   |     |     |                                getFaceFromSourcePos(). Generic device detection via
@@ -91,6 +93,9 @@ com.ideomancer.ideomod
   |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
   |     |     |-- MachineFrameBlockEntity.java Shared BE for all machine blocks. Single slot + IPistonMovable.
   |     |     |                                Protected constructor for subclass BE types.
+  |     |     |                                transmitterSignalStrength for wireless redstone.
+  |     |     |                                pistonSettling flag for 1-tick settlement window.
+  |     |     |                                onDataPacket() for client-side tint updates.
   |     |     |-- MachinePipeBlock.java        Pipe specialization. Push-only item transport + ticker.
   |     |     |-- MachinePipeBlockEntity.java  Pipe BE subclass. Transit slot + cooldown + round-robin.
   |     |     |                                Client sync: getUpdatePacket(), getUpdateTag(), syncToClients().
@@ -118,9 +123,15 @@ com.ideomancer.ideomod
   |     |     |-- MachineTransformerBlock.java Extends AbstractMachineBlock. MachineType.TRANSFORMER.
   |     |     |                                Configurable signal level setter. Signal detection via
   |     |     |                                MachineRedstoneHelper.
-  |     |     \-- MachineTimerBlock.java       Extends AbstractMachineBlock. MachineType.TIMER.
-  |     |                                      Edge-triggered timed output. Signal detection via
-  |     |                                      MachineRedstoneHelper.
+  |     |     |-- MachineTimerBlock.java       Extends AbstractMachineBlock. MachineType.TIMER.
+  |     |     |                                Edge-triggered timed output. Signal detection via
+  |     |     |                                MachineRedstoneHelper.
+  |     |     |-- MachineGrabberBlock.java    Extends AbstractMachineBlock. MachineType.SLIME_GRABBER / HONEY_GRABBER.
+  |     |     |                                Edge-triggered toggleable sticky block. POWERED blockstate.
+  |     |     |                                Piston settlement (1-tick pistonSettling window).
+  |     |     \-- MachineTransmitterBlock.java Extends AbstractMachineBlock. MachineType.TRANSMITTER.
+  |     |                                      Wireless redstone via Oddstone channels. POWERED + SOURCE
+  |     |                                      blockstates. Signal attenuation. Anti-feedback architecture.
   |     |-- movement/
   |     |     |-- IPistonMovable.java          Interface: saveMovementData/loadMovementData
   |     |     |-- MovingBlockEntityData.java   Static registry for BE data in transit during moves
@@ -143,7 +154,9 @@ com.ideomancer.ideomod
   |           |-- PortalUtils.java             Corner validation, interior nav, clearing helpers
   |           \-- EnderPearlPortalHandler.java Ender pearl portal activation (Forge event handler)
   |-- client/
-  |     |-- ModColorHandlers.java        Block/item color tinting (tintIndex system)
+  |     |-- ModColorHandlers.java        Block/item color tinting (Conductor power indicator,
+  |     |                                Fluid Pipe biome water tint, Transmitter level-aware
+  |     |                                signal strength tint via BE read)
   |     |-- FramedBlockDebugOverlay.java F3 debug overlay for inner block info
   |     |-- gui/
   |     |     \-- MachineFrameScreen.java      Dynamic GUI screen for all Machine Family (spritesheet)
@@ -240,17 +253,20 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `machine_transformer` | MachineTransformerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TRANSFORMER. Configurable signal level setter. POWERED + OUTPUT_LEVEL (1-15). |
 | `machine_timer` | MachineTimerBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TIMER. Edge-triggered timed output. POWERED. |
 | `machine_engine` | MachineEngineBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.ENGINE. Fuel-burning pulse clock. LIT + POWERED. Own BE type (MACHINE_ENGINE). |
+| `machine_slime_grabber` | MachineGrabberBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.SLIME_GRABBER. Edge-triggered toggleable sticky block. POWERED. |
+| `machine_honey_grabber` | MachineGrabberBlock | Hardness 3.0/6.0, pickaxe, metal sound. `PushReaction.NORMAL`. MachineType.HONEY_GRABBER. Edge-triggered toggleable sticky block. POWERED. |
+| `machine_transmitter` | MachineTransmitterBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL`. MachineType.TRANSMITTER. Wireless redstone. POWERED + SOURCE. |
 | `iron_frame` | FrameBlock | FrameMaterial.IRON, strength 3.0/6.0, pickaxe, metal sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
 | `copper_frame` | FrameBlock | FrameMaterial.COPPER, strength 2.5/6.0, pickaxe, copper sound. `noOcclusion()`. Waterloggable (SimpleWaterloggedBlock). |
-| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
-| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT. |
+| `iron_framed_block` | FramedBlock | FrameMaterial.IRON, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_LIGHT. |
+| `copper_framed_block` | FramedBlock | FrameMaterial.COPPER, shared `FRAMED_REDSTONE_CONDUCTOR` predicate, `lightLevel` reads INNER_LIGHT. EntityBlock. `noOcclusion()`. Properties: ACTIVE, FACING, INNER_STICKY, INNER_LIGHT. |
 | `hollow_stone` | HollowstoneBlock | MapColor.STONE, strength 1.5/6.0, pickaxe, stone sound. `noOcclusion()`. EntityBlock. FILLED BooleanProperty. BE type: HOLLOW_STONE. |
 
 ### ModItems (DeferredRegister<Item>)
 
 BlockItems for every block EXCEPT `oddstone_portal` (not player-placeable, same pattern as vanilla nether portal). All use `new Item.Properties()` with no special settings. Includes: ideoblock, drill, oddstone, cobbled_oddstone, oddstone_bricks, oddstone_wall, oddstone_stairs, oddstone_slab, cobbled_oddstone_wall, cobbled_oddstone_stairs, cobbled_oddstone_slab, oddstone_brick_wall, oddstone_brick_stairs, oddstone_brick_slab, machine_block, odd_slime, oddstone_repulser, oddstone_attractor, machine_track, machine_trolley, iron_frame, copper_frame.
 
-BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock, `MACHINE_ENGINE` for MachineEngineBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
+BlockItems: `MACHINE_CONDUCTOR` for MachineConductorBlock, `MACHINE_PIPE` for MachinePipeBlock, `MACHINE_PISTON` for MachinePistonBlock, `MACHINE_STICKY_PISTON` for MachineStickyPistonBlock, `MACHINE_BRACE` for MachineBraceBlock, `MACHINE_REPEATER` for MachineRepeaterBlock, `MACHINE_TOGGLE` for MachineToggleBlock, `MACHINE_TRANSFORMER` for MachineTransformerBlock, `MACHINE_TIMER` for MachineTimerBlock, `MACHINE_ENGINE` for MachineEngineBlock, `MACHINE_SLIME_GRABBER` for MachineGrabberBlock, `MACHINE_HONEY_GRABBER` for MachineGrabberBlock, `MACHINE_TRANSMITTER` for MachineTransmitterBlock. No item for `machine_piston_head` (not player-placeable -- middle-click returns parent piston item).
 
 Special items: `IRON_FRAMED_BLOCK` and `COPPER_FRAMED_BLOCK` are `FramedBlockItem` instances (custom BlockItem with dynamic getName and NBT support). `STRUCTURE_DEBUG_STICK` is a standalone Item (not a BlockItem), `stacksTo(1)`. `REDSTONE_ROD` is a `RedstoneRodItem` (custom Item subclass), `stacksTo(1)`. Uses `onItemUseFirst()` to bypass block GUIs and inject phantom redstone pulses via `RedstoneRodSignalManager`. `HOLLOW_STONE` is a standard BlockItem. `HOLLOW_STONE_SHARD` is a plain Item (crafting ingredient, 9 shards -> 1 hollowstone).
 
@@ -263,7 +279,7 @@ Two deferred registers in `worldgen/ModFeatures.java`:
 ### ModCreativeTabs
 
 Two tabs:
-- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater, Machine Toggle, Machine Transformer, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
+- `ideomod_tab`: icon = IDEOBLOCK. Lists all standard mod items (Ideoblock, Drill, Oddstone, Machine Block, Odd Slime, Repulser, Attractor, Machine Track, Machine Trolley, Machine Conductor, Machine Pipe, Machine Fluid Pipe, Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater, Machine Toggle, Machine Transformer, Machine Timer, Machine Engine, Machine Slime Grabber, Machine Honey Grabber, Machine Transmitter, Iron Frame, Copper Frame, Structure Debug Stick). Machine specializations use pre-loaded stacks.
 - `framed_blocks_tab`: icon = Iron Framed Stone. Dynamically populated -- caches frameable blocks list on first open (via `FrameabilityHelper.isFrameable()`), creates iron + copper framed variants for each valid block. Includes modded blocks automatically.
 
 ### ModTags
@@ -322,7 +338,7 @@ The `StickyType` enum (in `block/movement/StickyType.java`) serves as the single
 
 Rows = grabber, columns = target. "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron/Copper Framed Blocks. Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules.
 
-*Note: This is the overview matrix with collapsed columns. See CODEBASE_REFERENCE.md and STICKINESS_SYSTEM.md for the detailed matrix with Machine Frame / Same-Type Spec / Diff-Type Spec / Vanilla Metal columns separated.*
+*Note: This is the overview matrix with collapsed columns. See CODEBASE_REFERENCE.md and STICKINESS_SYSTEM.md for the detailed matrix with Machine Frame / Same-Type Spec / Diff-Type Spec columns separated.*
 
 |              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
@@ -525,7 +541,7 @@ Conditions for anchor detection (ALL must be true):
 1. Neighbor is a FramedBlock with immovable inner (`#ideomod:immovable_when_framed` tag or destroySpeed -1)
 2. Neighbor is NOT already in toPush (those are handled by Feature 5)
 3. Neighbor is ACTIVE (inactive framed obsidian has no frame stickiness connection)
-4. Frame stickiness connects the neighbor to the group member (same material, cross-frame mediation via ideomod$wouldFrameStickinessAllow, or Machine Family adjacency)
+4. Frame stickiness connects the neighbor to the group member (same frame material via ideomod$wouldFrameStickinessAllow, or Machine Family adjacency)
 
 Helper: `ideomod$hasImmovableFrameAnchor()` — iterates toPush, checks 6 neighbors per block, returns true if any immovable anchor found.
 
@@ -730,7 +746,7 @@ TWO restore paths (sole consumer of `MovingBlockEntityData.retrieve()`):
 Note: `finalTick()` inject uses `(PistonMovingBlockEntity)(Object)this` to access the instance since it is non-static, unlike `tick()`.
 
 **BlockMoveHelper integration** (steps 2.5 + 2.6):
-BlockMoveHelper has its own save logic in step 2.5 for Repulser/Attractor/Track moves. Wrapped in `if (!level.isClientSide())` guard. Same pattern as PistonBaseBlockMixin but within the BlockMoveHelper flow. Restore uses the same PistonMovingBlockEntityMixin. Step 2.6 handles client-side transit rendering: iterates toPush (which includes sympathetic blocks from the resolver) and populates MovingFrameData for any framed blocks found. This ensures the transit renderer draws inner blocks during BlockMoveHelper-driven moves.
+BlockMoveHelper has its own save logic in step 2.5 for Repulser/Attractor/Track moves. Wrapped in `if (!level.isClientSide())` guard. Same pattern as PistonBaseBlockMixin but within the BlockMoveHelper flow. Restore uses the same PistonMovingBlockEntityMixin. Step 2.6 handles client-side transit rendering: iterates toPush (which includes sympathetic blocks from the resolver) and populates MovingFrameData for any framed blocks or hollowstone blocks found. FramedBlock entries store innerBlockId + facing + innerSticky. Hollowstone entries store innerBlockId with dummy facing=NORTH and innerSticky=0. This ensures the transit renderer draws inner blocks during BlockMoveHelper-driven moves.
 
 **Three bugs discovered and fixed**:
 1. **onPlace timing**: `setBlock()` -> `onPlace()` -> `newBlockEntity()`. Block entity does not exist during onPlace(). Sole consumer must be the mixin.
@@ -765,54 +781,42 @@ Signal decay prevents backward activation (same as redstone dust) — no block c
 
 | Type | Activation State | Conducts For | When Activated Passes |
 |------|-----------------|--------------|----------------------|
-| Frame Block (IFrameBlock) | ACTIVE blockstate property | Own frame material | Own material(s) |
-| Framed Block (normal) | ACTIVE blockstate property | Frame material + inner conductor (if set) | Own material(s) |
-| Framed Block (mediator) | ACTIVE blockstate property | Frame material + inner conductor | ALL materials (universal bridge) |
-| Vanilla Metal (iron_block, copper_block) | Ephemeral Set<Long> in FrameActivation | Own metal material | Own material |
-| Machine Block (source) | Always active | N/A (source) | ALL materials |
+| Frame Block (IFrameBlock) | ACTIVE blockstate property | Own frame material | Own material |
+| Framed Block | ACTIVE blockstate property | Own frame material | Own material |
+| Machine Block (source) | Always active | N/A (source) | All materials |
 
-**Mediator**: A framed block whose INNER_CONDUCTOR is a different material than its frame (e.g., copper-framed iron block: frame=COPPER, inner=IRON). When activated, mediators pass ALL materials like a machine block, enabling unlimited material family hops. Same-material inner conductors (iron-framed iron) are NOT mediators.
+(Removed 2026-04-19: raw vanilla iron_block / copper_block as conductors -- the feature had no visual indication on the block. Cross-frame mediation via INNER_CONDUCTOR was also removed -- each conductor now passes only its own frame material. Iron chains conduct through iron only, copper through copper.)
 
 ### The Algorithm
 
 When `recalculate()` is called:
 
-1. **DISCOVER**: BFS from the change point through all connected conductors (IFrameBlock + vanilla metals, any material, active or inactive). Finds the entire network.
-2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade). Remove only this network's vanilla metal positions from activatedVanillaMetals set (per-network remove, not global clear).
+1. **DISCOVER**: BFS from the change point through all connected IFrameBlock conductors (any material, active or inactive). Finds the entire network.
+2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade).
 3. **FIND SOURCES**: For every block in the network AND the change position, check 6 neighbors for Machine Blocks.
-4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts if its conductive materials intersect the available materials. Mediators pass ALL materials. Signal decays by 1 per hop. Records max strength per position.
+4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts and outputs only its own frame material -- no cross-material mediation. Signal decays by 1 per hop. Records max strength per position.
 5. **PROPAGATE ANTI-SIGNAL**: From powered Machine Frames ONLY (no other Machine Family blocks), BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
-6. **APPLY**: For each network block: activate if activation > 0 AND anti-signal == 0. IFrameBlocks get ACTIVE=true. Vanilla metals get added to activatedVanillaMetals.
-
-### Vanilla Metal Activation Tracking
-
-Vanilla blocks cannot have custom blockstate properties added (properties are baked into StateDefinition at registration time). Instead, FrameActivation maintains a `ConcurrentHashMap.newKeySet()` backed `Set<Long> activatedVanillaMetals` (packed BlockPos longs) with per-network remove-then-add. Each `recalculate()` removes only the vanilla metal positions belonging to the network it's processing (step 2), then adds back the ones that should be active (step 6). This preserves vanilla metals from other networks.
-
-Thread safety: `ConcurrentHashMap.newKeySet()` provides thread-safe individual add/remove/contains. Concurrent reads from stickiness checks always see consistent per-element state.
-
-History: Previously used volatile atomic-swap of an immutable set (audit fix B, 2026-03-14), which was safe for single-network worlds but caused Issue #15 -- when multiple networks were recalculated in one flush cycle, each recalculate() replaced the ENTIRE global set with only its own network's metals, wiping metals from previously-processed networks (Issue #15 fix, 2026-03-15).
+6. **APPLY**: For each network block: IFrameBlocks get ACTIVE=true if activation > 0 AND anti-signal == 0.
 
 Public queries:
-- `isVanillaMetalActivated(BlockPos)` — is this vanilla metal connected to a machine source?
-- `isActivatedConductor(BlockState, BlockPos)` — covers both IFrameBlocks (via ACTIVE) and vanilla metals (via set)
+- `isActivatedConductor(BlockState, BlockPos)` — checks IFrameBlock ACTIVE property
 - `isActive(BlockState)` — checks IFrameBlock ACTIVE property only (public for cross-package access)
 
 ### Stickiness Activation Requirements
 
-Frame-family stickiness requires activation on BOTH sides:
-- **FrameBlock.canStickTo()**: Frame family material checks gated behind `IFrameBlock.isActive(other)`. Inactive neighbor falls through to permissive checks (slime/honey can still grab).
+Frame-family stickiness requires activation on BOTH sides AND exact same frame material:
+- **FrameBlock.canStickTo()**: Frame family material checks gated behind `IFrameBlock.isActive(other)` AND same `getFrameMaterial()`. Cross-material or inactive neighbor falls through to permissive checks (slime/honey can still grab).
 - **FramedBlock.canStickTo()**: Same treatment for neighbor IFrameBlock checks within the ACTIVE block.
-- **IMachineFamily.canMachineFamilyStickTo()**: Frame family returns `FrameActivation.isActive(other)`. Machine blocks only grab active frames.
-- **Vanilla metals**: shouldVanillaMetalStick/shouldVanillaMetalGrabNeighbor check `FrameActivation.isVanillaMetalActivated(metalPos)`.
+- **IMachineFamily.canMachineFamilyStickTo()**: Frame family returns `FrameActivation.isActive(other)`. Machine blocks only grab active frames (any material).
 
 ### Key Types
 
 | Type | Role |
 |------|------|
 | `IFrameBlock` | Interface. Marker for Frame Family blocks. Provides `getFrameMaterial()`. Has static `isActive(BlockState)` helper. |
-| `FrameMaterial` | Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry, miningTimeModifier. `fromVanillaBlock()`, `toConductorValue()`, `fromConductorValue()` for conductor mapping. |
+| `FrameMaterial` | Data-carrying enum: IRON, COPPER. displayName, registryPrefix, item registry, miningTimeModifier. `fromVanillaBlock()` (used only by FramedBlockRecipe to reject same-material crafting). |
 | `FrameBlock` | Base block class. ACTIVE + WATERLOGGED properties. `isStickyBlock()` returns ACTIVE value. All lifecycle hooks call `FrameActivation.markDirty()`. |
-| `FrameActivation` | Static utility. `markDirty()` is the primary entry point (batched). `recalculate()` is package-private. End-of-tick processing via `TickHandler`. `flushIfDirty()` for piston resolver. Signal strength propagation, anti-signal suppression, vanilla metal tracking. Public queries: `isVanillaMetalActivated()`, `isActivatedConductor()`, `isActive()`, `isFrameFamily()`, `getFrameMaterial()`. |
+| `FrameActivation` | Static utility. `markDirty()` is the primary entry point (batched). `recalculate()` is package-private. End-of-tick processing via `TickHandler`. `flushIfDirty()` for piston resolver. Signal strength propagation, anti-signal suppression. Public queries: `isActivatedConductor()`, `isActive()`, `isFrameFamily()`, `getFrameMaterial()`. |
 
 ### Performance
 
@@ -842,12 +846,11 @@ FramedBlockEntity stores the inner block's ResourceLocation. FramedBlock overrid
 | ACTIVE | BooleanProperty | false (default), true | Frame-family stickiness activation (Machine Block driven) |
 | FACING | DirectionProperty | 6 directions (default NORTH) | Inner block orientation + Framed Odd Slime directional stickiness |
 | INNER_STICKY | IntegerProperty | 0-4 (default 0) | Inner sticky type from StickyType enum: 0=NONE, 1=SLIME, 2=HONEY, 3=ODD_SLIME, 4=ODDSTONE |
-| INNER_CONDUCTOR | IntegerProperty | 0-2 (default 0) | Inner block conductor material: 0=NONE, 1=IRON, 2=COPPER. Enables cross-frame mediation at blockstate level. |
 | INNER_LIGHT | IntegerProperty | 0-15 (default 0) | Inner block light emission level. Read by lightLevel predicate in ModBlocks.java so the lighting engine knows emission without block entity access. |
 
-Total blockstate count: 2 x 6 x 5 x 3 x 16 = 2880 states per framed block type.
+Total blockstate count: 2 x 6 x 5 x 16 = 960 states per framed block type. (INNER_CONDUCTOR property removed 2026-04-19 alongside cross-frame mediation; was 2880 states.)
 
-FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT are pre-populated in getStateForPlacement() from item NBT (critical for lighting engine to detect emission on first setBlock), and kept in sync by FramedBlockEntity.updateBlockstateFromInner() for piston restores and chunk loads. INNER_STICKY delegates to `StickyType.fromBlock()`. INNER_CONDUCTOR uses `FrameMaterial.fromVanillaBlock()` + `toConductorValue()`. INNER_LIGHT uses `inner.defaultBlockState().getLightEmission()`. updateBlockstateFromInner() called on setInnerBlock(), onLoad(), load() (when level available), and loadMovementData().
+FACING set from player look direction on placement (piston-style: getNearestLookingDirection().getOpposite()). INNER_STICKY and INNER_LIGHT are pre-populated in getStateForPlacement() from item NBT (critical for lighting engine to detect emission on first setBlock), and kept in sync by FramedBlockEntity.updateBlockstateFromInner() for piston restores and chunk loads. INNER_STICKY delegates to `StickyType.fromBlock()`. INNER_LIGHT uses `inner.defaultBlockState().getLightEmission()`. updateBlockstateFromInner() called on setInnerBlock(), onLoad(), load() (when level available), and loadMovementData().
 
 ### FrameabilityHelper
 
@@ -894,7 +897,7 @@ Both use early-exit: if vanilla already returned a non-default value (not 1.0f),
 
 FramedBlock has two independent stickiness systems that combine:
 
-**Frame stickiness** (same as Frame Blocks): Requires ACTIVE=true (driven by FrameActivation system). Sticks to same-material IFrameBlock **only when neighbor is also active**. Sticks to Machine Family. Cross-frame mediation: sticks to framed blocks with matching INNER_CONDUCTOR. Sticks to same-material activated vanilla metals. Grab immunity rules 9-11 prevent grabbing slime/honey/odd slime.
+**Frame stickiness** (same as Frame Blocks): Requires ACTIVE=true (driven by FrameActivation system). Sticks to same-material IFrameBlock **only when neighbor is also active and the frame materials match exactly** (no cross-material mediation since 2026-04-19). Sticks to Machine Family (any material, when active). Grab immunity rules prevent grabbing slime/honey/odd slime.
 
 **Inner stickiness** (based on INNER_STICKY property): Requires INNER_STICKY > 0. Applies the vanilla stickiness behavior of the inner block type. Framed Slime grabs normal blocks like real slime. Framed Honey grabs like real honey. Framed Odd Slime grabs like real odd slime (directional). Framed Oddstone grabs all slime types and other oddstone like real oddstone (universal grabber). Vanilla mutual exclusions apply (slime vs honey, slime vs odd slime, honey vs odd slime).
 
@@ -1314,6 +1317,8 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Us
 
 **Piston Movement**: Latch state is preserved through piston moves. Vanilla preserves the original blockstate (POWERED + INPUT_FACE) via MovingPistonBlockEntity's movedState. Entity data (inputFace, inputWasLow) is preserved via IPistonMovable save/loadMovementData. Critically, onMovementRestored does NOT schedule a re-evaluation tick for powered Toggles -- the tick() method's POWERED branch unconditionally sets POWERED=false (it's the "toggle OFF" handler), which would immediately undo the latch. The movementPowered field in MachineFrameBlockEntity also restores POWERED + INPUT_FACE blockstate as a safety net.
 
+**Piston Settlement Window**: Same 1-tick pistonSettling mechanism as Grabber. When moved by piston, sets `pistonSettling=true` and schedules a 1-tick settle tick. During settlement, neighborChanged is suppressed (returns immediately if `be.isPistonSettling()`). The settle tick clears the flag and re-snapshots signal state: if powered, scans input face only; if unpowered, scans all faces. This prevents spurious toggles from sequential block placement in push groups.
+
 **Anti-feedback Architecture** (4 layers, simplified from Repeater):
 
 1. getSignal/getDirectSignal: return 0 toward input face (`direction == inputFace.getOpposite()`), 15 on all other faces. INPUT_FACE read from blockstate (not BE) for BlockGetter compatibility. `shouldSignal` ThreadLocal<BlockPos> stores scanning position — suppresses only at that position (same-type power through solid blocks enabled).
@@ -1487,6 +1492,88 @@ Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits pe
 **Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer/Timer). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when POWERED=false, bright red (POWER_COLORS[15]) when POWERED=true. Outer shell uses `machine_engine.png` / `machine_engine_lit.png` textures (placeholder -- needs user art). LIT blockstate drives texture variant swap.
 
 Stickiness: MachineType.ENGINE -- sticks to other Engines + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Pipes, or other specialization types.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Grabber -- Toggleable Sticky Block
+
+Registry IDs: `machine_slime_grabber`, `machine_honey_grabber`. Class: MachineGrabberBlock extends AbstractMachineBlock. `MachineType.SLIME_GRABBER` / `MachineType.HONEY_GRABBER`.
+
+Two variants of a toggleable sticky block. When unpowered, standard Machine Family stickiness only. When powered, additionally behaves like the corresponding vanilla sticky block (Slime or Honey). Specialization items: Slime Block or Honey Block respectively.
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing slime/honey block in slot). Uses `inputWasLow` field for edge detection (same pattern as Toggle).
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) |
+| **Output** | None -- no redstone output |
+| **Trigger** | Rising edge only (signal must drop to 0 then rise to toggle) |
+| **Sticky behavior** | When POWERED: slime variant grabs like SlimeBlock (excludes honey, odd slime). Honey variant grabs like HoneyBlock (excludes slime, odd slime). |
+
+**Edge Detection**: Same pattern as MachineToggleBlock. `inputWasLow` boolean in MachineFrameBlockEntity. Rising edge flips POWERED. Signal must drop and rise between toggles. Placement signal absorption: onPlace() snapshots signal landscape (sets inputWasLow based on existing signal) so pre-existing signals don't cause immediate toggle.
+
+**No Anti-Feedback**: Grabber has no redstone output, so no feedback loops are possible. No shouldSignal, no updatingPos, no output-face filtering needed.
+
+**Piston Settlement Window**: When moved by piston (`movedByPiston=true` in onPlace), sets `pistonSettling=true` on the block entity and schedules a 1-tick settle tick. During the settlement window, neighborChanged is completely suppressed (returns immediately if `be.isPistonSettling()`). This prevents spurious toggles caused by sequential block placement in push groups -- blocks land one at a time, so a grabber may see a temporary signal drop (adjacent transmitter not placed yet) followed by a rise (transmitter lands), which would falsely trigger a toggle. The settle tick clears the flag and re-snapshots the signal landscape (`be.setInputWasLow(!hasSignal)`).
+
+**Stickiness**: MachineType.SLIME_GRABBER / HONEY_GRABBER. When POWERED=false: sticks to same-type + Machine Frames + Frame Family (active) only. When POWERED=true: additionally sticks like the corresponding vanilla sticky block. canStickTo is permissive (Layer 1); grab immunity carve-out in StickinessRules Rule 2 exempts powered grabbers matching the target's sticky type.
+
+**Visual**: Dual-cuboid model. Inner cuboid renders the slime/honey block via BESR (same approach as FramedBlockRenderer). Outer shell uses `machine_grabber` (off) / `machine_grabber_on` (on) textures with transparent centers revealing the inner block. No indicator tint -- on/off distinguished by outer texture only.
+
+Frame activation: Always emits activation (strength 15). Never suppresses.
+
+### Machine Transmitter -- Wireless Redstone via Oddstone Channels
+
+Registry ID: `machine_transmitter`. Class: MachineTransmitterBlock extends AbstractMachineBlock. `MachineType.TRANSMITTER`.
+
+Wireless redstone link. Transmitters operate in one of two mutually exclusive modes: SOURCE (receiving external redstone, broadcasting wirelessly) or RECEIVER (receiving wireless signal, outputting redstone). The wireless channel is determined by the Oddstone variant in the spec slot -- two transmitters match if and only if they have the exact same Oddstone type. Specialization item: any Oddstone block or variant (oddstone, cobbled_oddstone, oddstone_bricks, etc.).
+
+Shares MachineFrameBlockEntity (right-click opens GUI showing oddstone item in slot). Uses `transmitterSignalStrength` field in MachineFrameBlockEntity for both source strength storage and receiver output level.
+
+| Property | Value |
+|----------|-------|
+| **Blockstate** | POWERED (BooleanProperty) + SOURCE (BooleanProperty) |
+| **Output** | Receivers: stored signal strength on all faces. Sources: 0 (no output). |
+| **Attenuation** | Receiver outputs `sourceStrength - 1`, simulating one block of distance. |
+| **Range** | Cubic radius from config (`oddstone.sympathetic_radius`, default 5). |
+| **Activation** | SOURCE mode: immediate in neighborChanged (no tick delay). |
+| **Re-evaluation** | Via scheduled tick (2 game ticks). |
+
+**Signal Flow (SOURCE mode)**: External redstone signal detected → immediately set POWERED=true, SOURCE=true in neighborChanged (no tick delay, so even 1-tick pulses transmit). Store received signal strength in BE (`transmitterSignalStrength`). Notify all matching-channel transmitters in range via scheduled tick so they can become receivers. When external signal changes strength, update BE and re-notify receivers. When external signal drops to 0, schedule tick to re-evaluate.
+
+**Signal Flow (RECEIVER mode)**: Tick fires, no external signal → scan for matching SOURCE in range → read source's stored `transmitterSignalStrength` from its BE → set own BE's `transmitterSignalStrength` to `sourceStrength - 1` → set POWERED=true, SOURCE=false → output signal on all faces. When source turns off, receivers are turned off FIRST (before source notifies its own neighbors) to prevent stale receiver output feeding back through dust.
+
+**Signal Strength Changes**: When a source's external signal changes strength while already powered, the source updates its stored strength and notifies receivers. Receivers re-read the source's strength and update their output. If the blockstate doesn't change (still POWERED/!SOURCE), the receiver calls `level.updateNeighborsAt(pos, this)` followed by `updateNeighborsAt(pos.relative(dir))` for all 6 directions to ensure direct neighbors (dust) and indirect neighbors (through solid blocks) all update.
+
+**Anti-Feedback Architecture** (3 layers):
+
+1. SOURCE blockstate: getSignal/getDirectSignal return 0 when SOURCE=true (sources never output redstone). Receivers ignore neighborChanged entirely (early return when POWERED && !SOURCE). This prevents circular evaluation between source output and receiver input.
+
+2. shouldSignal ThreadLocal<BlockPos>: Position-based self-read suppression. During getExternalSignalStrength(), stores own position; getSignal/getDirectSignal return 0 at the scanning position. Prevents feedback through solid block conductors.
+
+3. updatingPos ThreadLocal<BlockPos>: During setBlock calls in tick() and neighborChanged, stores own position. neighborChanged at THIS position returns immediately, preventing stale reads during state transitions.
+
+4. Receiver self-read guard in tick(): Receivers skip external signal check entirely (`externalStrength = 0` when `wasPowered && !wasSource`). Without this guard, a receiver sitting next to dust it is powering would read its own output back through getBestNeighborSignal(), flip to SOURCE (output=0), and collapse the circuit.
+
+5. Source power-off ordering: When a source turns off, `turnOffMatchingReceivers()` is called BEFORE the source updates its own blockstate and notifies neighbors. This ensures stale receiver output can't feed back through dust during the transition.
+
+**Channel System**: The channel is the registry name of the item in slot 0 (e.g., "minecraft:oddstone", "ideomod:cobbled_oddstone"). `getChannel(level, pos)` reads from BE. `getChannelFromItem(ItemStack)` derives from an item directly (used during spec item changes where the old item is no longer in the slot). All scanning methods (getWirelessSignalStrength, notifyMatchingTransmitters, turnOffMatchingReceivers) iterate a cubic volume (radius from config) and match channels.
+
+**Spec Item Change Lifecycle**: Two-phase callback system via AbstractMachineBlock virtual methods:
+
+1. `onSpecItemChanging(Level, BlockPos, ItemStack oldItem)` — called BEFORE triggerSwapCheck. For transmitters: turns off receivers on OLD channel, notifies OLD channel peers, resets blockstate to POWERED=false/SOURCE=false. Uses `getChannelFromItem(oldItem)` since the old item is still available as a parameter.
+
+2. `onSpecItemChanged(Level, BlockPos, ItemStack newItem)` — called AFTER triggerSwapCheck when the block type stayed the same (oddstone variant swaps). Calls `reevaluateAfterChange()` which checks external signal first (become SOURCE), then wireless signal (become RECEIVER).
+
+For cross-block swaps (e.g., conductor→transmitter), the old block's `onSpecItemChanging` fires, then `checkAndSwap` replaces the block. The new block's `onSpecItemChanged` fires on whatever block is at the position after the swap (covers both same-block and cross-block cases).
+
+**Placement**: Normal placement calls `reevaluateAfterChange()` to check for external signal (become SOURCE) or wireless signal from active sources (become RECEIVER). During `MachineSwapHelper.isSwapping()`, re-evaluation is SKIPPED in onPlace because the spec item hasn't been written to the new BE yet — `onSpecItemChanged` handles evaluation after `setItemDirect` puts the item in.
+
+**Removal**: onRemove turns off matching receivers (if source), notifies own neighbors, and notifies matching transmitters. Guarded by `!movedByPiston` and `!level.isClientSide()`.
+
+**Visual**: Dual-cuboid model. Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Level-aware tint: reads `transmitterSignalStrength` from MachineFrameBlockEntity (not from blockstate), returns `POWER_COLORS[strength]` where 0 = dark maroon and 15 = bright red. This provides a continuous visual gradient reflecting the actual signal level being transmitted/received. Client-side BE sync via `syncToClients()` after strength changes; `onDataPacket()` compares old/new strength and calls `requestModelDataUpdate()` to trigger chunk re-render for tint update. Outer shell uses `machine_transmitter.png` texture (placeholder).
+
+Stickiness: MachineType.TRANSMITTER -- sticks to other Transmitters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Engines, Pipes, Grabbers, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 

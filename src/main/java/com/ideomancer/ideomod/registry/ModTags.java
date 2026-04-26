@@ -87,5 +87,15 @@ public class ModTags {
          */
         public static final TagKey<Item> PULSER_ITEMS =
                 ItemTags.create(new ResourceLocation(Ideomod.MOD_ID, "pulser_items"));
+
+        /**
+         * Items that trigger the Machine Transmitter specialization when inserted
+         * into a Machine Frame. Contains all Oddstone block items (oddstone,
+         * cobbled oddstone, oddstone bricks, and all wall/stair/slab variants).
+         *
+         * Tag file: data/ideomod/tags/items/transmitter_items.json
+         */
+        public static final TagKey<Item> TRANSMITTER_ITEMS =
+                ItemTags.create(new ResourceLocation(Ideomod.MOD_ID, "transmitter_items"));
     }
 }

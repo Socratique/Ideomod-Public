@@ -52,8 +52,8 @@ import java.util.List;
  *
  * LIGHT EMISSION FIX (Issue #11):
  * getStateForPlacement() reads the inner block from the item's NBT and
- * pre-populates INNER_LIGHT, INNER_STICKY, and INNER_CONDUCTOR on the
- * blockstate BEFORE the block enters the world. This ensures the very
+ * pre-populates INNER_LIGHT and INNER_STICKY on the blockstate BEFORE
+ * the block enters the world. This ensures the very
  * first setBlock() call has the correct light value, so the chunk's
  * light-change detection (old=AIR emission 0 -> new=FRAMED emission 15)
  * triggers the lighting engine immediately — same as vanilla glowstone.
@@ -71,15 +71,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public static final BooleanProperty ACTIVE = BooleanProperty.create("active");
     public static final DirectionProperty FACING = DirectionalBlock.FACING;
     public static final IntegerProperty INNER_STICKY = IntegerProperty.create("inner_sticky", 0, 4);
-
-    /**
-     * Tracks whether the inner block is a vanilla metal conductor.
-     * 0 = not a conductor, 1 = IRON (iron_block inner), 2 = COPPER (copper_block inner).
-     *
-     * This enables cross-frame mediation in canStickTo() without needing
-     * block entity access. Set by FramedBlockEntity.updateBlockstateFromInner().
-     */
-    public static final IntegerProperty INNER_CONDUCTOR = IntegerProperty.create("inner_conductor", 0, 2);
 
     /**
      * Tracks the inner block's light emission level (0-15).
@@ -108,7 +99,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                 .setValue(ACTIVE, false)
                 .setValue(FACING, Direction.NORTH)
                 .setValue(INNER_STICKY, STICKY_NONE)
-                .setValue(INNER_CONDUCTOR, 0)
                 .setValue(INNER_LIGHT, 0));
     }
 
@@ -119,7 +109,7 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(ACTIVE, FACING, INNER_STICKY, INNER_CONDUCTOR, INNER_LIGHT);
+        builder.add(ACTIVE, FACING, INNER_STICKY, INNER_LIGHT);
     }
 
     // ========================================================================
@@ -129,8 +119,8 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     /**
      * Build the initial blockstate for placement. Reads the item stack's
      * BlockEntityTag to determine the inner block, then pre-populates
-     * INNER_LIGHT, INNER_STICKY, and INNER_CONDUCTOR so the blockstate
-     * is fully correct from the very first setBlock() call.
+     * INNER_LIGHT and INNER_STICKY so the blockstate is fully correct
+     * from the very first setBlock() call.
      *
      * This is critical for light emission: the chunk's light-change detection
      * compares old emission (air=0) vs new emission during setBlock(). If the
@@ -160,11 +150,6 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
                 // INNER_STICKY: from StickyType classification
                 int sticky = StickyType.fromBlock(innerBlock).getInnerStickyValue();
                 state = state.setValue(INNER_STICKY, sticky);
-
-                // INNER_CONDUCTOR: from FrameMaterial vanilla block detection
-                FrameMaterial conductorMat = FrameMaterial.fromVanillaBlock(innerBlock);
-                int conductor = conductorMat != null ? conductorMat.toConductorValue() : 0;
-                state = state.setValue(INNER_CONDUCTOR, conductor);
             }
         }
 
@@ -519,58 +504,26 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
 
     /**
      * Combined stickiness: frame rules (gated by ACTIVE) + inner block
-     * rules (gated by INNER_STICKY) + cross-frame mediation + permissive entries.
-     *
-     * CROSS-FRAME MEDIATION (via INNER_CONDUCTOR property):
-     * When active, a framed block sticks to blocks matching EITHER its
-     * frame material OR its inner conductor material. For example:
-     *
-     *   copper-framed iron block (material=COPPER, inner_conductor=IRON):
-     *     ✓ Copper frames/framed blocks (frame material match)
-     *     ✓ Iron frames/framed blocks (inner conductor match)
-     *     ✓ Vanilla iron blocks (inner conductor match)
-     *     ✓ Vanilla copper blocks (frame material match)
-     *     ✓ Machine Family (always)
+     * rules (gated by INNER_STICKY) + permissive entries.
      */
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
         Block otherBlock = other.getBlock();
         int innerSticky = state.getValue(INNER_STICKY);
-        int innerConductor = state.getValue(INNER_CONDUCTOR);
-        FrameMaterial innerMat = FrameMaterial.fromConductorValue(innerConductor);
 
         // --- Frame family rules -- ONLY when activated by Machine Block ---
         if (state.getValue(ACTIVE)) {
             if (otherBlock instanceof IFrameBlock otherFrame) {
-                // Other frame must also be active for frame-family stickiness
-                if (!IFrameBlock.isActive(other)) {
-                    // Fall through — might have inner stickiness (framed slime etc.)
-                } else {
-                    // Same frame material — stick
-                    if (otherFrame.getFrameMaterial() == this.frameMaterial) return true;
-
-                    // Cross-frame mediation: MY inner conductor matches OTHER's frame material
-                    if (innerMat != null && innerMat == otherFrame.getFrameMaterial()) return true;
-
-                    // Cross-frame mediation (reverse): OTHER's inner conductor matches MY frame material
-                    if (otherBlock instanceof FramedBlock) {
-                        FrameMaterial otherInnerMat = FrameMaterial.fromConductorValue(
-                            other.getValue(INNER_CONDUCTOR));
-                        if (otherInnerMat != null && otherInnerMat == this.frameMaterial) return true;
-                    }
+                // Other frame must also be active AND match frame material
+                if (IFrameBlock.isActive(other)
+                        && otherFrame.getFrameMaterial() == this.frameMaterial) {
+                    return true;
                 }
-
-                // Cross-material: DON'T return false here. The other block might
-                // have inner stickiness that should still be able to grab us.
+                // Cross-material or inactive: DON'T return false here. The other
+                // block might have inner stickiness that should still be able
+                // to grab us.
             }
             if (MachineFrameBlock.isMachineFamily(otherBlock)) return true;
-
-            // Vanilla metal block: same frame material OR inner conductor match
-            FrameMaterial otherVanillaMat = FrameMaterial.fromVanillaBlock(otherBlock);
-            if (otherVanillaMat != null) {
-                if (otherVanillaMat == this.frameMaterial) return true;
-                if (innerMat != null && innerMat == otherVanillaMat) return true;
-            }
         }
 
         // --- Inner block stickiness rules ---

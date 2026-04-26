@@ -1,7 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
-*Last updated: 2026-04-03 (Redstone Rod tool added. Phantom signal injection via mixin + static registry.)*
+*Last updated: 2026-04-19 (Frame Family simplified -- raw vanilla iron/copper removed as conductors and sticky members; cross-frame mediation removed and INNER_CONDUCTOR property deleted; Oddstone silk-touch loot fix; OddstoneConfig deleted; FurnaceArray frame tag consolidated)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
 *This is a living design document. Nothing in it is final -- all features, systems, and decisions are subject to change as the project evolves. Status tags reflect current implementation state and design clarity, not permanence or commitment.*
@@ -284,6 +284,9 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Any button (tag) | Pulser | MachinePulserBlock | PULSER | [DONE] |
 | Furnace | Engine | MachineEngineBlock | ENGINE | [DONE] |
 | Lever | Toggle | MachineToggleBlock | TOGGLE | [DONE] |
+| Slime Block | Slime Grabber | MachineGrabberBlock | SLIME_GRABBER | [DONE] |
+| Honey Block | Honey Grabber | MachineGrabberBlock | HONEY_GRABBER | [DONE] |
+| Any Oddstone | Transmitter | MachineTransmitterBlock | TRANSMITTER | [DONE] |
 | Piston | Machine Piston | MachinePistonBlock | PISTON | [DONE] |
 | Sticky Piston | Machine Sticky Piston | MachineStickyPistonBlock | STICKY_PISTON | [DONE] |
 
@@ -299,7 +302,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
 | Piston data preservation | [DONE] | All specializations implement IPistonMovable via shared block entity. |
 | AbstractMachineBlock | [DONE] | Shared base class for all Machine Family blocks. Default lifecycle, GUI, drops, stickiness. MachineFrameBlock/MachineTrolleyBlock ~20 lines each. |
-| Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 151px height. |
+| Unified dynamic GUI | [DONE] | All Machine Family blocks share one menu type (MACHINE_FRAME), one screen, one PositionBoundContainer. GUI renders from ideomod_gui.png spritesheet. Transit slot dynamically enabled for pipes. Fixed 187px height (89px content area). |
 | Pipe subclass BE | [DONE] | MachinePipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Transit slot, cooldown, round-robin, input face tracking. IItemHandler capability. |
 | Fluid Pipe subclass BE | [DONE] | MachineFluidPipeBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fluid type tracking, cooldown, round-robin, input face tracking. IFluidHandler capability. Biome water tint via ModColorHandlers. Lava light emission (level 10). |
 | Engine subclass BE | [DONE] | MachineEngineBlockEntity extends MachineFrameBlockEntity with its own BlockEntityType. Fuel slot, litTime/litDuration, pulseInterval, pulseCounter. Server ticker. IItemHandler capability. Fuel freezes when unpowered. |
@@ -312,6 +315,10 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | BESR arm animation | [DONE] | MachinePistonArmRenderer. Per-face interpolated animation. 2-tick duration. Transient state in MachineFrameBlockEntity. |
 | Brace push limit increase | [DONE] | Each Machine Brace in a push group adds +6 to the push limit (base 12), up to 60. Cascading: limit grows as Braces are discovered. Implemented via @ModifyConstant in PistonStructureResolverMixin. |
 | Lazy swap mapping | [DONE] | Specializations using mod items as triggers (Brace uses Machine Frame item) register lazily via ensureBraceMapping() to avoid DeferredRegister timing issues. |
+| Grabber toggleable stickiness | [DONE] | Edge-triggered toggle. POWERED=true adds vanilla slime/honey stickiness on top of Machine Family stickiness. Two variants: SLIME_GRABBER, HONEY_GRABBER. |
+| Transmitter wireless redstone | [DONE] | Oddstone-channel-based wireless. SOURCE/RECEIVER mutually exclusive modes. Signal attenuation (output = source - 1). Anti-feedback architecture. Level-aware indicator tint. |
+| Piston settlement window | [DONE] | 1-tick pistonSettling flag in MachineFrameBlockEntity. Suppresses neighborChanged during push group placement for Grabber, Toggle, and other edge-triggered blocks. Prevents spurious toggles. |
+| Spec item change callbacks | [DONE] | AbstractMachineBlock.onSpecItemChanging/onSpecItemChanged. Two-phase lifecycle for pre/post specialization item changes. Used by Transmitter for channel change cleanup. |
 
 ---
 
@@ -349,6 +356,12 @@ Fuel-burning pulse clock. Burns fuel items (any Forge-recognized fuel) to emit p
 
 **Machine Toggle:** [DONE]
 Omnidirectional edge-triggered flip-flop / T-latch. Receives signal on any face, toggles between ON (outputs 15 on all other faces) and OFF on each rising edge. Specialization item: vanilla Lever. Shares MachineFrameBlockEntity with inputWasLow field for edge detection. Blockstate: POWERED (boolean) + INPUT_FACE (EnumProperty: none + 6 directions). Rising-edge-only design: signal must drop to 0 then rise again to toggle. Placement signal absorption prevents activation from pre-existing signals (critical for binary counters). Anti-feedback via 4-layer architecture: shouldSignal ThreadLocal, output-face early-return, updatingPos ThreadLocal, absorbing ThreadLocal. Signal detection delegated to MachineRedstoneHelper. getRedstoneOutput() returns 15 when POWERED. Dual-cuboid visual model with tinted underlay (dark maroon=off, red=on). INPUT_FACE blockstate drives model rotation: input face shows off texture, other 5 show on texture when powered. 14 blockstate variants, 2 model files. Known cosmetic limitation: per-face indicator tint not possible with vanilla block color handlers (see Known Issue #5).
+
+**Machine Grabber (Slime/Honey):** [DONE]
+Edge-triggered toggleable sticky block. Two variants sharing MachineGrabberBlock class. Slime variant specialization item: Slime Block. Honey variant: Honey Block. When POWERED=false: standard Machine Family stickiness. When POWERED=true: additionally behaves like corresponding vanilla sticky block (with mutual exclusions). Rising-edge toggle via inputWasLow (same as Toggle). No redstone output. Piston settlement window (1-tick pistonSettling) prevents spurious toggles during push group placement. BESR renders inner slime/honey block through transparent outer texture.
+
+**Machine Transmitter:** [DONE]
+Wireless redstone link via Oddstone channels. Specialization item: any Oddstone variant (determines channel). Two mutually exclusive modes: SOURCE (external redstone in, broadcasts wirelessly) and RECEIVER (wireless in, redstone out on all faces). Signal attenuation: receiver outputs sourceStrength-1. Cubic range from config (sympathetic_radius). Immediate activation in neighborChanged (no tick delay) so even 1-tick pulses transmit. Anti-feedback: SOURCE blockstate enforces mode exclusivity, shouldSignal ThreadLocal for self-read suppression, receiver self-read guard in tick(), source-first power-off ordering. Spec item change lifecycle: onSpecItemChanging cleans up old channel, onSpecItemChanged re-evaluates for new channel. Level-aware indicator tint reads from BE (not blockstate), synced to client via onDataPacket.
 
 **Machine Piston / Machine Sticky Piston:** [DONE]
 Omnidirectional pistons as Machine Family members. No FACING property on the base block — signal on any face extends a head from the opposite face. Multiple heads can extend simultaneously. Pushes blocks via BlockMoveHelper (12-block limit, full sticky group resolution). Immovable while any head is extended (PistonBaseBlockMixin Feature 5). Head block (MachinePistonHeadBlock) is a real block in the world with 8×8×16 collision shape, FACING + STICKY properties. Breaking the head causes the piston to recognize that face is free (vanilla-like behavior — if signal is still present, re-extends immediately).
@@ -435,7 +448,7 @@ Frame-only stickiness (no inner sticky block):
 With inner sticky block (e.g., Framed Slime): inherits inner block's grab behavior in addition to frame stickiness above. Framed Slime grabs Normal blocks. Framed Odd Slime grabs directionally.
 
 **Activation model (redstone-style signal strength with anti-signal suppression):**
-Framed Blocks use the same FrameActivation system as Frame Blocks. Signal strength 15, decays by 1 per conductor. Mediators (framed blocks with cross-material inner conductor) pass ALL materials as universal bridges. See Frame Blocks section for full algorithm description.
+Framed Blocks use the same FrameActivation system as Frame Blocks. Signal strength 15, decays by 1 per conductor. Each framed block conducts only its own frame material -- cross-material mediation was removed 2026-04-19. See Frame Blocks section for full algorithm description.
 
 **Known issues:**
 - "Any block" framing via automation requires Placer Block (not yet implemented). Manual crafting works.
@@ -504,19 +517,19 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.markDirty() -- redstone-style batched wipe-and-rebuild (markDirty + end-of-tick processing) from Machine Block sources. |
 | Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
 | Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
-| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Cross-material stops propagation unless via mediator. Anti-signal suppression via redstone-powered Machine Frames only. |
-| Vanilla metal conductors | [DONE] | iron_block and copper_block participate in frame activation networks. Activation tracked ephemerally in FrameActivation. Only sticky when activated. |
-| Cross-frame mediation | [DONE] | Framed blocks with cross-material inner conductor (e.g., copper-framed iron) are mediators -- pass ALL materials when activated. Unlimited mediator hops. |
+| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Cross-material does not propagate -- iron only chains through iron, copper through copper. Anti-signal suppression via redstone-powered Machine Frames only. |
+| Vanilla metal conductors | [REMOVED 2026-04-19] | Previously iron_block and copper_block participated in frame activation and stickiness. Removed -- the feature had no visual indication on the vanilla blocks, so players couldn't tell when a metal block was part of a sticky group or signal chain. |
+| Cross-frame mediation | [REMOVED 2026-04-19] | Previously framed blocks with a cross-material inner conductor (e.g., copper-framed iron) were universal-bridge mediators. Removed alongside the vanilla metal feature -- the rule "this framed copper acts like both copper and iron" required mental cross-referencing of inner block + frame material with no clean visual signal. INNER_CONDUCTOR blockstate property deleted. |
 | Activation-gated stickiness | [DONE] | Frame-to-frame stickiness requires ACTIVE on both sides. Machine blocks only grab active frames. |
 | Waterlogging | [DONE] | Implements SimpleWaterloggedBlock. BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. Bucket interaction. updateShape() schedules fluid ticks. Water contained within frame (standard full-cube waterlogged behavior). |
 
 **Activation model (redstone-style signal strength with anti-signal suppression):**
 Frames are passive like redstone dust. They never decide their own activation state.
 All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.markDirty(level, pos).
-1. DISCOVER: BFS from change point through all connected conductors (any material, active or not)
-2. WIPE: Set all discovered IFrameBlocks to active=false, clear vanilla metal activation set
+1. DISCOVER: BFS from change point through all connected IFrameBlock conductors (any material, active or not)
+2. WIPE: Set all discovered IFrameBlocks to active=false
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
-4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Material routing: conductors only accept matching materials. Mediators pass ALL materials.
+4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Material routing: each conductor accepts and outputs only its own frame material -- iron-only through iron frames, copper-only through copper frames. No cross-material mediation.
 5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone level, decaying by 1. Binary override.
 6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
 
@@ -525,10 +538,10 @@ Redstone input changes trigger via neighborChanged automatically.
 
 **Stickiness matrix (when active, requires active on BOTH sides for frame-to-frame):**
 
-| | Machine Fam | Iron Frame (active) | Copper Frame (active) | Iron Frame (inactive) | Vanilla Iron (activated) | Vanilla Copper (activated) | Slime | Honey | Odd Slime | Oddstone | Normal |
-|---|---|---|---|---|---|---|---|---|---|---|---|
-| Iron Frame (active) | YES | YES | no* | no | YES | no | no | no | no | no | no |
-| Copper Frame (active) | YES | no* | YES | no | no | YES | no | no | no | no | no |
+| | Machine Fam | Iron Frame (active) | Copper Frame (active) | Iron Frame (inactive) | Slime | Honey | Odd Slime | Oddstone | Normal |
+|---|---|---|---|---|---|---|---|---|---|
+| Iron Frame (active) | YES | YES | no* | no | no | no | no | no | no |
+| Copper Frame (active) | YES | no* | YES | no | no | no | no | no | no |
 
 - `no*` = mutual canStickTo exclusion (cross-material)
 - `no` = grab immunity rule (rules 9-11) or canStickTo returns false or inactive
@@ -548,21 +561,19 @@ Redstone input changes trigger via neighborChanged automatically.
 ---
 
 ### Iron/Copper Block Registry Substitution [DESIGNED]
-> Replacing vanilla iron_block and copper_block with custom versions that own their blockstate properties. Required to add ACTIVE visual state, rust stages (iron), and full frame family membership to these blocks.
+> Replacing vanilla iron_block and copper_block with custom versions that own their blockstate properties. Originally motivated by frame family membership; the surviving motivation is rust stages (iron) and player-controllable copper oxidation. Frame family participation was removed 2026-04-19.
 
 **Why substitution is necessary:**
-Vanilla blocks cannot have new blockstate properties added to them after registration. We need to add ACTIVE (visual change when part of an active frame network) and RUST_STAGE (iron only) as real blockstate properties. The only way to achieve this cleanly is to own the block registration entirely -- replacing vanilla's entry with our own via Forge registry substitution (the Quark pattern).
+Vanilla blocks cannot have new blockstate properties added to them after registration. We want to add RUST_STAGE on iron blocks. The only way to do this cleanly is to own the block registration entirely -- replacing vanilla's entry with our own via Forge registry substitution (the Quark pattern).
 
 From the player's perspective, nothing changes: same craft recipe, same name, same item, same everything. Our code runs underneath.
 
 **What our iron block gains:**
 - RUST_STAGE (0-3) -- drives texture. Stage 0 = vanilla. Stages 1-3 = exposed/weathered/rusted.
-- ACTIVE (boolean) -- drives texture when part of an active frame network.
 - Wax interaction (honeycomb locks rust stage).
 - Grindstone reversal (pick up rusted block, use in grindstone, drops previous stage).
 
 **What our copper block gains:**
-- ACTIVE (boolean) -- drives texture when part of an active frame network.
 - The four vanilla oxidation stages become ours to control.
 - Wax interaction inherited from vanilla.
 
@@ -2420,7 +2431,7 @@ launch. Missing sections or keys gracefully fall back to defaults.
 | File | Purpose |
 |------|---------|
 | `ideomod.mixins.json` | Mixin config |
-| `PistonStructureResolverMixin.java` | 8 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect, immovable inner check (framed obsidian anchors), vanilla metal conductors, frame anchor detection (post-gathering scan), dynamic push limit (Machine Brace) |
+| `PistonStructureResolverMixin.java` | 7 features: one-way stickiness, directional stickiness (Odd Slime), sympathetic movement, ranged piston startPos redirect, immovable inner check (framed obsidian anchors), frame anchor detection (post-gathering scan), dynamic push limit (Machine Brace). (Vanilla metal conductors feature removed 2026-04-19.) |
 | `AbstractFurnaceBlockEntityMixin.java` | Furnace array speed boost (50% cooking speed when part of registered structure) |
 | `LevelSignalMixin.java` | Redstone Rod phantom signal injection. Targets BlockBehaviour.BlockStateBase -- injects into getSignal() and getDirectSignal() at HEAD. Returns 15 when RedstoneRodSignalManager has an active pulse at the queried (pos, direction). |
 

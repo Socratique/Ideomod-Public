@@ -61,7 +61,16 @@ public enum MachineType {
     STICKY_PISTON,
 
     /** Machine Engine -- fuel-burning pulse clock. */
-    ENGINE;
+    ENGINE,
+
+    /** Machine Slime Grabber -- toggleable slime-type sticky block. */
+    SLIME_GRABBER,
+
+    /** Machine Honey Grabber -- toggleable honey-type sticky block. */
+    HONEY_GRABBER,
+
+    /** Machine Transmitter -- wireless redstone via Oddstone channels. */
+    TRANSMITTER;
 
     /**
      * Can this type stick to another machine type?

@@ -1,5 +1,311 @@
 # Ideomod Changelog
 
+## [2026-04-19] Frame Family Simplification, Audit Cleanup, Oddstone Silk Touch Fix
+
+### Oddstone silk touch drop fix
+
+Mining Oddstone with a Silk Touch pickaxe now drops Cobbled Oddstone, matching
+the design doc inverse-of-stone behavior. Previously the loot table dropped
+`ideomod:oddstone` unconditionally with no silk-touch branch.
+
+Fix: replaced the flat single-entry pool in `oddstone.json` loot table with a
+`minecraft:alternatives` entry. Silk Touch (level >= 1) drops cobbled_oddstone;
+otherwise drops raw oddstone. Smelting in a furnace still converts raw to
+cobbled (the other half of the inverted-stone pair).
+
+Files modified:
+- `src/main/resources/data/ideomod/loot_tables/blocks/oddstone.json`
+
+### Vanilla iron_block / copper_block removed from Frame Family
+
+Previously: vanilla iron_block and copper_block participated in Frame Family
+activation networks and piston sticky groups. They had no ACTIVE blockstate --
+activation was tracked in an ephemeral `Set<Long>` of packed positions. When
+connected to a machine source, they conducted frame signal for their material
+and formed sticky connections with same-material active frame members.
+
+Problem: the feature added substantial code complexity (parallel activation
+tracking, per-network remove-then-add to avoid network-overlap wipes, BFS
+extensions in resolver and scan helpers, bidirectional vanilla-metal walker
+in the resolver) for a behavior that had **no visual indication**. A vanilla
+iron_block adjacent to an iron frame looked identical to one not adjacent --
+players could not tell from appearance whether a given vanilla metal was
+currently part of a frame network or sticky group.
+
+Removed:
+- `FrameActivation.activatedVanillaMetals` set and `isVanillaMetalActivated()`
+  query.
+- `FrameActivation.isActivatedConductor()` vanilla-metal branch. Now returns
+  true only for active IFrameBlocks.
+- `FrameActivation.recalculate()` vanilla-metal wipe/apply steps.
+- `FrameActivation.isConductor()` vanilla-metal branch -- networks only
+  propagate through IFrameBlock members now.
+- `FrameActivation.getConductiveMaterials()` raw-metal branch.
+- `FrameBlock.canStickTo()` vanilla metal same-material check.
+- `FramedBlock.canStickTo()` vanilla metal branch.
+- `MovementScanHelper.scanStickyGroup()` vanilla metal adjacency and expansion
+  checks. Deleted `isVanillaMetalConnection()` helper entirely.
+- `PistonStructureResolverMixin.ideomod$addVanillaMetalConductors()` +
+  helpers `ideomod$isVanillaMetalStickyNeighbor()`,
+  `ideomod$shouldVanillaMetalStick()`, `ideomod$shouldVanillaMetalGrabNeighbor()`.
+- `PistonBaseBlockMixin.scanSympathetic()` and
+  `PistonBaseBlockClientMixin.ideomod$captureSympathetic()`
+  `FrameMaterial.fromVanillaBlock()` fallbacks.
+- `FrameMaterial.isVanillaConductor()` (zero callers after above removals).
+
+Behavior changes visible to players:
+- Chains like frame -- iron_block -- iron_block -- frame no longer form a
+  single sticky group. Pistons treat vanilla iron_block as any other
+  non-sticky mineral block.
+- Vanilla iron_block adjacent to a Machine Block does not transmit frame
+  activation. Machine-frame networks no longer extend through raw metals.
+- Existing worlds: any saved vanilla-metal activation state is silently
+  dropped at load (the `activatedVanillaMetals` set was ephemeral, never
+  serialized).
+- iron_block / copper_block remain framable into iron_framed_block /
+  copper_framed_block as before.
+
+### Cross-frame mediation removed (INNER_CONDUCTOR property deleted)
+
+Previously: framed blocks tracked their inner block's vanilla-metal material
+in the `INNER_CONDUCTOR` IntegerProperty (0=none, 1=IRON, 2=COPPER). When
+active, a framed block with a non-matching INNER_CONDUCTOR acted as a
+MEDIATOR -- it conducted ALL materials in `FrameActivation` and stuck to
+frames matching either its frame material or its inner conductor material.
+Example: a copper-framed iron_block bridged iron and copper frame networks
+and stuck to both iron and copper frames.
+
+Same complaint as the vanilla metal feature: complex behavior with no clean
+visual signal. The framed block does show its inner block, but the rule
+"this framed copper acts like both copper and iron" required players to
+remember which inners were vanilla metals AND mentally cross-reference the
+two materials.
+
+Removed:
+- `FramedBlock.INNER_CONDUCTOR` IntegerProperty (declaration, default-state
+  setup, state-definition builder entry, placement-time population in
+  `getStateForPlacement`).
+- `FramedBlockEntity.updateBlockstateFromInner` no longer writes
+  INNER_CONDUCTOR.
+- `FramedBlock.canStickTo` -- removed cross-frame mediation branches.
+  Framed blocks now stick to frame family only when frame materials match
+  exactly (and both ACTIVE).
+- `FrameBlock.canStickTo` -- removed cross-frame mediation branch reading
+  INNER_CONDUCTOR.
+- `FrameActivation.isMediator()` -- entire method deleted.
+- `FrameActivation.getConductiveMaterials()` -- simplified to return only
+  the frame's own material; no longer adds inner conductor material.
+- `FrameActivation.propagateSignal` -- mediators no longer pass ALL
+  materials; outgoing materials = block's own materials only.
+- `PistonStructureResolverMixin.ideomod$wouldFrameStickinessAllow` --
+  simplified to same-frame-material match only.
+- `FrameMaterial.toConductorValue()` and `fromConductorValue()` -- zero
+  callers after above removals.
+
+Blockstate count for framed blocks: was 2 (ACTIVE) x 6 (FACING) x 5
+(INNER_STICKY) x 3 (INNER_CONDUCTOR) x 16 (INNER_LIGHT) = 2880 per type.
+Now 2 x 6 x 5 x 16 = 960 per type. Two-thirds smaller blockstate registry.
+
+Behavior changes visible to players:
+- Iron frames stick to iron frames only (when both ACTIVE). Copper frames
+  to copper only. No more bridging via copper-framed-iron or
+  iron-framed-copper.
+- A framed block that contains a vanilla iron/copper inner is now an
+  ordinary same-material framed block. No special routing role.
+- Existing worlds with saved framed blocks: blockstate values for
+  INNER_CONDUCTOR (1 or 2) silently coerce to the new state def's defaults
+  on chunk load. The block entity NBT (which holds the actual inner
+  block ID) is unaffected, so framed blocks continue rendering and
+  behaving correctly.
+
+Retained:
+- `FrameMaterial.fromVanillaBlock()` -- still used by `FramedBlockRecipe`
+  to reject same-material crafting (iron frame + iron_block, copper frame
+  + copper_block remain non-craftable as redundant combinations).
+- `frameable_blocks` tag entries for iron_block / copper_block.
+
+### OddstoneConfig deleted
+
+Deleted `config/OddstoneConfig.java`. The class had been marked @Deprecated
+with a "safe to delete" note but still contained full JSON file I/O, a
+synchronized lock, and mutable static state. Zero call sites in the source
+tree. Replacement (`IdeomodConfig`) has been in sole use since its
+introduction.
+
+### Furnace array frame tag consolidated
+
+`FurnaceArrayDefinition` defined its own `FRAME_TAG` TagKey pointing at
+`ideomod:furnace_array_frame`, duplicating `ModTags.FURNACE_ARRAY_FRAME`
+(which had zero references). Two TagKey objects for the same resource --
+hash-equal but separate instances. Now a single source of truth in
+`ModTags.FURNACE_ARRAY_FRAME`. Removed unused `BlockTags` / `TagKey<Block>`
+/ `Block` / `StructureManager` imports.
+
+Files modified across all sections:
+- `block/frame/FrameActivation.java`
+- `block/frame/FrameBlock.java`
+- `block/frame/FramedBlock.java`
+- `block/frame/FramedBlockEntity.java`
+- `block/frame/FrameMaterial.java`
+- `block/movement/MovementScanHelper.java`
+- `client/render/HollowstoneRenderer.java` (stale comment update)
+- `mixin/PistonStructureResolverMixin.java`
+- `mixin/PistonBaseBlockMixin.java`
+- `mixin/client/PistonBaseBlockClientMixin.java`
+- `multiblock/definitions/FurnaceArrayDefinition.java`
+- `src/main/resources/data/ideomod/loot_tables/blocks/oddstone.json`
+
+Files deleted:
+- `config/OddstoneConfig.java`
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
+## [2026-04-05] Machine Transmitter, Machine Grabber, Piston Settlement, Spec Item Lifecycle
+
+### Machine Transmitter -- Wireless Redstone
+
+New Machine Family specialization: wireless redstone link via Oddstone channels.
+Specialization item: any Oddstone variant (oddstone, cobbled_oddstone, oddstone_bricks,
+etc.). The specific variant determines the wireless channel.
+
+Two mutually exclusive modes:
+- SOURCE (POWERED=true, SOURCE=true): Receiving external redstone, broadcasts
+  wirelessly to matching-channel transmitters in range. Does NOT output redstone.
+  Activation is IMMEDIATE in neighborChanged (no tick delay) so even 1-tick pulses
+  are captured and transmitted.
+- RECEIVER (POWERED=true, SOURCE=false): Receiving wireless signal from a source,
+  outputs redstone at (sourceStrength - 1) on all faces, simulating signal
+  attenuation. Does NOT accept external input. Does NOT re-broadcast (no chaining).
+
+Anti-feedback architecture (5 layers):
+1. SOURCE blockstate enforces mode exclusivity (sources don't output, receivers
+   don't read external)
+2. shouldSignal ThreadLocal<BlockPos> for self-read suppression through solid blocks
+3. updatingPos ThreadLocal<BlockPos> for re-entrant protection during setBlock
+4. Receiver self-read guard in tick() -- receivers never call getExternalSignalStrength
+   (would read own output back through dust, flip to SOURCE, collapse circuit)
+5. Source power-off ordering -- receivers turned off BEFORE source notifies own
+   neighbors, preventing stale feedback through dust
+
+Channel system: channel = registry name of oddstone item in spec slot. Matching is
+exact string equality. Range is cubic (config sympathetic_radius, default 5).
+
+Level-aware indicator tint: reads transmitterSignalStrength from BE (not blockstate),
+returns POWER_COLORS[0-15] gradient. Avoids bloating blockstate JSON from 4 to 64
+entries. Client sync via syncToClients() + onDataPacket() with requestModelDataUpdate()
+for chunk re-render on strength change.
+
+### Machine Grabber -- Toggleable Sticky Block
+
+New Machine Family specialization: toggleable sticky block. Two variants:
+- Slime Grabber (MachineType.SLIME_GRABBER, specialization item: Slime Block)
+- Honey Grabber (MachineType.HONEY_GRABBER, specialization item: Honey Block)
+
+When POWERED=false: standard Machine Family stickiness only. When POWERED=true:
+additionally behaves like the corresponding vanilla sticky block (with mutual
+exclusions -- slime excludes honey/odd_slime, honey excludes slime/odd_slime).
+
+Rising-edge toggle via inputWasLow (same pattern as MachineToggleBlock). No redstone
+output, so no anti-feedback architecture needed.
+
+Visual: BESR renders inner slime/honey block through transparent outer texture.
+
+### Piston Settlement Window
+
+Fixed spurious toggles on Grabber and Toggle blocks during piston movement. When
+blocks in a push group are placed sequentially, edge-triggered blocks may see
+temporary signal drops (adjacent transmitter not placed yet) followed by rises
+(transmitter lands), falsely triggering a toggle.
+
+Fix: 1-tick pistonSettling flag in MachineFrameBlockEntity.
+- onPlace with movedByPiston=true: sets pistonSettling=true, schedules 1-tick tick
+- neighborChanged: returns immediately if isPistonSettling()
+- tick (settlement): clears flag, re-snapshots signal state for correct edge arming
+
+Applied to: MachineGrabberBlock, MachineToggleBlock. Field is transient (not saved
+to disk).
+
+### Spec Item Change Lifecycle
+
+New two-phase callback system for specialization item changes:
+
+1. AbstractMachineBlock.onSpecItemChanging(Level, BlockPos, ItemStack oldItem)
+   Called BEFORE triggerSwapCheck. Allows cleanup of old state (e.g., transmitter
+   turns off old-channel receivers).
+
+2. AbstractMachineBlock.onSpecItemChanged(Level, BlockPos, ItemStack newItem)
+   Called AFTER triggerSwapCheck on whatever block is at the position (covers both
+   same-block and cross-block swap cases).
+
+MachineFrameBlockEntity.setItem() rewritten to call onSpecItemChanging before
+triggerSwapCheck and onSpecItemChanged after. Captures old item copy for the
+pre-swap callback.
+
+Fixes resolved:
+- Receiver not updating when source's oddstone channel changes
+- Newly placed transmitters not receiving from active sources
+- Cross-block swap (conductor->transmitter) not notifying receivers when powered
+
+### Receiver Signal Strength Updates
+
+Fixed receiver output not updating when source signal strength changes while
+transmitting. Root cause: the !stateChanged branch in tick() only called
+updateNeighborsAt(pos.relative(dir)) for secondary/indirect neighbors but never
+updateNeighborsAt(pos) for direct neighbors like dust. No setBlock call meant
+direct neighbors weren't notified.
+
+Fix: added level.updateNeighborsAt(pos, this) before the secondary neighbor updates
+in the receiver's !stateChanged path.
+
+### Receiver Self-Read Anti-Feedback
+
+Fixed receiver signal cutting to zero randomly. Root cause: receiver in tick()
+read its own output back through adjacent dust via getExternalSignalStrength(),
+flipped to SOURCE (output=0), everything collapsed.
+
+Fix: receivers skip external signal check in tick() entirely
+(externalStrength = wasPowered && !wasSource ? 0 : getExternalSignalStrength).
+
+### Hollowstone Inner Block Transit Rendering
+
+Added hollowstone inner block capture alongside framed blocks in BlockMoveHelper's
+client-side capture loop. Reads innerBlockId from HollowstoneBlockEntity, stores to
+MovingFrameData with dummy facing=NORTH and innerSticky=0. The transit renderer
+(PistonMovingBlockEntityRendererMixin) draws the inner block during piston animation.
+
+Files added:
+- `block/machine/MachineTransmitterBlock.java` -- Wireless redstone block class
+- `block/machine/MachineGrabberBlock.java` -- Toggleable sticky block class
+- Block model/blockstate/texture/loot/lang files for all three new blocks
+
+Files modified:
+- `block/machine/AbstractMachineBlock.java` -- Added onSpecItemChanging/onSpecItemChanged
+  virtual callback methods
+- `block/machine/MachineFrameBlockEntity.java` -- Added transmitterSignalStrength field
+  + getter/setter with syncToClients(). Added pistonSettling field + getter/setter.
+  Added onDataPacket() override for client-side tint refresh. Rewritten setItem() with
+  two-phase pre/post swap callbacks.
+- `block/machine/MachineToggleBlock.java` -- Added pistonSettling guard in neighborChanged.
+  Updated tick() with settlement handling. Updated onPlace with settlement scheduling.
+- `block/machine/MachineGrabberBlock.java` -- New file (see above)
+- `block/machine/MachineTransmitterBlock.java` -- New file (see above)
+- `block/machine/MachineType.java` -- Added SLIME_GRABBER, HONEY_GRABBER, TRANSMITTER
+- `block/machine/MachineSwapHelper.java` -- Added transmitter/grabber swap mappings
+- `block/movement/BlockMoveHelper.java` -- Added hollowstone inner block capture in
+  client-side rendering loop
+- `client/ModColorHandlers.java` -- Added transmitter level-aware tint handler reading
+  from MachineFrameBlockEntity.getTransmitterSignalStrength()
+- `registry/ModBlocks.java` -- Registered machine_slime_grabber, machine_honey_grabber,
+  machine_transmitter
+- `registry/ModItems.java` -- Registered BlockItems for new blocks
+- `registry/ModCreativeTabs.java` -- Added new blocks to creative tab
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-04-03] Add Redstone Rod Tool
 
 New handheld tool that delivers a 1-redstone-tick pulse of signal strength 15

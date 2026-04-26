@@ -42,24 +42,19 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *
  * CONDUCTOR TYPES:
  * ================
- * 1. FRAME BLOCKS (IFrameBlock): ACTIVE blockstate property.
- *    Conduct for their getFrameMaterial() material.
+ * FRAME BLOCKS (IFrameBlock): ACTIVE blockstate property.
+ * Conduct for their getFrameMaterial() material. Iron frames conduct only
+ * iron, copper frames conduct only copper. There is no cross-material
+ * bridging.
  *
- * 2. FRAMED BLOCKS with INNER_CONDUCTOR: If the inner conductor is a
- *    different material than the frame, the block is a MEDIATOR — when
- *    activated, it passes ALL materials (universal bridge).
- *
- * 3. VANILLA METAL BLOCKS: No ACTIVE property. Activation tracked in
- *    a concurrent set of packed BlockPos longs. Each recalculate() only
- *    touches entries belonging to its own network (remove-then-add),
- *    preserving vanilla metals from other networks.
- *    Queryable via isVanillaMetalActivated(pos).
+ * Raw vanilla iron_block / copper_block are NOT conductors. They were
+ * removed 2026-04-19 -- the feature added too much complexity for a
+ * behavior that had no visual indication on the vanilla block.
  *
  * THE ALGORITHM:
  * ==============
- * 1. DISCOVER: BFS from change point through all conductors.
- * 2. WIPE: Set all IFrameBlock to ACTIVE=false, remove this network's
- *    vanilla metals from the global set.
+ * 1. DISCOVER: BFS from change point through all IFrameBlock conductors.
+ * 2. WIPE: Set all IFrameBlock to ACTIVE=false.
  * 3. FIND SOURCES: Find Machine Blocks adjacent to network.
  * 4. ACTIVATE: BFS from activation sources. Machine Frames only activate
  *    when unpowered; all other Machine Family blocks always activate.
@@ -70,7 +65,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  *    redstone level, decaying by 1. Any block reached by anti-signal
  *    is deactivated. Other Machine Family blocks never suppress.
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
- *    no anti-signal. Add activated vanilla metals back to the global set.
+ *    no anti-signal.
  *
  * BATCHING (Audit #14):
  * =====================
@@ -80,19 +75,6 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * per connected dirty network. This batches all changes in a tick into
  * a single pass — placing 50 frame blocks triggers 1 recalculation
  * instead of 50.
- *
- * THREAD SAFETY (Audit #B, updated for Issue #15 fix):
- * ====================================================
- * activatedVanillaMetals uses a ConcurrentHashMap-backed key set.
- * recalculate() performs per-network remove-then-add: it removes only
- * the vanilla metal positions discovered in THIS network, then adds back
- * the ones that should be active. This prevents one network's recalculation
- * from wiping vanilla metals belonging to a different network — the root
- * cause of Issue #15 (first-push failure after frame network change).
- *
- * Concurrent reads from stickiness checks (e.g., during piston resolution)
- * see a consistent view because ConcurrentHashMap.newKeySet() provides
- * thread-safe individual add/remove/contains operations.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -225,48 +207,16 @@ public class FrameActivation {
     }
 
     // ========================================================================
-    // VANILLA METAL ACTIVATION TRACKING
+    // ACTIVATED CONDUCTOR QUERY
     // ========================================================================
 
     /**
-     * Ephemeral set of activated vanilla metal positions (packed longs).
-     * Updated per-network during recalculate(): each call removes only the
-     * vanilla metals belonging to its discovered network, then adds back the
-     * ones that should be active. This preserves metals from other networks.
-     *
-     * THREAD SAFETY: ConcurrentHashMap.newKeySet() provides thread-safe
-     * individual add/remove/contains. Concurrent reads from stickiness
-     * checks always see a consistent per-element view.
-     *
-     * HISTORY: Previously used volatile atomic-swap of an immutable set,
-     * which was safe for single-network worlds but caused Issue #15 —
-     * when multiple networks were recalculated in one flush cycle, each
-     * recalculate() replaced the ENTIRE global set with only its own
-     * network's metals, wiping metals from previously-processed networks.
-     * (Issue #15 fix, 2026-03-15)
-     */
-    private static final Set<Long> activatedVanillaMetals = ConcurrentHashMap.newKeySet();
-
-    /**
-     * Query whether a vanilla metal block at the given position is
-     * currently activated (connected to a machine source, not suppressed).
-     */
-    public static boolean isVanillaMetalActivated(BlockPos pos) {
-        return activatedVanillaMetals.contains(pos.asLong());
-    }
-
-    /**
-     * Check if a block at a position is an activated conductor of any kind.
-     * Covers IFrameBlocks (via ACTIVE property) and vanilla metals (via set).
+     * Check if a block at a position is an activated conductor.
+     * Covers IFrameBlocks via ACTIVE property. (Raw vanilla metals were
+     * removed as conductors on 2026-04-19.)
      */
     public static boolean isActivatedConductor(BlockState state, BlockPos pos) {
-        if (state.getBlock() instanceof IFrameBlock) {
-            return isActive(state);
-        }
-        if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
-            return isVanillaMetalActivated(pos);
-        }
-        return false;
+        return state.getBlock() instanceof IFrameBlock && isActive(state);
     }
 
     // ========================================================================
@@ -277,11 +227,6 @@ public class FrameActivation {
      * Full wipe-and-rebuild with signal strength propagation.
      * Called internally by processDirtyNetworks(). External callers should
      * use markDirty() to batch changes.
-     *
-     * Vanilla metal tracking uses per-network remove-then-add:
-     * 1. WIPE removes only vanilla metals found in THIS network
-     * 2. APPLY adds back only the ones that should be active
-     * This preserves vanilla metals belonging to other networks.
      */
     static void recalculate(Level level, BlockPos changePos) {
         if (level.isClientSide()) return;
@@ -290,18 +235,12 @@ public class FrameActivation {
         Set<BlockPos> network = discoverNetwork(level, changePos);
         if (network.isEmpty()) return;
 
-        // Step 2: Wipe all activation states
-        // -- IFrameBlocks: set ACTIVE=false
-        // -- Vanilla metals: remove only THIS network's entries from global set
+        // Step 2: Wipe all activation states (IFrameBlock ACTIVE=false)
         for (BlockPos pos : network) {
             BlockState state = level.getBlockState(pos);
             if (state.getBlock() instanceof IFrameBlock && isActive(state)) {
                 level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, false),
                         Block.UPDATE_CLIENTS);
-            }
-            // Remove this network's vanilla metals from global set
-            if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
-                activatedVanillaMetals.remove(pos.asLong());
             }
         }
 
@@ -318,7 +257,6 @@ public class FrameActivation {
         }
 
         if (machineSources.isEmpty()) {
-            // No sources — vanilla metals for this network already removed in step 2
             Ideomod.LOGGER.debug("Frame recalculate at {}: network={}, no sources",
                     changePos, network.size());
             return;
@@ -369,12 +307,6 @@ public class FrameActivation {
                     level.setBlock(pos, state.setValue(FrameBlock.ACTIVE, true),
                             Block.UPDATE_CLIENTS);
                 }
-            } else if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) {
-                if (shouldActivate) {
-                    // Add back to global set — only this network's activated metals
-                    activatedVanillaMetals.add(packed);
-                }
-                // If not shouldActivate, the entry was already removed in step 2
             }
         }
 
@@ -455,13 +387,8 @@ public class FrameActivation {
             // Record this strength
             strengthMap.put(packed, strength);
 
-            // Determine outgoing materials
-            EnumSet<FrameMaterial> outgoing;
-            if (isMediator(currentState)) {
-                outgoing = EnumSet.allOf(FrameMaterial.class);
-            } else {
-                outgoing = blockMaterials;
-            }
+            // Outgoing materials are this block's own materials (no mediation)
+            EnumSet<FrameMaterial> outgoing = blockMaterials;
 
             // Decay and continue
             int nextStrength = strength - 1;
@@ -505,49 +432,22 @@ public class FrameActivation {
     }
 
     /**
-     * Checks if a block is any kind of conductor in the activation network.
+     * Checks if a block is a conductor in the activation network.
+     * Only IFrameBlock (frame + framed) members participate.
      */
     private static boolean isConductor(BlockState state) {
-        if (state.getBlock() instanceof IFrameBlock) return true;
-        return FrameMaterial.fromVanillaBlock(state.getBlock()) != null;
-    }
-
-    /**
-     * Checks if a block is a MEDIATOR — a framed block whose inner conductor
-     * is a DIFFERENT material than its frame. When activated, mediators
-     * become universal conductors that pass ALL materials.
-     */
-    private static boolean isMediator(BlockState state) {
-        if (!(state.getBlock() instanceof FramedBlock)) return false;
-        int innerConductor = state.getValue(FramedBlock.INNER_CONDUCTOR);
-        if (innerConductor == 0) return false;
-        FrameMaterial innerMat = FrameMaterial.fromConductorValue(innerConductor);
-        if (innerMat == null) return false;
-        FrameMaterial frameMat = ((IFrameBlock) state.getBlock()).getFrameMaterial();
-        return innerMat != frameMat;
+        return state.getBlock() instanceof IFrameBlock;
     }
 
     /**
      * Returns all materials a conductor block handles.
+     * Each IFrameBlock conducts only its own getFrameMaterial().
      */
     private static EnumSet<FrameMaterial> getConductiveMaterials(BlockState state) {
         EnumSet<FrameMaterial> materials = EnumSet.noneOf(FrameMaterial.class);
 
         if (state.getBlock() instanceof IFrameBlock frameBlock) {
             materials.add(frameBlock.getFrameMaterial());
-
-            if (state.getBlock() instanceof FramedBlock) {
-                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
-                    state.getValue(FramedBlock.INNER_CONDUCTOR));
-                if (innerMat != null) {
-                    materials.add(innerMat);
-                }
-            }
-        }
-
-        FrameMaterial vanillaMat = FrameMaterial.fromVanillaBlock(state.getBlock());
-        if (vanillaMat != null) {
-            materials.add(vanillaMat);
         }
 
         return materials;

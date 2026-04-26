@@ -1,0 +1,23 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "all": "ideomod:block/machine_grabber_on",
+    "particle": "ideomod:block/machine_grabber_on"
+  },
+  "elements": [
+    {
+      "name": "outer_shell",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#all" },
+        "south": { "texture": "#all" },
+        "east":  { "texture": "#all" },
+        "west":  { "texture": "#all" },
+        "up":    { "texture": "#all" },
+        "down":  { "texture": "#all" }
+      }
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
+  "textures": {
+    "frame": "ideomod:block/machine_grabber",
+    "inner_top": "minecraft:block/honey_block_top",
+    "inner_side": "minecraft:block/honey_block_side",
+    "inner_bottom": "minecraft:block/honey_block_bottom",
+    "particle": "ideomod:block/machine_grabber"
+  },
+  "elements": [
+    {
+      "name": "inner_block",
+      "from": [2, 2, 2],
+      "to": [14, 14, 14],
+      "faces": {
+        "north": { "texture": "#inner_side" },
+        "south": { "texture": "#inner_side" },
+        "east":  { "texture": "#inner_side" },
+        "west":  { "texture": "#inner_side" },
+        "up":    { "texture": "#inner_top" },
+        "down":  { "texture": "#inner_bottom" }
+      }
+    },
+    {
+      "name": "outer_shell",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#frame" },
+        "south": { "texture": "#frame" },
+        "east":  { "texture": "#frame" },
+        "west":  { "texture": "#frame" },
+        "up":    { "texture": "#frame" },
+        "down":  { "texture": "#frame" }
+      }
+    }
+  ]
+}

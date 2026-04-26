@@ -98,24 +98,25 @@ The `MachineType` enum (`block/machine/MachineType.java`) identifies each Machin
 
 Who grabs whom (rows = grabber, columns = target). "Machine Frame" = MachineType.FRAME. "Machine Spec" = any specialization. "Same-Type Spec" = same MachineType. "Diff-Type Spec" = different MachineType.
 
-|              | Slime | Honey | Odd Slime | Machine Frame | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Vanilla Metal (activated) | Oddstone | Normal |
-|:-------------|:-----:|:-----:|:---------:|:-------------:|:--------------:|:--------------:|:------------------:|:--------------------:|:-------------------------:|:--------:|:------:|
-| **Slime**    |  YES  |  no*  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |            YES            |    no    |  YES   |
-| **Honey**    |  no*  |  YES  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |            YES            |    no    |  YES   |
-| **Odd Slime**|  no*  |  no*  |  YES (d)  |    YES (d)    |    YES (d)     |    YES (d)     |      YES (d)       |       YES (d)        |          YES (d)          |    no    | YES (d)|
-| **Machine Frame**|no |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |            no             |    no    |   no   |
-| **Machine Spec**|no  |  no   |    no     |      YES      |      YES       |       no       |        YES         |         no           |            no             |    no    |   no   |
-| **Frame Fam (active)**| no | no | no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
-| **Vanilla Metal (act.)**| no | no | no   |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |   no   |
-| **Framed Slime (act.)**| YES | no* | no* |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |  YES   |
-| **Framed Honey (act.)**| no* | YES | no* |      YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    |  YES   |
-| **Framed OddSlime (act.)**| no* | no* | YES (d) | YES  |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |    no    | YES (d)|
-| **Framed Oddstone (act.)**| YES | YES | YES |    YES      |      YES       |      YES       |      YES (m)       |         no           |          YES (m)          |   YES    |   no   |
-| **Framed Oddstone (inact.)**| YES | YES | YES |  no      |       no       |       no       |         no         |         no           |            no             |   YES    |   no   |
-| **Framed Sticky (inact.)**| (i) | (i) | (i) |   no      |       no       |       no       |         no         |         no           |            no             |    no    |  (i)   |
-| **Oddstone** |  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |            no             |   YES    |   no   |
+(Raw vanilla iron_block / copper_block were removed from frame-family stickiness on 2026-04-19. Cross-frame mediation via INNER_CONDUCTOR was also removed -- frames now require exact same-material match.)
 
-Legend: `no*` = mutual canStickTo exclusion | `no` = grab immunity or MachineType rejection | `(d)` = directional | `(m)` = material-matched | `(i)` = inner sticky only
+|              | Slime | Honey | Odd Slime | Machine Frame | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Oddstone | Normal |
+|:-------------|:-----:|:-----:|:---------:|:-------------:|:--------------:|:--------------:|:------------------:|:--------------------:|:--------:|:------:|
+| **Slime**    |  YES  |  no*  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |    no    |  YES   |
+| **Honey**    |  no*  |  YES  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |    no    |  YES   |
+| **Odd Slime**|  no*  |  no*  |  YES (d)  |    YES (d)    |    YES (d)     |    YES (d)     |      YES (d)       |       YES (d)        |    no    | YES (d)|
+| **Machine Frame**|no |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |    no    |   no   |
+| **Machine Spec**|no  |  no   |    no     |      YES      |      YES       |       no       |        YES         |         no           |    no    |   no   |
+| **Frame Fam (active)**| no | no | no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |    no    |   no   |
+| **Framed Slime (act.)**| YES | no* | no* |      YES      |      YES       |      YES       |      YES (m)       |         no           |    no    |  YES   |
+| **Framed Honey (act.)**| no* | YES | no* |      YES      |      YES       |      YES       |      YES (m)       |         no           |    no    |  YES   |
+| **Framed OddSlime (act.)**| no* | no* | YES (d) | YES  |      YES       |      YES       |      YES (m)       |         no           |    no    | YES (d)|
+| **Framed Oddstone (act.)**| YES | YES | YES |    YES      |      YES       |      YES       |      YES (m)       |         no           |   YES    |   no   |
+| **Framed Oddstone (inact.)**| YES | YES | YES |  no      |       no       |       no       |         no         |         no           |   YES    |   no   |
+| **Framed Sticky (inact.)**| (i) | (i) | (i) |   no      |       no       |       no       |         no         |         no           |    no    |  (i)   |
+| **Oddstone** |  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |   YES    |   no   |
+
+Legend: `no*` = mutual canStickTo exclusion | `no` = grab immunity or MachineType rejection | `(d)` = directional | `(m)` = material-matched, exact same frame material | `(i)` = inner sticky only
 Machine Frame (FRAME) bridges all specialization types. Diff-Type Spec rejected at Layer 1 (canStickTo false).
 
 ### How Each Pair Is Implemented
@@ -149,7 +150,7 @@ Machine Frame (FRAME) bridges all specialization types. Diff-Type Spec rejected 
 | `IMachineFamily` | `IMachineFamily.java` | getMachineType(). canMachineFamilyStickTo(type, state). |
 | `MachineSwapHelper` | `MachineSwapHelper.java` | Central swap utility. Item<->Block registry, checkAndSwap(). |
 | `PositionBoundContainer` | `PositionBoundContainer.java` | Position-bound Container for seamless GUI across swaps. |
-| `FrameMaterial` | `FrameMaterial.java` | Material lookups for conductor mapping |
+| `FrameMaterial` | `FrameMaterial.java` | IRON / COPPER enum. Same-material matching for frame stickiness. |
 | Rule helpers | `StickinessRules.java` | isOddstoneType(), isFramedOddstone(), isActiveFrameConnection(), hasMatchingInnerSticky() |
 | MovementScanHelper | `MovementScanHelper.java` | Shared scanning. scanStickyGroup() with settled-set BFS tracking. |
 

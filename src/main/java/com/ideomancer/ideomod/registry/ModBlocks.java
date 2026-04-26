@@ -10,6 +10,8 @@ import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineEngineBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
+import com.ideomancer.ideomod.block.machine.MachineGrabberBlock;
+import com.ideomancer.ideomod.block.machine.MachineTransmitterBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePipeBlock;
 import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
@@ -404,6 +406,43 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Slime Grabber: toggleable slime-type sticky block.
+    // noOcclusion for transparent center texture (inner block rendered by BESR).
+    public static final RegistryObject<Block> MACHINE_SLIME_GRABBER = BLOCKS.register("machine_slime_grabber",
+            () -> new MachineGrabberBlock(MachineGrabberBlock.GrabberType.SLIME, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Honey Grabber: toggleable honey-type sticky block.
+    // noOcclusion for transparent center texture (inner block rendered by BESR).
+    public static final RegistryObject<Block> MACHINE_HONEY_GRABBER = BLOCKS.register("machine_honey_grabber",
+            () -> new MachineGrabberBlock(MachineGrabberBlock.GrabberType.HONEY, BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    // Machine Transmitter: wireless redstone via Oddstone channels.
+    // isRedstoneConductor=false. noOcclusion for transparent center.
+    public static final RegistryObject<Block> MACHINE_TRANSMITTER = BLOCKS.register("machine_transmitter",
+            () -> new MachineTransmitterBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .noOcclusion()
                     .pushReaction(PushReaction.NORMAL)
             ));
 

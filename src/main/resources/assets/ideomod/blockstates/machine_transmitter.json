@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "powered=false,source=false": { "model": "ideomod:block/machine_transmitter" },
+    "powered=false,source=true":  { "model": "ideomod:block/machine_transmitter" },
+    "powered=true,source=false":  { "model": "ideomod:block/machine_transmitter_on" },
+    "powered=true,source=true":   { "model": "ideomod:block/machine_transmitter_on" }
+  }
+}

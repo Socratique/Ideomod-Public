@@ -1,0 +1,17 @@
+{
+  "replace": false,
+  "values": [
+    "ideomod:oddstone",
+    "ideomod:cobbled_oddstone",
+    "ideomod:oddstone_bricks",
+    "ideomod:oddstone_wall",
+    "ideomod:oddstone_stairs",
+    "ideomod:oddstone_slab",
+    "ideomod:cobbled_oddstone_wall",
+    "ideomod:cobbled_oddstone_stairs",
+    "ideomod:cobbled_oddstone_slab",
+    "ideomod:oddstone_brick_wall",
+    "ideomod:oddstone_brick_stairs",
+    "ideomod:oddstone_brick_slab"
+  ]
+}

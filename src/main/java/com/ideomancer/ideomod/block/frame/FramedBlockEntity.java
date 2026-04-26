@@ -174,14 +174,11 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     }
 
     /**
-     * Sync the INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT blockstate
-     * properties from the current inner block. Called after any operation
-     * that changes the inner block identity: placement, piston restore,
-     * chunk load.
+     * Sync the INNER_STICKY and INNER_LIGHT blockstate properties from the
+     * current inner block. Called after any operation that changes the inner
+     * block identity: placement, piston restore, chunk load.
      *
      * INNER_STICKY: tracks sticky inner types (slime, honey, odd slime, oddstone)
-     * INNER_CONDUCTOR: tracks vanilla metal conductor inners (iron_block, copper_block)
-     *   for cross-frame mediation in canStickTo()
      * INNER_LIGHT: tracks inner block's light emission level (0-15)
      *   for Minecraft's lighting engine via lightLevel predicate
      *
@@ -203,20 +200,14 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         int stickyType = computeStickyType(inner);
         int currentSticky = currentState.getValue(FramedBlock.INNER_STICKY);
 
-        FrameMaterial conductorMat = FrameMaterial.fromVanillaBlock(inner);
-        int conductorValue = conductorMat != null ? conductorMat.toConductorValue() : 0;
-        int currentConductor = currentState.getValue(FramedBlock.INNER_CONDUCTOR);
-
         int lightLevel = inner.defaultBlockState().getLightEmission();
         int currentLight = currentState.getValue(FramedBlock.INNER_LIGHT);
 
         boolean lightChanged = lightLevel != currentLight;
 
-        if (stickyType != currentSticky || conductorValue != currentConductor
-                || lightChanged) {
+        if (stickyType != currentSticky || lightChanged) {
             BlockState newState = currentState
                 .setValue(FramedBlock.INNER_STICKY, stickyType)
-                .setValue(FramedBlock.INNER_CONDUCTOR, conductorValue)
                 .setValue(FramedBlock.INNER_LIGHT, lightLevel);
             level.setBlock(worldPosition, newState, Block.UPDATE_ALL);
 
@@ -330,7 +321,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
             innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
             cachedInnerBlock = null;
             setChanged();
-            // Sync INNER_STICKY, INNER_CONDUCTOR, and INNER_LIGHT to blockstate after piston restore
+            // Sync INNER_STICKY and INNER_LIGHT to blockstate after piston restore
             updateBlockstateFromInner();
         }
     }

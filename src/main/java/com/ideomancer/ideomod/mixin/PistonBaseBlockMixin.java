@@ -440,8 +440,7 @@ public abstract class PistonBaseBlockMixin {
                 savedPositions.add(checkPos);
 
                 // Scan its sticky group too (resolver's addBlockLine behavior)
-                if (checkState.isStickyBlock()
-                        || com.ideomancer.ideomod.block.frame.FrameMaterial.fromVanillaBlock(checkState.getBlock()) != null) {
+                if (checkState.isStickyBlock()) {
                     scanStickyGroup(level, checkPos, moveDir,
                             dimensionKey, savedPositions);
                 }

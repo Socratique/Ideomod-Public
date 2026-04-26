@@ -1,7 +1,6 @@
 package com.ideomancer.ideomod.block.movement;
 
 import com.ideomancer.ideomod.block.ISympathetic;
-import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.config.IdeomodConfig;
@@ -12,10 +11,6 @@ import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
-import com.ideomancer.ideomod.block.frame.FrameActivation;
-import com.ideomancer.ideomod.block.frame.FrameMaterial;
-import com.ideomancer.ideomod.block.frame.IFrameBlock;
-import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.HashMap;
@@ -267,21 +262,6 @@ public class MovementScanHelper {
                     stuckToGroup = true;
                     break;
                 }
-
-                // Vanilla metal conductor check:
-                // Adjacent block in group is a vanilla metal
-                FrameMaterial adjacentMetal = FrameMaterial.fromVanillaBlock(adjacentState.getBlock());
-                if (adjacentMetal != null && isVanillaMetalConnection(adjacentMetal, state, adjacentPos, pos)) {
-                    stuckToGroup = true;
-                    break;
-                }
-
-                // Reverse: this block is a vanilla metal
-                FrameMaterial thisMetal = FrameMaterial.fromVanillaBlock(state.getBlock());
-                if (thisMetal != null && isVanillaMetalConnection(thisMetal, adjacentState, pos, adjacentPos)) {
-                    stuckToGroup = true;
-                    break;
-                }
             }
 
             if (!stuckToGroup) {
@@ -295,11 +275,7 @@ public class MovementScanHelper {
             settled.add(pos);
             count++;
 
-            // Expand BFS if this block can pull neighbors
-            boolean shouldExpand = state.isStickyBlock()
-                    || FrameMaterial.fromVanillaBlock(state.getBlock()) != null;
-
-            if (shouldExpand) {
+            if (state.isStickyBlock()) {
                 for (Direction dir : Direction.values()) {
                     BlockPos neighbor = pos.relative(dir);
                     // Only queue if not already settled (in group or air)
@@ -311,31 +287,5 @@ public class MovementScanHelper {
         }
 
         return group;
-    }
-
-    /**
-     * Checks if a vanilla metal block should connect to the given other block.
-     * Only connects when the vanilla metal is ACTIVATED.
-     */
-    private static boolean isVanillaMetalConnection(FrameMaterial metalMat, BlockState otherState,
-                                                      BlockPos metalPos, BlockPos otherPos) {
-        if (!FrameActivation.isVanillaMetalActivated(metalPos)) return false;
-
-        if (otherState.getBlock() instanceof IFrameBlock otherFrame) {
-            if (!IFrameBlock.isActive(otherState)) return false;
-            if (otherFrame.getFrameMaterial() == metalMat) return true;
-            if (otherState.getBlock() instanceof FramedBlock) {
-                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
-                    otherState.getValue(FramedBlock.INNER_CONDUCTOR));
-                if (innerMat == metalMat) return true;
-            }
-            return false;
-        }
-        if (MachineFrameBlock.isMachineFamily(otherState.getBlock())) return true;
-        FrameMaterial otherMetal = FrameMaterial.fromVanillaBlock(otherState.getBlock());
-        if (otherMetal == metalMat) {
-            return FrameActivation.isVanillaMetalActivated(otherPos);
-        }
-        return false;
     }
 }

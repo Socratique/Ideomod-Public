@@ -2,7 +2,6 @@ package com.ideomancer.ideomod.mixin;
 
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
-import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
@@ -281,32 +280,12 @@ public abstract class PistonStructureResolverMixin {
         if (!(grabberState.getBlock() instanceof FramedBlock framedBlock)) return false;
         if (!grabberState.getValue(FramedBlock.ACTIVE)) return false;
 
-        // Get this framed block's inner conductor material (if any)
-        FrameMaterial innerMat = FrameMaterial.fromConductorValue(
-            grabberState.getValue(FramedBlock.INNER_CONDUCTOR));
-
         if (neighborState.getBlock() instanceof IFrameBlock otherFrame) {
-            // Same frame material — always
-            if (otherFrame.getFrameMaterial() == framedBlock.getFrameMaterial()) return true;
-            // Cross-frame mediation: inner conductor matches other's frame material
-            if (innerMat != null && innerMat == otherFrame.getFrameMaterial()) return true;
-            // Reverse mediation: other framed block's inner conductor matches our frame material
-            if (neighborState.getBlock() instanceof FramedBlock) {
-                FrameMaterial otherInnerMat = FrameMaterial.fromConductorValue(
-                    neighborState.getValue(FramedBlock.INNER_CONDUCTOR));
-                if (otherInnerMat != null && otherInnerMat == framedBlock.getFrameMaterial()) return true;
-            }
-            return false;
+            // Same frame material only — no cross-material mediation
+            return otherFrame.getFrameMaterial() == framedBlock.getFrameMaterial();
         }
 
         if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) return true;
-
-        // Vanilla metal block: same-material conductor OR inner conductor match
-        FrameMaterial otherVanillaMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
-        if (otherVanillaMat != null) {
-            if (otherVanillaMat == framedBlock.getFrameMaterial()) return true;
-            if (innerMat != null && innerMat == otherVanillaMat) return true;
-        }
 
         return false;
     }
@@ -320,13 +299,6 @@ public abstract class PistonStructureResolverMixin {
         // NOTE: flushIfDirty is called at resolve() HEAD, not here.
         // It must run BEFORE vanilla's addBranchingBlocks checks isStickyBlock()
         // and canStickTo(), not after. See ideomod$redirectStartPos.
-
-        // --- Feature 6: Vanilla metal block frame family stickiness ---
-        // Vanilla iron/copper blocks have isStickyBlock()=false, so the resolver
-        // never checks their neighbors for sticking. We manually scan them here:
-        // for each block already in toPush, check if any neighbor is a vanilla
-        // metal conductor that should stick. If so, add it via addBlockLine.
-        boolean addedMetals = ideomod$addVanillaMetalConductors();
 
         // --- Feature 3: Sympathetic movement (channel-aware) ---
         // Each sympathetic channel (oddstone, cobbled_oddstone, oddstone_bricks,
@@ -369,7 +341,7 @@ public abstract class PistonStructureResolverMixin {
             }
         }
 
-        if (addedAny || addedMetals) {
+        if (addedAny) {
             cir.setReturnValue(true);
         }
 
@@ -416,177 +388,6 @@ public abstract class PistonStructureResolverMixin {
         if (dy < 0) return Direction.DOWN;
         if (dz > 0) return Direction.SOUTH;
         return Direction.NORTH;
-    }
-
-    // ====================================================================
-    // FEATURE 6: VANILLA METAL CONDUCTOR STICKINESS
-    // ====================================================================
-
-    /**
-     * Scans blocks in toPush for vanilla metal conductor connections.
-     * Works BIDIRECTIONALLY using a BFS frontier queue:
-     *
-     * 1. Finds vanilla iron/copper blocks adjacent to frame family members
-     *    already in toPush, and adds them.
-     * 2. Finds frame family members (active frames, machine blocks) adjacent
-     *    to vanilla metals already in toPush, and adds them.
-     *
-     * This handles chains like: frame → iron_block → iron_block → frame
-     * where the vanilla blocks bridge between frame family members.
-     *
-     * Uses a frontier queue instead of snapshot-and-rescan: when a new block
-     * is added, only its neighbors are checked next, giving O(n) instead of
-     * O(n²) for chains of n vanilla metals. (Audit item #15)
-     *
-     * @return true if any blocks were added to toPush
-     */
-    @Unique
-    private boolean ideomod$addVanillaMetalConductors() {
-        boolean addedAny = false;
-
-        // Seed the frontier with all current toPush positions
-        java.util.Queue<BlockPos> frontier = new java.util.ArrayDeque<>(this.toPush);
-        java.util.Set<Long> processed = new java.util.HashSet<>();
-        // Safety cap to prevent runaway iteration
-        int maxIterations = 256;
-        int iterations = 0;
-
-        while (!frontier.isEmpty() && iterations < maxIterations) {
-            iterations++;
-            BlockPos pushedPos = frontier.poll();
-            long packedPos = pushedPos.asLong();
-
-            // Skip if already processed from the frontier
-            if (!processed.add(packedPos)) continue;
-
-            BlockState pushedState = this.level.getBlockState(pushedPos);
-
-            // --- Direction A: pushed block is a frame family member,
-            //     find adjacent vanilla metals to pull in ---
-            if (ideomod$isVanillaMetalStickyNeighbor(pushedState)) {
-                for (Direction dir : Direction.values()) {
-                    BlockPos neighborPos = pushedPos.relative(dir);
-                    if (this.toPush.contains(neighborPos)) continue;
-
-                    BlockState neighborState = this.level.getBlockState(neighborPos);
-                    FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
-                    if (neighborMat == null) continue;
-
-                    if (ideomod$shouldVanillaMetalStick(neighborMat, pushedState, neighborPos)) {
-                        this.addBlockLine(neighborPos, dir);
-                        if (this.toPush.contains(neighborPos)) {
-                            addedAny = true;
-                            // Newly added — check ITS neighbors next
-                            frontier.add(neighborPos);
-                        }
-                    }
-                }
-            }
-
-            // --- Direction B: pushed block is a vanilla metal,
-            //     find adjacent frame family members to pull in ---
-            FrameMaterial pushedMetal = FrameMaterial.fromVanillaBlock(pushedState.getBlock());
-            if (pushedMetal != null) {
-                for (Direction dir : Direction.values()) {
-                    BlockPos neighborPos = pushedPos.relative(dir);
-                    if (this.toPush.contains(neighborPos)) continue;
-
-                    BlockState neighborState = this.level.getBlockState(neighborPos);
-
-                    if (ideomod$shouldVanillaMetalGrabNeighbor(pushedMetal, neighborState, pushedPos)) {
-                        this.addBlockLine(neighborPos, dir);
-                        if (this.toPush.contains(neighborPos)) {
-                            addedAny = true;
-                            // Newly added — check ITS neighbors next
-                            frontier.add(neighborPos);
-                        }
-                    }
-                }
-            }
-        }
-
-        return addedAny;
-    }
-
-    /**
-     * Checks if a block in toPush is the type that vanilla metal blocks
-     * would want to stick to (active frame family, machine family, or
-     * another vanilla metal of the same material, or a framed block with
-     * matching inner conductor).
-     */
-    @Unique
-    private boolean ideomod$isVanillaMetalStickyNeighbor(BlockState state) {
-        if (state.getBlock() instanceof IFrameBlock && IFrameBlock.isActive(state)) return true;
-        if (MachineFrameBlock.isMachineFamily(state.getBlock())) return true;
-        if (FrameMaterial.fromVanillaBlock(state.getBlock()) != null) return true;
-        return false;
-    }
-
-    /**
-     * Checks if a vanilla metal block of the given material should stick
-     * to the given neighbor block (used when scanning for vanilla metals
-     * to ADD to toPush). Handles cross-frame mediation via INNER_CONDUCTOR.
-     * Only sticks when the vanilla metal is activated.
-     */
-    @Unique
-    private boolean ideomod$shouldVanillaMetalStick(FrameMaterial metalMat, BlockState neighborState, BlockPos metalPos) {
-        // Vanilla metal must be activated to form sticky connections
-        if (!com.ideomancer.ideomod.block.frame.FrameActivation.isVanillaMetalActivated(metalPos)) return false;
-
-        if (neighborState.getBlock() instanceof IFrameBlock otherFrame) {
-            if (!IFrameBlock.isActive(neighborState)) return false;
-            if (otherFrame.getFrameMaterial() == metalMat) return true;
-            if (neighborState.getBlock() instanceof FramedBlock) {
-                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
-                    neighborState.getValue(FramedBlock.INNER_CONDUCTOR));
-                if (innerMat == metalMat) return true;
-            }
-            return false;
-        }
-        if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) return true;
-        FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
-        if (neighborMat == metalMat) {
-            // Other vanilla metal must also be activated
-            // (can't check position here — we'd need neighborPos)
-            // But if it's same material and WE're activated, it should be too
-            // since activation propagates through same-material metals
-            return true;
-        }
-        return false;
-    }
-
-    /**
-     * Checks if a vanilla metal block should grab a neighboring block.
-     * Only grabs when the vanilla metal is activated.
-     *
-     * A vanilla iron block grabs:
-     * - Active iron frames and iron framed blocks (same material)
-     * - Active framed blocks with INNER_CONDUCTOR=IRON (cross-frame mediation)
-     * - Machine Family blocks
-     * - Other activated vanilla iron blocks
-     */
-    @Unique
-    private boolean ideomod$shouldVanillaMetalGrabNeighbor(FrameMaterial metalMat, BlockState neighborState, BlockPos metalPos) {
-        // Vanilla metal must be activated to grab
-        if (!com.ideomancer.ideomod.block.frame.FrameActivation.isVanillaMetalActivated(metalPos)) return false;
-
-        // Same-material active IFrameBlock
-        if (neighborState.getBlock() instanceof IFrameBlock otherFrame) {
-            if (!IFrameBlock.isActive(neighborState)) return false;
-            if (otherFrame.getFrameMaterial() == metalMat) return true;
-            // Cross-frame mediation: framed block whose inner conductor matches
-            if (neighborState.getBlock() instanceof FramedBlock) {
-                FrameMaterial innerMat = FrameMaterial.fromConductorValue(
-                    neighborState.getValue(FramedBlock.INNER_CONDUCTOR));
-                if (innerMat == metalMat) return true;
-            }
-            return false;
-        }
-        // Machine Family
-        if (MachineFrameBlock.isMachineFamily(neighborState.getBlock())) return true;
-        // Same-material vanilla metal
-        FrameMaterial neighborMat = FrameMaterial.fromVanillaBlock(neighborState.getBlock());
-        return neighborMat == metalMat;
     }
 
     // ====================================================================

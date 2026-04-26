@@ -7,6 +7,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
+import com.ideomancer.ideomod.block.machine.MachineGrabberBlock;
 import com.ideomancer.ideomod.block.machine.MachineSwapHelper;
 import com.ideomancer.ideomod.network.ModNetworking;
 import com.ideomancer.ideomod.registry.ModRecipeSerializers;
@@ -139,13 +140,31 @@ public class Ideomod {
         );
 
         // --- Rule 2: Machine Family can't grab sticky blocks ---
+        // Exception: Powered Machine Grabbers can grab their matching sticky type.
+        // Slime Grabber (powered) can grab SlimeBlock, Honey Grabber can grab HoneyBlock.
         StickinessRules.registerGrabImmunity(
                 (grabber, target) -> {
                     if (!MachineFrameBlock.isMachineFamily(grabber.getBlock())) return false;
                     Block targetBlock = target.getBlock();
-                    return targetBlock instanceof SlimeBlock
+                    boolean targetIsSticky = targetBlock instanceof SlimeBlock
                         || targetBlock instanceof HoneyBlock
                         || targetBlock instanceof OddSlimeBlock;
+                    if (!targetIsSticky) return false;
+
+                    // Carve-out: powered grabber matching its sticky type
+                    if (grabber.getBlock() instanceof MachineGrabberBlock grabberBlock
+                            && grabber.getValue(MachineGrabberBlock.POWERED)) {
+                        if (grabberBlock.getGrabberType() == MachineGrabberBlock.GrabberType.SLIME
+                                && targetBlock instanceof SlimeBlock) {
+                            return false; // Allow slime grabber to grab slime
+                        }
+                        if (grabberBlock.getGrabberType() == MachineGrabberBlock.GrabberType.HONEY
+                                && targetBlock instanceof HoneyBlock) {
+                            return false; // Allow honey grabber to grab honey
+                        }
+                    }
+
+                    return true; // Block all other Machine Family from grabbing sticky blocks
                 }
         );
 
@@ -230,6 +249,13 @@ public class Ideomod {
 
             // Hollowstone: cutoutMipped for filled variant (transparent center pixels)
             ItemBlockRenderTypes.setRenderLayer(ModBlocks.HOLLOW_STONE.get(), RenderType.cutoutMipped());
+
+            // Machine Grabbers: cutoutMipped for transparent center (inner block via BESR)
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.MACHINE_SLIME_GRABBER.get(), RenderType.cutoutMipped());
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.MACHINE_HONEY_GRABBER.get(), RenderType.cutoutMipped());
+
+            // Machine Transmitter: cutoutMipped for transparent center (inner oddstone via BESR)
+            ItemBlockRenderTypes.setRenderLayer(ModBlocks.MACHINE_TRANSMITTER.get(), RenderType.cutoutMipped());
 
             BlockEntityRenderers.register(ModBlockEntities.HOLLOW_STONE.get(), HollowstoneRenderer::new);
             BlockEntityRenderers.register(ModBlockEntities.FRAMED_BLOCK.get(), FramedBlockRenderer::new);

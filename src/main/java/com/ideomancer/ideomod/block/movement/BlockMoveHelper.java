@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import com.ideomancer.ideomod.block.piston.RangedPistonFlags;
+import com.ideomancer.ideomod.block.HollowstoneBlock;
+import com.ideomancer.ideomod.block.HollowstoneBlockEntity;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.client.render.MovingFrameData;
@@ -174,6 +176,16 @@ public class BlockMoveHelper {
                             int innerSticky = srcState.getValue(FramedBlock.INNER_STICKY);
                             BlockPos destPos = sourcePos.relative(pushDir);
                             MovingFrameData.store(destPos, innerBlockId, facing, innerSticky);
+                        }
+                    }
+                } else if (srcState.getBlock() instanceof HollowstoneBlock) {
+                    BlockEntity srcBe = level.getBlockEntity(sourcePos);
+                    if (srcBe instanceof HollowstoneBlockEntity hollowBE) {
+                        ResourceLocation innerBlockId = hollowBE.getInnerBlockId();
+                        if (innerBlockId != null) {
+                            BlockPos destPos = sourcePos.relative(pushDir);
+                            // Dummy facing/innerSticky — renderer uses defaultBlockState for hollowstone
+                            MovingFrameData.store(destPos, innerBlockId, Direction.NORTH, 0);
                         }
                     }
                 }

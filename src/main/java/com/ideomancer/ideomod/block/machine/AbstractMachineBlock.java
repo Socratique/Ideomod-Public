@@ -99,6 +99,49 @@ public abstract class AbstractMachineBlock extends Block implements EntityBlock,
     }
 
     // ========================================================================
+    // SPEC ITEM CHANGE CALLBACK
+    // ========================================================================
+
+    /**
+     * Called BEFORE triggerSwapCheck when the specialization item is about
+     * to change. The new item is already in the slot but the block hasn't
+     * been swapped yet. Use this to clean up state associated with the old
+     * item (e.g., turn off wireless receivers on the old channel).
+     *
+     * This fires for ALL item changes — both same-block-type (oddstone
+     * variants) and cross-block-type (oddstone → redstone). The block may
+     * be replaced by checkAndSwap immediately after this returns, so this
+     * is the LAST chance to clean up using the old item's context.
+     *
+     * Default: no-op.
+     *
+     * @param level   The world
+     * @param pos     Block position
+     * @param oldItem The previous specialization item
+     */
+    public void onSpecItemChanging(Level level, BlockPos pos, ItemStack oldItem) {
+        // No-op — most specializations don't need pre-swap cleanup.
+    }
+
+    /**
+     * Called AFTER triggerSwapCheck when the specialization item changed
+     * but the block type stayed the same (e.g., swapping oddstone variants).
+     *
+     * This is NOT called when the block type changes (the old BE is dead
+     * by then). Use this to re-evaluate state for the new item (e.g.,
+     * check wireless signal on the new channel).
+     *
+     * Default: no-op.
+     *
+     * @param level   The world
+     * @param pos     Block position
+     * @param newItem The new specialization item
+     */
+    public void onSpecItemChanged(Level level, BlockPos pos, ItemStack newItem) {
+        // No-op — most specializations don't care about same-type item changes.
+    }
+
+    // ========================================================================
     // GUI CONTENT HEIGHT
     // ========================================================================
 

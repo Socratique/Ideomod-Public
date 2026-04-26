@@ -67,12 +67,13 @@ public enum FrameMaterial {
     // ========================================================================
 
     /**
-     * Returns the FrameMaterial that a vanilla block naturally belongs to,
-     * or null if it's not a natural frame conductor.
+     * Returns the FrameMaterial that corresponds to a vanilla block, or
+     * null if it has no frame-material mapping.
      *
-     * This allows vanilla iron blocks and copper blocks to participate in
-     * the FrameActivation network as native conductors for their material.
-     * They don't need an ACTIVE property -- they're always conductive.
+     * Currently used only by FramedBlockRecipe to reject same-material
+     * crafting combinations (iron frame + iron_block, copper frame +
+     * copper_block). Raw vanilla iron_block / copper_block do not
+     * participate in the frame activation network.
      *
      * @param block The block to check
      * @return IRON for iron_block, COPPER for copper_block, null otherwise
@@ -82,41 +83,6 @@ public enum FrameMaterial {
         if (block == Blocks.IRON_BLOCK) return IRON;
         if (block == Blocks.COPPER_BLOCK) return COPPER;
         return null;
-    }
-
-    /**
-     * Checks whether a block is a vanilla conductor for this specific material.
-     * Convenience method for activation chain checks.
-     */
-    public boolean isVanillaConductor(Block block) {
-        return fromVanillaBlock(block) == this;
-    }
-
-    // ========================================================================
-    // BLOCKSTATE CONDUCTOR VALUE
-    // ========================================================================
-
-    /**
-     * Returns the integer value for storing this material in the
-     * FramedBlock.INNER_CONDUCTOR blockstate property.
-     * IRON=1, COPPER=2.
-     */
-    public int toConductorValue() {
-        return this == IRON ? 1 : 2;
-    }
-
-    /**
-     * Returns the FrameMaterial for a given INNER_CONDUCTOR blockstate value.
-     * @param value 0=no conductor, 1=IRON, 2=COPPER
-     * @return the FrameMaterial, or null if value is 0 or invalid
-     */
-    @Nullable
-    public static FrameMaterial fromConductorValue(int value) {
-        return switch (value) {
-            case 1 -> IRON;
-            case 2 -> COPPER;
-            default -> null;
-        };
     }
 
     // ========================================================================

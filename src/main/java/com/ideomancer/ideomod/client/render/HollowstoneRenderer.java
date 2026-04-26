@@ -23,7 +23,7 @@ import net.minecraft.world.level.block.state.BlockState;
  * at 0.998 scale inside the Hollowstone shell.
  *
  * No FACING transfer (Hollowstone has no FACING property).
- * No INNER_STICKY / INNER_CONDUCTOR / INNER_LIGHT properties.
+ * No INNER_STICKY / INNER_LIGHT properties.
  * No piston transit rendering.
  *
  * Written by Claude, directed and guided by The Ideomancer.
