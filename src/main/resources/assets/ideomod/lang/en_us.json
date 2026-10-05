@@ -49,5 +49,6 @@
   "block.ideomod.hollow_stone": "Hollowstone",
   "item.ideomod.hollow_stone_shard": "Hollowstone Shard",
   "generator.ideomod.ore_only": "Ore Only (Debug)",
-  "item.ideomod.redstone_rod": "Redstone Rod"
+  "item.ideomod.redstone_rod": "Redstone Rod",
+  "item.ideomod.structure_debug_stick": "Structure Debug Stick"
 }

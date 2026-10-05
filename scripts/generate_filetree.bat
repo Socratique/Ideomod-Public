@@ -1,4 +1,6 @@
 @echo off
+REM Run from anywhere: works from the repository root (the parent of this folder)
+cd /d "%~dp0.."
 REM Generate a file tree of only the src/ directory
 REM Uses PowerShell to avoid Windows tree command encoding issues
 powershell -NoProfile -Command ^
@@ -14,6 +16,6 @@ powershell -NoProfile -Command ^
   "  }" ^
   "}" ^
   "Write-Output 'src'; Get-Tree 'src'" ^
-  " | Set-Content -Encoding UTF8 'FILETREE.txt'"
-echo FILETREE.txt generated (src/ only)
+  " | Set-Content -Encoding UTF8 'docs/dev/FILETREE.txt'"
+echo docs/dev/FILETREE.txt generated (src/ only)
 ```
