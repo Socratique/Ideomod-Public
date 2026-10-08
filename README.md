@@ -263,7 +263,7 @@ This applies to vanilla pistons, Machine Pistons, Tracks, Repulsers and Attracto
 
 #### Track and Trolley
 
-A Track pushes Trolleys. When a Track's signal turns on, every Trolley touching it moves one block, away from the side the signal came from.
+A Track pushes Trolleys. When a Track's signal turns on, every Trolley touching it moves one block, away from the side the signal came from. Lay Tracks in a line, set a Trolley on top, and power the line from one end: each pulse moves the Trolley one block along it.
 
 ![Machine Track and Trolley](docs/media/track.gif)
 
@@ -353,6 +353,8 @@ Looking at a framed block with F3 open shows the inner block on the right-hand s
 ## Furnace Array
 
 A multiblock. Wall furnaces into a stone shell and they cook 50% faster.
+
+> **Note:** the Furnace Array is an example, built to test the mod's multiblock system. It shows what that system can do; it is not a finished feature.
 
 ![Furnace Array](docs/media/furnace_array.gif)
 

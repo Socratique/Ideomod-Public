@@ -191,21 +191,25 @@ def frames(tx):
 
 
 def track(tx):
-    s = Scene(tx, "Machine Track and Trolley", look=(2.5, 0.5, 1), floor=((-1, 7), (-1, 4)))
+    s = Scene(tx, "Machine Track and Trolley", look=(3.5, 0.5, 1), floor=((-1, 9), (-1, 3)))
     lever = s.add(0, 0, 1, "lever")
-    t = s.add(1, 0, 1, "track")
-    r1 = s.add(2, 0, 1, "trolley")
-    r2 = s.add(3, 0, 1, "trolley")
-    cargo = s.add(3, 1, 1, "machine_frame")
-    s.labels.append((t, "Track", CYAN))
-    s.labels.append((r1, "Trolley", CYAN))
-    s.say("A Track pushes every Trolley touching it, away from where the signal came from.", 2500)
+    tracks = s.fill(range(1, 8), [0], [1], "track")
+    trolley = s.add(1, 1, 1, "trolley")
+    cargo = s.add(1, 2, 1, "machine_frame")
+    s.labels.append((tracks[4], "Track line", CYAN))
+    s.labels.append((cargo, "Trolley + cargo", CYAN))
+    s.say("A line of Tracks, with a Trolley sitting on top carrying a Machine Frame.", 2400)
     del s.labels[:]
-    lever.set(on=True)
-    s.caption = "One block per pulse. The Trolley carries whatever is stuck to it."
-    s.snap(400)
-    s.move([r1, r2, cargo], E)
-    s.snap(2400)
+    s.say("A Track pushes the Trolleys touching it, away from where its signal came from.", 2400)
+    for i in range(3):
+        lever.set(on=True)
+        s.caption = "Pulse %d: the signal runs down the line and the Trolley moves one block." % (i + 1)
+        s.snap(350)
+        s.move([trolley, cargo], E)
+        s.snap(500)
+        lever.set(on=False)
+        s.snap(350)
+    s.say("One block per pulse. The Trolley carries whatever is stuck to it.", 2400)
     return s
 
 
