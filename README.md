@@ -1,5 +1,7 @@
 # Ideomod
 
+<!-- INTRO: The Ideomancer is writing this opening in his own words. The paragraph below is a stand-in until then. -->
+
 A vanilla+ Minecraft mod about moving blocks: stone that moves in sympathy at a distance, stickiness that only works one way, frames you can switch on and off, and a family of machine blocks built for contraptions.
 
 **Status: work in progress.** This repository is a snapshot of where the mod is today, shared so people can look at it. It is not a release. There is no download, things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
@@ -37,6 +39,8 @@ A vanilla+ Minecraft mod about moving blocks: stone that moves in sympathy at a 
 ## About the pictures
 
 The isometric animations in this README are **illustrations, not screen captures**. They are drawn by a small script ([`tools/renders`](tools/renders)) from the mod's own textures, and each one replays by hand what the code does in that situation. They exist to make the rules easy to see.
+
+The GUI pictures are drawn the same way, from the mod's own GUI textures, by [`tools/renders/gui.py`](tools/renders/gui.py).
 
 Real footage from the game is in [In-game footage](#in-game-footage) at the end of the Oddstone section.
 
@@ -159,6 +163,10 @@ Hollowstone forms where Oddstone meets lava. Any lava *source* block touching Od
 ## The Machine Family
 
 The Machine Frame is one block that becomes many. Right-click it to open a one-slot GUI. The item you put in the slot decides what the block is. Take the item out and it is a Machine Frame again.
+
+![The Machine Frame GUI in each of its modes](docs/media/gui.png)
+
+The GUI changes with the item in the slot. Most machine blocks show only the slot; the six above are the ones with more to them.
 
 | Put this in the slot | It becomes |
 |---|---|
@@ -370,8 +378,6 @@ A multiblock. Wall furnaces into a stone shell and they cook 50% faster.
 
 **Drill.** On a redstone pulse, breaks the 3×3 area of blocks directly in front of it, one block deep, and drops the items at the drill.
 
-**Ideoblock.** A decorative block. Nine cobblestone make one.
-
 **Judgement.** When a player kills an animal or a villager, there is a 1 in 200 chance that every animal and villager within 32 blocks stops and turns to stare at the player for five seconds.
 
 **Structure Debug Stick.** A creative-only tool. While you hold it, chat reports when a Furnace Array forms or breaks and what portals are doing.
@@ -408,7 +414,6 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 | Hollowstone | Nine Hollowstone Shards |
 | Redstone Rod | Redstone torch over iron ingot over stick, in a column |
 | Drill | Piston in the centre, redstone below it, iron ingots in the other seven slots |
-| Ideoblock | Nine cobblestone |
 
 Oddstone itself only comes from the world. The Repulser, Attractor and Structure Debug Stick have no recipe yet and are creative-only.
 
@@ -485,10 +490,10 @@ scripts/            small Windows helper scripts
 
 The notes in [`docs/dev`](docs/dev) are the project's working documents. They are long, detailed, and in places behind the code. This README was checked against the code and is the better guide to what the mod does today.
 
-To redraw the illustrations: `python tools/renders/scenes.py` (needs Python 3 and Pillow).
+To redraw the illustrations: `python tools/renders/scenes.py` and `python tools/renders/gui.py` (needs Python 3 and Pillow).
 
 ## License
 
-All rights reserved for now. No open-source license has been chosen yet, so please ask before reusing the code or the art.
+[Mozilla Public License 2.0](LICENSE). In short: you can use, change and redistribute this mod, and include it in modpacks or build on it in your own projects, open or closed. If you change Ideomod's own files and share the result, those changed files have to stay under the MPL and their source has to be available.
 
 The code was written with Claude, directed by The Ideomancer.

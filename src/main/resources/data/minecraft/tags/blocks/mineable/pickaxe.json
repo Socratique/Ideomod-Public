@@ -1,7 +1,6 @@
 {
   "replace": false,
   "values": [
-    "ideomod:ideoblock",
     "ideomod:drill",
     "ideomod:oddstone",
     "ideomod:machine_block",

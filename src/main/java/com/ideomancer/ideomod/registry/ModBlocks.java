@@ -73,13 +73,6 @@ public class ModBlocks {
     // BASIC BLOCKS
     // ========================================================================
     
-    public static final RegistryObject<Block> IDEOBLOCK = BLOCKS.register("ideoblock",
-            () -> new Block(BlockBehaviour.Properties.of()
-                    .mapColor(MapColor.STONE)
-                    .strength(1.5f, 6.0f)
-                    .requiresCorrectToolForDrops()
-            ));
-    
     public static final RegistryObject<Block> DRILL = BLOCKS.register("drill",
             () -> new DrillBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)

@@ -347,7 +347,7 @@ def fluid_pipe(tx):
     f1 = s.add(1, 0, 1, "fluid_pipe")
     f2 = s.add(2, 0, 1, "fluid_pipe")
     f3 = s.add(3, 0, 1, "fluid_pipe")
-    lever = s.add(1, 0, 0, "lever")
+    lever = s.add(1, 0, 2, "lever")
     s.say("A lava source, three Fluid Pipes, and open air at the far end.", 1900)
     lever.set(on=True)
     s.caption = "Powered and empty, a Fluid Pipe takes an adjacent source block."
@@ -472,27 +472,30 @@ def logic(tx):
 
 
 def furnace_array(tx):
-    s = Scene(tx, "Furnace Array multiblock", look=(2, 1.2, 1.5), floor=((-1, 6), (-1, 5)))
+    # A 3x2 core in a 5x4 shell. The core has to be this big for the furnaces to show:
+    # from this camera a one-block recess is hidden by the shell above and to the right of it.
+    core = [(x, y) for x in (1, 2, 3) for y in (1, 2)]
+    s = Scene(tx, "Furnace Array multiblock", look=(2.5, 1.8, 1.5), floor=((-1, 7), (-1, 5)))
     s.say("Any stone-type block from the furnace_array_frame tag works as the shell.", 2000)
     s.caption = "Back layer: solid."
-    s.fill(range(4), range(3), [0], "stone_bricks")
+    s.fill(range(5), range(4), [0], "stone_bricks")
     s.snap(1200)
-    s.caption = "Middle layer: the furnaces, ringed by shell blocks."
-    for x in range(4):
-        for y in range(3):
-            if (x, y) not in ((1, 1), (2, 1)):
+    s.caption = "Middle layer: the furnaces, all facing the same way, ringed by shell blocks."
+    for x in range(5):
+        for y in range(4):
+            if (x, y) not in core:
                 s.add(x, y, 1, "stone_bricks")
-    fs = [s.add(1, 1, 1, "furnace", facing="south"), s.add(2, 1, 1, "furnace", facing="south")]
+    fs = [s.add(x, y, 1, "furnace", facing="south") for x, y in core]
     s.snap(1500)
-    s.caption = "Front layer (drawn see-through here): a ring, with air in front of each furnace."
-    for x in range(4):
-        for y in range(3):
-            if (x, y) not in ((1, 1), (2, 1)):
-                s.add(x, y, 2, "ghost_bricks")
+    s.caption = "Front layer: a ring, with air in front of every furnace so you can reach it."
+    for x in range(5):
+        for y in range(4):
+            if (x, y) not in core:
+                s.add(x, y, 2, "stone_bricks")
     s.snap(1600)
     for f in fs:
         f.set(lit=True)
-    s.labels.append(((1.5, 2.6, 2), "Enhanced Furnace: cooks 50% faster", GREEN))
+    s.labels.append(((2, 4.1, 2), "Enhanced Furnaces: cook 50% faster", GREEN))
     s.say("The furnaces become Enhanced Furnaces for as long as the shell is intact.", 2800)
     return s
 
@@ -553,7 +556,7 @@ CATALOGUE = [
     ("Honey Grabber", "grabber", {"variant": "honey", "on": True}), ("Machine Transmitter", "transmitter", {"power": 12}),
     ("Machine Pipe", "pipe", {}), ("Machine Fluid Pipe", "fluid_pipe", {"fluid": "water"}),
     ("Machine Piston", "machine_piston", {"arms": {"up": 1.0}}), ("Machine Sticky Piston", "machine_piston", {"sticky": True}),
-    ("Machine Brace", "brace", {}), ("Drill", "drill", {"facing": "south"}), ("Ideoblock", "ideoblock", {}),
+    ("Machine Brace", "brace", {}), ("Drill", "drill", {"facing": "south"}),
 ]
 
 

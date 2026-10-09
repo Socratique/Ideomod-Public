@@ -231,7 +231,6 @@ MODELS = {
     "slime": slime, "honey": honey, "piston": piston, "lever": lever, "dust": dust, "lamp": lamp,
     "furnace": furnace, "chest": chest, "item": item_marker, "pearl": pearl, "fluid": fluid,
     # mod
-    "ideoblock": lambda p: cube("ideoblock"),
     "oddstone": lambda p: cube("oddstone"),
     "cobbled_oddstone": lambda p: cube("cobbled_oddstone"),
     "oddstone_bricks": lambda p: cube("oddstone_bricks"),

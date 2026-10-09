@@ -20,9 +20,6 @@ public class ModItems {
     public static final DeferredRegister<Item> ITEMS = 
             DeferredRegister.create(ForgeRegistries.ITEMS, Ideomod.MOD_ID);
     
-    public static final RegistryObject<Item> IDEOBLOCK = ITEMS.register("ideoblock",
-            () -> new BlockItem(ModBlocks.IDEOBLOCK.get(), new Item.Properties()));
-    
     public static final RegistryObject<Item> DRILL = ITEMS.register("drill",
             () -> new BlockItem(ModBlocks.DRILL.get(), new Item.Properties()));
     
