@@ -9,7 +9,7 @@ What exists so far mainly centres on Oddstone and on expansions to sticky blocks
 - The implementation and development of this mod was almost entirely handled and written by Claude, directed by me.
 - Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Machine Frame and Drill textures were also made by Claude.
 
-**Status: work in progress.** This repository is a snapshot of where the mod is today, shared so people can look at it. It is not a release. There is no download, things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
+**Status: work in progress.** This repository is a snapshot of where the mod is today. A build of it, version 0.1.0, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases): put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
 
 | | |
 |---|---|
