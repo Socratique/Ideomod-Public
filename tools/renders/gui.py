@@ -30,6 +30,9 @@ BTN, GAP = 16, 2
 TIMER_TICKS = list(range(5, 85, 5))    # config default: 5 to 80, step 5
 ENGINE_TICKS = list(range(5, 45, 5))   # config default: 5 to 40, step 5
 SCALE = 2
+# Slot items that are blocks, drawn as small isometric blocks; everything else is a flat
+# vanilla item texture. Named explicitly: some vanilla names (repeater) are also mod models.
+BLOCK_ITEMS = {"furnace"}
 
 
 class Vanilla:
@@ -71,7 +74,7 @@ class Vanilla:
         """A 16x16 item icon: a flat item texture, or a small isometric block for block items."""
         if self.jar is None:
             return None
-        if name in MODELS:
+        if name in BLOCK_ITEMS:
             r = Renderer(self.tx, 16, 16, tile=14, origin=(0, 0))
             px, py = r.proj((0.5, 0.5, 0.5))
             r.ox, r.oy = 8 * SS - px, 8 * SS - py
