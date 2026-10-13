@@ -9,13 +9,13 @@ What exists so far mainly centres on Oddstone and on expansions to sticky blocks
 - The implementation and development of this mod was almost entirely handled and written by Claude, directed by me.
 - Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Machine Frame and Drill textures were also made by Claude.
 
-**Status: work in progress.** This repository is a snapshot of where the mod is today. A build of it, version 0.1.0, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases): put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
+**Status: work in progress.** This repository is a snapshot of where the mod is today. A build of it, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases): put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
 
 | | |
 |---|---|
 | Minecraft | 1.20.1 |
 | Loader | Forge 47.x (built against 47.4.10) |
-| Mod version | 0.1.0 |
+| Mod version | 0.1.1 |
 | Java | 17 |
 
 ![Every block the mod adds](docs/media/blocks.png)
@@ -54,7 +54,7 @@ Real footage from the game is in [In-game footage](#in-game-footage) at the end 
 You need JDK 17. From the repository root:
 
 ```
-./gradlew build        # builds build/libs/ideomod-0.1.0.jar
+./gradlew build        # builds build/libs/ideomod-0.1.1.jar
 ./gradlew runClient    # starts a development client with the mod loaded
 ```
 
