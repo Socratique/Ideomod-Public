@@ -500,5 +500,3 @@ To redraw the illustrations: `python tools/renders/scenes.py` and `python tools/
 ## License
 
 [Mozilla Public License 2.0](LICENSE). In short: you can use, change and redistribute this mod, and include it in modpacks or build on it in your own projects, open or closed. If you change Ideomod's own files and share the result, those changed files have to stay under the MPL and their source has to be available.
-
-The code was written with Claude, directed by The Ideomancer.
