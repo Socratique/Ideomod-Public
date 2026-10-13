@@ -1,8 +1,10 @@
 # Ideomod
 
-This is an incomplete prototype for my vision of a vanilla++ style overhaul of Minecraft. The full vision is roughly outlined, as recorded by Claude, in the [design document](docs/dev/IDEOMOD_DESIGN.md).
-
-What exists so far mainly centres on Oddstone and on expansions to sticky blocks, flying machines, and moving blocks and contraptions in general.
+> *"This is an incomplete prototype for my vision of a vanilla++ style overhaul of Minecraft. The full vision is roughly outlined, as recorded by Claude, in the [design document](docs/dev/IDEOMOD_DESIGN.md).*
+>
+> *What exists so far mainly centres on Oddstone and on expansions to sticky blocks, flying machines, and moving blocks and contraptions in general."*
+>
+> — The Ideomancer
 
 ### Disclaimers
 
