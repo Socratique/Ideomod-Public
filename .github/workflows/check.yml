@@ -1,0 +1,52 @@
+# Builds the jar and checks that it loads on a real Forge server.
+# Runs on every push and pull request; the built jar is kept as a download on the run's page.
+name: Build and check the jar
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build --console=plain
+
+      - name: Cache the Forge test server
+        uses: actions/cache@v4
+        with:
+          path: build/jar-check
+          key: forge-server-${{ hashFiles('gradle.properties') }}
+
+      - name: Check the jar loads on a Forge server
+        run: scripts/check_jar.sh
+
+      - name: Keep the jar
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ideomod-jar
+          path: build/libs/*.jar
+          if-no-files-found: ignore
+
+      - name: Keep the server log on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: server-log
+          path: |
+            build/jar-check/*/server-output.log
+            build/jar-check/*/crash-reports/
+          if-no-files-found: ignore

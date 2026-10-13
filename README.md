@@ -60,6 +60,8 @@ You need JDK 17. From the repository root:
 
 The first run downloads Forge and decompiles Minecraft, which takes a while.
 
+To check that a built jar really loads, run `scripts/check_jar.sh`. It starts a real Forge server with the jar in its `mods` folder and fails if the mod does not load or the server crashes. GitHub runs the same check on every push ([![Build and check the jar](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml/badge.svg)](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml)).
+
 In game, everything is in the **Ideomod** creative tab. A second tab, **Framed Blocks**, lists every framed block.
 
 ## Oddstone
