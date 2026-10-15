@@ -1,6 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
+*Last updated: 2026-07-17 (Enchanting Overhaul expansion -- imported the full consolidated enchant list from the "Yeet" brainstorm session that was never written in: movement enchants (Swiftness, Water/Lava/Blaze Walking), armor (Pockets, Endurance), farming (Harvest, Sowing, Reaping), gathering (Felling, Vein Miner), utility (Reach, universalized Channeling), Yeet; full Spell Enchants category (Fireball, Gust, Inferno Ring, Combustion, Destruction, Combustive/Destructive Shot, Explosive, Warp/Blink Shot) with shared durability-cost mechanic; new curses (Encumbrance, Feebleness, Dropping, Blunting); Mythical rarity tier + Sacrifice; Enchant Universalization system; Weight knockback note; Disenchanting Table subtraction mechanic; Wand item stub added (flagged, needs definition))*
 *Last updated: 2026-04-19 (Frame Family simplified -- raw vanilla iron/copper removed as conductors and sticky members; cross-frame mediation removed and INNER_CONDUCTOR property deleted; Oddstone silk-touch loot fix; OddstoneConfig deleted; FurnaceArray frame tag consolidated)*
 
 *Written by Claude, directed and guided by The Ideomancer.*
@@ -1319,6 +1320,27 @@ Blocks that use vanilla hasNeighborSignal() (Repulsers, Attractors, vanilla pist
 
 ---
 
+### Wand [IDEA -- NEEDS DEFINITION]
+> A dedicated magic-weapon item. Trades melee capability for a larger enchant budget / more enchant slots, making it the natural home for Spell Enchants. See Magic & Enchanting > Enchanting Overhaul > Spell Enchants.
+
+> **Note:** This item was discussed verbally (Mar 11 2026 session) but had never been written into the Design Doc. The properties below are placeholders reconstructed from that discussion -- The Ideomancer to confirm/replace. Flagged so the reference from Spell Enchants resolves to a real entry.
+
+| Property | Value |
+|----------|-------|
+| ID | `wand` (TBD) |
+| Type | Held magic weapon / catalyst item |
+| Enchant capacity | Larger enchant budget or more enchant slots than a standard tool (TBD -- exact advantage undecided) |
+| Melee | Little to no melee damage by design (this is the tradeoff for the enchant advantage) |
+| Source | TBD (crafted? loot? tiered variants?) |
+
+**Design notes / open questions:**
+- Is the wand's advantage extra *budget*, extra *slots*, or both? Needs a decision before Spell Enchants can be balanced against it.
+- Curse of Blunting turns any melee weapon into a makeshift wand -- so the wand is the "proper" version of a build players can already jury-rig. That relationship should be preserved (wand is better/cleaner, but Blunting is a valid early path).
+- Tiered wands (wood/iron/diamond-equivalent) or a single item? TBD.
+- Does the wand interact with the Magic Family (obsidian) resource chain, or its own materials? TBD.
+
+---
+
 ### Ectoplasm [IDEA]
 > Rare drop from ghost-type mobs. Primary crafting material for Ghost Blocks and potion ingredients.
 
@@ -1698,10 +1720,14 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Remove enchantment | [IDEA] | Strip enchantments from tools/armor/weapons. |
-| Transfer to book | [IDEA] | If book provided, enchantment moves to book. If no book, enchantment is deleted. |
-| GUI | [IDEA] | Input slot (enchanted item) + book slot (optional) + output slot(s). |
+| Enchant subtraction | [IDEA] | Consume a *second* enchanted item; any enchants it carries that also appear on the first item are removed from the first item. Works on curses too -- a cursed book becomes a targeted removal tool for that curse. |
+| Transfer to book | [IDEA] | Alternative/optional mode: if a book is provided, the removed enchantment moves to the book instead of being deleted. Relationship to subtraction mode TBD (two modes, or pick one). |
+| Curse removal | [IDEA] | Because subtraction matches curses too, this is the intended way to lift Curse of Binding / Vanishing / etc. Makes otherwise-junk cursed items valuable. |
+| GUI | [IDEA] | Input slot (item to clean) + sacrifice slot (item whose enchants define what to strip) and/or book slot + output slot(s). |
 
 **Design notes:**
+- Subtraction model recontextualizes cursed and unwanted enchanted items as useful removal tools -- nothing enchanted is pure junk.
+- With the budget system, removing enchants frees budget; removing curses removes their negative-cost budget contribution (so it can force a re-balance of the item's loadout).
 - Heavy Core from Trial Chambers gives that structure more endgame relevance.
 - Oddstone cost ties it into the mod's core economy.
 - One-time craft -- a permanent station, not a consumable.
@@ -1845,6 +1871,8 @@ Key insight: enchantability secretly does three jobs -- inflates effective level
 - Expanded bookshelf range via obsidian ring structure (more bookshelves = higher modified levels = new tiers reachable)
 - Levelless enchants get flat point costs (see Budget section)
 - Curses subtract from budget cost (see Curses section)
+- Enchant universalization -- enchants tied to behaviors, not item types (see Enchant Universalization section)
+- New Mythical rarity tier above Treasure (see Mythical Rarity Tier section)
 - Anvil "too expensive" cap removed
 
 **Enchantment Level Budget:**
@@ -1928,16 +1956,89 @@ New enchantments designed to give the catalyst system, budget system, and higher
 
 | Enchantment | Type | Applies To | Effect | Notes |
 |-------------|------|-----------|--------|-------|
-| Weight | Curse (optional) | Armor | Increases fall speed and fall damage taken. When landing on a mob, deals damage to it proportional to fall distance. | Player choice -- accept the downside, weaponize the fall. Works with high-fall playstyles. |
+| Weight | Curse (optional) | Armor | Increases fall speed and fall damage taken. When landing on a mob, deals damage to it proportional to fall distance. Also reduces knockback received. | Player choice -- accept the downside, weaponize the fall. Heavy armor = harder to move, harder to be moved. Works with high-fall playstyles. |
 | Aspect of [Tool] | Enchantment | Tools | The enchanted tool also functions as the named tool type. E.g. Aspect of Bow on a pickaxe: the pickaxe can also shoot arrows. | Discovery-driven -- players find wild combinations. Implementation complexity TBD. Multiple variants (Aspect of Bow, Aspect of Axe, etc.) each as separate enchants. |
+| Swiftness | Enchantment | Boots | Passive movement speed boost. Scales with level but caps below a Speed I potion, so potions still matter. | Movement. Always-on convenience without eclipsing consumables. |
+| Water Walking | Enchantment (Treasure) | Boots | Walk across the surface of water without sinking. | Distinct from Frost Walker -- creates no blocks, leaves the water liquid. Treasure tier makes it feel special. |
+| Lava Walking | Enchantment (Treasure) | Boots | Walk across the surface of lava without sinking. | Very powerful given lava prevalence, especially in the Nether. Treasure tier. |
+| Blaze Walking | Enchantment | Boots | Leaves a trail of fire on the ground where you walk. | Aggressive/utility hybrid. Could be made mutually exclusive with Frost Walker for flavor. |
+| Pockets | Enchantment | Armor | Grants extra inventory slots while worn. Scales with level. | Utility. Counterpart to Curse of Encumbrance. |
+| Endurance | Enchantment | Armor | Reduces the rate of hunger/exhaustion drain while worn. | Utility survival enchant. Exact scaling TBD. |
+| Harvest | Enchantment | Hoe | Harvests mature crops in an area and/or auto-replants. | Farming quality-of-life. Area size scales with level. |
+| Sowing | Enchantment | Hoe | Plants seeds from inventory across tilled soil in an area. | Pairs with Harvest for hands-free farming loops. |
+| Reaping | Enchantment | Hoe | Increases crop yield when harvesting, or widens harvest area. | Farming yield/AoE. Relationship to Harvest TBD (merge vs stack). |
+| Felling | Enchantment | Axe | Treecapitator -- fells an entire connected tree in one break. | Gathering. Durability cost scales with logs broken. |
+| Vein Miner | Enchantment | Pickaxe | Breaks an entire connected vein of the same ore in one break. | Gathering counterpart to Felling. Durability cost scales with blocks broken. |
+| Reach | Enchantment | Universal | Extends block-interaction and/or attack reach. Scales with level. | General utility. Applies broadly across tools. |
+| Channeling (universalized) | Enchantment | Tools | Channeling is no longer trident-only; can be applied to tools. Summons lightning on hit during thunderstorms. | Part of universalization -- see Enchant Universalization below. |
+| Yeet | Enchantment | Any (tool/weapon) | Throw the enchanted item as a projectile; it returns to you (or is retrievable). | Reference the community "yeet" mod for projectile-entity and item-return handling (video link saved from Mar 11 session). Fun, meme-friendly, clip-worthy. |
 | (more TBD) | -- | -- | -- | Expand as enchanting system develops |
+
+**Spell Enchants:**
+
+A category of active enchantments that fire a projectile or trigger an effect when you attack. They share a common resource cost: **all spell enchants consume extra durability per use.** This is their balancing lever -- powerful on-demand effects, paid for in item wear.
+
+*Synergy rule: projectile-modifying enchants (Power, Multishot, etc.) also affect spell-type projectile enchants. Multishot + Destructive Shot on a crossbow becomes a grenade launcher; Power presumably scales blast radius or damage.*
+
+| Enchantment | Type | Effect | Notes |
+|-------------|------|--------|-------|
+| Fireball | Melee spell | Attacking fires a fire charge (fireball) at the target. | Ranged pressure from a melee weapon. |
+| Gust | Melee spell | Attacking fires a wind/breeze charge. | Requires 1.21 breeze charge -- port-dependent. |
+| Inferno Ring | Melee spell | Attacking emits an expanding ring of damaging fire particles around the player. Radius and damage scale with level. | AoE self-centered burst. Good crowd control. |
+| Combustion | Melee spell | On-hit explosion that does NOT damage blocks. | Balanced by the player being within their own blast radius -- no tier gating needed. |
+| Destruction | Melee spell | On-hit explosion that DOES damage blocks. | Same self-damage risk plus terrain modification. Very dangerous, very powerful. |
+| Combustive Shot | Projectile spell | Fired projectile explodes on impact, no block damage. | Projectile counterpart to Combustion. |
+| Destructive Shot | Projectile spell | Fired projectile explodes on impact, damages blocks. | Projectile counterpart to Destruction. Pairs (dangerously) with Warp/Blink Shot. |
+| Explosive | Projectile spell | Generic explosive projectile. | Umbrella/simplest explosive option. Relationship to Combustive/Destructive Shot TBD (may merge). |
+| Warp / Blink Shot | Projectile spell | Teleports the player to where the fired projectile lands. | Ender-pearl functionality baked into a ranged weapon. With Multishot, teleport to the first arrow that lands (safest rule). "Warp" (melee blink-to-target) and "Blink Shot" (projectile) may be two names for one enchant or a melee/ranged split -- TBD. |
+
+**Design notes (spell enchants):**
+- Durability cost is the universal balancer -- spells are cheap to fire mechanically but expensive in item wear.
+- Combustion/Destruction self-damage risk is the balance; you are always in your own blast.
+- These enchants strongly favor the planned **wand** item (see Items & Tools), which trades melee capability for more enchant budget/slots. Curse of Blunting turns any melee weapon into a makeshift wand -- an emergent "I built a wand before I found one" path.
 
 **New Curses:**
 
 | Curse | Point Value | Effect | Notes |
 |-------|-------------|--------|-------|
 | Curse of Conductivity | -2 | During thunderstorms, the player has an elevated chance of being struck by lightning while wearing the cursed item. | Thematic risk -- weather becomes a genuine hazard. High-value tradeoff in non-storm conditions. |
+| Curse of Encumbrance | TBD | Locks/removes inventory slots based on level. | Counterpart to the Pockets enchant. The more encumbered, the more budget freed. |
+| Curse of Feebleness | TBD | The item loses durability faster. | Straightforward wear penalty. Scales with level. |
+| Curse of Dropping | TBD | Chance to drop the held item or an armor piece when taking damage or on use (~5% per level). | With Curse of Binding, the drop chance is reduced (~1% per level) -- Binding being un-removable is itself the offsetting cost, so no further mechanical adjustment is needed. |
+| Curse of Blunting | TBD (negative) | Removes melee damage from the item entirely. | Frees budget for spell enchants. Near-free on a wand (you weren't meleeing with it); a real sacrifice on a sword that transforms the item's role. Enables emergent makeshift-wand builds. |
 | (more TBD) | -- | -- | Curses should always have a clear, observable downside that the player can understand and weigh against the budget gain. |
+
+**Enchant Universalization:**
+
+A system-level change: enchantments belong to *behaviors*, not to specific item types. If an enchant makes sense on a behavior an item can perform, it can go on that item.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Cross-item enchants | [IDEA] | Crossbow enchants work on bows and vice versa. Any ranged enchant works on any ranged behavior. |
+| Redundant enchant merging | [IDEA] | Overlapping enchants (e.g. Flame and Fire Aspect) are merged, OR kept separate but given contextual meaning. Example: Fire Aspect on a bow makes *melee* attacks with the bow set targets alight, while Flame handles the arrows. |
+| Contextual behavior | [IDEA] | An enchant applied to an item that can perform multiple behaviors applies to whichever behavior fits. E.g. Channeling on a tool triggers on melee hits during storms. |
+| Crossbow rebalancing | [IDEA] | Crossbows currently justify their existence largely through exclusive enchants (Multishot, Piercing, Quick Charge). Once those universalize, crossbows need a reworked identity so they are not strictly redundant with bows. Approach TBD. |
+
+**Design notes (universalization):**
+- The goal is fewer arbitrary "this enchant only goes here" rules and more player freedom, in keeping with the budget system's build-it-yourself philosophy.
+- Merging vs contextualizing redundant enchants is a per-pair decision -- some merges are clean (Sharpness/Power?), some are more interesting kept separate with context (Flame/Fire Aspect).
+- Crossbow identity is the main open risk. Options: unique reload/stored-shot mechanic, higher base budget, exclusive access to certain spell-shot enchants, etc.
+
+**Mythical Rarity Tier:**
+
+A new rarity tier sitting *above* Treasure. Mythical enchants are the rarest, most powerful in the game and are deliberately hard to obtain.
+
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Tier position | [IDEA] | Above Treasure. Rarer and more powerful than any existing rarity. |
+| No villager access | [IDEA] | Cannot be obtained from villager trades -- this keeps them from being trivialized by librarian farming. |
+| Acquisition: loot | [IDEA] | Very rare loot from specific structures. |
+| Acquisition: max table | [IDEA] | A maxed-out Enhanced Enchanting Table multiblock that consumes a Totem of Undying as a catalyst. The Totem is destroyed in the process. |
+
+| Mythical Enchant | Applies To | Effect | Notes |
+|------------------|-----------|--------|-------|
+| Sacrifice | Item (any?) | Transforms the item into a consumable Totem-of-Undying effect -- on lethal damage, the item is destroyed and the player survives (as with a Totem). | First Mythical enchant. The item IS the totem. One-time save, permanent item loss. Which item types can carry it TBD. |
+| (more TBD) | -- | -- | Mythical additions should feel genuinely rare and game-changing, not just numerically bigger. |
 
 **Magic Bottles:**
 
@@ -1968,6 +2069,16 @@ Addition to the enchanting structure. A new contributor block or structure exten
 - *Does structure quality amplify catalyst effect?*
 - *How many Aspect of [Tool] variants? What tools are worth it?*
 - *Weight curse: is it a curse (negative budget cost) or a regular enchant with a built-in downside? Leaning curse.*
+- *Wand item -- undefined (verbal-only until now). Is its advantage extra budget, extra slots, or both? Tiered or single? See Items & Tools > Wand.*
+- *Spell enchant durability cost -- flat per shot, or scaled by spell power?*
+- *Warp / Blink Shot -- one enchant or a melee/ranged split? Does it consume the projectile on teleport?*
+- *Explosive vs Combustive/Destructive Shot -- are these three distinct enchants or should Explosive merge into the pair?*
+- *Harvest / Sowing / Reaping -- three separate hoe enchants, or should some merge (e.g. Harvest already auto-replants, making Sowing redundant)?*
+- *Crossbow identity after universalization -- what makes a crossbow worth using once its exclusive enchants work on bows?*
+- *Mythical: which item types can carry Sacrifice? Any item, or restricted?*
+- *Disenchanting Table: subtraction mode and transfer-to-book mode -- support both, or pick one?*
+- *Point values for the new curses (Encumbrance, Feebleness, Dropping, Blunting) -- assign per severity.*
+- *"Yeet" enchant -- reference the community mod (video link from Mar 11 session) for projectile-entity and item-return handling when implementing.*
 
 ---
 
