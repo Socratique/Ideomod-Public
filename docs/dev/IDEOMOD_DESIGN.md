@@ -1,6 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
+*Last updated: 2026-10-17 (Branch + Bush blocks prototyped and rewritten to the Ideomancer's placement rules: branches have an axis and join only when one points at the other (T, L, no lattice); bushes use 26 neighbours -- edges and corners fill only with the diagonal, so L-shapes keep their notch. Both now [WIP].)*
 *Last updated: 2026-07-17 (Enchanting Overhaul expansion -- imported the full consolidated enchant list from the "Yeet" brainstorm session that was never written in: movement enchants (Swiftness, Water/Lava/Blaze Walking), armor (Pockets, Endurance), farming (Harvest, Sowing, Reaping), gathering (Felling, Vein Miner), utility (Reach, universalized Channeling), Yeet; full Spell Enchants category (Fireball, Gust, Inferno Ring, Combustion, Destruction, Combustive/Destructive Shot, Explosive, Warp/Blink Shot) with shared durability-cost mechanic; new curses (Encumbrance, Feebleness, Dropping, Blunting); Mythical rarity tier + Sacrifice; Enchant Universalization system; Weight knockback note; Disenchanting Table subtraction mechanic; Wand item stub added (flagged, needs definition))*
 *Last updated: 2026-04-19 (Frame Family simplified -- raw vanilla iron/copper removed as conductors and sticky members; cross-frame mediation removed and INNER_CONDUCTOR property deleted; Oddstone silk-touch loot fix; OddstoneConfig deleted; FurnaceArray frame tag consolidated)*
 
@@ -1020,117 +1021,107 @@ Pulse fires ->
 
 ---
 
-### Branch Block [IDEA]
-> Connecting log-like block that forms organic tree/vine structures. Half-thickness centered log that visually joins to adjacent branches in all directions.
+### Branch Block [WIP]
+> Half-thickness centered log with a direction. Joins to the branches it meets end-on, so branches build trees, bends and junctions -- but a clump of branches does not fuse into a lattice.
 
 | Property | Value |
 |----------|-------|
 | ID | `branch` |
-| Hardness | ~2.0 / Blast 0 (log-equivalent) |
+| Hardness | 2.0 (log-equivalent) |
 | Tool | Axe |
-| Recipe | TBD (logs?) |
-| Notes | Decorative/structural. Connects to adjacent branches, forming trees, arbors, scaffolding-like organic shapes. |
+| Recipe | Placeholder: 2 oak logs (vertical) -> 6 branches |
+| Notes | Prototype built 2026-10-17 (`BranchBlock`), on the local branch `prototype/branch-bush`, not yet merged. Oak textures only. |
 
 **Concept:**
-A branch is a centered 8x8 (half-thickness) log core occupying the middle of a block space. When placed adjacent to other branches, they visually join together. The shape the branch displays depends entirely on which of its 6 faces have a neighboring branch.
+A branch is an 8x8 log core in the middle of the block, with an 8x8 arm running from the core to each face it is joined on. Like a vanilla log, a branch has an **axis** (x, y or z), taken from the face it was placed against. The axis decides what it joins to.
 
-**Shape Logic:**
-Branches use a multipart blockstate system -- the final visible shape is assembled from layered model pieces, not a single model per combination. This keeps the model file count manageable.
+**Placement rules (the Ideomancer's, 2026-02-18):**
+- A **vertical** branch joins any adjacent horizontal branch that points into it, in a T shape, on all sides.
+- A **horizontal** branch becomes an L (corner) to vertical branches above or below it, or to horizontal branches facing away from its sides.
 
-Base model pieces (all can be rotated to cover all 6 directions):
-- Core: the central 8x8x8 node (always present)
-- Arm: a 8x8 segment extending from center to one face edge (one per connected direction)
+Both rules come down to one symmetric test, which is how the prototype implements them:
 
-The game composes: Core + whichever Arms correspond to connected faces. This gives all possible shapes automatically with only a handful of model files.
+> **Two neighbouring branches join when at least one of them points at the other.**
 
-**Connection directions:**
-Branches connect in all 6 directions (up, down, north, south, east, west). A branch connects to any adjacent branch regardless of that neighbor's own orientation.
+So a branch always continues along its own axis, and only takes a side-join from a branch aimed straight at it. What this gives:
 
-**Shape examples (for visualization):**
-- Isolated: just the central node (a small cube stub)
-- Two opposite connections (e.g. up + down): a vertical pillar segment
-- Two perpendicular connections (e.g. up + north): an L-bend corner
-- Three connections (e.g. up + north + east): a T or corner junction
-- Four connections in a plane (e.g. all horizontal): a flat plus/cross
-- Six connections: full junction node
+| Arrangement | Result |
+|-------------|--------|
+| Branches in a line along their axis | One continuous branch |
+| Horizontal branch pointing into a vertical one | T-join into the upright |
+| Horizontal run ending under/over a vertical branch | L-bend up or down |
+| Two horizontal branches meeting at right angles | L corner (one points at the other) |
+| Two parallel branches side by side | **Stay apart** -- two sticks, not a slab |
+| A branch crossing over/under another (both sideways) | **Stay apart** -- crossing sticks |
+| Vanilla log or wood next to a branch | Same test, using the log's own axis -- so a branch can grow out of the side of a trunk |
+| A branch with no joins at all | A length of log along its own axis, so its direction shows the moment it is placed |
 
-**Corner/bend geometry note:**
-Unlike fences (where each arm is straight and identical), a branch arm that bends 90 degrees does NOT require unique geometry -- the core node handles the visual join, and each arm is simply a straight half-log segment pointing outward. This means corner shapes are handled naturally by the multipart composition without dedicated corner models. This is a key advantage of the centered-core design.
-
-**Blockstate approach:**
-Six boolean properties: north, south, east, west, up, down (same pattern as fence). 2^6 = 64 combinations, all handled automatically by multipart composition. The blockstate JSON applies each arm piece conditionally: "when: {up: true} -> apply: arm_up model".
-
-**Block update behavior:**
-On placement and on neighbor change, the branch checks all 6 adjacent positions for other branch blocks and updates its own connection booleans accordingly. Neighbors also update their own states when a branch is placed or removed next to them (standard Minecraft neighbor update pattern -- same as how fences work).
-
-**State space summary:**
-
-| States | Count |
-|--------|-------|
-| Connection booleans (N/S/E/W/U/D) | 6 x true/false |
-| Total combinations | 64 |
-| Model files needed | ~7 (core + 1 arm, rotated via blockstate JSON) |
+**Shape logic:**
+Multipart blockstate: the core is always drawn, plus one arm per joined face (one arm model, rotated six ways). Bends need no special geometry -- the core fills the elbow. Blockstate: `axis` + six booleans (north, south, east, west, up, down) = 3 x 64 states. The booleans are worked out from the axis rule on placement, on any neighbour change, and also when the block is set by a command, structure or worldgen (which skip normal placement) -- so a future tree generator can place branches directly.
 
 **Design notes:**
-- Centered half-thickness means branches visually line up through corners -- no awkward offset like vanilla logs do when placed perpendicular.
-- All vanilla log types could potentially have a branch variant, or a single "branch" block could have a wood type property. TBD based on scope.
-- Could generate naturally as part of tree feature worldgen (thick canopy trees, dead trees, mangrove-style growth).
-- Does NOT need to be waterloggable initially, but worth considering for swamp aesthetics.
-- Leaf blocks placed adjacent to branches look natural -- no special behavior needed.
+- Centered half-thickness means branches line up through corners -- no awkward offset like vanilla logs placed perpendicular.
+- The core uses bark on all faces: end rings on top of every horizontal run looked wrong.
+- Could generate naturally via a custom trunk placer (thick canopy trees, dead trees, mangrove-style growth) -- see the tree-generation note in the 2026-02-18 session.
 
 **Open questions:**
 - *Single branch block with a wood_type property, or one branch block per wood type (like vanilla logs)?*
 - *Does it generate naturally or is it purely player-placed?*
 - *Strip-able with axe like vanilla logs?*
-- *Should isolated branches (no connections) render as a small stub node, or default to a full pillar for easier placement?*
+- *Should a branch with one join still show its own-axis length (e.g. a horizontal branch pointing into a trunk shows as a short stub today)?*
+- *Waterloggable, for swamp aesthetics?*
 
 ---
 
-### Bush Block [IDEA]
-> Connecting foliage block. A slightly undersized leaf-cube that expands to meet adjacent bushes, forming seamless hedges, shrubs, and ground cover.
+### Bush Block [WIP]
+> Connecting foliage block. A slightly undersized leaf-cube that grows flush to meet neighbouring bushes -- rows and full clumps read as one hedge, but bushes keep their notches instead of filling space like a grid.
 
 | Property | Value |
 |----------|-------|
 | ID | `bush` |
-| Hardness | ~0.2 / Blast 0 (leaf-equivalent) |
-| Tool | Shears (drops itself), Axe (drops nothing or berries TBD) |
-| Recipe | TBD |
-| Notes | Decorative foliage. Connects to adjacent bush blocks visually. Could generate naturally as undergrowth. |
+| Hardness | 0.2 (leaf-equivalent) |
+| Tool | Hoe (mining speed); shears or Silk Touch drop the bush, otherwise 10% chance of a stick |
+| Recipe | Placeholder: 2x2 any leaves -> 4 bushes |
+| Notes | Prototype built 2026-10-17 (`FoliageBushBlock` + client `BushModel`), on the local branch `prototype/branch-bush`, not yet merged. Biome foliage tint; dense opaque leaf texture. |
 
 **Concept:**
-An isolated bush renders as a 14x14x14 cuboid centered in the block space -- slightly inset from the block edges on all sides (1 unit of gap per face). When a neighboring bush is present, that face extends out to the full 16-unit block edge, seamlessly joining the two together into one continuous mass. This is the inverse of the branch approach: instead of adding arms outward, the bush expands faces outward to close gaps.
+An isolated bush is a 14x14x14 cube centered in the block (1 unit of gap on every side). Where a neighbouring bush is present, the bush grows out to the block edge to meet it, so the two read as one mass.
 
-**Model approach:**
-Each face has two possible states: inset (gap present, no neighbor) or flush (full extent, neighbor present). Rather than 64 models, this can be handled with a multipart blockstate: start with the base 14x14x14 cube, then conditionally apply a thin "extension slab" piece on each face that bridges the gap to the block edge.
+**Placement rules (26 neighbours, from the 2026-02 bush plan):**
+Split the block into a 3x3x3 grid along each axis -- [0,1] [1,15] [15,16]:
+- **Core** (the 14x14x14 middle): always there.
+- **Face slab** (6, 1 unit thick): filled when that face's neighbour is a bush.
+- **Edge strip** (12): filled only when **both** of its face neighbours **and** the diagonal between them are bushes.
+- **Corner nub** (8): filled only when all **seven** blocks around that corner are bushes.
 
-Base pieces:
-- Core: 14x14x14 centered cube (always present)
-- Face extension: a 1x14x14 slab that fills the gap on one face (one per direction, applied when neighbor present)
+| Arrangement | Result |
+|-------------|--------|
+| Lone bush | 14x14x14 shrub stub |
+| Straight row | Seamless rectangular mass |
+| Full 2x2 (or 3x3, 2x2x2...) | Completely solid, no pinholes |
+| L of three bushes | **Keeps a notch** in the inner corner -- the diagonal is empty, so the edge strip there stays open |
+| Bush on solid ground | Sits flush on the ground instead of hovering 1 unit above it (solid ground counts as bush for everything one layer down) |
 
-6 boolean properties (same as branches/fences): north, south, east, west, up, down.
+Faces are only drawn between a filled region and an empty one inside the block. Where a bush meets another bush, nothing is drawn at the boundary -- one continuous mass.
 
-**Visual behavior examples:**
-- Isolated: slightly smaller cube with visible gaps on all sides -- a shrub stub
-- Two adjacent in a row: seamless rectangular mass, no visible seam
-- 3x3 ground-level hedge: completely flush top and sides, looks like a solid hedge
-- Corners: the face extensions from two perpendicular bushes overlap cleanly at the corner (both extend to the edge, filling the corner)
+**Implementation:**
+The blockstate can't hold 26 neighbours (2^26 states is far over the limit), and blockstates only hear about the 6 face neighbours anyway. The 2026-02 plan stored the 26-neighbour mask in a block entity. The prototype avoids the block entity: a custom baked model (`BushModel`) reads the 26 neighbours itself in `getModelData` while the chunk mesh is built, and a block change re-meshes its neighbours, so diagonals stay current. Quads are cached per neighbour mask. The block keeps six booleans for its collision/outline box only (each side 1 unit in or flush).
 
 **Difference from Branch Block:**
-Branches express their connections as arms (additive geometry extending outward from center). Bushes express their connections as face expansions (filling the gap between the inset core and the block edge). Branches are structural/skeletal; bushes are volumetric/mass-filling. Both use the same 6-boolean blockstate pattern and multipart composition strategy.
+Branches express their joins as arms (skeletal, additive). Bushes express theirs as face expansions (volumetric, filling the gap). Both refuse to become a perfect lattice: branches by direction, bushes by needing the diagonal.
 
 **Design notes:**
-- Leaf-like appearance -- uses a foliage-tinted texture similar to leaves, or a custom denser leaf texture.
-- Does not need to be transparent in the same way leaves are (no "fast/fancy" leaf transparency needed) -- solid faces are fine and simpler.
-- Could have biome-tinted color like vanilla leaves, or fixed green variants per biome.
-- Generates naturally as undergrowth in forests, dense vegetation in jungles, hedgerows in plains.
-- Could serve as a player-cuttable resource (shears -> bush block, axe -> nothing or small drop).
+- Solid, opaque faces -- no fast/fancy leaf transparency needed.
+- Biome-tinted like vanilla leaves (item uses the default foliage green).
+- Could generate naturally as undergrowth in forests, dense vegetation in jungles, hedgerows in plains.
 - Naturally pairs with Branch block -- branches form the skeleton of a tree or shrub, bushes fill the canopy volume.
 
 **Open questions:**
-- *Fixed texture or biome-tinted like vanilla leaves?*
-- *Drop when broken without shears -- nothing, leaves, or a unique berry/fruit item?*
+- *Fixed texture per biome, or biome-tinted (current)?*
+- *Drop without shears -- nothing, a stick (current, 10%), or a unique berry/fruit item?*
 - *Should it generate naturally or be purely player-placed initially?*
 - *Multiple variants (oak bush, jungle bush, etc.) or a single universal bush block?*
+- *Should bushes also grow flush against walls and other solid blocks, not only the ground?*
 
 ---
 
@@ -1149,7 +1140,7 @@ Branches express their connections as arms (additive geometry extending outward 
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Contact damage | [IDEA] | Deals damage to players and mobs that move through or stand inside the block (similar to cacti/sweet berry bushes). |
-| Connecting shape | [IDEA] | Inherits Bush Block's multipart model approach. Visually distinct texture -- darker, thornier appearance. |
+| Connecting shape | [IDEA] | Inherits Bush Block's 26-neighbour shape rules (keeps notches, fills only with the diagonal). Visually distinct texture -- darker, thornier appearance. Built as a subclass of the bush, brambles and bushes would join into one mass; a separate class would keep them apart. |
 | Haunted Forest spawn | [IDEA] | Primary undergrowth of the Haunted Forest biome. Replaces or supplements normal bush/shrub placement. |
 
 **Design notes:**
