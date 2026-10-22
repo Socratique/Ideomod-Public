@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.gametest;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.block.HollowstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
@@ -19,6 +20,7 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
 import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.block.RepeaterBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraftforge.gametest.GameTestHolder;
 import net.minecraftforge.gametest.PrefixGameTestTemplate;
@@ -137,6 +139,82 @@ public class IdeomodGameTests {
             }
             if (!helper.getBlockState(lamp).getValue(RedstoneLampBlock.LIT)) {
                 helper.fail("Lamp went dark after the frame activated", lamp);
+                return;
+            }
+            helper.succeed();
+        });
+    }
+
+    // ==================== Frames don't carry redstone ====================
+
+    /**
+     * Iron and Copper Frames are see-through, like glass: a repeater powering
+     * into one must not power the lamp behind it. Control lane: the same with
+     * stone, which must light its lamp (proves the repeater points the right way).
+     *
+     *   [lamp] [frame / stone] [repeater, pointing west] [redstone block]
+     */
+    @GameTest(template = EMPTY)
+    public static void framesDoNotCarryRedstone(GameTestHelper helper) {
+        for (int x = 0; x <= 5; x++) {
+            for (int z = 0; z <= 5; z++) {
+                helper.setBlock(x, 0, z, Blocks.STONE);
+            }
+        }
+        BlockState repeater = Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING, Direction.EAST);
+        BlockState[] middles = {
+                ModBlocks.IRON_FRAME.get().defaultBlockState(),
+                ModBlocks.COPPER_FRAME.get().defaultBlockState(),
+                Blocks.STONE.defaultBlockState()};
+        for (int lane = 0; lane < 3; lane++) {
+            int z = 1 + lane * 2;
+            helper.setBlock(1, 1, z, Blocks.REDSTONE_LAMP);
+            helper.setBlock(2, 1, z, middles[lane]);
+            helper.setBlock(3, 1, z, repeater);
+            helper.setBlock(4, 1, z, Blocks.REDSTONE_BLOCK);
+        }
+        helper.runAfterDelay(6, () -> {
+            if (!helper.getBlockState(new BlockPos(1, 1, 5)).getValue(RedstoneLampBlock.LIT)) {
+                helper.fail("Control: stone should carry the repeater's power to the lamp", new BlockPos(1, 1, 5));
+                return;
+            }
+            for (int lane = 0; lane < 2; lane++) {
+                BlockPos lamp = new BlockPos(1, 1, 1 + lane * 2);
+                if (helper.getBlockState(lamp).getValue(RedstoneLampBlock.LIT)) {
+                    helper.fail((lane == 0 ? "Iron" : "Copper") + " Frame carried redstone to the lamp", lamp);
+                    return;
+                }
+            }
+            helper.succeed();
+        });
+    }
+
+    // ==================== Hollowstone fill ====================
+
+    /**
+     * Right-clicking empty Hollowstone with a block puts it inside, but only a
+     * full cube: a button (or lever, torch, slab...) must be refused.
+     */
+    @GameTest(template = EMPTY)
+    public static void hollowstoneTakesOnlyFullBlocks(GameTestHelper helper) {
+        BlockPos refuses = new BlockPos(1, 1, 1);
+        BlockPos takes = new BlockPos(3, 1, 1);
+        helper.setBlock(refuses, ModBlocks.HOLLOW_STONE.get());
+        helper.setBlock(takes, ModBlocks.HOLLOW_STONE.get());
+        Player player = helper.makeMockPlayer();
+
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Blocks.STONE_BUTTON));
+        helper.useBlock(refuses, player);
+        player.setItemInHand(InteractionHand.MAIN_HAND, new ItemStack(Blocks.GLOWSTONE));
+        helper.useBlock(takes, player);
+
+        helper.runAfterDelay(2, () -> {
+            if (helper.getBlockState(refuses).getValue(HollowstoneBlock.FILLED)) {
+                helper.fail("Hollowstone took a stone button", refuses);
+                return;
+            }
+            if (!helper.getBlockState(takes).getValue(HollowstoneBlock.FILLED)) {
+                helper.fail("Hollowstone refused glowstone", takes);
                 return;
             }
             helper.succeed();

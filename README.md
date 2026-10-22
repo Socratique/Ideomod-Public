@@ -166,7 +166,7 @@ Hollowstone forms where Oddstone meets lava. Any lava *source* block touching Od
 
 ![Hollowstone](docs/media/hollowstone.gif)
 
-- Right-click an empty Hollowstone with a block to put that block inside it. This is for looks only. Blocks with inventories or other stored data cannot go in.
+- Right-click an empty Hollowstone with a full block to put that block inside it. This is for looks only. Blocks with inventories or other stored data cannot go in.
 - Mined normally it drops 5 to 7 Hollowstone Shards (Fortune applies). Nine shards craft back into one Hollowstone. Silk Touch drops the block itself.
 - When a filled Hollowstone is mined without Silk Touch, the block inside is left standing in its place.
 
@@ -287,7 +287,7 @@ A Track pushes Trolleys. When a Track's signal turns on, every Trolley touching 
 
 - One pulse moves a Trolley one block.
 - The Trolley moves as a pushed group, so it carries what is stuck to it: other Trolleys, Machine Frames, and anything those hold.
-- Tracks pass their signal along to neighbouring Tracks, losing 1 strength per Track. They do not power anything else.
+- Tracks pass their signal along to neighbouring Tracks, losing 1 strength per Track. They do not power anything else. A grey indicator in each Track shows its signal, so a pulse can be seen fading along the line.
 - The Trolley itself does nothing. It is the thing that gets moved.
 
 #### Grabbers
@@ -347,7 +347,7 @@ How activation works:
 
 So a row of frames is a rigid beam when active, and a row of loose blocks when not, and a lever decides which.
 
-Frames can be waterlogged.
+Frames can be waterlogged. Like glass, they do not carry redstone.
 
 ### Framed Blocks
 

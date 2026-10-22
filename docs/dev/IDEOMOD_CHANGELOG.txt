@@ -1,5 +1,48 @@
 # Ideomod Changelog
 
+## [2026-10-22c] Hollowstone takes full blocks only; frames carry no redstone; Track indicator
+
+Found while testing in the Ideomod test world.
+
+### Hollowstone: full blocks only
+
+Right-clicking empty Hollowstone with a button (or lever, torch, slab, any
+non-full block) put it inside, where it floated in the middle. `HollowstoneBlock.use`
+now also requires the block's collision shape to be a full cube.
+GameTest: `hollowstoneTakesOnlyFullBlocks` (button refused, glowstone taken).
+
+### Iron and Copper Frames don't carry redstone
+
+Frames are see-through like glass but used the default "redstone conductor"
+rule, so a powered frame powered what was behind it (and a Pulser touching a
+frame could fire a piston on the far side). Both frames now set
+`isRedstoneConductor` to false. Framed Blocks are unchanged: they already take
+this from their inner block. The Machine Frame (a solid machine block) still
+conducts. GameTest: `framesDoNotCarryRedstone` (a repeater into each frame must
+not light the lamp behind; control lane with stone must).
+
+### Machine Track: grey indicator
+
+The Track now has the same two-layer model as the redstone machines: a 4x4
+window in the middle of `machine_track.png` over the shared `machine_indicator`
+texture, tinted GREY by the Track's POWER (dark 0x303030 at 0 to 0xE0E0E0 at 15,
+`ModColorHandlers.TRACK_GREYS`). Grey, not red, because Track power is the
+Track's own signal and invisible to vanilla redstone. Since Track power drops by
+1 per Track, a pulse shows fading along the line.
+
+Files modified:
+- `src/main/java/com/ideomancer/ideomod/block/HollowstoneBlock.java`
+- `src/main/java/com/ideomancer/ideomod/registry/ModBlocks.java` (iron_frame, copper_frame)
+- `src/main/java/com/ideomancer/ideomod/client/ModColorHandlers.java` (Track block + item tint)
+- `src/main/resources/assets/ideomod/models/block/machine_track.json`
+- `src/main/resources/assets/ideomod/textures/block/machine_track.png` (centre window)
+- `src/main/java/com/ideomancer/ideomod/gametest/IdeomodGameTests.java` (2 tests)
+- `tools/renders/blocks.py` (Track drawn with its indicator)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-10-22b] Known Issues: GameTests, Conductor/Dust Fix, Pulse Jump Fix
 
 Worked through the Known Issues list (Beta Release ToDo, 2026-04-07) with

@@ -6,6 +6,7 @@ import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
 import com.ideomancer.ideomod.block.machine.MachineRepeaterBlock;
 import com.ideomancer.ideomod.block.machine.MachineEngineBlock;
+import com.ideomancer.ideomod.block.machine.MachineTrackBlock;
 import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
@@ -67,6 +68,16 @@ public class ModColorHandlers {
      * off, bright red gradations when fully powered.
      */
     private static final int[] POWER_COLORS = new int[16];
+
+    /** Machine Track indicator: grey ramp, 0x303030 at power 0 to 0xE0E0E0 at 15. */
+    private static final int[] TRACK_GREYS = new int[16];
+
+    static {
+        for (int power = 0; power <= 15; power++) {
+            int v = 0x30 + power * (0xE0 - 0x30) / 15;
+            TRACK_GREYS[power] = (v << 16) | (v << 8) | v;
+        }
+    }
 
     static {
         for (int power = 0; power <= 15; power++) {
@@ -181,6 +192,17 @@ public class ModColorHandlers {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_TRANSMITTER.get());
 
+        // Machine Track: tintIndex 1 on inner underlay cuboid, GREY by POWER
+        // (dark at 0, near-white at 15). Grey, not red: Track power is the
+        // Track's own signal, invisible to vanilla redstone, and fades by 1 per
+        // Track, so a pulse shows moving along a line.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                return TRACK_GREYS[state.getValue(MachineTrackBlock.POWER)];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_TRACK.get());
+
         // Machine Fluid Pipe: tintIndex 0 on inner cuboid faces.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 0 && state.getValue(MachineFluidPipeBlock.FLUID_TYPE) == FluidType.WATER) {
@@ -263,5 +285,13 @@ public class ModColorHandlers {
         event.register((stack, tintIndex) -> {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_FLUID_PIPE.get().asItem());
+
+        // Machine Track item: show unpowered (dark grey)
+        event.register((stack, tintIndex) -> {
+            if (tintIndex == 1) {
+                return TRACK_GREYS[0];
+            }
+            return 0xFFFFFF;
+        }, ModItems.MACHINE_TRACK.get());
     }
 }

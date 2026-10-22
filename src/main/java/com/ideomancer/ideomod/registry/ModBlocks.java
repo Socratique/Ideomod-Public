@@ -450,6 +450,8 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .noOcclusion()
+                    // See-through like glass, so no redstone through it (2026-10-22)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> COPPER_FRAME = BLOCKS.register("copper_frame",
@@ -459,6 +461,8 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.COPPER)
                     .noOcclusion()
+                    // See-through like glass, so no redstone through it (2026-10-22)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     // ========================================================================

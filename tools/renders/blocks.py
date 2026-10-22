@@ -34,6 +34,12 @@ def directional(front, back, side, facing):
     return [(orient(faces, facing), False, C)]
 
 
+def track_grey(power):
+    """Machine Track indicator tint (ModColorHandlers.TRACK_GREYS): 0x30 at power 0 to 0xE0 at 15."""
+    v = 0x30 + power * (0xE0 - 0x30) // 15
+    return (v, v, v)
+
+
 def indicator(outer, power):
     return layered(outer, "machine_indicator", tint=power_color(power))
 
@@ -237,7 +243,7 @@ MODELS = {
     "odd_slime": odd_slime, "repulser": repulser, "attractor": attractor, "drill": drill,
     "frame": frame, "framed": framed, "hollowstone": hollowstone, "portal": portal,
     "machine_frame": lambda p: cube("machine_block"),
-    "track": lambda p: cube("machine_track"),
+    "track": lambda p: layered("machine_track", "machine_indicator", tint=track_grey(p.get("power", 0))),
     "trolley": lambda p: cube("machine_trolley"),
     "brace": lambda p: cube("machine_extender"),
     "conductor": lambda p: indicator("machine_conductor", p.get("power", 0)),

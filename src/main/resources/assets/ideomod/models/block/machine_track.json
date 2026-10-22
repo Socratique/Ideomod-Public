@@ -1,6 +1,37 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "minecraft:block/block",
+  "render_type": "minecraft:cutout",
   "textures": {
-    "all": "ideomod:block/machine_track"
-  }
+    "indicator": "ideomod:block/machine_indicator",
+    "track": "ideomod:block/machine_track",
+    "particle": "ideomod:block/machine_track"
+  },
+  "elements": [
+    {
+      "comment": "Inner underlay cuboid - shared indicator, tinted grey by POWER (tintIndex 1) so a pulse shows moving along a line of Tracks",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "north": { "texture": "#indicator", "tintindex": 1 },
+        "south": { "texture": "#indicator", "tintindex": 1 },
+        "east":  { "texture": "#indicator", "tintindex": 1 },
+        "west":  { "texture": "#indicator", "tintindex": 1 },
+        "up":    { "texture": "#indicator", "tintindex": 1 },
+        "down":  { "texture": "#indicator", "tintindex": 1 }
+      }
+    },
+    {
+      "comment": "Outer shell - machine_track texture with a transparent 4x4 window in the middle of each face",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#track", "cullface": "north" },
+        "south": { "texture": "#track", "cullface": "south" },
+        "east":  { "texture": "#track", "cullface": "east" },
+        "west":  { "texture": "#track", "cullface": "west" },
+        "up":    { "texture": "#track", "cullface": "up" },
+        "down":  { "texture": "#track", "cullface": "down" }
+      }
+    }
+  ]
 }

@@ -87,6 +87,12 @@ public class HollowstoneBlock extends Block implements EntityBlock {
             return InteractionResult.PASS;
         }
 
+        // Full cube blocks only. FIX 2026-10-22: buttons, levers, torches, slabs
+        // and the like could be put inside, where they float in the middle.
+        if (!innerBlock.defaultBlockState().isCollisionShapeFullBlock(level, pos)) {
+            return InteractionResult.PASS;
+        }
+
         if (!level.isClientSide()) {
             // Store inner block in block entity
             BlockEntity be = level.getBlockEntity(pos);
