@@ -97,6 +97,12 @@ minecraft {
         client {
             // Comma-separated list of namespaces to load gametests from. Empty = all namespaces.
             property 'forge.enabledGameTestNamespaces', mod_id
+
+            // Open a singleplayer world straight away (Minecraft's quick play):
+            //   ./gradlew runClient -PquickPlay="World Folder Name"   (a folder in run/saves)
+            if (project.hasProperty('quickPlay')) {
+                args '--quickPlaySingleplayer', project.property('quickPlay')
+            }
         }
 
         server {
