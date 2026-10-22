@@ -35,7 +35,7 @@ def directional(front, back, side, facing):
 
 
 def indicator(outer, power):
-    return layered(outer, "machine_repeater_indicator", tint=power_color(power))
+    return layered(outer, "machine_indicator", tint=power_color(power))
 
 
 # ---------------------------------------------------------------- vanilla --
@@ -240,8 +240,7 @@ MODELS = {
     "track": lambda p: cube("machine_track"),
     "trolley": lambda p: cube("machine_trolley"),
     "brace": lambda p: cube("machine_extender"),
-    "conductor": lambda p: [(box(*FULL, "machine_conductor"), False, C),
-                            (box(*FULL, "machine_conductor_indicator", tint=power_color(p.get("power", 0))), False, C)],
+    "conductor": lambda p: indicator("machine_conductor", p.get("power", 0)),
     "repeater": lambda p: indicator("machine_repeater_%d" % p.get("delay", 1), 15 if p.get("on") else 0),
     "toggle": toggle,
     "transformer": lambda p: indicator("machine_transformer", p.get("power", 0)),

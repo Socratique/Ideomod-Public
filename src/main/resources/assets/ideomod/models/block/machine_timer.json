@@ -2,7 +2,7 @@
   "parent": "minecraft:block/block",
   "render_type": "cutout",
   "textures": {
-    "indicator": "ideomod:block/machine_repeater_indicator",
+    "indicator": "ideomod:block/machine_indicator",
     "timer": "ideomod:block/machine_timer",
     "particle": "ideomod:block/machine_timer"
   },

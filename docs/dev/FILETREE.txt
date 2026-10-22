@@ -315,7 +315,6 @@
 |     |        |  +-- iron_frame_active.png
 |     |        |  +-- machine_block.png
 |     |        |  +-- machine_conductor.png
-|     |        |  +-- machine_conductor_indicator.png
 |     |        |  +-- machine_engine.png
 |     |        |  +-- machine_engine_lit.png
 |     |        |  +-- machine_extender.png
@@ -323,6 +322,7 @@
 |     |        |  +-- machine_fluid_pipe_inner_empty.png
 |     |        |  +-- machine_grabber.png
 |     |        |  +-- machine_grabber_on.png
+|     |        |  +-- machine_indicator.png
 |     |        |  +-- machine_pipe.png
 |     |        |  +-- machine_pipe_filled.png
 |     |        |  +-- machine_piston.png
@@ -332,7 +332,6 @@
 |     |        |  +-- machine_repeater_2.png
 |     |        |  +-- machine_repeater_3.png
 |     |        |  +-- machine_repeater_4.png
-|     |        |  +-- machine_repeater_indicator.png
 |     |        |  +-- machine_sticky_piston.png
 |     |        |  +-- machine_timer.png
 |     |        |  +-- machine_toggle.png

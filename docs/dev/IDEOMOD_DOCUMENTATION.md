@@ -1247,7 +1247,7 @@ Stickiness: MachineType.CONDUCTOR -- sticks to other Conductors + Machine Frames
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
-**Visual**: Block model has two layers -- base texture (untinted, tintIndex 0) and indicator overlay (tintIndex 1, colored by POWER level via ModColorHandlers). Vanilla-style gradient: POWER 0 = dark maroon (~0x4C0000), 1-15 = progressively brighter red.
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer). Outer shell `machine_conductor.png` (untinted) has a transparent 4x4 window in the centre of each face; inner underlay cuboid (0.05 inset) uses the shared `machine_indicator.png` tinted via tintIndex 1 by POWER level (ModColorHandlers). Vanilla-style gradient: POWER 0 = dark maroon (~0x4C0000), 1-15 = progressively brighter red.
 
 **Known issues**: Dust sees Conductor strong power through solid blocks (issue #3 in Known Issues -- needs RedStoneWireBlock mixin).
 
@@ -1288,7 +1288,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 **Networking**: `RepeaterDelayPacket` via Forge SimpleChannel (`ModNetworking.java`). Client-to-server. Validates delay range (1-4), player distance (64 blocks), block type.
 
-**Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1 -- dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
+**Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_indicator.png` (solid white) tinted via tintIndex 1 -- dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
 
 Stickiness: MachineType.REPEATER -- sticks to other Repeaters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Tracks, Pipes, or other specialization types.
 
@@ -1333,7 +1333,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing lever in slot). Us
 
 **Tick Scheduling**: neighborChanged schedules tick via `level.scheduleTick()` at 2 game ticks (1 redstone tick). tick() is the ONLY place where POWERED state changes. Uses `setBlock(pos, state, 3)` (UPDATE_NEIGHBORS | UPDATE_CLIENTS). On POWERED state change (both ON and OFF transitions), also calls `updateNeighborsAt(pos.relative(dir))` for all 6 directions to propagate power through solid blocks. onRemove guarded by `!movedByPiston`.
 
-**Visual**: Dual-cuboid model (Repeater pattern). Inner underlay cuboid (0.05 inset) uses `machine_repeater_indicator.png` (shared white texture) tinted via tintIndex 1 -- dark maroon when unpowered, bright red when powered. Outer shell uses 2 model files: `machine_toggle_off` (all faces use machine_toggle texture) and `machine_toggle_on` (north face = machine_toggle, other 5 = machine_toggle_on). Blockstate rotates the on model via x/y to point input face at correct direction. 14 blockstate variants (7 input_face values x 2 powered states), 2 model files.
+**Visual**: Dual-cuboid model (Repeater pattern). Inner underlay cuboid (0.05 inset) uses `machine_indicator.png` (shared white texture) tinted via tintIndex 1 -- dark maroon when unpowered, bright red when powered. Outer shell uses 2 model files: `machine_toggle_off` (all faces use machine_toggle texture) and `machine_toggle_on` (north face = machine_toggle, other 5 = machine_toggle_on). Blockstate rotates the on model via x/y to point input face at correct direction. 14 blockstate variants (7 input_face values x 2 powered states), 2 model files.
 
 When powered, input face shows the "off" texture (machine_toggle) while other 5 faces show the "on" texture (machine_toggle_on), visually indicating which face is the input.
 
@@ -1374,7 +1374,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing comparator in slot
 
 **ContainerData**: MachineFrameMenu ContainerData size 6: DATA_REPEATER_DELAY=0, DATA_IS_REPEATER=1, DATA_TRANSFORMER_LEVEL=2, DATA_IS_TRANSFORMER=3, DATA_TIMER_DURATION=4, DATA_IS_TIMER=5.
 
-**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` (solid white) tinted via tintIndex 1. Level-aware tint: unpowered = POWER_COLORS[0] (dark maroon), powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Outer shell uses `machine_transformer.png` texture with transparent indicator windows. Single block model for all 30 blockstate variants (15 levels x 2 powered states) -- tint handles visual differentiation.
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` (solid white) tinted via tintIndex 1. Level-aware tint: unpowered = POWER_COLORS[0] (dark maroon), powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Outer shell uses `machine_transformer.png` texture with transparent indicator windows. Single block model for all 30 blockstate variants (15 levels x 2 powered states) -- tint handles visual differentiation.
 
 Stickiness: MachineType.TRANSFORMER -- sticks to other Transformers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Tracks, Pipes, or other specialization types.
 
@@ -1428,7 +1428,7 @@ While the timer is running, input signal changes are tracked for arming but don'
 
 **ContainerData**: MachineFrameMenu ContainerData size 6: DATA_TIMER_DURATION=4, DATA_IS_TIMER=5 (added to existing 0-3).
 
-**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses `machine_timer.png` texture (placeholder -- needs user art). Single block model for both powered variants.
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses `machine_timer.png` texture (placeholder -- needs user art). Single block model for both powered variants.
 
 Stickiness: MachineType.TIMER -- sticks to other Timers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Tracks, Pipes, or other specialization types.
 
@@ -1489,7 +1489,7 @@ Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits pe
 
 **ContainerData**: MachineFrameMenu ContainerData size 10: DATA_ENGINE_LIT_TIME=6, DATA_ENGINE_LIT_DURATION=7, DATA_ENGINE_INTERVAL=8, DATA_IS_ENGINE=9 (added to existing 0-5).
 
-**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer/Timer). Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when POWERED=false, bright red (POWER_COLORS[15]) when POWERED=true. Outer shell uses `machine_engine.png` / `machine_engine_lit.png` textures (placeholder -- needs user art). LIT blockstate drives texture variant swap.
+**Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer/Timer). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when POWERED=false, bright red (POWER_COLORS[15]) when POWERED=true. Outer shell uses `machine_engine.png` / `machine_engine_lit.png` textures (placeholder -- needs user art). LIT blockstate drives texture variant swap.
 
 Stickiness: MachineType.ENGINE -- sticks to other Engines + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Pipes, or other specialization types.
 
@@ -1571,7 +1571,7 @@ For cross-block swaps (e.g., conductor→transmitter), the old block's `onSpecIt
 
 **Removal**: onRemove turns off matching receivers (if source), notifies own neighbors, and notifies matching transmitters. Guarded by `!movedByPiston` and `!level.isClientSide()`.
 
-**Visual**: Dual-cuboid model. Inner underlay cuboid (0.05 inset) uses shared `machine_repeater_indicator.png` tinted via tintIndex 1. Level-aware tint: reads `transmitterSignalStrength` from MachineFrameBlockEntity (not from blockstate), returns `POWER_COLORS[strength]` where 0 = dark maroon and 15 = bright red. This provides a continuous visual gradient reflecting the actual signal level being transmitted/received. Client-side BE sync via `syncToClients()` after strength changes; `onDataPacket()` compares old/new strength and calls `requestModelDataUpdate()` to trigger chunk re-render for tint update. Outer shell uses `machine_transmitter.png` texture (placeholder).
+**Visual**: Dual-cuboid model. Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Level-aware tint: reads `transmitterSignalStrength` from MachineFrameBlockEntity (not from blockstate), returns `POWER_COLORS[strength]` where 0 = dark maroon and 15 = bright red. This provides a continuous visual gradient reflecting the actual signal level being transmitted/received. Client-side BE sync via `syncToClients()` after strength changes; `onDataPacket()` compares old/new strength and calls `requestModelDataUpdate()` to trigger chunk re-render for tint update. Outer shell uses `machine_transmitter.png` texture (placeholder).
 
 Stickiness: MachineType.TRANSMITTER -- sticks to other Transmitters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Engines, Pipes, Grabbers, or other specialization types.
 

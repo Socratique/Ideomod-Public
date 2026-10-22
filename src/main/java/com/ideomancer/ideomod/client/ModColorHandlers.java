@@ -24,7 +24,7 @@ import net.minecraftforge.fml.common.Mod;
 /**
  * Registers block and item color handlers for tintIndex-based coloring.
  *
- * Machine Conductor uses tintIndex 1 for its power indicator overlay.
+ * Machine Conductor uses tintIndex 1 for its inner underlay cuboid.
  * The color maps POWER 0-15 to a vanilla-style gradient: dark maroon at 0,
  * dim red at low power, bright red at 15. Matches vanilla RedStoneWireBlock's
  * color feel — unpowered components have a visible dark red rather than
@@ -93,7 +93,7 @@ public class ModColorHandlers {
     @SubscribeEvent
     public static void registerBlockColors(RegisterColorHandlersEvent.Block event) {
         // Machine Conductor: tintIndex 0 = no tint (base texture as-is)
-        //                    tintIndex 1 = power indicator overlay
+        //                    tintIndex 1 = inner underlay cuboid (power indicator)
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {
                 int power = state.getValue(MachineConductorBlock.POWER);

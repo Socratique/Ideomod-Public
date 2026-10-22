@@ -2,35 +2,35 @@
   "parent": "minecraft:block/block",
   "render_type": "minecraft:cutout",
   "textures": {
+    "indicator": "ideomod:block/machine_indicator",
     "base": "ideomod:block/machine_conductor",
-    "indicator": "ideomod:block/machine_conductor_indicator",
     "particle": "ideomod:block/machine_conductor"
   },
   "elements": [
     {
-      "comment": "Base block - no tintindex, renders texture as-is",
-      "from": [0, 0, 0],
-      "to": [16, 16, 16],
+      "comment": "Inner underlay cuboid — tinted indicator (tintIndex 1), colored by POWER level via color handler",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
       "faces": {
-        "down":  { "texture": "#base", "cullface": "down" },
-        "up":    { "texture": "#base", "cullface": "up" },
-        "north": { "texture": "#base", "cullface": "north" },
-        "south": { "texture": "#base", "cullface": "south" },
-        "west":  { "texture": "#base", "cullface": "west" },
-        "east":  { "texture": "#base", "cullface": "east" }
+        "north": { "texture": "#indicator", "tintindex": 1 },
+        "south": { "texture": "#indicator", "tintindex": 1 },
+        "east":  { "texture": "#indicator", "tintindex": 1 },
+        "west":  { "texture": "#indicator", "tintindex": 1 },
+        "up":    { "texture": "#indicator", "tintindex": 1 },
+        "down":  { "texture": "#indicator", "tintindex": 1 }
       }
     },
     {
-      "comment": "Indicator overlay - tintIndex 1 colored by POWER level via color handler. Slightly larger than base to sit on top and avoid z-fighting. Transparent pixels rendered invisible by cutout render type.",
-      "from": [-0.05, -0.05, -0.05],
-      "to": [16.05, 16.05, 16.05],
+      "comment": "Outer shell — machine_conductor texture with a transparent 4x4 indicator window",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
       "faces": {
-        "down":  { "texture": "#indicator", "cullface": "down",  "tintindex": 1 },
-        "up":    { "texture": "#indicator", "cullface": "up",    "tintindex": 1 },
-        "north": { "texture": "#indicator", "cullface": "north", "tintindex": 1 },
-        "south": { "texture": "#indicator", "cullface": "south", "tintindex": 1 },
-        "west":  { "texture": "#indicator", "cullface": "west",  "tintindex": 1 },
-        "east":  { "texture": "#indicator", "cullface": "east",  "tintindex": 1 }
+        "north": { "texture": "#base", "cullface": "north" },
+        "south": { "texture": "#base", "cullface": "south" },
+        "east":  { "texture": "#base", "cullface": "east" },
+        "west":  { "texture": "#base", "cullface": "west" },
+        "up":    { "texture": "#base", "cullface": "up" },
+        "down":  { "texture": "#base", "cullface": "down" }
       }
     }
   ]

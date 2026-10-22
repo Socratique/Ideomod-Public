@@ -3,7 +3,7 @@
   "render_type": "minecraft:cutout",
   "textures": {
     "outer": "ideomod:block/machine_repeater_3",
-    "inner": "ideomod:block/machine_repeater_indicator",
+    "inner": "ideomod:block/machine_indicator",
     "particle": "ideomod:block/machine_repeater_3"
   },
   "elements": [

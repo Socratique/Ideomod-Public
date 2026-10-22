@@ -1,5 +1,36 @@
 # Ideomod Changelog
 
+## [2026-10-22] Shared Machine Indicator Texture, Conductor Inner Indicator
+
+Two items from the Beta Release ToDo (2026-04-07).
+
+### One shared indicator texture
+
+The tinted inner indicator used by the Repeater, Toggle, Transformer, Timer,
+Pulser, Engine and Transmitter was named for the Repeater only
+(`machine_repeater_indicator.png`). Renamed to `machine_indicator.png`; every
+model that uses it now points at the new name. Texture unchanged.
+
+### Conductor uses the inner indicator
+
+The Conductor was the last machine on the old two-layer overlay: an opaque
+base texture plus a tinted overlay cube drawn slightly outside the block
+(`machine_conductor_indicator.png`, a white 4x4 square on transparent).
+It now uses the same dual-cuboid model as the other machines: the 4x4 centre
+of `machine_conductor.png` is transparent, and the inner underlay cuboid
+(shared `machine_indicator.png`, tintIndex 1) shows through it, tinted by
+POWER as before. The old overlay texture is removed. Colour handler logic
+unchanged (comments updated).
+
+Files modified:
+- `src/main/resources/assets/ideomod/models/block/machine_conductor.json`
+- `src/main/resources/assets/ideomod/models/block/machine_{engine,engine_lit,pulser,timer,repeater_1-4,toggle_off,toggle_on,transformer,transmitter,transmitter_on}.json`
+- `src/main/resources/assets/ideomod/textures/block/machine_conductor.png` (centre made transparent)
+- `src/main/resources/assets/ideomod/textures/block/machine_indicator.png` (renamed from machine_repeater_indicator.png)
+- `src/main/resources/assets/ideomod/textures/block/machine_conductor_indicator.png` (removed)
+- `src/main/java/com/ideomancer/ideomod/client/ModColorHandlers.java` (comments)
+- `tools/renders/blocks.py` (Conductor drawn like the other indicator machines)
+
 ## [2026-04-19] Frame Family Simplification, Audit Cleanup, Oddstone Silk Touch Fix
 
 ### Oddstone silk touch drop fix
