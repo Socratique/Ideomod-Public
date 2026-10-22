@@ -89,6 +89,23 @@ public class MachineConductorBlock extends AbstractMachineBlock {
      */
     private static final ThreadLocal<BlockPos> shouldSignal = ThreadLocal.withInitial(() -> null);
 
+    /**
+     * True while a vanilla redstone dust block is working out its own power
+     * (set by RedStoneWireBlockMixin around RedStoneWireBlock.calculateTargetStrength).
+     * Conductors hide their STRONG power during that scan, exactly as vanilla
+     * dust hides its own: a solid block a Conductor powers can still drive a
+     * lamp, piston or repeater, but dust on the far side of it stays dark.
+     *
+     * FIX 2026-10-22 (Known Issue #3): dust used to read a Conductor's strong
+     * power through a solid block, which dust never does from other dust.
+     */
+    private static final ThreadLocal<Boolean> dustScanning = ThreadLocal.withInitial(() -> false);
+
+    /** Called by RedStoneWireBlockMixin at the start and end of a dust power scan. */
+    public static void setDustScanning(boolean scanning) {
+        dustScanning.set(scanning);
+    }
+
     public MachineConductorBlock(Properties properties) {
         super(properties);
         this.registerDefaultState(this.stateDefinition.any().setValue(POWER, 0));
@@ -169,6 +186,7 @@ public class MachineConductorBlock extends AbstractMachineBlock {
     @Override
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) {
         if (shouldSignal.get() != null) return 0; // Suppress ALL instances during any Conductor scan (wire behavior)
+        if (dustScanning.get()) return 0; // Dust doesn't read wire power through blocks
 
         int power = state.getValue(POWER);
         if (power == 0) return 0;

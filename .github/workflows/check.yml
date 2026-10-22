@@ -1,4 +1,4 @@
-# Builds the jar and checks that it loads on a real Forge server.
+# Builds the jar, runs the in-world GameTests, and checks that the jar loads on a real Forge server.
 # Runs on every push and pull request; the built jar is kept as a download on the run's page.
 name: Build and check the jar
 
@@ -23,6 +23,9 @@ jobs:
 
       - name: Build
         run: ./gradlew build --console=plain
+
+      - name: Run the GameTests
+        run: ./gradlew runGameTestServer --console=plain
 
       - name: Cache the Forge test server
         uses: actions/cache@v4

@@ -11,6 +11,7 @@
     "PistonMovingBlockEntityMixin",
     "EntityMovementMixin",
     "LevelSignalMixin",
+    "RedStoneWireBlockMixin",
     "client.PistonBaseBlockClientMixin"
   ],
   "client": [

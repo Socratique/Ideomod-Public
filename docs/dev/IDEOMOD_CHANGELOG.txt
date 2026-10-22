@@ -1,5 +1,77 @@
 # Ideomod Changelog
 
+## [2026-10-22b] Known Issues: GameTests, Conductor/Dust Fix, Pulse Jump Fix
+
+Worked through the Known Issues list (Beta Release ToDo, 2026-04-07) with
+in-world GameTests, so each one is reproduced before it is fixed and stays
+checked afterwards.
+
+### GameTests
+
+New `gametest/IdeomodGameTests.java` (6 tests) and an empty 7x5x7 template
+(`data/ideomod/structures/empty.nbt`) that each test builds its own setup in.
+Run them with `./gradlew runGameTestServer`: a headless server places the
+blocks, ticks the world, prints "All N required tests passed" and exits 0, or
+names each failure and exits 1. CI now runs them on every push. They only run
+when the gametest namespace is enabled, never in a normal game.
+Set `-Dideomod.gametest.trace=true` on the run to log the pulse ring tick by tick.
+
+### Known Issue #3 fixed: dust read a Conductor's power through a solid block
+
+[redstone block] [Conductor] [stone] [dust] left the dust at power 15. Vanilla
+dust never reads other dust through a block: while dust works out its power it
+switches every dust's strong power off (RedStoneWireBlock.shouldSignal). The
+Conductor is a different class, so that switch never reached it.
+
+Fix: `RedStoneWireBlockMixin` wraps `calculateTargetStrength()` and sets
+`MachineConductorBlock.setDustScanning(true/false)`; the Conductor's
+`getDirectSignal()` returns 0 inside that window. Unchanged: a Conductor still
+strongly powers the block it outputs into (lamps, pistons, repeaters work through
+it), and dust touching a Conductor is still powered.
+
+### Known Issue #4: verified, not a bug
+
+`FramedBlock.getSignal/getDirectSignal` delegate to the inner block regardless of
+ACTIVE, so frame activation can't change the output. The test places a Framed
+Redstone Block through the real item path: the lamp beside it lights at once and
+stays lit after a Machine Brace activates the frame.
+
+### Known Issue #6 fixed: pulse jump when a piston moves a Pulser ring
+
+A ring of 8 Pulsers with one pulse circulating, shoved sideways by a piston: at
+three of four timings the pulse carried on cleanly, but with the piston at tick 8
+five Pulsers fired in the same tick. Cause: after a move, `onMovementRestored`
+scheduled a tick for EVERY machine block, idle ones included. `tick()` turns an
+unpowered block on whenever its input is lit (the 2026-03-31e recovery scan), so
+the idle Pulsers woke together and each one lit the next within the tick.
+
+Fix: `saveMovementData()` records whether the block had a scheduled tick waiting
+(`MovementPendingTick`); `onMovementRestored()` re-schedules only blocks that are
+POWERED (mid-countdown) or had a tick pending. Idle blocks hear about lit
+neighbours through `neighborChanged()` edge detection like any other block. The
+2026-03-31d/e cases (a receiver waiting to turn on, a sender mid-pulse) are both
+pending-tick or powered, so they still resume. The test moves the ring at ticks
+8, 9, 10 and 11 (every phase of the 2-tick pulse); all pass.
+
+### Known Issue #1: already fixed
+
+The config reload is wired: `/ideomod reload` (op level 2) calls
+`IdeomodConfig.reloadConfig()`. Marked fixed in the table.
+
+Files modified:
+- `src/main/java/com/ideomancer/ideomod/block/machine/MachineConductorBlock.java`
+- `src/main/java/com/ideomancer/ideomod/block/machine/MachineFrameBlockEntity.java`
+- `src/main/java/com/ideomancer/ideomod/mixin/RedStoneWireBlockMixin.java` (new)
+- `src/main/java/com/ideomancer/ideomod/gametest/IdeomodGameTests.java` (new)
+- `src/main/resources/data/ideomod/structures/empty.nbt` (new)
+- `src/main/resources/ideomod.mixins.json`
+- `.github/workflows/check.yml` (runs the GameTests)
+- docs: IDEOMOD_DOCUMENTATION.md, CODEBASE_REFERENCE.md (known issues)
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-10-22] Shared Machine Indicator Texture, Conductor Inner Indicator
 
 Two items from the Beta Release ToDo (2026-04-07).

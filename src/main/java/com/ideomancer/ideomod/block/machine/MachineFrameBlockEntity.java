@@ -73,6 +73,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
     private static final String TAG_TRANSMITTER_SIGNAL = "TransmitterSignal";
     private static final String TAG_MOVEMENT_POWERED = "MovementPowered";
+    private static final String TAG_MOVEMENT_PENDING_TICK = "MovementPendingTick";
 
     /**
      * The face from which this block receives redstone signal.
@@ -165,6 +166,15 @@ public class MachineFrameBlockEntity extends BlockEntity
      * default blockstate to POWERED=false.
      */
     private boolean movementPowered = false;
+
+    /**
+     * Transient field used only during piston movement: true when this block
+     * had a scheduled tick waiting at the moment it was moved (e.g. a Pulser
+     * that has seen a rising edge and is about to turn on). Scheduled ticks
+     * are lost in transit, so onMovementRestored() re-schedules exactly these
+     * (plus powered blocks mid-countdown) and leaves idle blocks alone.
+     */
+    private boolean movementPendingTick = false;
 
     /**
      * Transient flag: true for 1 tick after this block is placed by piston
@@ -632,6 +642,10 @@ public class MachineFrameBlockEntity extends BlockEntity
             if (currentState.getBlock() instanceof AbstractMachineBlock) {
                 tag.putBoolean(TAG_MOVEMENT_POWERED,
                         ((AbstractMachineBlock) currentState.getBlock()).getRedstoneOutput(currentState) > 0);
+                if (this.level instanceof ServerLevel serverLevel
+                        && serverLevel.getBlockTicks().hasScheduledTick(this.getBlockPos(), currentState.getBlock())) {
+                    tag.putBoolean(TAG_MOVEMENT_PENDING_TICK, true);
+                }
             }
         }
         return tag;
@@ -678,6 +692,7 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.transmitterSignalStrength = 0;
         }
         this.movementPowered = tag.getBoolean(TAG_MOVEMENT_POWERED);
+        this.movementPendingTick = tag.getBoolean(TAG_MOVEMENT_PENDING_TICK);
         this.setChanged();
     }
 
@@ -686,7 +701,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         // Scheduled ticks are lost during piston movement. If the block at
         // this position is a redstone machine that uses tick-based processing
         // (Repeater, Transformer, Toggle, Timer, Pulser), schedule a tick so
-        // it can resume its countdown or re-evaluate its power state.
+        // it can resume its countdown or carry out the tick it was waiting for.
         if (level instanceof ServerLevel serverLevel) {
             BlockState state = level.getBlockState(pos);
             Block block = state.getBlock();
@@ -733,7 +748,27 @@ public class MachineFrameBlockEntity extends BlockEntity
                         }
                     }
                 }
+                boolean hadPendingTick = this.movementPendingTick;
                 this.movementPowered = false; // consumed
+                this.movementPendingTick = false;
+
+                // FIX 2026-10-22 (Known Issue #6, pulse jump): only blocks that
+                // were mid-countdown (POWERED) or had a tick waiting when they
+                // were moved get one now. Idle blocks used to get a tick too;
+                // tick() turns an unpowered block on whenever its input is lit,
+                // so idle Pulsers in a moving ring all fired in the same tick,
+                // each one lighting the next. Idle blocks hear about lit
+                // neighbours through the normal neighborChanged() edge
+                // detection, like any other block.
+                boolean currentlyPowered = false;
+                net.minecraft.world.level.block.state.properties.Property<?> tickProp =
+                        state.getBlock().getStateDefinition().getProperty("powered");
+                if (tickProp instanceof net.minecraft.world.level.block.state.properties.BooleanProperty tbp) {
+                    currentlyPowered = state.getValue(tbp);
+                }
+                if (!currentlyPowered && !hadPendingTick) {
+                    skipTick = true;
+                }
 
                 if (!skipTick && !serverLevel.getBlockTicks().willTickThisTick(pos, block)) {
                     // FIX 2026-03-31d: Stagger tick delays to preserve pulse cascades.
@@ -742,12 +777,6 @@ public class MachineFrameBlockEntity extends BlockEntity
                     // before the sender's countdown expires.  Without this stagger,
                     // both fire at delay 1 and tick ordering is non-deterministic —
                     // the sender can expire before the receiver sees the signal.
-                    boolean currentlyPowered = false;
-                    net.minecraft.world.level.block.state.properties.Property<?> tickProp =
-                            state.getBlock().getStateDefinition().getProperty("powered");
-                    if (tickProp instanceof net.minecraft.world.level.block.state.properties.BooleanProperty tbp) {
-                        currentlyPowered = state.getValue(tbp);
-                    }
                     serverLevel.scheduleTick(pos, block, currentlyPowered ? 2 : 1);
                 }
             }
