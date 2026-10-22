@@ -30,6 +30,7 @@
 |  |           |  |  +-- MachineFrameBlock.java
 |  |           |  |  +-- MachineFrameBlockEntity.java
 |  |           |  |  +-- MachineFrameMenu.java
+|  |           |  |  +-- MachineGrabberBlock.java
 |  |           |  |  +-- MachinePipeBlock.java
 |  |           |  |  +-- MachinePipeBlockEntity.java
 |  |           |  |  +-- MachinePistonBlock.java
@@ -43,6 +44,7 @@
 |  |           |  |  +-- MachineToggleBlock.java
 |  |           |  |  +-- MachineTrackBlock.java
 |  |           |  |  +-- MachineTransformerBlock.java
+|  |           |  |  +-- MachineTransmitterBlock.java
 |  |           |  |  +-- MachineTrolleyBlock.java
 |  |           |  |  +-- MachineType.java
 |  |           |  |  \\-- PositionBoundContainer.java
@@ -88,23 +90,29 @@
 |  |           |  |  +-- HollowstoneRenderer.java
 |  |           |  |  +-- MachinePistonArmRenderer.java
 |  |           |  |  \\-- MovingFrameData.java
+|  |           |  +-- ClientSetup.java
 |  |           |  +-- FramedBlockDebugOverlay.java
 |  |           |  \\-- ModColorHandlers.java
 |  |           +-- config
-|  |           |  +-- IdeomodConfig.java
-|  |           |  \\-- OddstoneConfig.java
+|  |           |  \\-- IdeomodConfig.java
 |  |           +-- effect
 |  |           |  \\-- JudgementEffect.java
-|  |           +-- entity
+|  |           +-- gametest
+|  |           |  \\-- IdeomodGameTests.java
+|  |           +-- item
+|  |           |  +-- RedstoneRodItem.java
+|  |           |  \\-- RedstoneRodSignalManager.java
 |  |           +-- mixin
 |  |           |  +-- client
 |  |           |  |  +-- PistonBaseBlockClientMixin.java
 |  |           |  |  \\-- PistonMovingBlockEntityRendererMixin.java
 |  |           |  +-- AbstractFurnaceBlockEntityMixin.java
 |  |           |  +-- EntityMovementMixin.java
+|  |           |  +-- LevelSignalMixin.java
 |  |           |  +-- PistonBaseBlockMixin.java
 |  |           |  +-- PistonMovingBlockEntityMixin.java
-|  |           |  \\-- PistonStructureResolverMixin.java
+|  |           |  +-- PistonStructureResolverMixin.java
+|  |           |  \\-- RedStoneWireBlockMixin.java
 |  |           +-- multiblock
 |  |           |  +-- definitions
 |  |           |  |  \\-- FurnaceArrayDefinition.java
@@ -150,7 +158,6 @@
 |     |     |  +-- copper_framed_block.json
 |     |     |  +-- drill.json
 |     |     |  +-- hollow_stone.json
-|     |     |  +-- ideoblock.json
 |     |     |  +-- iron_frame.json
 |     |     |  +-- iron_framed_block.json
 |     |     |  +-- machine_block.json
@@ -158,16 +165,19 @@
 |     |     |  +-- machine_conductor.json
 |     |     |  +-- machine_engine.json
 |     |     |  +-- machine_fluid_pipe.json
+|     |     |  +-- machine_honey_grabber.json
 |     |     |  +-- machine_pipe.json
 |     |     |  +-- machine_piston.json
 |     |     |  +-- machine_piston_head.json
 |     |     |  +-- machine_pulser.json
 |     |     |  +-- machine_repeater.json
+|     |     |  +-- machine_slime_grabber.json
 |     |     |  +-- machine_sticky_piston.json
 |     |     |  +-- machine_timer.json
 |     |     |  +-- machine_toggle.json
 |     |     |  +-- machine_track.json
 |     |     |  +-- machine_transformer.json
+|     |     |  +-- machine_transmitter.json
 |     |     |  +-- machine_trolley.json
 |     |     |  +-- odd_slime.json
 |     |     |  +-- oddstone.json
@@ -203,7 +213,6 @@
 |     |     |  |  +-- drill_on.json
 |     |     |  |  +-- hollow_stone.json
 |     |     |  |  +-- hollow_stone_filled.json
-|     |     |  |  +-- ideoblock.json
 |     |     |  |  +-- iron_frame.json
 |     |     |  |  +-- iron_frame_active.json
 |     |     |  |  +-- iron_framed_block.json
@@ -216,6 +225,8 @@
 |     |     |  |  +-- machine_fluid_pipe_empty.json
 |     |     |  |  +-- machine_fluid_pipe_lava.json
 |     |     |  |  +-- machine_fluid_pipe_water.json
+|     |     |  |  +-- machine_honey_grabber.json
+|     |     |  |  +-- machine_honey_grabber_on.json
 |     |     |  |  +-- machine_pipe.json
 |     |     |  |  +-- machine_pipe_filled.json
 |     |     |  |  +-- machine_piston.json
@@ -226,12 +237,16 @@
 |     |     |  |  +-- machine_repeater_2.json
 |     |     |  |  +-- machine_repeater_3.json
 |     |     |  |  +-- machine_repeater_4.json
+|     |     |  |  +-- machine_slime_grabber.json
+|     |     |  |  +-- machine_slime_grabber_on.json
 |     |     |  |  +-- machine_sticky_piston.json
 |     |     |  |  +-- machine_timer.json
 |     |     |  |  +-- machine_toggle_off.json
 |     |     |  |  +-- machine_toggle_on.json
 |     |     |  |  +-- machine_track.json
 |     |     |  |  +-- machine_transformer.json
+|     |     |  |  +-- machine_transmitter.json
+|     |     |  |  +-- machine_transmitter_on.json
 |     |     |  |  +-- machine_trolley.json
 |     |     |  |  +-- odd_slime.json
 |     |     |  |  +-- oddstone.json
@@ -268,7 +283,6 @@
 |     |     |     +-- drill.json
 |     |     |     +-- hollow_stone.json
 |     |     |     +-- hollow_stone_shard.json
-|     |     |     +-- ideoblock.json
 |     |     |     +-- iron_frame.json
 |     |     |     +-- iron_framed_block.json
 |     |     |     +-- machine_block.json
@@ -276,15 +290,18 @@
 |     |     |     +-- machine_conductor.json
 |     |     |     +-- machine_engine.json
 |     |     |     +-- machine_fluid_pipe.json
+|     |     |     +-- machine_honey_grabber.json
 |     |     |     +-- machine_pipe.json
 |     |     |     +-- machine_piston.json
 |     |     |     +-- machine_pulser.json
 |     |     |     +-- machine_repeater.json
+|     |     |     +-- machine_slime_grabber.json
 |     |     |     +-- machine_sticky_piston.json
 |     |     |     +-- machine_timer.json
 |     |     |     +-- machine_toggle.json
 |     |     |     +-- machine_track.json
 |     |     |     +-- machine_transformer.json
+|     |     |     +-- machine_transmitter.json
 |     |     |     +-- machine_trolley.json
 |     |     |     +-- odd_slime.json
 |     |     |     +-- oddstone.json
@@ -297,6 +314,7 @@
 |     |     |     +-- oddstone_slab.json
 |     |     |     +-- oddstone_stairs.json
 |     |     |     +-- oddstone_wall.json
+|     |     |     +-- redstone_rod.json
 |     |     |     \\-- structure_debug_stick.json
 |     |     \\-- textures
 |     |        +-- block
@@ -310,7 +328,6 @@
 |     |        |  +-- drill_top.png
 |     |        |  +-- hollow_stone.png
 |     |        |  +-- hollow_stone_filled.png
-|     |        |  +-- ideoblock.png
 |     |        |  +-- iron_frame.png
 |     |        |  +-- iron_frame_active.png
 |     |        |  +-- machine_block.png
@@ -338,24 +355,26 @@
 |     |        |  +-- machine_toggle_on.png
 |     |        |  +-- machine_track.png
 |     |        |  +-- machine_transformer.png
+|     |        |  +-- machine_transmitter.png
 |     |        |  +-- machine_trolley.png
 |     |        |  +-- odd_slime_back.png
 |     |        |  +-- odd_slime_front.png
 |     |        |  +-- odd_slime_side.png
 |     |        |  +-- oddstone.png
+|     |        |  +-- oddstone1.png
 |     |        |  +-- oddstone_attractor_back.png
 |     |        |  +-- oddstone_attractor_front.png
 |     |        |  +-- oddstone_attractor_side.png
 |     |        |  +-- oddstone_bricks.png
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
-|     |        |  +-- oddstone_repulser_side.png
-|     |        |  \\-- oddstone1.png
+|     |        |  \\-- oddstone_repulser_side.png
 |     |        +-- gui
 |     |        |  +-- ideomod_gui.png
 |     |        |  \\-- ideomod_numbered_buttons.png
 |     |        \\-- item
-|     |           \\-- hollow_stone_shard.png
+|     |           +-- hollow_stone_shard.png
+|     |           \\-- redstone_rod.png
 |     +-- data
 |     |  +-- ideomod
 |     |  |  +-- forge
@@ -373,7 +392,6 @@
 |     |  |  |     +-- copper_framed_block.json
 |     |  |  |     +-- drill.json
 |     |  |  |     +-- hollow_stone.json
-|     |  |  |     +-- ideoblock.json
 |     |  |  |     +-- iron_frame.json
 |     |  |  |     +-- iron_framed_block.json
 |     |  |  |     +-- machine_block.json
@@ -381,14 +399,17 @@
 |     |  |  |     +-- machine_conductor.json
 |     |  |  |     +-- machine_engine.json
 |     |  |  |     +-- machine_fluid_pipe.json
+|     |  |  |     +-- machine_honey_grabber.json
 |     |  |  |     +-- machine_pipe.json
 |     |  |  |     +-- machine_piston.json
 |     |  |  |     +-- machine_pulser.json
 |     |  |  |     +-- machine_repeater.json
+|     |  |  |     +-- machine_slime_grabber.json
 |     |  |  |     +-- machine_sticky_piston.json
 |     |  |  |     +-- machine_toggle.json
 |     |  |  |     +-- machine_track.json
 |     |  |  |     +-- machine_transformer.json
+|     |  |  |     +-- machine_transmitter.json
 |     |  |  |     +-- machine_trolley.json
 |     |  |  |     +-- odd_slime.json
 |     |  |  |     +-- oddstone.json
@@ -412,7 +433,6 @@
 |     |  |  |  +-- drill.json
 |     |  |  |  +-- framed_block.json
 |     |  |  |  +-- hollow_stone.json
-|     |  |  |  +-- ideoblock.json
 |     |  |  |  +-- iron_frame.json
 |     |  |  |  +-- machine_block.json
 |     |  |  |  +-- odd_slime.json
@@ -433,7 +453,10 @@
 |     |  |  |  +-- oddstone_stairs.json
 |     |  |  |  +-- oddstone_stairs_from_stonecutting.json
 |     |  |  |  +-- oddstone_wall.json
-|     |  |  |  \\-- oddstone_wall_from_stonecutting.json
+|     |  |  |  +-- oddstone_wall_from_stonecutting.json
+|     |  |  |  \\-- redstone_rod.json
+|     |  |  +-- structures
+|     |  |  |  \\-- empty.nbt
 |     |  |  +-- tags
 |     |  |  |  +-- blocks
 |     |  |  |  |  +-- frameable_blocks.json
@@ -441,7 +464,8 @@
 |     |  |  |  |  +-- immovable_when_framed.json
 |     |  |  |  |  \\-- portal_corner_blocks.json
 |     |  |  |  \\-- items
-|     |  |  |     \\-- pulser_items.json
+|     |  |  |     +-- pulser_items.json
+|     |  |  |     \\-- transmitter_items.json
 |     |  |  \\-- worldgen
 |     |  |     +-- configured_feature
 |     |  |     |  +-- hollowstone_lava_formation.json

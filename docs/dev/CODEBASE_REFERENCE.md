@@ -18,6 +18,8 @@
 
 Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
+**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, and Hollowstone's full-block rule. `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
+
 ---
 
 ## PACKAGE STRUCTURE
@@ -231,6 +233,8 @@ com.ideomancer.ideomod
   |                                        getInjectedSignal() returns 15 if active pulse.
   |                                        Server tick handler for pulse expiry.
   |                                        @Mod.EventBusSubscriber for auto-registration.
+  |-- gametest/
+  |     \-- IdeomodGameTests.java        In-world regression tests (runGameTestServer), see PROJECT SETUP.
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java  Enforces stickiness rules + ranged redirect + immovable inner.
   |     |                                      Call-pair toggle for backward walk grab immunity.
@@ -243,6 +247,7 @@ com.ideomancer.ideomod
   |     |                                      Generic ideomod$getFramedFactor() helper.
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (50%)
   |     |-- LevelSignalMixin.java            Redstone Rod phantom signal injection.
+  |     |-- RedStoneWireBlockMixin.java      Hides Conductor strong power while dust computes its power.
   |     |                                      @Mixin(BlockBehaviour.BlockStateBase.class).
   |     |                                      @Inject on getSignal() + getDirectSignal() at
   |     |                                      HEAD. Returns 15 from RedstoneRodSignalManager
@@ -346,6 +351,8 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 **AbstractRangedPistonBlock**: Shared base for Repulser/Attractor. Handles FACING/POWERED, rising edge, block events, rotation. Subclasses implement `fire()` only (~15 lines each).
 
+**Scheduled ticks across a move** (`MachineFrameBlockEntity`): `saveMovementData()` records `MovementPowered` (output > 0) and `MovementPendingTick` (a scheduled tick was waiting); `onMovementRestored()` restores POWERED and re-schedules a tick only for blocks that were powered (delay 2, mid-countdown) or had a tick pending (delay 1). Idle blocks get none and react through normal `neighborChanged()` edge detection. FIX 2026-10-22: every machine block used to get a tick, and since an unpowered Pulser's `tick()` fires whenever its input is lit, idle Pulsers in a moved chain fired in a same-tick cascade (Known Issue #6, the "pulse jump").
+
 **RangedPistonFlags** (ThreadLocal): Redirects the resolver's startPos from (devicePos + pushDir) to the actual target block. Set before `new PistonStructureResolver()`, cleared in finally block.
 
 **MachineTrackBlock**: Uses BlockMoveHelper directly (no scanning). Internal POWER blockstate (0-15) for Track-to-Track chaining only -- NOT exposed to vanilla redstone (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads input from other Tracks/Conductors via direct blockstate access and from any vanilla redstone source via level.getSignal() (no whitelist needed -- Track emits no signal so no feedback risk). Signal direction detection checks actual sources (conduit blocks with higher POWER, any vanilla source with signal > 0) rather than vanilla `hasSignal()`. Pushes ALL adjacent Trolleys in the computed direction. Block event encodes pushDir + trolleyFace via bit packing. Re-entrancy guard uses ThreadLocal<Boolean>.
@@ -440,6 +447,7 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 1. **Activation-based stickiness**: BooleanProperty ACTIVE (default false). `isStickyBlock()` returns ACTIVE value. Frames are passive -- all lifecycle hooks call `FrameActivation.markDirty()`. Machine Blocks are the signal source. Signal strength 15, decays by 1 per conductor. Max range 15 blocks.
 2. **Material exclusivity**: canStickTo returns true for same-material IFrameBlock **only when neighbor is also active** (`IFrameBlock.isActive(other)`). Cross-material IFrameBlock falls through (does not short-circuit to false) so inner stickiness permissive entries can match. Also permissive to: Machine Family, SlimeBlock, HoneyBlock, OddSlimeBlock, FramedBlock with INNER_STICKY>0.
 3. **Waterlogging**: BooleanProperty WATERLOGGED (default false). Auto-waterlogs when placed in water. updateShape() schedules fluid ticks.
+5. **No redstone through frames**: `isRedstoneConductor` is false for both frames (registered in ModBlocks, 2026-10-22), like glass. Framed Blocks follow their inner block instead; the Machine Frame (solid) still conducts.
 4. **Grab immunity**: Rules (consolidated) prevent specific grabber->target pairs. Carve-outs for matching inner types.
 
 (Removed 2026-04-19: vanilla iron_block / copper_block as conductors and sticky members; cross-frame mediation via INNER_CONDUCTOR. Frames now require exact same-material match.)
@@ -487,6 +495,8 @@ Blockstate count per framed block type: 2 (ACTIVE) x 6 (FACING) x 5 (INNER_STICK
 ### 8. Machine Track (isolated redstone + Trolley push)
 
 Non-directional Machine Family block. Internal POWER blockstate (0-15, decay by 1) for Track-to-Track chaining only. NOT exposed to vanilla redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Reads from other Tracks/Conductors via direct blockstate access and from any vanilla redstone source via level.getSignal() (no whitelist needed -- Track emits no signal so no feedback risk). On rising edge, pushes adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style animated movement.
+
+**Indicator** (2026-10-22): two-layer model like the redstone machines. `machine_track.png` has a transparent 4x4 window in the middle of each face over the inner cuboid (shared `machine_indicator.png`, tintIndex 1), tinted GREY by POWER in ModColorHandlers (`TRACK_GREYS`: 0x303030 at 0 to 0xE0E0E0 at 15). Grey because Track power is internal, not vanilla redstone; it fades by 1 per Track, so a pulse shows moving along a line.
 
 ### 9. Machine Trolley (passive cargo)
 
@@ -547,7 +557,7 @@ Extends AbstractMachineBlock. MachineType.ENGINE. Fuel-burning pulse clock. Burn
 Registry ID: `hollow_stone`. Class: HollowstoneBlock (implements EntityBlock). Block entity: HollowstoneBlockEntity.
 
 1. **Transparent shell**: BooleanProperty FILLED (default false). `noOcclusion()` in properties. `cutoutMipped` render layer for transparent center pixels in filled texture.
-2. **Fill interaction**: Right-click with any block item fills the shell (sets FILLED=true, stores inner block in BE). Sound + hand swing feedback.
+2. **Fill interaction**: Right-click with a block item fills the shell (sets FILLED=true, stores inner block in BE). Sound + hand swing feedback. Refused: air, blocks with a block entity, and anything whose collision shape isn't a full cube (buttons, levers, torches, slabs; fixed 2026-10-22).
 3. **Mining behavior**: Drops 5-7 Hollowstone Shards (fortune-affected, explosion-safe). Silk touch drops the block itself. Filled variant: mining leaves the inner block in-world via coordinated `playerWillDestroy()` + `onRemove()` using `markForInnerBlockPlacement()` flag.
 4. **Rendering**: HollowstoneRenderer BESR. Simplified FramedBlockRenderer — no FACING transfer, no property delegation. Renders inner block at 0.998 scale with best-of-6-neighbors lighting. Only renders when `hasInnerBlock()` is true.
 5. **Crafting**: 9 Hollowstone Shards → 1 Hollowstone (shaped recipe).

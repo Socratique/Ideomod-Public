@@ -41,9 +41,9 @@
 
 Build config files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
-Mixin config: `ideomod.mixins.json` in resources root. Declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `EntityMovementMixin`, `LevelSignalMixin`, `client.PistonBaseBlockClientMixin`, and `client.PistonMovingBlockEntityRendererMixin` in the `mixins` array. Note: all mixins are in the common array -- Forge dev environment does not reliably process the `"client"` JSON array. Client mixins use `isClientSide()` guards or target client-only classes. Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
+Mixin config: `ideomod.mixins.json` in resources root. The `mixins` array declares `PistonStructureResolverMixin`, `AbstractFurnaceBlockEntityMixin`, `PistonBaseBlockMixin`, `PistonMovingBlockEntityMixin`, `EntityMovementMixin`, `LevelSignalMixin`, `RedStoneWireBlockMixin` and `client.PistonBaseBlockClientMixin`; the `client` array declares `client.PistonMovingBlockEntityRendererMixin` (moved there 2026-10-13: it targets a client-only class and crashed dedicated servers). Refmap: `ideomod.refmap.json`. Compatibility level: JAVA_17.
 
-gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.0`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
+gradle.properties values: `mod_id=ideomod`, `mod_name=Ideomod`, `mod_version=0.1.1`, `mod_group_id=com.ideomancer.ideomod`, `mod_authors=Ideomancer`.
 
 ---
 
@@ -177,12 +177,16 @@ com.ideomancer.ideomod
   |     \-- OddstoneConfig.java          JSON config: sympathetic radius + mob list
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event (Forge event bus)
+  |-- gametest/
+  |     \-- IdeomodGameTests.java                In-world regression tests (./gradlew runGameTestServer)
   |-- mixin/
   |     |-- PistonStructureResolverMixin.java    8-feature mixin (see section 5)
   |     |-- PistonBaseBlockMixin.java            Allows IPistonMovable BE movement + saves data + immovable inner
   |     |-- PistonMovingBlockEntityMixin.java    Restores IPistonMovable data after animation
   |     |-- EntityMovementMixin.java             Entity speed/jump factor for framed blocks
   |     |-- AbstractFurnaceBlockEntityMixin.java  Furnace array speed boost (section 8)
+  |     |-- LevelSignalMixin.java                Redstone Rod phantom signal injection
+  |     |-- RedStoneWireBlockMixin.java          Hides Conductor strong power while dust computes its power (Known Issue #3)
   |     \-- client/
   |           |-- PistonBaseBlockClientMixin.java           Captures framed block data for transit rendering
   |           \-- PistonMovingBlockEntityRendererMixin.java  Renders inner block during piston animation
@@ -677,6 +681,7 @@ Opt-in interface for block entities that need to preserve data through piston mo
 
 - **All machine blocks** with a "powered" BooleanProperty get their POWERED blockstate restored generically via state definition property lookup. This prevents powered blocks from arriving at their destination with POWERED=false even though vanilla's movedState should preserve it (neighbor updates from piston head removal can cause transient state changes).
 - **Toggle special case**: POWERED + INPUT_FACE restored, then the re-evaluation tick is SKIPPED (the Toggle's tick() treats any tick on a POWERED toggle as "toggle OFF", which would immediately undo the latch).
+- **Only blocks that need it get a tick** (FIX 2026-10-22, Known Issue #6): `saveMovementData()` also records `MovementPendingTick` (a scheduled tick was waiting when the block was moved). After the move, a tick is scheduled only for POWERED blocks and blocks with a pending tick. Idle blocks used to get one too; an unpowered Pulser's tick() fires whenever its input is lit, so idle Pulsers in a moved chain fired in a same-tick cascade.
 - **Staggered tick delays**: POWERED blocks get their re-evaluation tick at delay **2**, UNPOWERED blocks at delay **1**. This preserves pulse cascades through movement — the receiving (UNPOWERED) block gets a 1-tick head start to detect the sender's signal before the sender's countdown expires. Without this stagger, same-delay tick ordering is non-deterministic and the sender can expire before the receiver processes.
 - **Post-movement scan recovery**: All edge-triggered machine blocks (Pulser, Timer, Toggle) have a scan guard in their tick() UNPOWERED path. If inputFace is null after movement (pulse expired "clean" before the move), the tick does a full `scanAllFaces()` to recover the input direction. In normal gameplay this path is unreachable (neighborChanged always sets inputFace before scheduling tick). MachineRepeaterBlock already does an unconditional scan so no guard is needed.
 
@@ -1217,6 +1222,8 @@ Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI sho
 
 Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
 
+**Visual** (2026-10-22): two-layer model (Repeater pattern). Outer `machine_track.png` has a transparent 4x4 window in the middle of each face; inner underlay cuboid (0.05 inset) uses the shared `machine_indicator.png`, tintIndex 1, tinted GREY by POWER (`ModColorHandlers.TRACK_GREYS`, 0x303030 at 0 to 0xE0E0E0 at 15). Grey, not red: Track power is internal and invisible to vanilla redstone. Power drops by 1 per Track, so a pulse shows fading along a line.
+
 Frame activation: Always emits activation (strength 15). Lifecycle hooks call FrameActivation.markDirty(). onPlace and onRemove guarded by `!movedByPiston` to skip neighbor updates and FrameActivation during piston movement.
 
 ### Machine Trolley -- Passive Cargo Carrier
@@ -1723,6 +1730,7 @@ Transparent decorative blocks with activation-based stickiness. Implements `IFra
 | **Slime/honey interaction** | canStickTo returns true for slime/honey/odd slime (permissive). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules block frames from grabbing slime/honey/odd slime. Net: slime can grab active frames, frames cannot grab slime. |
 | **Waterlogging** | Implements SimpleWaterloggedBlock. Auto-waterlogs when placed in water. Bucket interaction for add/remove. updateShape() schedules fluid ticks for natural water flow. Water is contained (standard full-cube waterlogged behavior). |
 | **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. Inside-face rendering via inverted cuboid in JSON models. |
+| **No redstone** | `isRedstoneConductor` false (2026-10-22), like glass: a powered frame powers nothing behind it. Framed Blocks follow their inner block; the Machine Frame still conducts. GameTest `framesDoNotCarryRedstone`. |
 
 
 
@@ -1759,7 +1767,7 @@ Registry ID: `hollow_stone`. Class: `HollowstoneBlock` (implements `EntityBlock`
 
 **Blockstate**: BooleanProperty `FILLED` (default false). Two variants: `filled=false` → hollow_stone model, `filled=true` → hollow_stone_filled model (transparent center pixels showing inner block).
 
-**Fill interaction**: Right-click with any `BlockItem` when `FILLED=false` → sets `FILLED=true`, stores inner block ID in `HollowstoneBlockEntity`, consumes 1 item from player hand. Sound + hand swing feedback.
+**Fill interaction**: Right-click with a `BlockItem` whose block is a full cube (collision shape) and has no block entity, when `FILLED=false` (buttons, levers, torches, slabs are refused; fixed 2026-10-22, GameTest `hollowstoneTakesOnlyFullBlocks`) → sets `FILLED=true`, stores inner block ID in `HollowstoneBlockEntity`, consumes 1 item from player hand. Sound + hand swing feedback.
 
 **Mining behavior**: Drops 5-7 Hollowstone Shards (fortune `ore_drops` bonus, `explosion_decay`). Silk touch → drops the block itself. Filled variant: `playerWillDestroy()` sets `markForInnerBlockPlacement()` flag → `onRemove()` reads flag and places inner block at the position. This coordination prevents the inner block from being lost.
 
