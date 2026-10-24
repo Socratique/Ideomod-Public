@@ -3,10 +3,15 @@ package com.ideomancer.ideomod.block.portal;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.registry.ModBlocks;
+import com.ideomancer.ideomod.registry.ModParticles;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
@@ -22,6 +27,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.shapes.CollisionContext;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import org.jetbrains.annotations.Nullable;
+import org.joml.Vector3f;
 
 /**
  * Oddstone Portal Block - fills the interior of a lit Oddstone portal frame.
@@ -77,6 +83,56 @@ public class OddstonePortalBlock extends Block {
     public VoxelShape getShape(BlockState state, BlockGetter level, BlockPos pos,
                                 CollisionContext context) {
         return state.getValue(AXIS) == Direction.Axis.X ? Z_AXIS_AABB : X_AXIS_AABB;
+    }
+
+    // ========================================================================
+    // AMBIENCE - particles and hum, like a nether portal (client side)
+    // ========================================================================
+
+    /** Near-white sparks, like the bright crests in the portal texture. */
+    private static final DustParticleOptions SPARK =
+            new DustParticleOptions(new Vector3f(0.90f, 0.97f, 1.00f), 0.8f);
+
+    /**
+     * Light-blue portal particles (ModParticles.ODDSTONE_PORTAL: vanilla's
+     * portal swirl in the portal's colours) drifting out of both faces, a few
+     * per block per tick, with the odd white spark, and now and then the portal hum (pitched a
+     * little higher than a nether portal's). The portal is thin along its
+     * AXIS value, so particles start on either side along that axis.
+     */
+    @Override
+    public void animateTick(BlockState state, Level level, BlockPos pos, RandomSource random) {
+        if (random.nextInt(100) == 0) {
+            level.playLocalSound(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5,
+                    SoundEvents.PORTAL_AMBIENT, SoundSource.BLOCKS, 0.5F,
+                    random.nextFloat() * 0.4F + 1.2F, false);
+        }
+        boolean thinX = state.getValue(AXIS) == Direction.Axis.X;
+        for (int i = 0; i < 4; i++) {
+            int side = random.nextBoolean() ? 1 : -1;
+            double x = pos.getX() + random.nextDouble();
+            double y = pos.getY() + random.nextDouble();
+            double z = pos.getZ() + random.nextDouble();
+            double dx = (random.nextDouble() - 0.5) * 0.5;
+            double dy = (random.nextDouble() - 0.5) * 0.5;
+            double dz = (random.nextDouble() - 0.5) * 0.5;
+            if (thinX) {
+                x = pos.getX() + 0.5 + 0.25 * side;
+                dx = random.nextDouble() * 2.0 * side;
+            } else {
+                z = pos.getZ() + 0.5 + 0.25 * side;
+                dz = random.nextDouble() * 2.0 * side;
+            }
+            level.addParticle(ModParticles.ODDSTONE_PORTAL.get(), x, y, z, dx, dy, dz);
+        }
+        if (random.nextInt(6) == 0) {
+            double off = random.nextBoolean() ? 0.7 : 0.3;
+            level.addParticle(SPARK,
+                    thinX ? pos.getX() + off : pos.getX() + random.nextDouble(),
+                    pos.getY() + random.nextDouble(),
+                    thinX ? pos.getZ() + random.nextDouble() : pos.getZ() + off,
+                    0.0, 0.02, 0.0);
+        }
     }
 
     // ========================================================================

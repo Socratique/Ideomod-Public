@@ -240,7 +240,7 @@ All registrations use `DeferredRegister` pattern. Registers are created in their
 | `oddstone_brick_slab` | SympatheticSlabBlock | Slab variant, sympathetic channel "oddstone_brick_slab". `isStickyBlock=true`, `canStickTo=false`. |
 | `machine_block` | MachineFrameBlock | Block entity. Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. `PushReaction.NORMAL` (movable by pistons via PistonBaseBlockMixin). |
 | `odd_slime` | OddSlimeBlock | Friction 0.8F (slippery), slime sound, `noOcclusion()`. |
-| `oddstone_portal` | OddstonePortalBlock | `noCollission()`, hardness -1 (indestructible), light 11, `PushReaction.BLOCK`, glass sound, `noLootTable()`. |
+| `oddstone_portal` | OddstonePortalBlock | `noCollission()`, `noOcclusion()`, hardness -1 (indestructible), light 11, `PushReaction.BLOCK`, glass sound, `noLootTable()`. |
 | `oddstone_repulser` | OddstoneRepulserBlock | Hardness 3.0/6.0, pickaxe, stone sound. Extends AbstractRangedPistonBlock. |
 | `oddstone_attractor` | OddstoneAttractorBlock | Same properties as Repulser. Extends AbstractRangedPistonBlock. |
 | `machine_track` | MachineTrackBlock | Hardness 3.0/6.0, pickaxe, metal sound. `isRedstoneConductor=false`. Machine Family stickiness + redstone conduction. |
@@ -974,6 +974,12 @@ PistonStructureResolverMixin's sympathetic search checks for both direct Oddston
 
 The Oddstone Portal is an address-based teleportation system using mineral block corners to define destinations.
 
+### Look and Feel
+
+Own animated texture `textures/block/oddstone_portal.png` + `.mcmeta` (32 frames of 16x16, frametime 2, interpolated), original art from `tools/textures/make_portal_texture.py`: a seamless light-blue swirl (deep blue, sky blue, near-white) with white sparks, alpha 200. Both models (`oddstone_portal_ew/ns.json`) are `render_type: minecraft:translucent`, no tint. Until 2026-10-22 they used vanilla `nether_portal` with a tintindex and no registered tint (so it looked exactly like a nether portal) and no render type (so it drew solid).
+
+`animateTick()` (client only): 4 `ideomod:oddstone_portal` particles per tick (vanilla's portal particle behaviour and sprites, tinted light blue: `client/OddstonePortalParticle`, registered in `ClientSetup`), starting 0.25 out from the pane on either side and drifting away along the axis the pane is thin in (the AXIS value: axis=x is thin in x); 1 in 6 ticks a near-white `DustParticleOptions(0.90, 0.97, 1.00)` spark rising slowly; 1 in 100 ticks `SoundEvents.PORTAL_AMBIENT` at volume 0.5, pitch 1.2-1.6.
+
 ### Component Responsibilities
 
 | File | Role |
@@ -982,7 +988,7 @@ The Oddstone Portal is an address-based teleportation system using mineral block
 | `OddstonePortalFrameDetector` | Scans from interior outward to find valid frames. Validates structure, reads corner addresses, checks redstone power. |
 | `PortalGeometry` | Data structure: portal dimensions, corners, axis, interior bounds. Used by validateOrDeactivate() for re-validation. |
 | `OddstonePortalSavedData` | Per-dimension SavedData (NBT serialized). Stores portal registrations keyed by position. Manages linking/unlinking. |
-| `OddstonePortalBlock` | The interior fill block. Handles teleportation (entityInside), cascade breaking (updateShape), unregistration (onRemove). |
+| `OddstonePortalBlock` | The interior fill block. Handles teleportation (entityInside), cascade breaking (updateShape), unregistration (onRemove), and the client ambience (animateTick: portal particles out of both faces, cyan dust sparks, the portal hum). |
 | `PortalUtils` | Shared helpers: corner validation, interior navigation, clearing, axis direction lookup. |
 
 ### Frame Structure
@@ -1758,6 +1764,8 @@ Extends `DirectionalBlock`. FACING property, piston-style placement. `isStickyBl
 Extends `DirectionalBlock`. FACING + POWERED properties. On rising redstone edge: mines 3x3 grid in front of drill face. Drops items at drill position. Skips air and indestructible blocks. Uses perpendicular direction calculation for the 3x3 plane.
 
 ### Oddstone Repulser / Attractor
+
+**Textures** (re-skinned 2026-10-22): `oddstone_{repulser,attractor}_{front,side,back}.png`, 16x16. The Ideomancer's original faces (grey frame, front patterns, side arrows) on the current Oddstone instead of the original cyan. Made by `tools/textures/make_ranged_textures.py` from the cyan-era files in git: cyan -> Oddstone pixel (fronts: pulled 60% toward the darkest stone tone so the pattern reads), side arrows -> light lavender (176,168,212).
 
 Both extend `AbstractRangedPistonBlock`. FACING + POWERED properties. Block event pattern for client-server sync. Repulser finds nearest Oddstone in line, pushes away. Attractor finds farthest Oddstone, pulls toward device. Each is ~15 lines -- all shared logic lives in the base class. Movement delegated to BlockMoveHelper via RangedPistonUtil.
 

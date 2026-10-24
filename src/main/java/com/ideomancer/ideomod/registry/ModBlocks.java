@@ -225,8 +225,9 @@ public class ModBlocks {
     
     public static final RegistryObject<Block> ODDSTONE_PORTAL = BLOCKS.register("oddstone_portal",
             () -> new OddstonePortalBlock(BlockBehaviour.Properties.of()
-                    .mapColor(MapColor.COLOR_LIGHT_BLUE)
+                    .mapColor(MapColor.COLOR_PURPLE)
                     .noCollission()
+                    .noOcclusion()
                     .strength(-1.0F)
                     .sound(SoundType.GLASS)
                     .lightLevel(state -> 11)

@@ -9,6 +9,7 @@ import com.ideomancer.ideomod.client.render.MachinePistonArmRenderer;
 import com.ideomancer.ideomod.registry.ModBlockEntities;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModMenuTypes;
+import com.ideomancer.ideomod.registry.ModParticles;
 import net.minecraft.client.gui.screens.MenuScreens;
 import net.minecraft.client.renderer.ItemBlockRenderTypes;
 import net.minecraft.client.renderer.RenderType;
@@ -18,6 +19,7 @@ import net.minecraft.client.resources.model.ModelResourceLocation;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.ModelEvent;
+import net.minecraftforge.client.event.RegisterParticleProvidersEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -26,7 +28,8 @@ import net.minecraftforge.fml.event.lifecycle.FMLClientSetupEvent;
 import java.util.Map;
 
 /**
- * Client-only setup: screens, render layers, block entity renderers, item model wrapping.
+ * Client-only setup: screens, render layers, block entity renderers, item model wrapping,
+ * particle providers.
  *
  * Kept out of the main mod class so a dedicated server never loads these client
  * classes (doing so crashes the server at startup).
@@ -66,6 +69,11 @@ public final class ClientSetup {
             MinecraftForge.EVENT_BUS.register(new com.ideomancer.ideomod.client.FramedBlockDebugOverlay());
         });
         Ideomod.LOGGER.info("Ideomod client setup complete!");
+    }
+
+    @SubscribeEvent
+    public static void onRegisterParticles(final RegisterParticleProvidersEvent event) {
+        event.registerSpriteSet(ModParticles.ODDSTONE_PORTAL.get(), OddstonePortalParticle.Provider::new);
     }
 
     @SubscribeEvent

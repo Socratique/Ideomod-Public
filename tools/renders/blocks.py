@@ -12,7 +12,7 @@ from isorender import box, orient, power_color
 FULL = (0, 0, 0, 16, 16, 16)
 INNER = (0.05, 0.05, 0.05, 15.95, 15.95, 15.95)
 C = (0.5, 0.5, 0.5)
-PORTAL_TINT = None  # the mod registers no colour handler for the portal block
+PORTAL_TINT = None  # the portal texture carries its own colour; no tint
 
 
 def cube(tex, tint=None, alpha=1.0):
@@ -213,7 +213,7 @@ def toggle(p):
 
 def portal(p):
     """Oddstone portal fill: a thin translucent pane. props: axis ('x' = pane spans x)."""
-    tex, tint = "mc:nether_portal", PORTAL_TINT
+    tex, tint = "oddstone_portal", PORTAL_TINT   # the mod's own animated texture (first frame)
     if p.get("axis", "x") == "x":
         return [(box(0, 0, 6, 16, 16, 10, tex, tint=tint, uv=(0, 0, 16, 16), faces=("north", "south")), True, C)]
     return [(box(6, 0, 0, 10, 16, 16, tex, tint=tint, uv=(0, 0, 16, 16), faces=("east", "west")), True, C)]

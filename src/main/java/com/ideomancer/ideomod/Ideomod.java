@@ -22,6 +22,7 @@ import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModCreativeTabs;
 import com.ideomancer.ideomod.registry.ModItems;
 import com.ideomancer.ideomod.registry.ModMenuTypes;
+import com.ideomancer.ideomod.registry.ModParticles;
 import com.ideomancer.ideomod.multiblock.StructureManager;
 import com.ideomancer.ideomod.multiblock.definitions.FurnaceArrayDefinition;
 import com.mojang.logging.LogUtils;
@@ -56,6 +57,7 @@ public class Ideomod {
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
         ModMenuTypes.MENUS.register(modEventBus);
+        ModParticles.PARTICLES.register(modEventBus);
         ModRecipeSerializers.RECIPE_SERIALIZERS.register(modEventBus);
         ModFeatures.FEATURES.register(modEventBus);
         ModFeatures.CHUNK_GENERATORS.register(modEventBus);

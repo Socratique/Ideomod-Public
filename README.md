@@ -159,6 +159,7 @@ A portal frame is an upright rectangle of Oddstone with a mineral block at each 
 - **Unlinked portals:** walking in throws you 200 to 1000 blocks in a random direction, onto the surface, and costs 5 hearts.
 - **Limits:** players only, with a 4 second cooldown.
 - **Closing:** break or move any frame Oddstone or corner block. The partner becomes unlinked.
+- **Look:** a lit portal is a slow light-blue swirl with white sparks. Like a nether portal it gives off (light-blue) particles and hums now and then.
 
 ## Hollowstone
 

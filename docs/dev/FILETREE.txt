@@ -92,7 +92,8 @@
 |  |           |  |  \\-- MovingFrameData.java
 |  |           |  +-- ClientSetup.java
 |  |           |  +-- FramedBlockDebugOverlay.java
-|  |           |  \\-- ModColorHandlers.java
+|  |           |  +-- ModColorHandlers.java
+|  |           |  \\-- OddstonePortalParticle.java
 |  |           +-- config
 |  |           |  \\-- IdeomodConfig.java
 |  |           +-- effect
@@ -139,6 +140,7 @@
 |  |           |  +-- ModCreativeTabs.java
 |  |           |  +-- ModItems.java
 |  |           |  +-- ModMenuTypes.java
+|  |           |  +-- ModParticles.java
 |  |           |  +-- ModRecipeSerializers.java
 |  |           |  \\-- ModTags.java
 |  |           +-- worldgen
@@ -316,6 +318,8 @@
 |     |     |     +-- oddstone_wall.json
 |     |     |     +-- redstone_rod.json
 |     |     |     \\-- structure_debug_stick.json
+|     |     +-- particles
+|     |     |  \\-- oddstone_portal.json
 |     |     \\-- textures
 |     |        +-- block
 |     |        |  +-- cobbled_oddstone.png
@@ -366,6 +370,8 @@
 |     |        |  +-- oddstone_attractor_front.png
 |     |        |  +-- oddstone_attractor_side.png
 |     |        |  +-- oddstone_bricks.png
+|     |        |  +-- oddstone_portal.png
+|     |        |  +-- oddstone_portal.png.mcmeta
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
 |     |        |  \\-- oddstone_repulser_side.png

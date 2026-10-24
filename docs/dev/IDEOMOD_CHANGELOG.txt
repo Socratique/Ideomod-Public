@@ -1,5 +1,61 @@
 # Ideomod Changelog
 
+## [2026-10-24] Oddstone portals: own animated texture, particles and hum; Repulser/Attractor re-skinned
+
+Two items from the Beta Release ToDo (2026-04-07): "add animation to oddstone
+portals similar to nether portals", "give oddstone portal blocks their own
+colouring", and "Attractor and Repulser need texture matching oddstone texture
+themes".
+
+### Portal look and feel
+
+- Own texture: `oddstone_portal.png`, 32 frames of 16x16 (frametime 2,
+  interpolated), original art drawn by `tools/textures/make_portal_texture.py`:
+  a seamless LIGHT BLUE swirl (Sean's choice, 2026-10-24) from deep blue
+  through sky blue to near-white, with white sparks. Replaces the vanilla `nether_portal`
+  texture the models used (with a tintindex but no tint registered, so it
+  showed as a plain nether portal).
+- Both portal models now `render_type: minecraft:translucent` (the texture is
+  see-through; with no render type it drew solid). Block gains `noOcclusion()`.
+- New particle type `ideomod:oddstone_portal` (`ModParticles`, client look in
+  `client/OddstonePortalParticle`, registered in `ClientSetup`): vanilla's portal
+  particle (same generic sprites via `particles/oddstone_portal.json`, same drift
+  and swirl) tinted light blue instead of purple.
+- `OddstonePortalBlock.animateTick()`: four of those particles per block per
+  tick drifting out of both faces (along the axis the pane is thin in), the odd
+  near-white dust spark, and a 1-in-100 chance per tick of the portal hum
+  (`PORTAL_AMBIENT`, pitched 1.2-1.6, a little above a nether portal).
+
+### Repulser and Attractor textures
+
+The six faces were drawn on the original cyan Oddstone. Re-skinned onto the
+current Oddstone (2026-04-26) by `tools/textures/make_ranged_textures.py`
+(reads the cyan-era originals from git, so it can be re-run): cyan becomes the
+Oddstone pixel at the same spot; the fronts use a calmer, darker version of it
+so their grey patterns stand out; the grey frames and patterns are unchanged;
+the dark arrows on the side faces become light lavender (176,168,212) so they
+still read on the darker stone.
+
+Checked: build clean; 8 GameTests pass; jar boots on a real Forge server (the
+particle's client classes stay out of it); dev client loads with no texture,
+animation or particle warnings. Not yet seen: the particles around a lit portal.
+
+Files modified:
+- `src/main/java/com/ideomancer/ideomod/block/portal/OddstonePortalBlock.java` (animateTick)
+- `src/main/java/com/ideomancer/ideomod/registry/ModBlocks.java` (portal: noOcclusion)
+- `src/main/java/com/ideomancer/ideomod/registry/ModParticles.java` (new), `Ideomod.java` (registers it)
+- `src/main/java/com/ideomancer/ideomod/client/OddstonePortalParticle.java` (new), `ClientSetup.java`
+- `src/main/resources/assets/ideomod/particles/oddstone_portal.json` (new)
+- `src/main/resources/assets/ideomod/models/block/oddstone_portal_ew.json`, `oddstone_portal_ns.json`
+- `src/main/resources/assets/ideomod/textures/block/oddstone_portal.png` + `.mcmeta` (new)
+- `src/main/resources/assets/ideomod/textures/block/oddstone_{repulser,attractor}_{front,side,back}.png`
+- `tools/textures/make_portal_texture.py`, `tools/textures/make_ranged_textures.py` (new)
+- `tools/renders/blocks.py` (portal drawn with its own texture); README pictures redrawn
+
+Written by Claude, directed and guided by The Ideomancer.
+
+---
+
 ## [2026-10-22c] Hollowstone takes full blocks only; frames carry no redstone; Track indicator
 
 Found while testing in the Ideomod test world.

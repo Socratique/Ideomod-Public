@@ -18,6 +18,8 @@
 
 Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
+**Texture scripts**: `tools/textures/make_portal_texture.py` (the animated portal), `tools/textures/make_ranged_textures.py` (Repulser/Attractor re-skinned from the cyan-era originals onto the current Oddstone). `tools/renders` draws the README pictures from the mod's textures.
+
 **Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, and Hollowstone's full-block rule. `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
 
 ---
@@ -380,6 +382,8 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 **Teleportation**: Linked portals preserve relative position (fractional offset). All teleports apply 180-degree yaw rotation so player exits facing away from destination portal (doorway effect). Cross-axis portals (X vs Z) additionally rotate 90 degrees to align with destination axis. Unlinked portals scatter-teleport 200-1000 blocks + 5 hearts damage.
 
 **Deactivation strategy**: Full frame re-validation via `validateOrDeactivate()`. When any frame Oddstone gets neighborChanged, navigates from portal block to frame, checks all corners + all Oddstone powered. Only deactivates if validation fails. Prevents false triggers from unrelated neighbor updates. Immediate deactivation via `onBlockRemoved()` when a frame Oddstone is physically broken.
+
+**Look and feel** (2026-10-22/24): own animated texture `oddstone_portal.png` (32 frames, frametime 2, interpolated; drawn by `tools/textures/make_portal_texture.py`, original art, light blue with white sparks), models `render_type: translucent`, block `noOcclusion()`. Particle type `ideomod:oddstone_portal` (`registry/ModParticles`; client: `client/OddstonePortalParticle` extends vanilla `PortalParticle`, light-blue tint, registered in `ClientSetup.onRegisterParticles`). `OddstonePortalBlock.animateTick()` (client): 4 of those per tick drifting out of both faces along the AXIS value (the pane is thin along AXIS: axis=x uses the shape thin in x), an occasional near-white `DustParticleOptions` spark, and a 1/100 per-tick `PORTAL_AMBIENT` hum at pitch 1.2-1.6.
 
 **Break effects**: `PortalUtils.clearPortalBlocks()` uses `level.destroyBlock(pos, false)` for proper break particles and sound on all deactivation paths.
 
