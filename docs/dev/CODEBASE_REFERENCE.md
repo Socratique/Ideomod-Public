@@ -83,7 +83,7 @@ com.ideomancer.ideomod
   |     |     |                                isPipe(), isRepeater(), isTransformer(), isTimer(),
   |     |     |                                isEngine(). Dynamic slots. getBlockContentHeight()
   |     |     |                                reads GUI height from current block class.
-  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. POWERED state (display only: Sean's active/inactive textures).
+  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. POWERED state (display only: Sean's active/inactive textures; powered shows the red indicator).
   |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync.
   |     |     |                                Protected constructor for subclass BE types.
   |     |     |                                (getUpdatePacket, getUpdateTag, syncToClients).

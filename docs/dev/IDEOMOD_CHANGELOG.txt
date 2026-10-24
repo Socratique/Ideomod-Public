@@ -4,12 +4,12 @@
 
 - New textures by Sean: `machine_frame_active.png` (unpowered: sends out activation; hole
   filled, copper rivets lit) and `machine_frame_inactive.png` (redstone-powered: suppresses;
-  see-through hole). Replaces Claude's `machine_block.png` (deleted).
+  the shared red indicator shows through its hole, like the other machines). Replaces Claude's `machine_block.png` (deleted).
 - `MachineFrameBlock` gains `POWERED` (vanilla BlockStateProperties.POWERED), set on placement,
   on neighbour change and after a piston move or swap back from a specialization. Display only:
   `FrameActivation` still reads the redstone level itself.
-- Blockstate `powered=false|true` -> models `machine_block` / `machine_block_powered`,
-  `render_type: cutout`; block gains `noOcclusion()` for the see-through hole. The old model's
+- Blockstate `powered=false|true` -> models `machine_block` / `machine_block_powered`
+  (`render_type: cutout`). The powered model is two layers like the Repeater's: an inner `machine_indicator` cube (tintIndex 1, full red) under Sean's shell. The old model's
   `tintindex 0` on every face is gone (no colour handler has supplied a tint for it).
 - GameTest `machineFrameShowsPower`. 10/10 GameTests pass; jar check passes.
 - README renders (blocks.png, frames.gif, track.gif, recipe pictures) redrawn with the new

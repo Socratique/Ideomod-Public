@@ -242,8 +242,8 @@ MODELS = {
     "oddstone_bricks": lambda p: cube("oddstone_bricks"),
     "odd_slime": odd_slime, "repulser": repulser, "attractor": attractor, "drill": drill,
     "frame": frame, "framed": framed, "hollowstone": hollowstone, "portal": portal,
-    # Sean's textures: unpowered sends activation ("active"); powered suppresses, with a see-through hole
-    "machine_frame": lambda p: see_through("machine_frame_inactive") if p.get("powered") else cube("machine_frame_active"),
+    # Sean's textures: unpowered sends activation ("active"); powered suppresses, red indicator in the hole
+    "machine_frame": lambda p: indicator("machine_frame_inactive", 15) if p.get("powered") else cube("machine_frame_active"),
     "track": lambda p: layered("machine_track", "machine_indicator", tint=track_grey(p.get("power", 0))),
     "trolley": lambda p: cube("machine_trolley"),
     "brace": lambda p: cube("machine_extender"),

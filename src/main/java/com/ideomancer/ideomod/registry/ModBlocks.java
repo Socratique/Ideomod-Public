@@ -213,7 +213,6 @@ public class ModBlocks {
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.METAL)
                     .pushReaction(PushReaction.NORMAL)
-                    .noOcclusion()   // the powered texture has a see-through hole
             ));
     
     public static final RegistryObject<Block> ODD_SLIME = BLOCKS.register("odd_slime",

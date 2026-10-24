@@ -12,6 +12,7 @@ import com.ideomancer.ideomod.block.machine.MachineTimerBlock;
 import com.ideomancer.ideomod.block.machine.MachineToggleBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransformerBlock;
 import com.ideomancer.ideomod.block.machine.MachineTransmitterBlock;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import net.minecraft.world.level.block.entity.BlockEntity;
@@ -115,6 +116,15 @@ public class ModColorHandlers {
             }
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_CONDUCTOR.get());
+
+        // Machine Frame: only the powered model has an indicator (tintIndex 1), seen
+        // through the hole in Sean's inactive texture: full red, like a Repeater that's on.
+        event.register((state, level, pos, tintIndex) -> {
+            if (tintIndex == 1) {
+                return state.getValue(MachineFrameBlock.POWERED) ? POWER_COLORS[15] : POWER_COLORS[0];
+            }
+            return 0xFFFFFF;
+        }, ModBlocks.MACHINE_BLOCK.get());
 
         // Machine Repeater: tintIndex 1 on inner underlay cuboid.
         // Binary: off = dark maroon, on = full bright red.

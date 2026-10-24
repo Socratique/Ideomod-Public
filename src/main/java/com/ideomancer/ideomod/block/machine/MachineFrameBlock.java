@@ -16,7 +16,7 @@ import net.minecraft.world.level.block.state.properties.BooleanProperty;
  * stickiness) is inherited from AbstractMachineBlock. Machine Frame adds
  * only the static utility methods that other systems reference, and its
  * POWERED look: unpowered it sends out activation (Sean's "active" texture),
- * powered by redstone it suppresses instead ("inactive", the see-through hole).
+ * powered by redstone it suppresses instead ("inactive", red indicator in the hole).
  * POWERED is display only; FrameActivation reads the redstone level itself.
  *
  * Written by Claude, directed and guided by The Ideomancer.

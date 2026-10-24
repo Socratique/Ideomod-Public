@@ -1,7 +1,37 @@
 {
-  "parent": "minecraft:block/cube_all",
+  "parent": "minecraft:block/block",
   "render_type": "minecraft:cutout",
   "textures": {
-    "all": "ideomod:block/machine_frame_inactive"
-  }
+    "outer": "ideomod:block/machine_frame_inactive",
+    "inner": "ideomod:block/machine_indicator",
+    "particle": "ideomod:block/machine_frame_inactive"
+  },
+  "elements": [
+    {
+      "name": "inner_underlay",
+      "from": [0.05, 0.05, 0.05],
+      "to": [15.95, 15.95, 15.95],
+      "faces": {
+        "north": { "texture": "#inner", "tintindex": 1 },
+        "south": { "texture": "#inner", "tintindex": 1 },
+        "east":  { "texture": "#inner", "tintindex": 1 },
+        "west":  { "texture": "#inner", "tintindex": 1 },
+        "up":    { "texture": "#inner", "tintindex": 1 },
+        "down":  { "texture": "#inner", "tintindex": 1 }
+      }
+    },
+    {
+      "name": "outer_shell",
+      "from": [0, 0, 0],
+      "to": [16, 16, 16],
+      "faces": {
+        "north": { "texture": "#outer" },
+        "south": { "texture": "#outer" },
+        "east":  { "texture": "#outer" },
+        "west":  { "texture": "#outer" },
+        "up":    { "texture": "#outer" },
+        "down":  { "texture": "#outer" }
+      }
+    }
+  ]
 }
