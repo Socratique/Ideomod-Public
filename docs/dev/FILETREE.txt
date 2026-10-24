@@ -380,7 +380,6 @@
 |     |        |  +-- ideomod_gui.png
 |     |        |  \\-- ideomod_numbered_buttons.png
 |     |        \\-- item
-|     |           +-- copper_nugget.png
 |     |           +-- hollow_stone_shard.png
 |     |           \\-- redstone_rod.png
 |     +-- data

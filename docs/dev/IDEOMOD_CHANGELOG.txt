@@ -12,8 +12,10 @@
 - **Copper Frame** (`copper_frame.json`), still 4: copper ingots in the
   corners, copper nuggets on the edges, centre empty, the same shape as the
   Iron Frame. Was 4 ingots in a diamond.
-- Texture `textures/item/copper_nugget.png` is a PLACEHOLDER by Claude (a plain
-  copper lump); Sean is drawing the real one.
+- Look: no texture of its own. The model uses vanilla's
+  `minecraft:item/iron_nugget` and `ModColorHandlers` tints it copper
+  (`COPPER_NUGGET_TINT` 0xFF8C5A; Sean's call, 2026-10-24). Nothing of Mojang's is
+  shipped, and no new art is needed.
 - `recipesHaveTheirShapes` also checks the Copper Frame and both nugget
   recipes. 9/9 GameTests pass; jar check passes.
 

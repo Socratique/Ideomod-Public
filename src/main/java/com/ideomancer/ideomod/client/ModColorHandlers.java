@@ -101,6 +101,9 @@ public class ModColorHandlers {
         }
     }
 
+    /** Multiplies the iron nugget's greys into copper oranges (blue kept low so it doesn't turn pink). */
+    private static final int COPPER_NUGGET_TINT = 0xFF8C5A;
+
     @SubscribeEvent
     public static void registerBlockColors(RegisterColorHandlersEvent.Block event) {
         // Machine Conductor: tintIndex 0 = no tint (base texture as-is)
@@ -217,6 +220,11 @@ public class ModColorHandlers {
 
     @SubscribeEvent
     public static void registerItemColors(RegisterColorHandlersEvent.Item event) {
+        // Copper Nugget: vanilla's iron nugget texture tinted copper (1.20.1 has no
+        // copper nugget texture, and Mojang's art can't be shipped in the mod)
+        event.register((stack, tintIndex) -> tintIndex == 0 ? COPPER_NUGGET_TINT : 0xFFFFFF,
+                ModItems.COPPER_NUGGET.get());
+
         // Machine Conductor item: show unpowered (dark maroon)
         event.register((stack, tintIndex) -> {
             if (tintIndex == 1) {
