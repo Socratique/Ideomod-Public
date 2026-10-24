@@ -282,6 +282,7 @@
 |     |     |     +-- cobbled_oddstone_wall.json
 |     |     |     +-- copper_frame.json
 |     |     |     +-- copper_framed_block.json
+|     |     |     +-- copper_nugget.json
 |     |     |     +-- drill.json
 |     |     |     +-- hollow_stone.json
 |     |     |     +-- hollow_stone_shard.json
@@ -365,7 +366,6 @@
 |     |        |  +-- odd_slime_front.png
 |     |        |  +-- odd_slime_side.png
 |     |        |  +-- oddstone.png
-|     |        |  +-- oddstone1.png
 |     |        |  +-- oddstone_attractor_back.png
 |     |        |  +-- oddstone_attractor_front.png
 |     |        |  +-- oddstone_attractor_side.png
@@ -374,14 +374,22 @@
 |     |        |  +-- oddstone_portal.png.mcmeta
 |     |        |  +-- oddstone_repulser_back.png
 |     |        |  +-- oddstone_repulser_front.png
-|     |        |  \\-- oddstone_repulser_side.png
+|     |        |  +-- oddstone_repulser_side.png
+|     |        |  \\-- oddstone1.png
 |     |        +-- gui
 |     |        |  +-- ideomod_gui.png
 |     |        |  \\-- ideomod_numbered_buttons.png
 |     |        \\-- item
+|     |           +-- copper_nugget.png
 |     |           +-- hollow_stone_shard.png
 |     |           \\-- redstone_rod.png
 |     +-- data
+|     |  +-- forge
+|     |  |  \\-- tags
+|     |  |     \\-- items
+|     |  |        +-- nuggets
+|     |  |        |  \\-- copper.json
+|     |  |        \\-- nuggets.json
 |     |  +-- ideomod
 |     |  |  +-- forge
 |     |  |  |  \\-- biome_modifier
@@ -436,12 +444,15 @@
 |     |  |  |  +-- cobbled_oddstone_wall.json
 |     |  |  |  +-- cobbled_oddstone_wall_from_stonecutting.json
 |     |  |  |  +-- copper_frame.json
+|     |  |  |  +-- copper_ingot_from_nuggets.json
+|     |  |  |  +-- copper_nugget.json
 |     |  |  |  +-- drill.json
 |     |  |  |  +-- framed_block.json
 |     |  |  |  +-- hollow_stone.json
 |     |  |  |  +-- iron_frame.json
 |     |  |  |  +-- machine_block.json
 |     |  |  |  +-- odd_slime.json
+|     |  |  |  +-- oddstone_attractor.json
 |     |  |  |  +-- oddstone_brick_slab.json
 |     |  |  |  +-- oddstone_brick_slab_from_oddstone_bricks_stonecutting.json
 |     |  |  |  +-- oddstone_brick_slab_from_oddstone_stonecutting.json
@@ -453,6 +464,7 @@
 |     |  |  |  +-- oddstone_brick_wall_from_oddstone_stonecutting.json
 |     |  |  |  +-- oddstone_bricks.json
 |     |  |  |  +-- oddstone_bricks_from_oddstone_stonecutting.json
+|     |  |  |  +-- oddstone_repulser.json
 |     |  |  |  +-- oddstone_slab.json
 |     |  |  |  +-- oddstone_slab_from_stonecutting.json
 |     |  |  |  +-- oddstone_smelting.json

@@ -93,6 +93,7 @@ public class ModCreativeTabs {
                         // Frame Blocks
                         output.accept(ModItems.IRON_FRAME.get());
                         output.accept(ModItems.COPPER_FRAME.get());
+                        output.accept(ModItems.COPPER_NUGGET.get());
 
                         // Tools / Debug
                         output.accept(ModItems.REDSTONE_ROD.get());

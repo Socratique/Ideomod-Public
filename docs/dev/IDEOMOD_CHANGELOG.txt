@@ -1,5 +1,22 @@
 # Ideomod Changelog
 
+## [2026-10-24c] Copper nugget; Copper Frame matches the Iron Frame
+
+- New item `ideomod:copper_nugget` (Minecraft 1.20.1 has no copper nugget;
+  vanilla adds one in 1.21.9). 1 copper ingot -> 9 nuggets
+  (`copper_nugget.json`, shapeless); 9 nuggets -> 1 copper ingot
+  (`copper_ingot_from_nuggets.json`). In the main creative tab after the frames.
+- Tagged `forge:nuggets/copper` and `forge:nuggets`
+  (`data/forge/tags/items/`). The recipes take the tag, so another mod's copper
+  nugget (Create's, for one) works in them too.
+- **Copper Frame** (`copper_frame.json`), still 4: copper ingots in the
+  corners, copper nuggets on the edges, centre empty, the same shape as the
+  Iron Frame. Was 4 ingots in a diamond.
+- Texture `textures/item/copper_nugget.png` is a PLACEHOLDER by Claude (a plain
+  copper lump); Sean is drawing the real one.
+- `recipesHaveTheirShapes` also checks the Copper Frame and both nugget
+  recipes. 9/9 GameTests pass; jar check passes.
+
 ## [2026-10-24b] Recipes: Machine Frame needs Hollowstone; Iron Frame uses nuggets; Repulser and Attractor craftable
 
 From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
@@ -22,8 +39,8 @@ From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
   cobbled   cobbled   cobbled
   ```
   Plain piston pushes, sticky piston pulls.
-- **Copper Frame** unchanged for now: Minecraft 1.20.1 has no copper nugget
-  (added in 1.21.9), so the matching nugget recipe needs a decision.
+- **Copper Frame** unchanged here: Minecraft 1.20.1 has no copper nugget
+  (added in 1.21.9). Done in [2026-10-24c] with an Ideomod copper nugget.
 - New GameTest `recipesHaveTheirShapes` reads both recipes back from the
   recipe manager and checks every slot and the output count (all four recipes). 9/9 GameTests
   pass; jar check passes.

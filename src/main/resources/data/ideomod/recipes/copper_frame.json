@@ -1,17 +1,13 @@
 {
   "type": "minecraft:crafting_shaped",
   "pattern": [
-    " C ",
-    "C C",
-    " C "
+    "INI",
+    "N N",
+    "INI"
   ],
   "key": {
-    "C": {
-      "item": "minecraft:copper_ingot"
-    }
+    "I": { "item": "minecraft:copper_ingot" },
+    "N": { "tag": "forge:nuggets/copper" }
   },
-  "result": {
-    "item": "ideomod:copper_frame",
-    "count": 4
-  }
+  "result": { "item": "ideomod:copper_frame", "count": 4 }
 }

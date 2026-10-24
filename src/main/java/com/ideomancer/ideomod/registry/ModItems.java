@@ -151,6 +151,10 @@ public class ModItems {
     public static final RegistryObject<Item> COPPER_FRAME = ITEMS.register("copper_frame",
             () -> new BlockItem(ModBlocks.COPPER_FRAME.get(), new Item.Properties()));
 
+    /** Copper nugget, which vanilla 1.20.1 lacks (added in 1.21.9). Edges of the Copper Frame recipe. */
+    public static final RegistryObject<Item> COPPER_NUGGET = ITEMS.register("copper_nugget",
+            () -> new Item(new Item.Properties()));
+
     // ========================================================================
     // FRAMED BLOCKS (custom BlockItem with NBT inner block data)
     // ========================================================================

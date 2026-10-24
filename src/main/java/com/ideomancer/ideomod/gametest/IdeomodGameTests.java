@@ -366,6 +366,23 @@ public class IdeomodGameTests {
                 cob, cob, cob,
                 red, Items.STICKY_PISTON, odd,
                 cob, cob, cob);
+        Item cuNug = ModItems.COPPER_NUGGET.get();
+        if (problem == null) problem = checkShaped(helper, "copper_frame", ModItems.COPPER_FRAME.get(), 4,
+                cu, cuNug, cu,
+                cuNug, null, cuNug,
+                cu, cuNug, cu);
+        if (problem == null) problem = checkShaped(helper, "copper_ingot_from_nuggets", cu, 1,
+                cuNug, cuNug, cuNug,
+                cuNug, cuNug, cuNug,
+                cuNug, cuNug, cuNug);
+        if (problem == null) {
+            Recipe<?> r = helper.getLevel().getRecipeManager()
+                    .byKey(new ResourceLocation(Ideomod.MOD_ID, "copper_nugget")).orElse(null);
+            ItemStack out = r == null ? ItemStack.EMPTY : r.getResultItem(helper.getLevel().registryAccess());
+            if (r == null || r.getIngredients().size() != 1 || !r.getIngredients().get(0).test(new ItemStack(cu))
+                    || !out.is(cuNug) || out.getCount() != 9)
+                problem = "copper_nugget: expected 1 copper ingot -> 9 copper nuggets, got " + out;
+        }
         if (problem != null) helper.fail(problem);
         else helper.succeed();
     }

@@ -417,7 +417,8 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 |---|---|
 | Machine Frame ×4 | Hollowstone in the centre, copper ingots left and right, redstone dust above and below, iron ingots in the corners |
 | Iron Frame ×4 | Iron ingots in the corners, iron nuggets on the edges, centre empty |
-| Copper Frame ×4 | Four copper ingots in a diamond shape |
+| Copper Frame ×4 | Copper ingots in the corners, copper nuggets on the edges, centre empty |
+| Copper Nugget ×9 | One copper ingot (and nine nuggets make an ingot back). Minecraft 1.20.1 has no copper nugget of its own; other mods' copper nuggets (the `forge:nuggets/copper` tag) work in these recipes too |
 | Framed block | One frame and one frameable block, anywhere in the grid |
 | Odd Slime | Slime block and Oddstone, anywhere in the grid |
 | Oddstone Bricks ×4 | 2×2 Oddstone |
