@@ -1783,7 +1783,7 @@ Registry ID: `hollow_stone`. Class: `HollowstoneBlock` (implements `EntityBlock`
 
 **Rendering**: `HollowstoneRenderer` BESR — simplified `FramedBlockRenderer`. No FACING transfer, no property delegation. Renders inner block at 0.998 scale with best-of-6-neighbors lighting via `BlockRenderDispatcher.renderSingleBlock()`. Only renders when `hasInnerBlock()` is true. Registered in `Ideomod.clientSetup()`. Render layer: `cutoutMipped` for transparent texture pixels.
 
-**Crafting**: 9 Hollowstone Shards (3x3) → 1 Hollowstone (shaped recipe at `data/ideomod/recipes/hollow_stone.json`). Hollowstone is the centre of the Machine Frame recipe (`machine_block.json`: Hollowstone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners → 4), as the design intends.
+**Crafting**: 9 Hollowstone Shards (3x3) → 1 Hollowstone (shaped recipe at `data/ideomod/recipes/hollow_stone.json`). Hollowstone is the centre of the Machine Frame recipe (`machine_block.json`: Hollowstone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners → 1), as the design intends.
 
 **Loot table**: `data/ideomod/loot_tables/blocks/hollow_stone.json`. Uses `minecraft:alternatives`: silk touch → block drop, else → 5-7 shards with fortune `ore_drops` and `explosion_decay`.
 

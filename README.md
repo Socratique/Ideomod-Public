@@ -413,22 +413,32 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 
 ## Recipes
 
-| Result | Recipe |
-|---|---|
-| Machine Frame ×4 | Hollowstone in the centre, copper ingots left and right, redstone dust above and below, iron ingots in the corners |
-| Iron Frame ×4 | Iron ingots in the corners, iron nuggets on the edges, centre empty |
-| Copper Frame ×4 | Copper ingots in the corners, copper nuggets on the edges, centre empty |
-| Copper Nugget ×9 | One copper ingot (and nine nuggets make an ingot back). Minecraft 1.20.1 has no copper nugget of its own; other mods' copper nuggets (the `forge:nuggets/copper` tag) work in these recipes too |
-| Framed block | One frame and one frameable block, anywhere in the grid |
-| Odd Slime | Slime block and Oddstone, anywhere in the grid |
-| Oddstone Bricks ×4 | 2×2 Oddstone |
-| Cobbled Oddstone | Smelt Oddstone, or mine Oddstone with Silk Touch |
-| Stairs, slabs, walls | The usual shapes, or the stonecutter |
-| Hollowstone | Nine Hollowstone Shards |
-| Redstone Rod | Redstone torch over iron ingot over stick, in a column |
-| Drill | Piston in the centre, redstone below it, iron ingots in the other seven slots |
-| Repulser | Cobbled Oddstone along the top and bottom rows; middle row redstone, piston, Oddstone |
-| Attractor | As the Repulser, with a sticky piston in place of the piston |
+Pictures drawn in the 1.20.1 crafting windows by `tools/renders/recipes.py`, straight from the recipe files.
+
+### Machines, frames and tools
+
+<table>
+<tr><td align="center"><img src="docs/media/recipes/machine_block.png" width="352" alt="Machine Frame"><br>Machine Frame</td><td align="center"><img src="docs/media/recipes/hollow_stone.png" width="352" alt="Hollowstone, from shards"><br>Hollowstone, from shards</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/iron_frame.png" width="352" alt="Iron Frame ×4"><br>Iron Frame ×4</td><td align="center"><img src="docs/media/recipes/copper_frame.png" width="352" alt="Copper Frame ×4"><br>Copper Frame ×4</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/framed_block.png" width="352" alt="Framed block: any frame + any frameable block"><br>Framed block: any frame + any frameable block</td><td align="center"><img src="docs/media/recipes/drill.png" width="352" alt="Drill"><br>Drill</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_repulser.png" width="352" alt="Repulser"><br>Repulser</td><td align="center"><img src="docs/media/recipes/oddstone_attractor.png" width="352" alt="Attractor"><br>Attractor</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/odd_slime.png" width="352" alt="Odd Slime, any arrangement"><br>Odd Slime, any arrangement</td><td align="center"><img src="docs/media/recipes/redstone_rod.png" width="352" alt="Redstone Rod"><br>Redstone Rod</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/copper_nugget.png" width="352" alt="Copper Nugget ×9"><br>Copper Nugget ×9</td><td align="center"><img src="docs/media/recipes/copper_ingot_from_nuggets.png" width="352" alt="Copper ingot from nuggets"><br>Copper ingot from nuggets</td></tr>
+</table>
+
+Minecraft 1.20.1 has no copper nugget, so Ideomod adds one (it shows as the iron nugget, tinted copper). Copper nuggets from other mods (the `forge:nuggets/copper` tag) work in these recipes too.
+
+### Oddstone building blocks
+
+<table>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_bricks.png" width="352" alt="Oddstone Bricks ×4"><br>Oddstone Bricks ×4</td><td align="center"><img src="docs/media/recipes/oddstone_smelting.png" width="352" alt="Cobbled Oddstone, by smelting"><br>Cobbled Oddstone, by smelting</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_stairs.png" width="352" alt="Oddstone Stairs ×4"><br>Oddstone Stairs ×4</td><td align="center"><img src="docs/media/recipes/oddstone_slab.png" width="352" alt="Oddstone Slab ×6"><br>Oddstone Slab ×6</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_wall.png" width="352" alt="Oddstone Wall ×6"><br>Oddstone Wall ×6</td><td align="center"><img src="docs/media/recipes/cobbled_oddstone_stairs.png" width="352" alt="Cobbled Oddstone Stairs ×4"><br>Cobbled Oddstone Stairs ×4</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/cobbled_oddstone_slab.png" width="352" alt="Cobbled Oddstone Slab ×6"><br>Cobbled Oddstone Slab ×6</td><td align="center"><img src="docs/media/recipes/cobbled_oddstone_wall.png" width="352" alt="Cobbled Oddstone Wall ×6"><br>Cobbled Oddstone Wall ×6</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_brick_stairs.png" width="352" alt="Oddstone Brick Stairs ×4"><br>Oddstone Brick Stairs ×4</td><td align="center"><img src="docs/media/recipes/oddstone_brick_slab.png" width="352" alt="Oddstone Brick Slab ×6"><br>Oddstone Brick Slab ×6</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/oddstone_brick_wall.png" width="352" alt="Oddstone Brick Wall ×6"><br>Oddstone Brick Wall ×6</td><td align="center"><img src="docs/media/recipes/stonecutter_oddstone.png" width="352" alt="Stonecutter: Oddstone"><br>Stonecutter: Oddstone</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/stonecutter_cobbled_oddstone.png" width="352" alt="Stonecutter: Cobbled Oddstone"><br>Stonecutter: Cobbled Oddstone</td><td align="center"><img src="docs/media/recipes/stonecutter_oddstone_bricks.png" width="352" alt="Stonecutter: Oddstone Bricks"><br>Stonecutter: Oddstone Bricks</td></tr>
+</table>
 
 Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Frames need a trip to the lava-side Hollowstone formations first. The Structure Debug Stick has no recipe and is creative-only.
 

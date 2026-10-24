@@ -11,5 +11,5 @@
     "C": { "item": "minecraft:copper_ingot" },
     "H": { "item": "ideomod:hollow_stone" }
   },
-  "result": { "item": "ideomod:machine_block", "count": 4 }
+  "result": { "item": "ideomod:machine_block", "count": 1 }
 }

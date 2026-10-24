@@ -1,5 +1,14 @@
 # Ideomod Changelog
 
+## [2026-10-24d] Machine Frame recipe makes 1; recipe pictures in the README
+
+- `machine_block.json` now makes 1 Machine Frame (was 4); Sean's call. GameTest updated.
+- New `tools/renders/recipes.py`: one picture per recipe in `docs/media/recipes/`, drawn in the
+  1.20.1 crafting table, furnace and stonecutter windows (window, font and vanilla icons read from
+  a local client jar; block items as small isometric blocks; recipes read from the JSON, so the
+  pictures follow the files). Reconstructions like `gui.py`, not screenshots.
+- README Recipes section now shows the pictures instead of a text table.
+
 ## [2026-10-24c] Copper nugget; Copper Frame matches the Iron Frame
 
 - New item `ideomod:copper_nugget` (Minecraft 1.20.1 has no copper nugget;

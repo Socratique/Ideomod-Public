@@ -349,7 +349,7 @@ public class IdeomodGameTests {
     public static void recipesHaveTheirShapes(GameTestHelper helper) {
         Item iron = Items.IRON_INGOT, red = Items.REDSTONE, cu = Items.COPPER_INGOT, nug = Items.IRON_NUGGET;
         Item hollow = ModBlocks.HOLLOW_STONE.get().asItem();
-        String problem = checkShaped(helper, "machine_block", ModBlocks.MACHINE_BLOCK.get().asItem(), 4,
+        String problem = checkShaped(helper, "machine_block", ModBlocks.MACHINE_BLOCK.get().asItem(), 1,
                 iron, red, iron,
                 cu, hollow, cu,
                 iron, red, iron);
