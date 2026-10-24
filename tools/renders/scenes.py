@@ -179,6 +179,7 @@ def frames(tx):
     o = build()
     s.say("Same build again. This time, power the Machine Frame first.", 1700)
     o["lever"].set(on=True)
+    o["m"].set(powered=True)
     for f in o["f"]:
         f.set(active=False)
     s.say("A powered Machine Frame switches the frames it reaches off.", 2000)

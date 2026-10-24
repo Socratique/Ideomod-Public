@@ -1,20 +1,7 @@
 {
   "parent": "minecraft:block/cube_all",
+  "render_type": "minecraft:cutout",
   "textures": {
-    "all": "ideomod:block/machine_block"
-  },
-  "elements": [
-    {
-      "from": [0, 0, 0],
-      "to": [16, 16, 16],
-      "faces": {
-        "north":  { "texture": "#all", "tintindex": 0 },
-        "south":  { "texture": "#all", "tintindex": 0 },
-        "east":   { "texture": "#all", "tintindex": 0 },
-        "west":   { "texture": "#all", "tintindex": 0 },
-        "up":     { "texture": "#all", "tintindex": 0 },
-        "down":   { "texture": "#all", "tintindex": 0 }
-      }
-    }
-  ]
+    "all": "ideomod:block/machine_frame_active"
+  }
 }

@@ -220,6 +220,7 @@
 |     |     |  |  +-- iron_framed_block.json
 |     |     |  |  +-- iron_framed_block_active.json
 |     |     |  |  +-- machine_block.json
+|     |     |  |  +-- machine_block_powered.json
 |     |     |  |  +-- machine_brace.json
 |     |     |  |  +-- machine_conductor.json
 |     |     |  |  +-- machine_engine.json
@@ -335,13 +336,14 @@
 |     |        |  +-- hollow_stone_filled.png
 |     |        |  +-- iron_frame.png
 |     |        |  +-- iron_frame_active.png
-|     |        |  +-- machine_block.png
 |     |        |  +-- machine_conductor.png
 |     |        |  +-- machine_engine.png
 |     |        |  +-- machine_engine_lit.png
 |     |        |  +-- machine_extender.png
 |     |        |  +-- machine_fluid_pipe.png
 |     |        |  +-- machine_fluid_pipe_inner_empty.png
+|     |        |  +-- machine_frame_active.png
+|     |        |  +-- machine_frame_inactive.png
 |     |        |  +-- machine_grabber.png
 |     |        |  +-- machine_grabber_on.png
 |     |        |  +-- machine_indicator.png

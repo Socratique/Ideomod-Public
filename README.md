@@ -9,7 +9,7 @@
 ### Disclaimers
 
 - The implementation and development of this mod was almost entirely handled and written by Claude, directed by me.
-- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Machine Frame and Drill textures were also made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
+- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Drill textures were also made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
 - This Repo was put together by Claude. The intro and Disclaimers were written by me.
 
 **Status: work in progress.** This repository is a snapshot of where the mod is today. A build of it, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases): put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).

@@ -4,6 +4,7 @@ import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.block.HollowstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
@@ -334,6 +335,38 @@ public class IdeomodGameTests {
             }
             Ideomod.LOGGER.info("[GameTest] pulse ring (piston at t={}) order: {}", pistonTick, firings);
             helper.succeed();
+        });
+    }
+
+    // ==================== Machine Frame look ====================
+
+    /**
+     * The Machine Frame shows POWERED (Sean's "inactive" texture) while it has
+     * redstone power and goes back when the power is removed. Display only:
+     * FrameActivation reads the redstone level itself.
+     */
+    @GameTest(template = EMPTY)
+    public static void machineFrameShowsPower(GameTestHelper helper) {
+        BlockPos frame = new BlockPos(2, 1, 2);
+        BlockPos power = new BlockPos(3, 1, 2);
+        helper.setBlock(frame, ModBlocks.MACHINE_BLOCK.get());
+        helper.runAfterDelay(2, () -> {
+            if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) {
+                helper.fail("Machine Frame shows powered with no power", frame);
+                return;
+            }
+            helper.setBlock(power, Blocks.REDSTONE_BLOCK);
+        });
+        helper.runAfterDelay(4, () -> {
+            if (!helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) {
+                helper.fail("Machine Frame did not show powered next to a redstone block", frame);
+                return;
+            }
+            helper.setBlock(power, Blocks.AIR);
+        });
+        helper.runAfterDelay(6, () -> {
+            if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) helper.fail("Machine Frame stayed powered after the power was removed", frame);
+            else helper.succeed();
         });
     }
 

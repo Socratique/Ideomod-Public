@@ -1,5 +1,21 @@
 # Ideomod Changelog
 
+## [2026-10-24e] Machine Frame: Sean's new textures, powered look
+
+- New textures by Sean: `machine_frame_active.png` (unpowered: sends out activation; hole
+  filled, copper rivets lit) and `machine_frame_inactive.png` (redstone-powered: suppresses;
+  see-through hole). Replaces Claude's `machine_block.png` (deleted).
+- `MachineFrameBlock` gains `POWERED` (vanilla BlockStateProperties.POWERED), set on placement,
+  on neighbour change and after a piston move or swap back from a specialization. Display only:
+  `FrameActivation` still reads the redstone level itself.
+- Blockstate `powered=false|true` -> models `machine_block` / `machine_block_powered`,
+  `render_type: cutout`; block gains `noOcclusion()` for the see-through hole. The old model's
+  `tintindex 0` on every face is gone (no colour handler has supplied a tint for it).
+- GameTest `machineFrameShowsPower`. 10/10 GameTests pass; jar check passes.
+- README renders (blocks.png, frames.gif, track.gif, recipe pictures) redrawn with the new
+  textures; frames.gif shows the powered look. README credit line no longer lists the Machine
+  Frame as Claude's.
+
 ## [2026-10-24d] Machine Frame recipe makes 1; recipe pictures in the README
 
 - `machine_block.json` now makes 1 Machine Frame (was 4); Sean's call. GameTest updated.

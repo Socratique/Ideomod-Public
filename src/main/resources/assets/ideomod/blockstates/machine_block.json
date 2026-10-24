@@ -1,5 +1,6 @@
 {
   "variants": {
-    "": { "model": "ideomod:block/machine_block" }
+    "powered=false": { "model": "ideomod:block/machine_block" },
+    "powered=true": { "model": "ideomod:block/machine_block_powered" }
   }
 }

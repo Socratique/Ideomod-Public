@@ -20,7 +20,7 @@ Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
 **Texture scripts**: `tools/textures/make_portal_texture.py` (the animated portal), `tools/textures/make_ranged_textures.py` (Repulser/Attractor re-skinned from the cyan-era originals onto the current Oddstone). `tools/renders` draws the README pictures from the mod's textures.
 
-**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
+**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
 
 ---
 
@@ -83,7 +83,7 @@ com.ideomancer.ideomod
   |     |     |                                isPipe(), isRepeater(), isTransformer(), isTimer(),
   |     |     |                                isEngine(). Dynamic slots. getBlockContentHeight()
   |     |     |                                reads GUI height from current block class.
-  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. ~40 lines.
+  |     |     |-- MachineFrameBlock.java       Extends AbstractMachineBlock. MachineType.FRAME. POWERED state (display only: Sean's active/inactive textures).
   |     |     |-- MachineFrameBlockEntity.java Shared BE. Single slot + IPistonMovable + client sync.
   |     |     |                                Protected constructor for subclass BE types.
   |     |     |                                (getUpdatePacket, getUpdateTag, syncToClients).
