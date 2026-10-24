@@ -1,5 +1,26 @@
 # Ideomod Changelog
 
+## [2026-10-24b] Recipes: Machine Frame needs Hollowstone; Iron Frame uses nuggets
+
+From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
+
+- **Machine Frame** (`machine_block.json`), still makes 4:
+  ```
+  iron     redstone    iron
+  copper   Hollowstone copper
+  iron     redstone    iron
+  ```
+  Was 1 iron ingot + 4 redstone. Hollowstone now has a crafting use, as the
+  design intends (Oddstone -> lava -> Hollowstone -> Machine Frames).
+- **Iron Frame** (`iron_frame.json`), still makes 4: iron ingots in the
+  corners, iron nuggets on the four edges, centre empty. Was 4 ingots in a diamond.
+- **Copper Frame** unchanged for now: Minecraft 1.20.1 has no copper nugget
+  (added in 1.21.9), so the matching nugget recipe needs a decision.
+- New GameTest `recipesHaveTheirShapes` reads both recipes back from the
+  recipe manager and checks every slot and the output count. 9/9 GameTests
+  pass; jar check passes.
+- README recipe table updated.
+
 ## [2026-10-24] Oddstone portals: own animated texture, particles and hum; Repulser/Attractor re-skinned
 
 Two items from the Beta Release ToDo (2026-04-07): "add animation to oddstone

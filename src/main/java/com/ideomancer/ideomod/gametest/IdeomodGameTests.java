@@ -15,7 +15,12 @@ import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.world.item.crafting.Ingredient;
+import net.minecraft.world.item.crafting.Recipe;
+import net.minecraft.world.item.crafting.ShapedRecipe;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
@@ -330,6 +335,45 @@ public class IdeomodGameTests {
             Ideomod.LOGGER.info("[GameTest] pulse ring (piston at t={}) order: {}", pistonTick, firings);
             helper.succeed();
         });
+    }
+
+    // ==================== Recipes ====================
+
+    /**
+     * Shaped recipes come out of the game's recipe manager with the expected
+     * item in every slot (read left to right, top to bottom; null = empty) and
+     * the expected count. Catches a mistyped item id, which Minecraft would
+     * otherwise just log and skip, leaving the item uncraftable.
+     */
+    @GameTest(template = EMPTY)
+    public static void recipesHaveTheirShapes(GameTestHelper helper) {
+        Item iron = Items.IRON_INGOT, red = Items.REDSTONE, cu = Items.COPPER_INGOT, nug = Items.IRON_NUGGET;
+        Item hollow = ModBlocks.HOLLOW_STONE.get().asItem();
+        String problem = checkShaped(helper, "machine_block", ModBlocks.MACHINE_BLOCK.get().asItem(), 4,
+                iron, red, iron,
+                cu, hollow, cu,
+                iron, red, iron);
+        if (problem == null) problem = checkShaped(helper, "iron_frame", ModItems.IRON_FRAME.get(), 4,
+                iron, nug, iron,
+                nug, null, nug,
+                iron, nug, iron);
+        if (problem != null) helper.fail(problem);
+        else helper.succeed();
+    }
+
+    private static String checkShaped(GameTestHelper helper, String id, Item result, int count, Item... slots) {
+        Recipe<?> recipe = helper.getLevel().getRecipeManager()
+                .byKey(new ResourceLocation(Ideomod.MOD_ID, id)).orElse(null);
+        if (!(recipe instanceof ShapedRecipe shaped)) return id + ": no shaped recipe loaded";
+        if (shaped.getWidth() != 3 || shaped.getHeight() != 3) return id + ": not 3x3";
+        ItemStack out = shaped.getResultItem(helper.getLevel().registryAccess());
+        if (!out.is(result) || out.getCount() != count) return id + ": makes " + out + ", expected " + count + " " + result;
+        for (int i = 0; i < 9; i++) {
+            Ingredient ing = shaped.getIngredients().get(i);
+            boolean ok = slots[i] == null ? ing.isEmpty() : ing.test(new ItemStack(slots[i]));
+            if (!ok) return id + ": slot " + i + " should be " + slots[i];
+        }
+        return null;
     }
 
     private static boolean isPoweredPulser(GameTestHelper helper, int ringIndex, int dz) {

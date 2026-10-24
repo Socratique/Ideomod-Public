@@ -415,8 +415,9 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 
 | Result | Recipe |
 |---|---|
-| Machine Frame ×4 | Iron ingot in the centre, redstone dust above, below, left and right |
-| Iron Frame ×4 / Copper Frame ×4 | Four ingots in a diamond shape |
+| Machine Frame ×4 | Hollowstone in the centre, copper ingots left and right, redstone dust above and below, iron ingots in the corners |
+| Iron Frame ×4 | Iron ingots in the corners, iron nuggets on the edges, centre empty |
+| Copper Frame ×4 | Four copper ingots in a diamond shape |
 | Framed block | One frame and one frameable block, anywhere in the grid |
 | Odd Slime | Slime block and Oddstone, anywhere in the grid |
 | Oddstone Bricks ×4 | 2×2 Oddstone |
@@ -426,7 +427,7 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 | Redstone Rod | Redstone torch over iron ingot over stick, in a column |
 | Drill | Piston in the centre, redstone below it, iron ingots in the other seven slots |
 
-Oddstone itself only comes from the world. The Repulser, Attractor and Structure Debug Stick have no recipe yet and are creative-only.
+Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Frames need a trip to the lava-side Hollowstone formations first. The Repulser, Attractor and Structure Debug Stick have no recipe yet and are creative-only.
 
 Mining Oddstone with a normal pickaxe drops Oddstone. Silk Touch gives Cobbled Oddstone, the reverse of vanilla stone.
 
