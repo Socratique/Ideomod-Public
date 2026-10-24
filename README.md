@@ -426,8 +426,10 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 | Hollowstone | Nine Hollowstone Shards |
 | Redstone Rod | Redstone torch over iron ingot over stick, in a column |
 | Drill | Piston in the centre, redstone below it, iron ingots in the other seven slots |
+| Repulser | Cobbled Oddstone along the top and bottom rows; middle row redstone, piston, Oddstone |
+| Attractor | As the Repulser, with a sticky piston in place of the piston |
 
-Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Frames need a trip to the lava-side Hollowstone formations first. The Repulser, Attractor and Structure Debug Stick have no recipe yet and are creative-only.
+Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Frames need a trip to the lava-side Hollowstone formations first. The Structure Debug Stick has no recipe and is creative-only.
 
 Mining Oddstone with a normal pickaxe drops Oddstone. Silk Touch gives Cobbled Oddstone, the reverse of vanilla stone.
 

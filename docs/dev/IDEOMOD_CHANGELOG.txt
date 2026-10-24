@@ -1,6 +1,6 @@
 # Ideomod Changelog
 
-## [2026-10-24b] Recipes: Machine Frame needs Hollowstone; Iron Frame uses nuggets
+## [2026-10-24b] Recipes: Machine Frame needs Hollowstone; Iron Frame uses nuggets; Repulser and Attractor craftable
 
 From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
 
@@ -14,10 +14,18 @@ From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
   design intends (Oddstone -> lava -> Hollowstone -> Machine Frames).
 - **Iron Frame** (`iron_frame.json`), still makes 4: iron ingots in the
   corners, iron nuggets on the four edges, centre empty. Was 4 ingots in a diamond.
+- **Repulser** (`oddstone_repulser.json`, new) and **Attractor**
+  (`oddstone_attractor.json`, new), 1 each; until now both were creative-only:
+  ```
+  cobbled   cobbled   cobbled
+  redstone  piston    Oddstone        (Attractor: sticky piston)
+  cobbled   cobbled   cobbled
+  ```
+  Plain piston pushes, sticky piston pulls.
 - **Copper Frame** unchanged for now: Minecraft 1.20.1 has no copper nugget
   (added in 1.21.9), so the matching nugget recipe needs a decision.
 - New GameTest `recipesHaveTheirShapes` reads both recipes back from the
-  recipe manager and checks every slot and the output count. 9/9 GameTests
+  recipe manager and checks every slot and the output count (all four recipes). 9/9 GameTests
   pass; jar check passes.
 - README recipe table updated.
 

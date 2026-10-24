@@ -1,0 +1,15 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CCC",
+    "RPO",
+    "CCC"
+  ],
+  "key": {
+    "C": { "item": "ideomod:cobbled_oddstone" },
+    "R": { "item": "minecraft:redstone" },
+    "P": { "item": "minecraft:piston" },
+    "O": { "item": "ideomod:oddstone" }
+  },
+  "result": { "item": "ideomod:oddstone_repulser", "count": 1 }
+}

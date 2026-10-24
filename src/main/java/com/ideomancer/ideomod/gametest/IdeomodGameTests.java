@@ -357,6 +357,15 @@ public class IdeomodGameTests {
                 iron, nug, iron,
                 nug, null, nug,
                 iron, nug, iron);
+        Item cob = ModBlocks.COBBLED_ODDSTONE.get().asItem(), odd = ModBlocks.ODDSTONE.get().asItem();
+        if (problem == null) problem = checkShaped(helper, "oddstone_repulser", ModItems.ODDSTONE_REPULSER.get(), 1,
+                cob, cob, cob,
+                red, Items.PISTON, odd,
+                cob, cob, cob);
+        if (problem == null) problem = checkShaped(helper, "oddstone_attractor", ModItems.ODDSTONE_ATTRACTOR.get(), 1,
+                cob, cob, cob,
+                red, Items.STICKY_PISTON, odd,
+                cob, cob, cob);
         if (problem != null) helper.fail(problem);
         else helper.succeed();
     }
