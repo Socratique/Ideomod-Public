@@ -1,5 +1,19 @@
 # Ideomod Changelog
 
+## [2026-10-25c] Sympathetic links respect the push limit
+
+Sean's rule: a linked Oddstone that would itself go over the push limit is left behind (the
+rest moves); one that would push or pull other blocks over the limit fails the whole move.
+
+- `PistonStructureResolverMixin.ideomod$sympatheticSearch` ignored `addBlockLine`'s result for
+  linked blocks, so a refused line still joined the move: in the new test four blocks moved with
+  the limit at 3. Now: skip the linked block if toPush is already at the limit; otherwise a
+  false result (over the limit, or blocked) fails the resolve.
+- GameTests `linkedOddstoneOverLimitIsLeftBehind` and `linkedOddstonePushingOverLimitFailsTheMove`
+  (own batch `pushlimit`; they lower the push limit to 3 by reflection and restore it). The second
+  fails without the fix. 14/14 GameTests pass.
+- README: the rule added to Sympathetic movement; the rough edge removed.
+
 ## [2026-10-25b] Odd Slime: new recipe and an Oddstone core (textures unchanged)
 
 - Recipe (`odd_slime.json`): one Oddstone surrounded by eight slime balls -> 1 (was a slime

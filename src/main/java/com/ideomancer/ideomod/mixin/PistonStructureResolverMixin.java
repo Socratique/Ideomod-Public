@@ -329,7 +329,21 @@ public abstract class PistonStructureResolverMixin {
                         // along cardinal directions), so exactly one axis will differ.
                         Direction linkDir = ideomod$getAxisDirection(sourcePos, checkPos);
                         if (linkDir != null) {
+                            // Push limit (Sean, 2026-10-25): a linked block that would itself
+                            // take the move over the limit is left behind, and the rest of the
+                            // move goes ahead. But once it joins, whatever it pushes or pulls
+                            // must fit: if vanilla refuses its line (over the limit, or blocked)
+                            // the whole move fails, as a vanilla piston would. (The result used
+                            // to be ignored, so such a block was dropped and the move went on.)
+                            if (this.toPush.size() >= ideomod$calculatePushLimit()) {
+                                foundSource = true;   // left behind; don't try other sources
+                                break;
+                            }
                             boolean result = this.addBlockLine(checkPos, linkDir);
+                            if (!result) {
+                                cir.setReturnValue(false);
+                                return;
+                            }
                             if (this.toPush.contains(checkPos)) {
                                 addedAny = true;
                                 foundSource = true;

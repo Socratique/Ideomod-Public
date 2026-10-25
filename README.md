@@ -96,6 +96,9 @@ The rule:
 - Every block type is its own channel, so there are twelve: Oddstone, Cobbled Oddstone, Oddstone Bricks, and the wall, stairs and slab of each. Oddstone never links with Cobbled Oddstone.
 - A linked block moves the way any pushed block does. It pushes what is in front of it and brings along anything stuck to it.
 - Everything counts toward the one piston push limit (12, or more with [Machine Braces](#brace)).
+  A linked block that would itself go over the limit is left behind and the rest of the move goes ahead;
+  but if a linked block would push or pull other blocks over the limit (or into something immovable),
+  the whole move fails, as a vanilla piston refuses.
 
 A sticky piston cannot pull a sympathetic block directly. It retracts and leaves the block where it is.
 
@@ -487,7 +490,6 @@ This is a snapshot, so here is what is known to be unfinished. Most of these com
 - **Hollowstone** loses its inner block when mined with Silk Touch or destroyed by anything other than a player, and cannot be moved by pistons.
 - **Furnace Array size limits** are read at startup, so `/ideomod reload` does not change them until a restart.
 - **A full Fluid Pipe** that is broken drops holding its filled bucket, and turns into a plain Machine Frame when placed again.
-- **Sympathetic links and the push limit:** a linked block that would take a move over the limit appears to be left behind rather than stopping the move.
 - **No world generation beyond Oddstone ore and Hollowstone formations.** The larger overhaul sketched in the design notes has not been started.
 - **Framed glass, slime and other see-through blocks** look solid in the inventory. Placed in the world they look right.
 - **The Toggle's indicator** is the same colour on all six faces; only the outer texture shows which face is the input.

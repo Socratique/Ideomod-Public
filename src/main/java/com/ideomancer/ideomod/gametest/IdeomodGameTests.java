@@ -1,6 +1,7 @@
 package com.ideomancer.ideomod.gametest;
 
 import com.ideomancer.ideomod.Ideomod;
+import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.block.HollowstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
@@ -418,6 +419,78 @@ public class IdeomodGameTests {
             int seen = MachineRedstoneHelper.getIncomingSignalFromFace(helper.getLevel(), reader, Direction.WEST, new ThreadLocal<>());
             if (seen != 14) helper.fail("a machine next to the receiver reads " + seen + ", expected 14", receiver);
             else helper.succeed();
+        });
+    }
+
+    // ==================== Sympathetic links and the push limit (Sean, 2026-10-25) ====================
+    // Run in their own batch: they lower the global push limit to 3 (a 7x7 test area cannot
+    // hold 12-block lines) and must not overlap other tests that move bigger groups.
+
+    // read once, before any test lowers it: both tests in the batch run at the same time
+    private static final int CONFIGURED_PUSH_LIMIT = IdeomodConfig.getBasePushLimit();
+
+    private static int setBasePushLimit(int limit) {
+        try {
+            java.lang.reflect.Field f = IdeomodConfig.class.getDeclaredField("basePushLimit");
+            f.setAccessible(true);
+            int old = f.getInt(null);
+            f.setInt(null, limit);
+            return old;
+        } catch (ReflectiveOperationException e) {
+            throw new IllegalStateException(e);
+        }
+    }
+
+    /**
+     * A linked Oddstone that would itself take the move over the limit is left behind;
+     * the rest of the move goes ahead. Limit 3: piston -> [Oddstone A][stone][stone] is 3;
+     * Oddstone B, linked 3 blocks south of A, would be the 4th.
+     */
+    @GameTest(template = EMPTY, batch = "pushlimit")
+    public static void linkedOddstoneOverLimitIsLeftBehind(GameTestHelper helper) {
+        setBasePushLimit(3);
+        helper.setBlock(0, 1, 1, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST));
+        helper.setBlock(1, 1, 1, ModBlocks.ODDSTONE.get());
+        helper.setBlock(2, 1, 1, Blocks.STONE);
+        helper.setBlock(3, 1, 1, Blocks.STONE);
+        helper.setBlock(1, 1, 4, ModBlocks.ODDSTONE.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            setBasePushLimit(CONFIGURED_PUSH_LIMIT);
+            if (!helper.getBlockState(new BlockPos(2, 1, 1)).is(ModBlocks.ODDSTONE.get())
+                    || !helper.getBlockState(new BlockPos(4, 1, 1)).is(Blocks.STONE)) {
+                helper.fail("the main push (3 blocks, at the limit) did not happen", new BlockPos(1, 1, 1));
+            } else if (!helper.getBlockState(new BlockPos(1, 1, 4)).is(ModBlocks.ODDSTONE.get())) {
+                helper.fail("the linked Oddstone over the limit moved instead of being left behind", new BlockPos(1, 1, 4));
+            } else {
+                helper.succeed();
+            }
+        });
+    }
+
+    /**
+     * A linked Oddstone that would push blocks over the limit makes the whole move fail,
+     * as a vanilla piston refuses. Limit 3: Oddstone A alone, but Oddstone B (linked) has
+     * three stones in front of it: B's line alone is 4.
+     */
+    @GameTest(template = EMPTY, batch = "pushlimit")
+    public static void linkedOddstonePushingOverLimitFailsTheMove(GameTestHelper helper) {
+        setBasePushLimit(3);
+        helper.setBlock(0, 1, 1, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST));
+        helper.setBlock(1, 1, 1, ModBlocks.ODDSTONE.get());
+        helper.setBlock(1, 1, 4, ModBlocks.ODDSTONE.get());
+        helper.setBlock(2, 1, 4, Blocks.STONE);
+        helper.setBlock(3, 1, 4, Blocks.STONE);
+        helper.setBlock(4, 1, 4, Blocks.STONE);
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            setBasePushLimit(CONFIGURED_PUSH_LIMIT);
+            boolean aStayed = helper.getBlockState(new BlockPos(1, 1, 1)).is(ModBlocks.ODDSTONE.get());
+            boolean bStayed = helper.getBlockState(new BlockPos(1, 1, 4)).is(ModBlocks.ODDSTONE.get());
+            boolean extended = helper.getBlockState(new BlockPos(0, 1, 1)).getValue(PistonBaseBlock.EXTENDED);
+            if (aStayed && bStayed && !extended) helper.succeed();
+            else helper.fail("move should have failed: A stayed=" + aStayed + ", B stayed=" + bStayed
+                    + ", piston extended=" + extended, new BlockPos(1, 1, 1));
         });
     }
 
