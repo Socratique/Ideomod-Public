@@ -133,6 +133,8 @@ A slime block with a direction. It is sticky on all six sides, but only when it 
 
 It is placed like a piston, facing you. It never sticks to slime or honey blocks, and it cannot grab Oddstone.
 
+Like a vanilla slime block it has a smaller block inside it; Odd Slime's is Oddstone, seen through the slime.
+
 ## Oddstone Repulser and Attractor
 
 Two blocks that move Oddstone at a distance. Each acts along the line it faces, up to 12 blocks, and ignores whatever is in between.
@@ -422,7 +424,7 @@ Pictures drawn in the 1.20.1 crafting windows by `tools/renders/recipes.py`, str
 <tr><td align="center"><img src="docs/media/recipes/iron_frame.png" width="352" alt="Iron Frame ×4"><br>Iron Frame ×4</td><td align="center"><img src="docs/media/recipes/copper_frame.png" width="352" alt="Copper Frame ×4"><br>Copper Frame ×4</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/framed_block.png" width="352" alt="Framed block: any frame + any frameable block"><br>Framed block: any frame + any frameable block</td><td align="center"><img src="docs/media/recipes/drill.png" width="352" alt="Drill"><br>Drill</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/oddstone_repulser.png" width="352" alt="Repulser"><br>Repulser</td><td align="center"><img src="docs/media/recipes/oddstone_attractor.png" width="352" alt="Attractor"><br>Attractor</td></tr>
-<tr><td align="center"><img src="docs/media/recipes/odd_slime.png" width="352" alt="Odd Slime, any arrangement"><br>Odd Slime, any arrangement</td><td align="center"><img src="docs/media/recipes/redstone_rod.png" width="352" alt="Redstone Rod"><br>Redstone Rod</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/odd_slime.png" width="352" alt="Odd Slime"><br>Odd Slime</td><td align="center"><img src="docs/media/recipes/redstone_rod.png" width="352" alt="Redstone Rod"><br>Redstone Rod</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/copper_nugget.png" width="352" alt="Copper Nugget ×9"><br>Copper Nugget ×9</td><td align="center"><img src="docs/media/recipes/copper_ingot_from_nuggets.png" width="352" alt="Copper ingot from nuggets"><br>Copper ingot from nuggets</td></tr>
 </table>
 

@@ -4,11 +4,26 @@
     "front": "ideomod:block/odd_slime_front",
     "back": "ideomod:block/odd_slime_back",
     "side": "ideomod:block/odd_slime_side",
+    "core": "ideomod:block/oddstone",
     "particle": "ideomod:block/odd_slime_side"
   },
   "render_type": "translucent",
   "elements": [
     {
+      "name": "oddstone_core",
+      "from": [3, 3, 3],
+      "to": [13, 13, 13],
+      "faces": {
+        "north": { "uv": [3, 3, 13, 13], "texture": "#core" },
+        "south": { "uv": [3, 3, 13, 13], "texture": "#core" },
+        "up":    { "uv": [3, 3, 13, 13], "texture": "#core" },
+        "down":  { "uv": [3, 3, 13, 13], "texture": "#core" },
+        "east":  { "uv": [3, 3, 13, 13], "texture": "#core" },
+        "west":  { "uv": [3, 3, 13, 13], "texture": "#core" }
+      }
+    },
+    {
+      "name": "slime_shell",
       "from": [0, 0, 0],
       "to": [16, 16, 16],
       "faces": {

@@ -450,6 +450,11 @@ public class IdeomodGameTests {
                 cob, cob, cob,
                 red, Items.STICKY_PISTON, odd,
                 cob, cob, cob);
+        Item ball = Items.SLIME_BALL;
+        if (problem == null) problem = checkShaped(helper, "odd_slime", ModItems.ODD_SLIME.get(), 1,
+                ball, ball, ball,
+                ball, odd, ball,
+                ball, ball, ball);
         Item cuNug = ModItems.COPPER_NUGGET.get();
         if (problem == null) problem = checkShaped(helper, "copper_frame", ModItems.COPPER_FRAME.get(), 4,
                 cu, cuNug, cu,

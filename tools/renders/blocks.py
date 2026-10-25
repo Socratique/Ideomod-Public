@@ -143,7 +143,9 @@ def fluid(p):
 # -------------------------------------------------------------------- mod --
 
 def odd_slime(p):
-    return directional("odd_slime_front", "odd_slime_back", "odd_slime_side", p.get("facing", "up"))
+    """Oddstone core inside a translucent shell, like vanilla slime; the shell is directional."""
+    core = (box(3, 3, 3, 13, 13, 13, "oddstone", uv=(3, 3, 13, 13)), False, C)
+    return [core] + directional("odd_slime_front", "odd_slime_back", "odd_slime_side", p.get("facing", "up"))
 
 
 def repulser(p):

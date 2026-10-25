@@ -1,5 +1,15 @@
 # Ideomod Changelog
 
+## [2026-10-25b] Odd Slime: new recipe and an Oddstone core (textures unchanged)
+
+- Recipe (`odd_slime.json`): one Oddstone surrounded by eight slime balls -> 1 (was a slime
+  block + Oddstone, shapeless). Checked by `recipesHaveTheirShapes`.
+- Model: like vanilla slime, an inner core (3..13, the Oddstone texture) inside the
+  translucent shell. Facing and rotations unchanged.
+- Textures unchanged (Sean's): new Odd Slime and Oddstone textures are commissioned. Claude's
+  2026-10-24 texture drafts stay parked on the local `beta/indicators` branch.
+- README: Odd Slime section mentions the core; recipe picture and Odd Slime GIF redrawn.
+
 ## [2026-10-25] Fixes: mixed-metal frames, Transmitter strength, log noise; sympathetic range 12
 
 From a review of the README's rough edges against the code (Sean, 2026-10-25).
