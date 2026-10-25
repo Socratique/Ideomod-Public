@@ -481,7 +481,7 @@ Commands, both for operators:
 
 This is a snapshot, so here is what is known to be unfinished. Most of these come from reading the code and have not all been checked in the game.
 
-- **Placeholder art** on some machine blocks (Timer, Engine, Transmitter).
+- **Placeholder art** on the Machine Timer: a plain stand-in Claude drew when the block was added, waiting for a real texture.
 - **Hollowstone** loses its inner block when mined with Silk Touch or destroyed by anything other than a player, and cannot be moved by pistons.
 - **Furnace Array size limits** are read at startup, so `/ideomod reload` does not change them until a restart.
 - **A full Fluid Pipe** that is broken drops holding its filled bucket, and turns into a plain Machine Frame when placed again.
