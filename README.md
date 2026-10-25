@@ -12,7 +12,7 @@
 - Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Drill textures were also made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
 - This Repo was put together by Claude. The intro and Disclaimers were written by me.
 
-**Status: work in progress.** This repository is a snapshot of where the mod is today. A build of it, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases): put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
+**Status: work in progress.** This README describes the code on `main` as it is today. The last release, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases) (put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install); `main` has moved on since then (new recipes, the copper nugget, fixes, see [the changelog](docs/dev/IDEOMOD_CHANGELOG.txt)), so build it yourself for the latest. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
 
 | | |
 |---|---|
@@ -48,7 +48,7 @@
 
 The isometric animations in this README are **illustrations, not screen captures**. They are drawn by a small script ([`tools/renders`](tools/renders)) from the mod's own textures, and each one replays by hand what the code does in that situation. They exist to make the rules easy to see.
 
-The GUI pictures are drawn the same way, from the mod's own GUI textures, by [`tools/renders/gui.py`](tools/renders/gui.py).
+The GUI pictures are drawn the same way, from the mod's own GUI textures, by [`tools/renders/gui.py`](tools/renders/gui.py), and the recipe pictures by [`tools/renders/recipes.py`](tools/renders/recipes.py), straight from the recipe files.
 
 Real footage from the game is in [In-game footage](#in-game-footage) at the end of the Oddstone section.
 
@@ -63,7 +63,9 @@ You need JDK 17. From the repository root:
 
 The first run downloads Forge and decompiles Minecraft, which takes a while.
 
-To check that a built jar really loads, run `scripts/check_jar.sh`. It starts a real Forge server with the jar in its `mods` folder and fails if the mod does not load or the server crashes. GitHub runs the same check on every push ([![Build and check the jar](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml/badge.svg)](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml)).
+`./gradlew runGameTestServer` runs the in-world tests: a headless server builds small setups (a Pulser ring shaken by a piston, mixed iron and copper frames, a full Fluid Pipe broken and placed again, sympathetic links at the push limit, every recipe's shape, and more), checks the results and exits with a pass or fail.
+
+To check that a built jar really loads, run `scripts/check_jar.sh`. It starts a real Forge server with the jar in its `mods` folder and fails if the mod does not load or the server crashes. GitHub runs the tests and the same jar check on every push ([![Build and check the jar](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml/badge.svg)](https://github.com/Socratique/Ideomod-Public/actions/workflows/check.yml)).
 
 In game, everything is in the **Ideomod** creative tab. A second tab, **Framed Blocks**, lists every framed block.
 
@@ -340,6 +342,8 @@ Holds one bucket of water or lava.
 
 With an empty slot, the Machine Frame is the connector. It sticks to every machine block, which makes it the glue of a contraption. It is also what switches [frames](#frames-and-framed-blocks) off.
 
+Its look shows which it is doing: unpowered (switching frames on) it shows a filled centre; powered by redstone (switching them off) the centre opens and the red machine indicator shows through.
+
 ## Frames and Framed Blocks
 
 Iron Frames and Copper Frames are see-through blocks that are only sticky while they are **active**.
@@ -507,19 +511,21 @@ src/main/java/com/ideomancer/ideomod/
   block/piston/     Repulser and Attractor
   block/portal/     Oddstone portals
   multiblock/       multiblock framework and the Furnace Array
-  mixin/            the piston, furnace and entity hooks
+  mixin/            the piston, redstone wire, furnace and entity hooks
   worldgen/         ore-only world type, Hollowstone formations
+  gametest/         the in-world tests (runGameTestServer)
   config/ client/ network/ registry/ item/ effect/
 src/main/resources/ models, textures, recipes, loot tables, tags, worldgen
 docs/dev/           working notes: design, technical reference, changelog, audits
 docs/media/         the pictures in this README
-tools/renders/      the script that draws the illustrations
-scripts/            small Windows helper scripts
+tools/renders/      the scripts that draw the illustrations, GUI and recipe pictures
+tools/textures/     scripts that draw some textures (the portal, the Repulser/Attractor re-skins)
+scripts/            check_jar.sh (boots the jar on a real server) and generate_filetree.bat
 ```
 
 The notes in [`docs/dev`](docs/dev) are the project's working documents. They are long, detailed, and in places behind the code. This README was checked against the code and is the better guide to what the mod does today.
 
-To redraw the illustrations: `python tools/renders/scenes.py` and `python tools/renders/gui.py` (needs Python 3 and Pillow).
+To redraw the illustrations: `python tools/renders/scenes.py`, `python tools/renders/gui.py` and `python tools/renders/recipes.py` (needs Python 3 and Pillow; vanilla textures are read from a local 1.20.1 client jar).
 
 ## License
 

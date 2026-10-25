@@ -1,5 +1,14 @@
 # Ideomod Changelog
 
+## [2026-10-25e] README and design doc brought up to date
+
+- README: status line (main has moved past the 0.1.1 release); the in-world tests and how to run
+  them; the Machine Frame's powered look; recipe pictures in About the pictures; repository layout
+  (gametest/, tools/textures/, what scripts/ holds, redstone-wire mixin); how to redraw everything.
+- IDEOMOD_DESIGN.md: the 2026-10-24/25 decisions written in (recipes, Copper Nugget, Machine Frame
+  look, full Fluid Pipe, sympathetic range 12 and the push-limit rule, Hollow Stone [DONE], Odd
+  Slime core, branch-tree rules). Same file synced to every branch.
+
 ## [2026-10-25d] A full Fluid Pipe keeps its fluid when broken
 
 - Bug: a full pipe drops as a Fluid Pipe holding its slot item, which while full is a water or

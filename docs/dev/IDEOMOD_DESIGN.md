@@ -1,6 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
+*Last updated: 2026-10-25 (Ideomancer's decisions of 2026-10-24/25 written in: real recipes -- Machine Frame needs Hollow Stone, Iron/Copper Frames from ingots + nuggets, Repulser/Attractor craftable, Odd Slime from an Oddstone ringed by slime balls with an Oddstone core inside; the Copper Nugget item; the Machine Frame's own textures and powered look; a full Fluid Pipe keeps its fluid; sympathetic range 12 and the push-limit rule for linked blocks; Hollow Stone marked [DONE]; branch-tree rules: side-only limbs, mostly normal trees, small branch-only trees.)*
 *Last updated: 2026-10-17 (Branch + Bush blocks prototyped and rewritten to the Ideomancer's placement rules: branches have an axis and join only when one points at the other (T, L, no lattice); bushes use 26 neighbours -- edges and corners fill only with the diagonal, so L-shapes keep their notch. Both now [WIP]. Later the same day: branch texturing hand-set (ring end caps, grain along every stick, bark at bends); bushes on vanilla oak leaves in two layers.)*
 *Last updated: 2026-07-17 (Enchanting Overhaul expansion -- imported the full consolidated enchant list from the "Yeet" brainstorm session that was never written in: movement enchants (Swiftness, Water/Lava/Blaze Walking), armor (Pockets, Endurance), farming (Harvest, Sowing, Reaping), gathering (Felling, Vein Miner), utility (Reach, universalized Channeling), Yeet; full Spell Enchants category (Fireball, Gust, Inferno Ring, Combustion, Destruction, Combustive/Destructive Shot, Explosive, Warp/Blink Shot) with shared durability-cost mechanic; new curses (Encumbrance, Feebleness, Dropping, Blunting); Mythical rarity tier + Sacrifice; Enchant Universalization system; Weight knockback note; Disenchanting Table subtraction mechanic; Wand item stub added (flagged, needs definition))*
 *Last updated: 2026-04-19 (Frame Family simplified -- raw vanilla iron/copper removed as conductors and sticky members; cross-frame mediation removed and INNER_CONDUCTOR property deleted; Oddstone silk-touch loot fix; OddstoneConfig deleted; FurnaceArray frame tag consolidated)*
@@ -95,7 +96,7 @@
 |---------|--------|-------|
 | Mob avoidance | [DONE] | `isPathfindable=false` + Forge `DAMAGE_OTHER` hook. JSON config for per-mob control. |
 | Redstone insulation | [DONE] | `isRedstoneConductor=false` -- acts like glass for redstone. |
-| Sympathetic movement | [DONE] | Channel-aware wireless via ISympathetic interface (channel "oddstone"). Scans adjacent blocks at distance 1 via MovementScanHelper. BFS chaining. Only links to same-channel blocks. Push chains count toward 12-block limit. |
+| Sympathetic movement | [DONE] | Channel-aware wireless via ISympathetic interface (channel "oddstone"). Scans along the six axis lines up to `sympathetic_radius` (config, default 12; was 5 until 2026-10-25) via MovementScanHelper. BFS chaining. Only links to same-channel blocks. Push chains count toward the 12-block limit. **Push-limit rule (Ideomancer, 2026-10-25):** a linked block that would itself take the move over the limit is left behind and the rest moves; a linked block whose own push or pull would go over the limit (or into something immovable) fails the whole move, as a vanilla piston refuses. |
 | One-way stickiness | [DONE] | Oddstone grabs only SLIME, HONEY, ODD_SLIME via StickyType.ODDSTONE.canGrab(). Cannot grab other Oddstone blocks (real or framed) -- those connections resolve purely through sympathetic channels. Slime does NOT grab Oddstone. Via mixin + StickinessRules. |
 | Sticky piston immunity | [DONE] | Sticky pistons cannot directly pull Oddstone. Implemented via PistonBaseBlockMixin position-specific ThreadLocal check -- during retraction, only the block at the exact pull position is checked. Oddstone dragged by its own stickiness (e.g., stuck to slime being pulled) still moves correctly. |
 
@@ -219,7 +220,7 @@
 
 ---
 
-### Hollow Stone [IDEA]
+### Hollow Stone [DONE]
 > Processed stone created when lava meets Oddstone. Required material for Machine Blocks. Also a decorative block with inner-block display.
 
 | Property | Value |
@@ -228,7 +229,7 @@
 | Hardness | TBD |
 | Tool | Pickaxe |
 | Type | Block Entity (stores inner decorative block ID) |
-| Recipe | Not crafted directly -- see Creation below |
+| Recipe | Not crafted from other blocks -- forms where lava meets Oddstone (see Creation). 9 Hollow Stone Shards (3x3) -> 1 Hollow Stone. |
 
 **Creation:**
 When a lava source block is adjacent to Oddstone, the lava source transforms into Hollow Stone. The Oddstone is NOT consumed -- it acts as a catalyst. Hollow Stone can also be found naturally wherever lava sources and Oddstone coexist underground.
@@ -236,13 +237,13 @@ When a lava source block is adjacent to Oddstone, the lava source transforms int
 **Mining behavior:**
 - Without Silk Touch: drops Hollow Stone Shards. If the block contained an inner decorative block, that block is also dropped as an item.
 - With Silk Touch: drops itself (preserving inner block if present). TBD.
-- Hollow Stone Shards craft back into Hollow Stone blocks (shaped/shapeless recipe TBD).
+- Hollow Stone Shards craft back into Hollow Stone blocks: 9 shards (3x3) -> 1. [DONE] Mining without Silk Touch gives 5-7 (Fortune applies), so the round trip loses a few: it works like an ore (Ideomancer: fine).
 
 **Decorative feature:**
 Each face of a Hollow Stone block has a small square hole visible in its texture. Right-clicking with a block in hand places that block "inside" the Hollow Stone -- visible through the holes on each face. Uses the same dynamic rendering approach as Framed Blocks (BlockEntityRenderer fetches inner block texture at render time), but inverted: the shell is the Hollow Stone with holes, the inner block shows through them.
 
 **Role in progression:**
-Hollow Stone is a required crafting ingredient for Machine Blocks. This creates the progression chain: find Oddstone -> expose to lava (or find naturally) -> collect Hollow Stone Shards -> craft Hollow Stone -> craft Machine Blocks.
+Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10-24] Machine Frame recipe: Hollow Stone in the centre, copper ingots left and right, redstone above and below, iron ingots in the corners -> 1. This creates the progression chain: find Oddstone -> expose to lava (or find naturally) -> collect Hollow Stone Shards -> craft Hollow Stone -> craft Machine Blocks.
 
 **Design notes:**
 - Oddstone is not consumed, so a single Oddstone vein near lava becomes a renewable Hollow Stone source (bring lava buckets, place sources adjacent to Oddstone, collect the results).
@@ -268,7 +269,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Type | Block Entity (single item slot, shared by all specializations) |
 | Placement | Non-directional (base form) |
 | Redstone | Accepts redstone signal. Only Machine Frames emit anti-signal to suppress frame activation. |
-| Recipe | 4 iron + 4 redstone + 1 slime (placeholder) |
+| Recipe | Hollow Stone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners -> 1 (Ideomancer, 2026-10-24) |
 
 **Specializations (insert item to transform):**
 
@@ -278,7 +279,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Minecart | Trolley | MachineTrolleyBlock | TROLLEY | [DONE] |
 | Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [DONE] |
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
-| Bucket | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
+| Bucket (a water or lava bucket gives a full pipe) | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
 | Repeater | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
 | Comparator | Transformer | MachineTransformerBlock | TRANSFORMER | [DONE] |
@@ -320,6 +321,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. This creates 
 | Grabber toggleable stickiness | [DONE] | Edge-triggered toggle. POWERED=true adds vanilla slime/honey stickiness on top of Machine Family stickiness. Two variants: SLIME_GRABBER, HONEY_GRABBER. |
 | Transmitter wireless redstone | [DONE] | Oddstone-channel-based wireless. SOURCE/RECEIVER mutually exclusive modes. Signal attenuation (output = source - 1). Anti-feedback architecture. Level-aware indicator tint. |
 | Piston settlement window | [DONE] | 1-tick pistonSettling flag in MachineFrameBlockEntity. Suppresses neighborChanged during push group placement for Grabber, Toggle, and other edge-triggered blocks. Prevents spurious toggles. |
+| Machine Frame look | [DONE] | Ideomancer's textures (2026-10-24): unpowered (sending activation) = `machine_frame_active`; powered by redstone (suppressing) = `machine_frame_inactive`, the red machine indicator showing through its hole (two-layer model, like the Repeater). POWERED blockstate, display only. |
+| Full Fluid Pipe drop | [DONE] | A full pipe broken and placed again stays full (its slot holds the filled bucket; filled buckets also map to the Fluid Pipe and the pipe reads its fluid from the bucket). Fixed 2026-10-25. |
 | Spec item change callbacks | [DONE] | AbstractMachineBlock.onSpecItemChanging/onSpecItemChanged. Two-phase lifecycle for pre/post specialization item changes. Used by Transmitter for channel change cleanup. |
 
 ---
@@ -509,7 +512,7 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Hardness | Iron: 3.0 / Copper: 2.5 (blast 6.0) |
 | Tool | Pickaxe |
 | Transparency | Non-solid, see-through. Uses RenderType.cutout() and noOcclusion(). Inside-face rendering via inverted cuboid in JSON models. |
-| Recipe | 4 iron/copper ingots in diamond pattern -> 4 frames |
+| Recipe | Ingots in the four corners, nuggets on the four edges, centre empty -> 4 frames (Ideomancer, 2026-10-24). Copper uses the Ideomod Copper Nugget (any `forge:nuggets/copper`). |
 
 **Features:**
 
@@ -753,7 +756,7 @@ Pulse fires ->
 | Range | 12 blocks |
 | Target | Oddstone blocks only |
 | Movable | Yes (can be pushed by pistons) |
-| Recipe | TBD (Oddstone + piston + ?) |
+| Recipe | Cobbled Oddstone along the top and bottom rows; middle row redstone, piston, Oddstone -> 1 (Ideomancer, 2026-10-24) |
 
 **Features:**
 
@@ -786,7 +789,7 @@ Pulse fires ->
 | Range | 12 blocks |
 | Target | Oddstone blocks only |
 | Movable | Yes (can be pushed by pistons) |
-| Recipe | TBD (Oddstone + piston + ?) |
+| Recipe | As the Repulser, with a sticky piston in place of the piston -> 1 (Ideomancer, 2026-10-24) |
 
 **Features:**
 
@@ -1063,10 +1066,11 @@ Multipart blockstate: the core is always drawn, plus one arm per joined face (on
 - Centered half-thickness means branches line up through corners -- no awkward offset like vanilla logs placed perpendicular.
 - Texturing is hand-set per piece (one model per arm direction, one per core axis -- no blockstate rotation, which flipped the bark): bark grain always runs along the stick and lines up from arm to core; free ends show the log's rings (culled against a full block such as a log). The core shows rings only at a plain stick end; where the branch bends or branches it is bark all round, so an elbow has no cut end on its outside.
 - Could generate naturally via a custom trunk placer (thick canopy trees, dead trees, mangrove-style growth) -- see the tree-generation note in the 2026-02-18 session.
+- **Branch trees (Ideomancer, 2026-10-24; prototyped on `prototype/branch-bush`):** keep trees fairly normal. Most are ordinary oak-like trees; about half get 1-3 extra Branch limbs that leave the trunk from its **side**, below the canopy, sometimes turning up at the end, each with a small leaf tuft. **A branch never comes out of the top of a log.** Some small trees are made only of Branches: a short upright stem with side twigs and leaf tufts. Bushes are ground cover only, never tree foliage.
 
 **Open questions:**
 - *Single branch block with a wood_type property, or one branch block per wood type (like vanilla logs)?*
-- *Does it generate naturally or is it purely player-placed?*
+- *Does it generate naturally or is it purely player-placed?* -> Both: player-placed, and in branch trees (see design notes; prototype, not yet on main).
 - *Strip-able with axe like vanilla logs?*
 - *Should a branch with one join still show its own-axis length (e.g. a horizontal branch pointing into a trunk shows as a short stub today)?*
 - *Waterloggable, for swamp aesthetics?*
@@ -1218,6 +1222,18 @@ Blocks that use vanilla hasNeighborSignal() (Repulsers, Attractors, vanilla pist
 **Future ideas:**
 - *[IDEA] Tool/armor modifiers via multiblock crafting stations (see Recipes & Crafting > Crafting Modifiers)*
 - *[IDEA] Custom tool materials tied to geology system*
+
+---
+
+### Copper Nugget [DONE]
+> Minecraft 1.20.1 has no copper nugget (vanilla adds one in 1.21.9), so Ideomod adds `copper_nugget` for the Copper Frame recipe.
+
+| Property | Value |
+|----------|-------|
+| ID | `copper_nugget` |
+| Recipe | 1 copper ingot -> 9; 9 nuggets (any `forge:nuggets/copper`) -> 1 copper ingot |
+| Look | Vanilla's iron nugget texture, tinted copper in code (no texture of its own) |
+| Tags | `forge:nuggets/copper`, `forge:nuggets` (other mods' copper nuggets work in the recipes) |
 
 ---
 
@@ -1418,7 +1434,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Placement | Directional (piston-style, FACING property) |
 | Friction | 0.8F (slippery like ice) |
 | Sound | Slime |
-| Recipe | 1 slime block + 1 oddstone -> 1 odd slime (shapeless) |
+| Recipe | One Oddstone surrounded by eight slime balls -> 1 (Ideomancer, 2026-10-25; was slime block + Oddstone, shapeless) |
 
 **Features:**
 
@@ -1427,6 +1443,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Directional stickiness | [DONE] | Only sticky when pushed in FACING direction. Pushed sideways or opposite = acts non-sticky. Enforced by StickinessRules directional rule + mixin. |
 | Slime/honey exclusion | [DONE] | canStickTo returns false for SlimeBlock and HoneyBlock (mutual exclusion, same as slime vs honey in vanilla). |
 | Oddstone immunity | [DONE] | Grab immunity rule prevents Odd Slime from grabbing Oddstone. |
+| Oddstone core | [DONE] | Like vanilla slime's inner cube: a 10px Oddstone core inside the translucent shell (2026-10-25). New Odd Slime (and Oddstone) textures are commissioned; Claude's drafts are parked. |
 | Chain pulling | [DONE] | When active (pushed in FACING direction), Odd Slime pulls blocks behind it in the backward walk. Special mixin exemption allows this despite grab immunity. |
 
 **Known issues:**
