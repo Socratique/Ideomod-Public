@@ -1,6 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
+*Last updated: 2026-10-25, second pass (Current Recipes table rewritten from the recipe files -- it still listed the spring placeholders; Ideoblock marked [HOLD]: dropped from Ideomod-Public and the Machine Mod on 2026-10-09, still in the private original.)*
 *Last updated: 2026-10-25 (Ideomancer's decisions of 2026-10-24/25 written in: real recipes -- Machine Frame needs Hollow Stone, Iron/Copper Frames from ingots + nuggets, Repulser/Attractor craftable, Odd Slime from an Oddstone ringed by slime balls with an Oddstone core inside; the Copper Nugget item; the Machine Frame's own textures and powered look; a full Fluid Pipe keeps its fluid; sympathetic range 12 and the push-limit rule for linked blocks; Hollow Stone marked [DONE]; branch-tree rules: side-only limbs, mostly normal trees, small branch-only trees.)*
 *Last updated: 2026-10-17 (Branch + Bush blocks prototyped and rewritten to the Ideomancer's placement rules: branches have an axis and join only when one points at the other (T, L, no lattice); bushes use 26 neighbours -- edges and corners fill only with the diagonal, so L-shapes keep their notch. Both now [WIP]. Later the same day: branch texturing hand-set (ring end caps, grain along every stick, bark at bends); bushes on vanilla oak leaves in two layers.)*
 *Last updated: 2026-07-17 (Enchanting Overhaul expansion -- imported the full consolidated enchant list from the "Yeet" brainstorm session that was never written in: movement enchants (Swiftness, Water/Lava/Blaze Walking), armor (Pockets, Endurance), farming (Harvest, Sowing, Reaping), gathering (Felling, Vein Miner), utility (Reach, universalized Channeling), Yeet; full Spell Enchants category (Fireball, Gust, Inferno Ring, Combustion, Destruction, Combustive/Destructive Shot, Explosive, Warp/Blink Shot) with shared durability-cost mechanic; new curses (Encumbrance, Feebleness, Dropping, Blunting); Mythical rarity tier + Sacrifice; Enchant Universalization system; Weight knockback note; Disenchanting Table subtraction mechanic; Wand item stub added (flagged, needs definition))*
@@ -43,15 +44,15 @@
 
 ## 1. BLOCKS
 
-### Ideoblock [DONE]
-> Decorative stone block. First test block.
+### Ideoblock [HOLD]
+> Decorative stone block. First test block. Dropped from Ideomod-Public (and so the Machine Mod) on 2026-10-09; still registered in the private original.
 
 | Property | Value |
 |----------|-------|
 | ID | `ideoblock` |
 | Hardness | 1.5 / Blast 6.0 (cobblestone) |
 | Tool | Pickaxe |
-| Recipe | 9 cobblestone -> 1 ideoblock |
+| Recipe | 9 cobblestone -> 1 ideoblock (private original only) |
 | Notes | Placeholder. May become something or get removed. |
 
 ---
@@ -2239,15 +2240,26 @@ When a Drafting Table is part of an active crafting station structure, it adds a
 
 ---
 
-### Current Recipes (All Placeholder)
+### Current Recipes
+
+Read from `data/ideomod/recipes/` on 2026-10-25. Pictures of each: README, made by `tools/renders/recipes.py`. Rows read top to bottom; `.` = empty.
 
 | Output | Recipe | Notes |
 |--------|--------|-------|
-| Ideoblock | 9 cobblestone | |
-| Drill | Iron + piston + redstone | Shaped |
+| Machine Frame x1 | `IRI / CHC / IRI`: I iron ingot, R redstone, C copper ingot, H Hollow Stone | Ideomancer, 2026-10-24 |
+| Iron Frame x4 | `INI / N.N / INI`: I iron ingot, N iron nugget | Ideomancer, 2026-10-24 |
+| Copper Frame x4 | `INI / N.N / INI`: I copper ingot, N any `forge:nuggets/copper` | Ideomancer, 2026-10-24 |
+| Framed block | Any frame + any frameable block, anywhere in the grid | Special recipe (`FramedBlockRecipe`) |
+| Oddstone Repulser x1 | `CCC / RPO / CCC`: C Cobbled Oddstone, R redstone, P piston, O Oddstone | Ideomancer, 2026-10-24 |
+| Oddstone Attractor x1 | As the Repulser with a sticky piston | Ideomancer, 2026-10-24 |
+| Odd Slime x1 | `SSS / SOS / SSS`: S slime ball, O Oddstone | Ideomancer, 2026-10-25 |
+| Drill x1 | `III / IPI / IRI`: I iron ingot, P piston, R redstone | Placeholder, not yet reviewed |
+| Redstone Rod x1 | Diagonal: stick (bottom left), iron ingot (middle), redstone torch (top right) | Placeholder, not yet reviewed |
+| Hollow Stone x1 | 9 Hollow Stone Shards (3x3) | Shards come from mining Hollow Stone |
+| Copper Nugget x9 | 1 copper ingot (shapeless); 9 nuggets -> 1 copper ingot | |
+| Oddstone family | Bricks 2x2 -> 4; stairs 6 -> 4; slabs 3 -> 6; walls 6 -> 6; stonecutter for every shape | Oddstone, Cobbled Oddstone, Oddstone Bricks |
+| Cobbled Oddstone | Smelt Oddstone | Reversed on purpose ("it's odd after all") |
 | Oddstone | None (natural resource) | |
-| Machine Block | 4 iron + 4 redstone + 1 slime | |
-| Odd Slime | 1 slime block + 1 oddstone | Shapeless |
 
 ---
 
