@@ -20,7 +20,7 @@ Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
 **Texture scripts**: `tools/textures/make_portal_texture.py` (the animated portal), `tools/textures/make_ranged_textures.py` (Repulser/Attractor re-skinned from the cyan-era originals onto the current Oddstone). `tools/renders` draws the README pictures from the mod's textures.
 
-**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, a copper frame beside an iron one still activating (mixed metals), machine blocks reading a Transmitter's real strength, a linked Oddstone over the push limit left behind and one pushing over it failing the move (own batch: they lower the limit to 3), a full Fluid Pipe surviving break and place, the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
+**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, a copper frame beside an iron one still activating (mixed metals), machine blocks reading a Transmitter's real strength, a linked Oddstone over the push limit left behind and one pushing over it failing the move (own batch: they lower the limit to 3), a full Fluid Pipe surviving break and place, the server's config replacing a client's until it leaves (own batch), the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
 
 ---
 
@@ -225,7 +225,12 @@ com.ideomancer.ideomod
   |                                      Sections: oddstone, pistons, machine_braces, pipes,
   |                                      portals, judgement, furnace_array, timer, engine,
   |                                      pulser. Lazy-load with double-checked locking.
-  |                                      /ideomod reload support.
+  |                                      /ideomod reload support. Server -> client sync:
+  |                                      toNetworkString / applyServerConfig /
+  |                                      restoreLocalConfig (network/ConfigSyncPacket sends it on
+  |                                      login and after /ideomod reload, not to a singleplayer/LAN
+  |                                      host; client/ClientConfigEvents restores the local file on
+  |                                      logout). Channel protocol 2.
   |-- effect/
   |     \-- JudgementEffect.java         Rare mob-stare event on passive mob kill
   |-- item/

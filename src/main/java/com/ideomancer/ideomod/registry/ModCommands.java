@@ -49,6 +49,7 @@ public class ModCommands {
                 .then(Commands.literal("reload")
                     .executes(context -> {
                         IdeomodConfig.reloadConfig();
+                        com.ideomancer.ideomod.network.ConfigSyncPacket.sendToAll(context.getSource().getServer());
                         context.getSource().sendSuccess(
                                 () -> Component.literal("Ideomod config reloaded."), true);
                         Ideomod.LOGGER.info("Config reloaded by command");

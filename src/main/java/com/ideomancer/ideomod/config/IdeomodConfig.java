@@ -503,6 +503,11 @@ public class IdeomodConfig {
     // ========================================================================
 
     private static void createDefaultConfig(Path configFile) throws IOException {
+        Files.writeString(configFile, GSON.toJson(toJson()));
+    }
+
+    /** The current values as the config file's JSON (also what the server sends to clients). */
+    private static JsonObject toJson() {
         JsonObject root = new JsonObject();
 
         root.addProperty("_comment", "Ideomod Configuration — edit values below to tune gameplay. Delete this file to regenerate defaults.");
@@ -590,8 +595,53 @@ public class IdeomodConfig {
         pulser.addProperty("pulse_duration", pulserPulseDuration);
         root.add("pulser", pulser);
 
-        String jsonStr = GSON.toJson(root);
-        Files.writeString(configFile, jsonStr);
+        return root;
+    }
+
+    // ========================================================================
+    // SERVER -> CLIENT SYNC
+    // ========================================================================
+    //
+    // The server's settings are the ones that count. A client re-runs every piston
+    // move itself to animate it (sympathetic links, push limit, Braces), and GUI
+    // buttons send preset indexes the server looks up in its own lists, so a client
+    // with different values sees blocks pop instead of slide, or sets the wrong
+    // time. The server sends its config to each player who joins (ConfigSync), the
+    // client uses it while connected, and goes back to its own file on leaving.
+    // Found 2026-10-25: a client still on an old file (sympathetic radius 5) joined
+    // a server on 12, and Oddstone linked from 6-12 blocks away popped.
+
+    /** True while this client is using the values a server sent. */
+    private static volatile boolean usingServerConfig = false;
+
+    /** The current config as compact JSON, to send to clients. */
+    public static String toNetworkString() {
+        ensureLoaded();
+        synchronized (LOCK) {
+            return new Gson().toJson(toJson());
+        }
+    }
+
+    /** Client: take the server's values for this connection (the file is not touched). */
+    public static void applyServerConfig(String json) {
+        synchronized (LOCK) {
+            parseConfig(json);
+            loaded = true;
+            usingServerConfig = true;
+        }
+        Ideomod.LOGGER.info("Using the server's Ideomod settings (sympathetic radius={}, push limit={})",
+                sympatheticRadius, basePushLimit);
+    }
+
+    /** Client: back to this game's own config file after leaving a server. */
+    public static void restoreLocalConfig() {
+        if (!usingServerConfig) return;
+        usingServerConfig = false;
+        reloadConfig();
+    }
+
+    public static boolean isUsingServerConfig() {
+        return usingServerConfig;
     }
 
     // ========================================================================

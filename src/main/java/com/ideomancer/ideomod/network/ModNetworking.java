@@ -15,7 +15,9 @@ import net.minecraftforge.network.simple.SimpleChannel;
  */
 public class ModNetworking {
 
-    private static final String PROTOCOL_VERSION = "1";
+    // 2: ConfigSyncPacket added (2026-10-25). A client and server with different
+    // versions refuse to connect instead of mixing settings.
+    private static final String PROTOCOL_VERSION = "2";
 
     public static final SimpleChannel CHANNEL = NetworkRegistry.newSimpleChannel(
             new ResourceLocation(Ideomod.MOD_ID, "main"),
@@ -49,6 +51,12 @@ public class ModNetworking {
                 .encoder(EnginePulseIntervalPacket::encode)
                 .decoder(EnginePulseIntervalPacket::decode)
                 .consumerMainThread(EnginePulseIntervalPacket::handle)
+                .add();
+
+        CHANNEL.messageBuilder(ConfigSyncPacket.class, packetId++, NetworkDirection.PLAY_TO_CLIENT)
+                .encoder(ConfigSyncPacket::encode)
+                .decoder(ConfigSyncPacket::decode)
+                .consumerMainThread(ConfigSyncPacket::handle)
                 .add();
 
         Ideomod.LOGGER.info("Registered {} network packet(s)", packetId);

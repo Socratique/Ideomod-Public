@@ -498,6 +498,45 @@ public class IdeomodGameTests {
         });
     }
 
+    // ==================== Server config sent to clients (fixed 2026-10-25) ====================
+
+    /**
+     * The server's config, sent as ConfigSyncPacket (through its real encode/decode), replaces
+     * the client's values while connected, and leaving the server brings back the client's own
+     * file. Own batch: it changes the global sympathetic radius for a moment.
+     */
+    @GameTest(template = EMPTY, batch = "config")
+    public static void clientUsesServerConfigUntilItLeaves(GameTestHelper helper) {
+        int own = IdeomodConfig.getSympatheticRadius();
+        int sent = own == 7 ? 8 : 7;
+        String json = IdeomodConfig.toNetworkString();
+        String key = "\"sympathetic_radius\":" + own;
+        if (!json.contains(key)) { helper.fail("config JSON has no " + key + ": " + json.substring(0, Math.min(200, json.length()))); return; }
+        net.minecraft.network.FriendlyByteBuf buf = new net.minecraft.network.FriendlyByteBuf(io.netty.buffer.Unpooled.buffer());
+        com.ideomancer.ideomod.network.ConfigSyncPacket.encode(
+                new com.ideomancer.ideomod.network.ConfigSyncPacket(json.replace(key, "\"sympathetic_radius\":" + sent)), buf);
+        com.ideomancer.ideomod.network.ConfigSyncPacket received = com.ideomancer.ideomod.network.ConfigSyncPacket.decode(buf);
+
+        String sentJson;
+        try {
+            java.lang.reflect.Field f = com.ideomancer.ideomod.network.ConfigSyncPacket.class.getDeclaredField("json");
+            f.setAccessible(true);
+            sentJson = (String) f.get(received);
+        } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+        IdeomodConfig.applyServerConfig(sentJson);
+        int during = IdeomodConfig.getSympatheticRadius();
+        boolean flagged = IdeomodConfig.isUsingServerConfig();
+        int pushDuring = IdeomodConfig.getBasePushLimit();
+        IdeomodConfig.restoreLocalConfig();
+        int after = IdeomodConfig.getSympatheticRadius();
+
+        if (during != sent) helper.fail("client kept radius " + during + " instead of the server's " + sent);
+        else if (!flagged) helper.fail("client not marked as using the server's config");
+        else if (pushDuring != CONFIGURED_PUSH_LIMIT) helper.fail("other values changed in transit: push limit " + pushDuring);
+        else if (after != own || IdeomodConfig.isUsingServerConfig()) helper.fail("after leaving, radius " + after + ", expected its own " + own);
+        else helper.succeed();
+    }
+
     // ==================== Fluid Pipe drop (fixed 2026-10-25) ====================
 
     /**

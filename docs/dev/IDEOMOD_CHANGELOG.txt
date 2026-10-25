@@ -1,5 +1,23 @@
 # Ideomod Changelog
 
+## [2026-10-25f] Players on a server use the server's settings
+
+- Bug: the config was never sent from server to client. Every client re-runs each piston move to
+  animate it, using its own config, so a client whose settings differed (for example an old
+  config file still at sympathetic radius 5 on a server at 12) did not find the far sympathetic
+  blocks: they vanished and popped into place instead of sliding. GUI buttons for Timer and Engine
+  presets send an index the server looks up in its own list, so differing lists set wrong times.
+  Found 2026-10-25 by the Ideomancer, watching a test contraption in a real client.
+- New ConfigSyncPacket (server -> client): the server sends its whole config to each player on
+  login and to everyone after /ideomod reload. The client uses it while connected without
+  touching its file (IdeomodConfig.applyServerConfig), and reloads its own file when it leaves
+  (client/ClientConfigEvents). Not sent to a singleplayer or LAN host (same game, same file).
+- Network protocol 1 -> 2: an old client and a new server (or the reverse) now refuse to connect
+  instead of running with mixed settings.
+- GameTest clientUsesServerConfigUntilItLeaves (own batch). Seen working in a real client:
+  client file at radius 5, server at 12, an Oddstone linked 8 blocks away now slides.
+- README (Configuration) and codebase reference updated.
+
 ## [2026-10-25e] README and design doc brought up to date
 
 - README: status line (main has moved past the 0.1.1 release); the in-world tests and how to run
