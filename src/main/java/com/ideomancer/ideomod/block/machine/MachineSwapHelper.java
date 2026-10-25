@@ -135,6 +135,13 @@ public final class MachineSwapHelper {
             return ModBlocks.MACHINE_TRANSMITTER.get();
         }
 
+        // A full Fluid Pipe's slot holds a water or lava bucket, so those also mean Fluid Pipe
+        // (2026-10-25: a full pipe broken and placed again came back as a plain Machine Frame).
+        // Kept out of itemToBlock so the canonical item (creative tab, middle-click) stays Bucket.
+        if (item == Items.WATER_BUCKET || item == Items.LAVA_BUCKET) {
+            return ModBlocks.MACHINE_FLUID_PIPE.get();
+        }
+
         return null;
     }
 
@@ -253,6 +260,11 @@ public final class MachineSwapHelper {
             }
         } finally {
             isSwapping.set(false);
+        }
+        // The pipe skips its blockstate update during a swap; set its look now (a Machine Frame
+        // given a water or lava bucket becomes a full Fluid Pipe).
+        if (level.getBlockEntity(pos) instanceof MachineFluidPipeBlockEntity fluidPipe) {
+            fluidPipe.syncFluidFromItem();
         }
 
         return true;

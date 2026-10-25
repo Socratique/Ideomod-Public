@@ -123,6 +123,28 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
         }
     }
 
+    /**
+     * The fluid is also read off the bucket in slot 0, so a pipe placed from a dropped full pipe
+     * (which carries only its slot item) or made by putting a water/lava bucket into a Machine
+     * Frame holds that fluid. setFluidType() keeps the two in step the other way.
+     */
+    @Override
+    public void setItemDirect(ItemStack stack) {
+        super.setItemDirect(stack);
+        syncFluidFromItem();
+    }
+
+    public void syncFluidFromItem() {
+        ItemStack item = this.getSpecializationItem();
+        FluidType fromItem = item.is(Items.WATER_BUCKET) ? FluidType.WATER
+                : item.is(Items.LAVA_BUCKET) ? FluidType.LAVA : FluidType.EMPTY;
+        if (fromItem != this.fluidType) {
+            this.fluidType = fromItem;
+            this.setChanged();
+        }
+        updateFluidState();
+    }
+
     /** Check if this pipe currently holds a fluid (water or lava). */
     public boolean hasFluid() {
         return this.fluidType != FluidType.EMPTY;
@@ -247,8 +269,12 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
                 this.fluidType = FluidType.EMPTY;
             }
         } else {
-            this.fluidType = FluidType.EMPTY;
+            // a dropped full pipe carries only its slot item: read the fluid off the bucket
+            ItemStack item = this.getSpecializationItem();
+            this.fluidType = item.is(Items.WATER_BUCKET) ? FluidType.WATER
+                    : item.is(Items.LAVA_BUCKET) ? FluidType.LAVA : FluidType.EMPTY;
         }
+        updateFluidState();
         this.transferCooldown = tag.getInt(TAG_COOLDOWN);
         this.roundRobinIndex = tag.getInt(TAG_ROUND_ROBIN);
         if (tag.contains(TAG_LAST_INPUT_FACE)) {

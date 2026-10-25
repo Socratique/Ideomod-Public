@@ -1,5 +1,19 @@
 # Ideomod Changelog
 
+## [2026-10-25d] A full Fluid Pipe keeps its fluid when broken
+
+- Bug: a full pipe drops as a Fluid Pipe holding its slot item, which while full is a water or
+  lava bucket, and the drop does not carry FluidType. Placed again, setPlacedBy's swap check found
+  no specialization for a filled bucket and swapped it to a plain Machine Frame.
+- `MachineSwapHelper.getSpecializationBlock`: water and lava buckets also mean Fluid Pipe (a
+  fallback, like buttons -> Pulser, so the canonical item stays Bucket). After a swap the pipe's
+  look is refreshed (it skips blockstate updates during a swap).
+- `MachineFluidPipeBlockEntity`: fluid follows the slot bucket (`setItemDirect` override,
+  `syncFluidFromItem`, and `load` when no FluidType is saved). So a Machine Frame given a water or
+  lava bucket becomes a full Fluid Pipe; taking the bucket out gives it back (fluid conserved).
+- GameTest `fullFluidPipeSurvivesBreakAndPlace` (fails without the fix). 15/15 pass.
+- README: Fluid Pipe section says so; the rough edge removed.
+
 ## [2026-10-25c] Sympathetic links respect the push limit
 
 Sean's rule: a linked Oddstone that would itself go over the push limit is left behind (the

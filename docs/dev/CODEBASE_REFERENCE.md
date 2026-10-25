@@ -20,7 +20,7 @@ Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
 **Texture scripts**: `tools/textures/make_portal_texture.py` (the animated portal), `tools/textures/make_ranged_textures.py` (Repulser/Attractor re-skinned from the cyan-era originals onto the current Oddstone). `tools/renders` draws the README pictures from the mod's textures.
 
-**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, a copper frame beside an iron one still activating (mixed metals), machine blocks reading a Transmitter's real strength, a linked Oddstone over the push limit left behind and one pushing over it failing the move (own batch: they lower the limit to 3), the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
+**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, a copper frame beside an iron one still activating (mixed metals), machine blocks reading a Transmitter's real strength, a linked Oddstone over the push limit left behind and one pushing over it failing the move (own batch: they lower the limit to 3), a full Fluid Pipe surviving break and place, the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
 
 ---
 
@@ -104,6 +104,9 @@ com.ideomancer.ideomod
   |     |     |-- MachineFluidPipeBlock.java   Extends AbstractMachineBlock. MachineType.FLUID_PIPE.
   |     |     |                                Fluid vacuum/depositor. Ticker. Pull/push/deposit.
   |     |     |-- MachineFluidPipeBlockEntity.java  Extends MachineFrameBlockEntity. Own BE type.
+  |     |     |                                Fluid is also read off the slot bucket (setItemDirect,
+  |     |     |                                load without FluidType); water/lava buckets map to the
+  |     |     |                                Fluid Pipe in MachineSwapHelper.getSpecializationBlock.
   |     |     |                                Fluid type tracking. IFluidHandler capability.
   |     |     |                                Bucket state sync. Water+lava collision.
   |     |     |-- MachinePistonBlock.java      Extends AbstractMachineBlock. MachineType.PISTON.

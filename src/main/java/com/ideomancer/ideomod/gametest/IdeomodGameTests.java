@@ -7,6 +7,10 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineFluidPipeBlock;
+import com.ideomancer.ideomod.block.machine.FluidType;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineRedstoneHelper;
 import com.ideomancer.ideomod.block.frame.FrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
@@ -492,6 +496,55 @@ public class IdeomodGameTests {
             else helper.fail("move should have failed: A stayed=" + aStayed + ", B stayed=" + bStayed
                     + ", piston extended=" + extended, new BlockPos(1, 1, 1));
         });
+    }
+
+    // ==================== Fluid Pipe drop (fixed 2026-10-25) ====================
+
+    /**
+     * A full Fluid Pipe that is broken drops as a Fluid Pipe holding its water bucket; placed
+     * again (load the drop's BlockEntityTag, then setPlacedBy, as a BlockItem does) it must
+     * still be a Fluid Pipe full of water, not a plain Machine Frame. A Machine Frame given a
+     * water bucket becomes a full Fluid Pipe too.
+     */
+    @GameTest(template = EMPTY)
+    public static void fullFluidPipeSurvivesBreakAndPlace(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 1, 2);
+        helper.setBlock(pos, ModBlocks.MACHINE_FLUID_PIPE.get());
+        BlockPos abs = helper.absolutePos(pos);
+        if (!(helper.getBlockEntity(pos) instanceof MachineFluidPipeBlockEntity pipe)) { helper.fail("no pipe", pos); return; }
+        pipe.setFluidType(FluidType.WATER);
+        java.util.List<ItemStack> drops = net.minecraft.world.level.block.Block.getDrops(
+                helper.getBlockState(pos), helper.getLevel(), abs, pipe);
+        if (drops.size() != 1 || !drops.get(0).is(ModBlocks.MACHINE_FLUID_PIPE.get().asItem())) {
+            helper.fail("full pipe dropped " + drops, pos); return;
+        }
+        ItemStack drop = drops.get(0);
+        helper.setBlock(pos, Blocks.AIR);
+        helper.setBlock(pos, ModBlocks.MACHINE_FLUID_PIPE.get());
+        BlockEntity placed = helper.getBlockEntity(pos);
+        net.minecraft.nbt.CompoundTag beTag = drop.getTag() == null ? null : drop.getTag().getCompound("BlockEntityTag");
+        if (placed != null && beTag != null) placed.load(beTag);
+        helper.getBlockState(pos).getBlock().setPlacedBy(helper.getLevel(), abs, helper.getBlockState(pos), null, drop);
+
+        BlockPos frame = new BlockPos(4, 1, 2);
+        helper.setBlock(frame, ModBlocks.MACHINE_BLOCK.get());
+        if (helper.getBlockEntity(frame) instanceof MachineFrameBlockEntity frameBE) frameBE.setItem(0, new ItemStack(Items.LAVA_BUCKET));
+
+        // Checked at once: a full pipe pours its fluid out (into the next pipe, or the world) on
+        // its next tick, which is right but would hide whether it was placed full.
+        {
+            BlockState st = helper.getBlockState(pos);
+            if (!st.is(ModBlocks.MACHINE_FLUID_PIPE.get())) { helper.fail("re-placed full pipe became " + st.getBlock(), pos); return; }
+            if (!(helper.getBlockEntity(pos) instanceof MachineFluidPipeBlockEntity p2) || p2.getFluidType() != FluidType.WATER
+                    || st.getValue(MachineFluidPipeBlock.FLUID_TYPE) != FluidType.WATER) {
+                helper.fail("re-placed pipe lost its water", pos); return;
+            }
+            BlockState fs = helper.getBlockState(frame);
+            if (!fs.is(ModBlocks.MACHINE_FLUID_PIPE.get()) || fs.getValue(MachineFluidPipeBlock.FLUID_TYPE) != FluidType.LAVA) {
+                helper.fail("Machine Frame given a lava bucket became " + fs, frame); return;
+            }
+            helper.succeed();
+        }
     }
 
     // ==================== Recipes ====================

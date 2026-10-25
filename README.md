@@ -333,6 +333,8 @@ Holds one bucket of water or lava.
 - The redstone logic is the reverse of the Item Pipe: here a signal means "pump".
 - Water meeting lava inside a pipe uses up both and leaves obsidian in the slot, which turns that pipe back into a Machine Frame.
 - A pipe holding lava gives off light. A comparator reads empty or full.
+- Broken while full, it keeps its fluid: placed again it is still full. A Machine Frame given a water or lava
+  bucket becomes a full Fluid Pipe; taking the bucket out turns it back into a Machine Frame.
 
 ### Machine Frame
 
@@ -489,7 +491,6 @@ This is a snapshot, so here is what is known to be unfinished. Most of these com
 - **Placeholder art** on the Machine Timer: a plain stand-in Claude drew when the block was added, waiting for a real texture.
 - **Hollowstone** loses its inner block when mined with Silk Touch or destroyed by anything other than a player, and cannot be moved by pistons.
 - **Furnace Array size limits** are read at startup, so `/ideomod reload` does not change them until a restart.
-- **A full Fluid Pipe** that is broken drops holding its filled bucket, and turns into a plain Machine Frame when placed again.
 - **No world generation beyond Oddstone ore and Hollowstone formations.** The larger overhaul sketched in the design notes has not been started.
 - **Framed glass, slime and other see-through blocks** look solid in the inventory. Placed in the world they look right.
 - **The Toggle's indicator** is the same colour on all six faces; only the outer texture shows which face is the input.
