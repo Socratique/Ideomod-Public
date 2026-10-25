@@ -1,6 +1,7 @@
 # IDEOMOD DESIGN DOCUMENT
 ### A Vanilla+ Minecraft Overhaul
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
+*Last updated: 2026-10-25, third pass (Ideomancer: Redstone Rod recipe final; Drill stays a test block until balancing decides its role; Ghost Block kept separate from projected blocks; the core idea of the Machine Family written in; Machine Specializations [DONE], with room for more.)*
 *Last updated: 2026-10-25, second pass (Current Recipes table rewritten from the recipe files -- it still listed the spring placeholders; Ideoblock marked [HOLD]: dropped from Ideomod-Public and the Machine Mod on 2026-10-09, still in the private original.)*
 *Last updated: 2026-10-25 (Ideomancer's decisions of 2026-10-24/25 written in: real recipes -- Machine Frame needs Hollow Stone, Iron/Copper Frames from ingots + nuggets, Repulser/Attractor craftable, Odd Slime from an Oddstone ringed by slime balls with an Oddstone core inside; the Copper Nugget item; the Machine Frame's own textures and powered look; a full Fluid Pipe keeps its fluid; sympathetic range 12 and the push-limit rule for linked blocks; Hollow Stone marked [DONE]; branch-tree rules: side-only limbs, mostly normal trees, small branch-only trees.)*
 *Last updated: 2026-10-17 (Branch + Bush blocks prototyped and rewritten to the Ideomancer's placement rules: branches have an axis and join only when one points at the other (T, L, no lattice); bushes use 26 neighbours -- edges and corners fill only with the diagonal, so L-shapes keep their notch. Both now [WIP]. Later the same day: branch texturing hand-set (ring end caps, grain along every stick, bark at bends); bushes on vanilla oak leaves in two layers.)*
@@ -58,7 +59,7 @@
 ---
 
 ### Drill Block [HOLD]
-> Directional mining block. Redstone-activated 3x3 excavator. Implemented and functional but on hold pending design review.
+> Directional mining block. Redstone-activated 3x3 excavator. Implemented and functional. A test block for now -- the second block ever made for the mod. **Its future (Ideomancer, 2026-10-25):** decided by balancing -- either a Machine Family block, a unique loot-only block, or something else.
 
 | Property | Value |
 |----------|-------|
@@ -68,7 +69,7 @@
 | Drops | Mined items spawn at drill position |
 | Limits | Skips bedrock / indestructible blocks |
 | Movable | Yes (pistons can push it) |
-| Recipe | Iron + piston + redstone (placeholder) |
+| Recipe | `III / IPI / IRI`: iron ingots, piston centre, redstone bottom middle (test recipe; goes with its final role) |
 
 **Known issues:**
 - None currently
@@ -259,6 +260,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 ---
 
 ### Machine Block [DONE]
+> **Core idea (Ideomancer, 2026-10-25): machine blocks let you shift complex redstone circuits into flying machines.** The circuit is built from blocks that stick together and move, so it keeps working while it travels.
+>
 > Modular mechanical chassis. Every Machine Family block shares a single-slot block entity (MachineFrameBlockEntity). Insert an item into the slot to swap the block to a specialization. Remove the item to revert to Machine Frame. Each specialization is a unique registered block. Now called "Machine Frame" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
 
 | Property | Value |
@@ -328,8 +331,8 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 
 ---
 
-### Machine Specializations [WIP]
-> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Track, Trolley, Pipe, Fluid Pipe, Piston, and Sticky Piston are implemented; remaining specializations are designed but not yet built.
+### Machine Specializations [DONE]
+> Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Every specialization below is implemented. More may be added later (Ideomancer, 2026-10-25); each new one should serve the core idea: redstone circuits that can be moved as flying machines.
 
 **Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
@@ -608,7 +611,7 @@ Registry substitution is the highest-risk operation in modding. Can cause save c
 ---
 
 ### Ghost Block [DESIGNED]
-> Ethereal, translucent block crafted from ectoplasm. Passable by walking players (slow slide-through). Impassable when crouching. Swappable with real blocks via right-click. Component in the Arcane Projector recipe.
+> Ethereal, translucent block crafted from ectoplasm. Passable by walking players (slow slide-through). Impassable when crouching. Swappable with real blocks via right-click. **Separate from projected blocks (Ideomancer, 2026-10-25):** the Projector does not use or make Ghost Blocks.
 
 | Property | Value |
 |----------|-------|
@@ -625,7 +628,6 @@ Registry substitution is the highest-risk operation in modding. Can cause save c
 | Walk-through passable | [IDEA] | Non-crouching players pass through at reduced speed (slow slide, like walking through cobwebs but without damage or sticking). |
 | Crouch-impassable | [IDEA] | Crouching players cannot pass through. Solid collision when sneaking. |
 | Block swap | [IDEA] | Right-click a placed ghost block with any real block in hand: ghost block returns to your inventory, real block takes its place. Clean swap, no dropping. |
-| Arcane Projector component | [IDEA] | Required crafting ingredient for the Arcane Projector. Ghost Block is necessary for the projector to function -- thematically, projection uses the same ephemeral material. |
 
 **Design notes:**
 - The walk-through mechanic makes ghost blocks useful as one-way barriers, slow traps, decorative hazards, or secret passages.
@@ -933,7 +935,7 @@ Pulse fires ->
 | Tool | Pickaxe |
 | Type | Block Entity (3x3 item grid + FACING) |
 | Placement | Directional (faces player look direction) |
-| Recipe | TBD (obsidian + glass + ghost block -- Magic Family crafting) |
+| Recipe | TBD (obsidian + glass -- Magic Family crafting; no Ghost Block) |
 
 **Features:**
 
@@ -947,7 +949,7 @@ Pulse fires ->
 
 **Design notes:**
 - Think of it as a magic holographic projector. Place blocks in the pattern grid, power it, and those blocks appear at a distance. Cut power and they vanish.
-- Ghost Block required in the recipe -- thematically the projector manifests ephemeral matter, and ghost blocks are already that.
+- Projected blocks are their own thing, not Ghost Blocks (Ideomancer, 2026-10-25), and the Projector's recipe does not use Ghost Blocks.
 - Primary uses: temporary bridges, traps (floor appears solid then vanishes), dynamic walls, construction scaffolding, redstone-controlled architecture.
 - The 3x3 grid means projected structures are small -- this is precision placement, not large-scale construction. For larger structures, use multiple Projectors.
 - Signal-distance control means you can sweep a projected platform across space by varying redstone signal strength. Combined with Machine Clock for gradual stepping, this enables moving platforms.
@@ -2253,8 +2255,8 @@ Read from `data/ideomod/recipes/` on 2026-10-25. Pictures of each: README, made 
 | Oddstone Repulser x1 | `CCC / RPO / CCC`: C Cobbled Oddstone, R redstone, P piston, O Oddstone | Ideomancer, 2026-10-24 |
 | Oddstone Attractor x1 | As the Repulser with a sticky piston | Ideomancer, 2026-10-24 |
 | Odd Slime x1 | `SSS / SOS / SSS`: S slime ball, O Oddstone | Ideomancer, 2026-10-25 |
-| Drill x1 | `III / IPI / IRI`: I iron ingot, P piston, R redstone | Placeholder, not yet reviewed |
-| Redstone Rod x1 | Diagonal: stick (bottom left), iron ingot (middle), redstone torch (top right) | Placeholder, not yet reviewed |
+| Drill x1 | `III / IPI / IRI`: I iron ingot, P piston, R redstone | Test recipe: the Drill is a test block until its role is decided |
+| Redstone Rod x1 | Diagonal: stick (bottom left), iron ingot (middle), redstone torch (top right) | Final (Ideomancer, 2026-10-25) |
 | Hollow Stone x1 | 9 Hollow Stone Shards (3x3) | Shards come from mining Hollow Stone |
 | Copper Nugget x9 | 1 copper ingot (shapeless); 9 nuggets -> 1 copper ingot | |
 | Oddstone family | Bricks 2x2 -> 4; stairs 6 -> 4; slabs 3 -> 6; walls 6 -> 6; stonecutter for every shape | Oddstone, Cobbled Oddstone, Oddstone Bricks |
