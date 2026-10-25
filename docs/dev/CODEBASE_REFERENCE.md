@@ -20,7 +20,7 @@ Build files: `build.gradle`, `settings.gradle`, `gradle.properties`, `mods.toml`
 
 **Texture scripts**: `tools/textures/make_portal_texture.py` (the animated portal), `tools/textures/make_ranged_textures.py` (Repulser/Attractor re-skinned from the cyan-era originals onto the current Oddstone). `tools/renders` draws the README pictures from the mod's textures.
 
-**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
+**Testing**: in-world GameTests in `gametest/IdeomodGameTests.java` (template `data/ideomod/structures/empty.nbt`, an empty 7x5x7 that each test builds its own setup in). Run `./gradlew runGameTestServer`: a headless server runs them all and exits 0 (all passed) or 1 (failures named in the log). CI runs them on every push, then `scripts/check_jar.sh` boots the built jar on a real Forge server. Tests cover Conductor/dust (#3), framed redstone (#4), Pulser ring moved by a piston at every pulse phase (#6), frames not carrying redstone, a copper frame beside an iron one still activating (mixed metals), machine blocks reading a Transmitter's real strength, the Machine Frame's POWERED look, Hollowstone's full-block rule, and the shapes of the Machine Frame, Iron/Copper Frame, Repulser, Attractor and copper nugget recipes (read from the recipe manager, so a mistyped item id fails the test instead of silently dropping the recipe). `./gradlew runClient -PquickPlay="<world folder>"` opens a world in run/saves straight away.
 
 ---
 
@@ -75,7 +75,8 @@ com.ideomancer.ideomod
   |     |     |-- MachineRedstoneHelper.java   Shared signal detection utility. Single source of truth
   |     |     |                                for getIncomingSignalFromFace(), scanAllFaces(),
   |     |     |                                getFaceFromSourcePos(). Generic device detection via
-  |     |     |                                AbstractMachineBlock.getRedstoneOutput().
+  |     |     |                                AbstractMachineBlock.getRedstoneOutput();
+  |     |     |                                Transmitters via getSignal (real BE strength).
   |     |     |-- MachineSwapHelper.java       Swap utility: item<->block registry, checkAndSwap(),
   |     |     |                                createPreloadedStack(), createDrop(), createCloneStack().
   |     |     |                                Client sync via syncToClients() after swap.
@@ -420,7 +421,7 @@ Framed Oddstone (active) has both oddstone inner stickiness + frame stickiness. 
 
 1. **Mob avoidance**: `isPathfindable=false` + `BlockPathTypes.DAMAGE_OTHER`. JSON config per-mob whitelist.
 2. **Redstone insulation**: `isRedstoneConductor=false` in properties.
-3. **Sympathetic movement**: Handled by PistonStructureResolverMixin. BFS within configurable radius (default 5). Chains count toward 12-block limit.
+3. **Sympathetic movement**: Handled by PistonStructureResolverMixin. BFS within configurable radius (default 12; was 5 until 2026-10-25). Chains count toward 12-block limit.
 4. **One-way stickiness**: Grabs all slime types (real+framed) via `StickyType.ODDSTONE.canGrab()`, which returns true only for SLIME, HONEY, ODD_SLIME. Cannot grab other Oddstone blocks (real or framed) -- all oddstone-to-oddstone connections resolve purely through sympathetic movement channels. Cannot be grabbed back (grab immunity rules). canStickTo recognizes FramedBlock targets via INNER_STICKY check.
 5. **Portal frame**: Delegates to OddstonePortalHandler on neighborChanged/onRemove.
 6. **Pull immunity**: Cannot be directly pulled by sticky pistons. PistonBaseBlockMixin position-specific check. Oddstone dragged by own stickiness (e.g., stuck to slime being pulled) still moves correctly.
@@ -460,7 +461,7 @@ Registry IDs: `iron_frame`, `copper_frame`. Class: FrameBlock (implements IFrame
 1. DISCOVER: BFS from change point through all IFrameBlock conductors
 2. WIPE: Set all IFrameBlocks to ACTIVE=false
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
-4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate regardless of redstone state. Each conductor accepts and outputs only its own frame material -- iron-only through iron frames, copper-only through copper frames. No cross-material mediation.
+4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. A neighbour is queued only if it shares a metal with the signal (2026-10-25 fix: queuing an incompatible frame marked its spot reached and blocked a same-metal signal of equal strength). Machine Frames only activate when unpowered; all other Machine Family blocks always activate regardless of redstone state. Each conductor accepts and outputs only its own frame material -- iron-only through iron frames, copper-only through copper frames. No cross-material mediation.
 5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone input level, decaying by 1. Binary override: any block reached = deactivated.
 6. APPLY: IFrameBlocks get ACTIVE=true only if activation > 0 AND anti-signal == 0.
 

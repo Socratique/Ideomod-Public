@@ -21,6 +21,10 @@ From a review of the README's rough edges against the code (Sean, 2026-10-25).
 - README: rough edges brought up to date (recipes exist; fixed items removed; inventory
   translucency, Toggle tint and the April footage added); range 12 throughout.
 - 12/12 GameTests pass; jar check passes.
+- README: the "placeholder art" rough edge now names only the Machine Timer. The Engine and
+  Transmitter textures are Sean's; the Timer's is the stand-in Claude drew on 2026-03-22.
+- CODEBASE_REFERENCE / DOCUMENTATION: testing line, sympathetic default, the frame-activation
+  metal check and the Transmitter read brought up to date.
 
 ## [2026-10-24e] Machine Frame: Sean's new textures, powered look
 

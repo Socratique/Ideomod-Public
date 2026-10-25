@@ -498,7 +498,7 @@ Blocks only link sympathetically with others on the SAME channel. This allows mu
 
 **Key details**:
 - Groups toPush entries by channel (via `ISympathetic.getSympatheticChannel()` or FramedBlock inner block check)
-- For each channel group, scans along all 6 axis directions up to `sympatheticRadius` (configurable, default 5) at distance 1, finding adjacent same-channel blocks
+- For each channel group, scans along all 6 axis directions up to `sympatheticRadius` (configurable, default 12; was 5 until 2026-10-25) at distance 1, finding adjacent same-channel blocks
 - MovementScanHelper also checks FramedBlock inner blocks for ISympathetic interface
 - Wall/stair/slab blocks set `isStickyBlock()=true` to trigger vanilla's `addBranchingBlocks` call + `canStickTo()=false` to prevent direct-contact grabbing (only sympathetic search via mixin at TAIL applies)
 - Takes a snapshot of `toPush` before iterating (avoids ConcurrentModificationException as new blocks get added)
