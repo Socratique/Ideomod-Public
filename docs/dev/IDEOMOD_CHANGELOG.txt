@@ -1,5 +1,18 @@
 # Ideomod Changelog
 
+## [2026-10-25g] Move checks no longer leave "in branching" state behind
+
+- Bug: the resolver mixin marked "inside addBranchingBlocks" with a flag cleared at TAIL. Mixin's
+  TAIL only runs before the last return, so the early "return false" (a grabbed line that can't
+  move) left the flag set, logged on the next move as "inBranching was already true at HEAD --
+  defensive reset". And addBranchingBlocks nests (a grabbed line that collides with blocks already
+  being moved branches them again): the inner call cleared the flag while the outer call was still
+  checking neighbours, so the grab-immunity rules could be skipped there. Now a depth counter,
+  counted down on every return, and reset when each resolve starts. (Audit 2026-03-26 finding #4,
+  the inBranching part.) Ported from the private Ideomod, where a large flying machine's moves
+  resolved to identical block lists before and after.
+- GameTests: 16/16 pass, no "defensive reset" warnings in the run.
+
 ## [2026-10-25f] Players on a server use the server's settings
 
 - Bug: the config was never sent from server to client. Every client re-runs each piston move to

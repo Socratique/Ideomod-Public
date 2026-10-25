@@ -54,6 +54,9 @@ public abstract class PistonStructureResolverMixin {
     private static final ThreadLocal<Boolean> ideomod$inBranching = ThreadLocal.withInitial(() -> false);
 
     @Unique
+    private static final ThreadLocal<Integer> ideomod$branchDepth = ThreadLocal.withInitial(() -> 0);
+
+    @Unique
     private static final ThreadLocal<Boolean> ideomod$firstCanStickToCall = ThreadLocal.withInitial(() -> true);
 
     // ====================================================================
@@ -62,6 +65,10 @@ public abstract class PistonStructureResolverMixin {
 
     @Inject(method = "resolve", at = @At("HEAD"))
     private void ideomod$redirectStartPos(CallbackInfoReturnable<Boolean> cir) {
+        // Every resolve starts outside branching (an exception thrown mid-resolve can't leak state).
+        ideomod$branchDepth.set(0);
+        ideomod$inBranching.set(false);
+
         // Flush any pending frame activation changes BEFORE the resolver
         // reads any blockstate. Without this, frames activated by markDirty()
         // during the current tick would still show ACTIVE=false during the
@@ -130,22 +137,24 @@ public abstract class PistonStructureResolverMixin {
     // PHASE DETECTION
     // ====================================================================
 
+    // addBranchingBlocks can nest (a grabbed line that collides with blocks already in toPush
+    // branches them again), and it has an early "return false". So "in branching" is a depth, not a
+    // flag: counted up on entry and down on EVERY return. With a flag cleared at TAIL, an early
+    // return left it set (logged as a "defensive reset" on the next run), and a nested call cleared
+    // it while the outer call was still checking neighbours, skipping the grab-immunity rules there.
     @Inject(method = "addBranchingBlocks", at = @At("HEAD"))
     private void ideomod$enterBranching(CallbackInfoReturnable<Boolean> cir) {
-        // Defensive reset: if flag is already true from a previous failed run
-        // (exception thrown between HEAD and TAIL), reset it first.
-        if (ideomod$inBranching.get()) {
-            com.ideomancer.ideomod.Ideomod.LOGGER.warn(
-                "[Ideomod] inBranching was already true at HEAD — defensive reset from previous failed run");
-        }
+        ideomod$branchDepth.set(ideomod$branchDepth.get() + 1);
         ideomod$inBranching.set(true);
         // Defensive reset for call-pair toggle too
         ideomod$firstCanStickToCall.set(true);
     }
 
-    @Inject(method = "addBranchingBlocks", at = @At("TAIL"))
+    @Inject(method = "addBranchingBlocks", at = @At("RETURN"))
     private void ideomod$exitBranching(CallbackInfoReturnable<Boolean> cir) {
-        ideomod$inBranching.set(false);
+        int depth = Math.max(0, ideomod$branchDepth.get() - 1);
+        ideomod$branchDepth.set(depth);
+        ideomod$inBranching.set(depth > 0);
     }
 
     // ====================================================================
