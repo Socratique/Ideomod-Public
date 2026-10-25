@@ -71,7 +71,7 @@ public abstract class PistonBaseBlockClientMixin {
         }
 
         if (captured > 0) {
-            IDEOMOD_LOGGER.info("[ClientCapture] Captured {} inner-block(s) for {} at {}",
+            IDEOMOD_LOGGER.debug("[ClientCapture] Captured {} inner-block(s) for {} at {}",
                     captured, extending ? "extension" : "retraction", pistonPos);
         }
     }

@@ -168,7 +168,7 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
         // One-shot confirmation that the ticker is alive
         if (!tickerConfirmed) {
             tickerConfirmed = true;
-            LOGGER.info("[ENGINE] Ticker ALIVE at {} — inputFace={}, fuel={}, litTime={}, interval={}",
+            LOGGER.debug("[ENGINE] Ticker ALIVE at {} — inputFace={}, fuel={}, litTime={}, interval={}",
                     pos, this.getInputFace(), this.fuelItem, this.litTime, this.pulseInterval);
         }
 
@@ -188,7 +188,7 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
             if (burnTime > 0) {
                 this.litTime = burnTime;
                 this.litDuration = burnTime;
-                LOGGER.info("[ENGINE] Fuel consumed at {} — burnTime={}, fuelItem={}", pos, burnTime, this.fuelItem);
+                LOGGER.debug("[ENGINE] Fuel consumed at {} — burnTime={}, fuelItem={}", pos, burnTime, this.fuelItem);
                 // Consume fuel item
                 ItemStack fuel = this.fuelItem;
                 if (fuel.getItem() == Items.LAVA_BUCKET) {
@@ -213,7 +213,7 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
                 // Get fresh state in case LIT changed
                 BlockState currentState = level.getBlockState(pos);
                 if (currentState.getBlock() instanceof MachineEngineBlock engineBlock) {
-                    LOGGER.info("[ENGINE] PULSE at {} — litTime={}, interval={}", pos, this.litTime, this.pulseInterval);
+                    LOGGER.debug("[ENGINE] PULSE at {} — litTime={}, interval={}", pos, this.litTime, this.pulseInterval);
                     engineBlock.emitPulse(level, pos, currentState);
                 } else {
                     LOGGER.warn("[ENGINE] Block at {} is NOT MachineEngineBlock! Got: {}", pos, currentState.getBlock());

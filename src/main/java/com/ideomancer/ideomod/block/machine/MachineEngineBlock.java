@@ -202,7 +202,7 @@ public class MachineEngineBlock extends AbstractMachineBlock {
             // New signal or signal returned after drop
             engineBE.setInputFace(bestFace);
             engineBE.setInputWasLow(false);
-            LOGGER.info("[ENGINE] Signal detected at {} — face={}, strength={}", pos, bestFace, bestSignal);
+            LOGGER.debug("[ENGINE] Signal detected at {} — face={}, strength={}", pos, bestFace, bestSignal);
 
             // Update LIT state: needs fuel AND signal
             updateLitState(level, pos, state, engineBE);
@@ -259,7 +259,7 @@ public class MachineEngineBlock extends AbstractMachineBlock {
      */
     void emitPulse(Level level, BlockPos pos, BlockState state) {
         if (!state.getValue(POWERED)) {
-            LOGGER.info("[ENGINE] emitPulse at {} — setting POWERED=true, scheduling 2-tick off", pos);
+            LOGGER.debug("[ENGINE] emitPulse at {} — setting POWERED=true, scheduling 2-tick off", pos);
             updatingPos.set(pos);
             try {
                 level.setBlock(pos, state.setValue(POWERED, true), 3);

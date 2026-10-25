@@ -83,6 +83,13 @@ public final class MachineRedstoneHelper {
             return Math.max(0, signal - 1);
         }
 
+        // --- Transmitter: its real output is in the block entity, which getSignal reads;
+        // getRedstoneOutput() is only a rough on/off (fixed 2026-10-25: a receiver read
+        // as 1 lost the strongest-face contest to almost any other input). No decay.
+        if (neighborBlock instanceof MachineTransmitterBlock) {
+            return neighborState.getSignal(level, neighborPos, face);
+        }
+
         // --- Device type: any Machine Family redstone device ---
         // These are "source-like" blocks that output a fixed level on non-input faces.
         // Read their output level directly, respecting input face suppression.

@@ -148,7 +148,7 @@ public class BlockMoveHelper {
                     CompoundTag data = movable.saveMovementData();
                     if (data != null) {
                         savedBlockEntityData.put(destPos, data);
-                        Ideomod.LOGGER.info("[BlockMoveHelper] SAVED IPistonMovable data from {} -> dest {} (tags: {})",
+                        Ideomod.LOGGER.debug("[BlockMoveHelper] SAVED IPistonMovable data from {} -> dest {} (tags: {})",
                                 sourcePos, destPos, data.getAllKeys());
                     }
                 }

@@ -6,6 +6,8 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineRedstoneHelper;
+import com.ideomancer.ideomod.block.frame.FrameBlock;
 import com.ideomancer.ideomod.block.machine.MachinePulserBlock;
 import com.ideomancer.ideomod.registry.ModBlocks;
 import com.ideomancer.ideomod.registry.ModItems;
@@ -366,6 +368,55 @@ public class IdeomodGameTests {
         });
         helper.runAfterDelay(6, () -> {
             if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) helper.fail("Machine Frame stayed powered after the power was removed", frame);
+            else helper.succeed();
+        });
+    }
+
+    // ==================== Frame metals (fixed 2026-10-25) ====================
+
+    /**
+     * A copper frame touching both an iron frame and a copper path from the same
+     * Machine Frame must still activate. Before the fix the iron neighbour got to
+     * it first (the UP seed is processed before SOUTH), marked its spot as reached
+     * with an iron-only signal, and the real copper signal was then skipped.
+     *
+     *   y=2:  [iron I] [copper C]       M = Machine Frame (2,1,2), I above it,
+     *   y=1:  [M]      [copper K]       K south of M, C above K and south of I.
+     */
+    @GameTest(template = EMPTY)
+    public static void copperFrameBesideIronStillActivates(GameTestHelper helper) {
+        BlockPos m = new BlockPos(2, 1, 2), iron = new BlockPos(2, 2, 2);
+        BlockPos k = new BlockPos(2, 1, 3), c = new BlockPos(2, 2, 3);
+        helper.setBlock(iron, ModBlocks.IRON_FRAME.get());
+        helper.setBlock(k, ModBlocks.COPPER_FRAME.get());
+        helper.setBlock(c, ModBlocks.COPPER_FRAME.get());
+        helper.setBlock(m, ModBlocks.MACHINE_BLOCK.get());
+        helper.runAfterDelay(6, () -> {
+            if (!helper.getBlockState(k).getValue(FrameBlock.ACTIVE)) { helper.fail("copper frame next to the Machine Frame is off", k); return; }
+            if (!helper.getBlockState(iron).getValue(FrameBlock.ACTIVE)) { helper.fail("iron frame next to the Machine Frame is off", iron); return; }
+            if (!helper.getBlockState(c).getValue(FrameBlock.ACTIVE)) { helper.fail("copper frame reachable by copper stayed off beside an iron frame", c); return; }
+            helper.succeed();
+        });
+    }
+
+    // ==================== Transmitter strength (fixed 2026-10-25) ====================
+
+    /**
+     * Machine redstone blocks read a Transmitter receiver at its real strength
+     * (source 15 -> receiver 14), not the rough "1" of getRedstoneOutput().
+     */
+    @GameTest(template = EMPTY)
+    public static void machinesReadTransmitterStrength(GameTestHelper helper) {
+        BlockPos power = new BlockPos(0, 1, 2), source = new BlockPos(1, 1, 2), receiver = new BlockPos(4, 1, 2);
+        for (BlockPos p : new BlockPos[]{source, receiver}) {
+            helper.setBlock(p, ModBlocks.MACHINE_TRANSMITTER.get());
+            if (helper.getBlockEntity(p) instanceof MachineFrameBlockEntity be) be.setItemDirect(new ItemStack(ModBlocks.ODDSTONE.get()));
+        }
+        helper.runAfterDelay(2, () -> helper.setBlock(power, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(10, () -> {
+            BlockPos reader = helper.absolutePos(receiver.east());
+            int seen = MachineRedstoneHelper.getIncomingSignalFromFace(helper.getLevel(), reader, Direction.WEST, new ThreadLocal<>());
+            if (seen != 14) helper.fail("a machine next to the receiver reads " + seen + ", expected 14", receiver);
             else helper.succeed();
         });
     }

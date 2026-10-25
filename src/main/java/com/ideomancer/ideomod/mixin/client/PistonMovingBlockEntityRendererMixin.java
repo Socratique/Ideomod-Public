@@ -77,7 +77,7 @@ public abstract class PistonMovingBlockEntityRendererMixin {
         Block movedBlock = movedState.getBlock();
 
         if (!ideomod$loggedOnce) {
-            IDEOMOD_LOGGER.info("[RendererMixin] Mixin active - first render() call");
+            IDEOMOD_LOGGER.debug("[RendererMixin] Mixin active - first render() call");
             ideomod$loggedOnce = true;
         }
 

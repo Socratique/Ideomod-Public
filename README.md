@@ -90,7 +90,7 @@ When a piston moves an Oddstone block, other Oddstone blocks of the same kind mo
 
 The rule:
 
-- From the moved block, the mod looks along the six axis lines (not diagonals), up to 5 blocks each way.
+- From the moved block, the mod looks along the six axis lines (not diagonals), up to 12 blocks each way (set in the config).
 - The first block of the **same channel** found in each direction is linked and moves too. Whatever sits in between, solid or not, is ignored.
 - Links chain: each linked block looks along its own six lines.
 - Every block type is its own channel, so there are twelve: Oddstone, Cobbled Oddstone, Oddstone Bricks, and the wall, stairs and slab of each. Oddstone never links with Cobbled Oddstone.
@@ -254,7 +254,7 @@ Wireless redstone. The Oddstone-family block in the slot is the **channel**. Twe
 ![Machine Transmitter](docs/media/transmitter.gif)
 
 - A Transmitter that receives redstone becomes a **source**. It outputs nothing itself.
-- Every other Transmitter on the same channel within 5 blocks in each direction becomes a **receiver**, and outputs the source's strength minus 1 on all six faces.
+- Every other Transmitter on the same channel within 12 blocks in each direction becomes a **receiver**, and outputs the source's strength minus 1 on all six faces.
 - Receivers do not relay to further receivers.
 - If several sources are in range, the strongest wins.
 - The range is the same config value as the sympathetic movement range.
@@ -450,7 +450,7 @@ The config file is `config/ideomod/ideomod.json`, created on first launch.
 
 | Section | Key | Default | What it sets |
 |---|---|---|---|
-| `oddstone` | `sympathetic_radius` | 5 | Range of sympathetic links and of Transmitters |
+| `oddstone` | `sympathetic_radius` | 12 | Range of sympathetic links and of Transmitters (1 to 16) |
 | `oddstone` | `affected_mobs` | 62 mobs | Which mobs avoid Oddstone |
 | `pistons` | `ranged_scan_range` | 12 | Reach of the Repulser and Attractor |
 | `pistons` | `base_push_limit` | 12 | Piston push limit before Braces |
@@ -481,16 +481,15 @@ Commands, both for operators:
 
 This is a snapshot, so here is what is known to be unfinished. Most of these come from reading the code and have not all been checked in the game.
 
-- **No recipes** for the Repulser, Attractor and Structure Debug Stick.
 - **Placeholder art** on some machine blocks (Timer, Engine, Transmitter).
 - **Hollowstone** loses its inner block when mined with Silk Touch or destroyed by anything other than a player, and cannot be moved by pistons.
-- **Mixed iron and copper frame networks** may leave a frame inactive that should be active. Chains of one metal are fine.
 - **Furnace Array size limits** are read at startup, so `/ideomod reload` does not change them until a restart.
 - **A full Fluid Pipe** that is broken drops holding its filled bucket, and turns into a plain Machine Frame when placed again.
-- **A Transmitter receiver** read directly by another machine redstone block counts as on or off only. Redstone dust and Conductors see the real strength.
 - **Sympathetic links and the push limit:** a linked block that would take a move over the limit appears to be left behind rather than stopping the move.
-- **Debug logging** is still switched on in a few places and is noisy.
-- **No world generation beyond the ores.** The larger overhaul sketched in the design notes has not been started.
+- **No world generation beyond Oddstone ore and Hollowstone formations.** The larger overhaul sketched in the design notes has not been started.
+- **Framed glass, slime and other see-through blocks** look solid in the inventory. Placed in the world they look right.
+- **The Toggle's indicator** is the same colour on all six faces; only the outer texture shows which face is the input.
+- **The in-game footage** above was recorded in April 2026, before the portal turned light blue.
 
 ## Repository layout
 

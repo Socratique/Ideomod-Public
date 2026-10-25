@@ -1548,7 +1548,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing oddstone item in s
 | **Blockstate** | POWERED (BooleanProperty) + SOURCE (BooleanProperty) |
 | **Output** | Receivers: stored signal strength on all faces. Sources: 0 (no output). |
 | **Attenuation** | Receiver outputs `sourceStrength - 1`, simulating one block of distance. |
-| **Range** | Cubic radius from config (`oddstone.sympathetic_radius`, default 5). |
+| **Range** | Cubic radius from config (`oddstone.sympathetic_radius`, default 12; was 5 until 2026-10-25). |
 | **Activation** | SOURCE mode: immediate in neighborChanged (no tick delay). |
 | **Re-evaluation** | Via scheduled tick (2 game ticks). |
 
@@ -1886,7 +1886,7 @@ Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneCon
 {
   "_comment": "Ideomod Configuration — edit values below to tune gameplay. Delete this file to regenerate defaults.",
   "oddstone": {
-    "sympathetic_radius": 5,
+    "sympathetic_radius": 12,
     "affected_mobs": ["minecraft:axolotl", "minecraft:bee", ...]
   },
   "pistons": {
@@ -1928,7 +1928,7 @@ Class: `config/IdeomodConfig.java`. Replaces the old single-purpose `OddstoneCon
 
 | Key | Type | Default | Range | Description |
 |-----|------|---------|-------|-------------|
-| `sympathetic_radius` | int | 5 | 1-16 | How many blocks apart Oddstones can "feel" each other for sympathetic movement. Scans through solid blocks. |
+| `sympathetic_radius` | int | 12 | 1-16 | How many blocks apart Oddstones can "feel" each other for sympathetic movement. Scans through solid blocks. |
 | `affected_mobs` | string[] | 62 mobs | — | Full registry IDs of mobs repelled by Oddstone pathfinding (`DAMAGE_OTHER`). Default includes all land-based vanilla 1.20.1 mobs. Excludes purely aquatic, purely flying, wither, ender dragon. |
 
 **Section: pistons**

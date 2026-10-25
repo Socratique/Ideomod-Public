@@ -1,5 +1,27 @@
 # Ideomod Changelog
 
+## [2026-10-25] Fixes: mixed-metal frames, Transmitter strength, log noise; sympathetic range 12
+
+From a review of the README's rough edges against the code (Sean, 2026-10-25).
+
+- **Frame activation, mixed metals** (`FrameActivation.propagateSignal`): a neighbour is only
+  queued if it shares a metal with the signal. Before, an iron frame could queue a copper
+  neighbour with an iron-only signal, marking that spot as reached, so a real copper signal
+  arriving at equal strength was skipped and the copper frame stayed off. GameTest
+  `copperFrameBesideIronStillActivates` (fails without the fix, passes with it).
+- **Transmitter strength** (`MachineRedstoneHelper.getIncomingSignalFromFace`): machine blocks
+  now read a receiver's real strength from its block entity (source 15 -> 14) instead of the
+  rough `getRedstoneOutput()` value of 1, which lost the strongest-face contest that picks a
+  machine's input. GameTest `machinesReadTransmitterStrength` (fails without, passes with).
+- **Log noise**: the Engine's per-pulse/fuel/signal lines, the block mover's "SAVED
+  IPistonMovable data" line and the client piston capture/renderer lines are now DEBUG.
+  Startup and portal events stay INFO.
+- **Sympathetic range default 5 -> 12** (Sean). The same setting is the Transmitter range, so
+  that is 12 too. Existing `config/ideomod/ideomod.json` files keep their own value.
+- README: rough edges brought up to date (recipes exist; fixed items removed; inventory
+  translucency, Toggle tint and the April footage added); range 12 throughout.
+- 12/12 GameTests pass; jar check passes.
+
 ## [2026-10-24e] Machine Frame: Sean's new textures, powered look
 
 - New textures by Sean: `machine_frame_active.png` (unpowered: sends out activation; hole

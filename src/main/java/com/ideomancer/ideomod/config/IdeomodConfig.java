@@ -44,7 +44,7 @@ public class IdeomodConfig {
     // ========================================================================
 
     /** How far Oddstone blocks link sympathetically when pushed (in blocks). */
-    private static int sympatheticRadius = 5;
+    private static int sympatheticRadius = 12;
     /** Maximum allowed sympathetic radius (performance clamp). */
     private static final int MAX_SYMPATHETIC_RADIUS = 16;
 

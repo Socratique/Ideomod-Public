@@ -400,13 +400,22 @@ public class FrameActivation {
 
                 if (!bestQueued.containsKey(neighborPacked) || bestQueued.get(neighborPacked) < nextStrength) {
                     BlockState neighborState = level.getBlockState(neighborPos);
-                    if (isConductor(neighborState)) {
+                    // Only queue a neighbour that can take this signal (shares a metal with it).
+                    // Queuing an incompatible one would mark its position as reached and
+                    // block a real, same-metal signal arriving later at equal strength
+                    // (fixed 2026-10-25: a copper frame beside an iron one could stay off).
+                    if (isConductor(neighborState) && shareMaterial(getConductiveMaterials(neighborState), outgoing)) {
                         bestQueued.put(neighborPacked, nextStrength);
                         queue.add(new SignalEntry(neighborPos, outgoing, nextStrength));
                     }
                 }
             }
         }
+    }
+
+    private static boolean shareMaterial(EnumSet<FrameMaterial> a, EnumSet<FrameMaterial> b) {
+        for (FrameMaterial m : a) if (b.contains(m)) return true;
+        return false;
     }
 
     // ========================================================================
