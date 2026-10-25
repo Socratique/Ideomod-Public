@@ -8,7 +8,7 @@ import net.minecraft.world.level.block.SlimeBlock;
 import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Interface for all Machine Family blocks (Machine Frame, Track, Trolley,
+ * Interface for all Machine Family blocks (Machine Base, Track, Trolley,
  * and future specializations).
  *
  * Provides type-aware stickiness behavior and family membership check.
@@ -16,7 +16,7 @@ import net.minecraft.world.level.block.state.BlockState;
  *
  * STICKINESS MODEL:
  * =================
- * - Machine Frame (FRAME type) sticks to ALL machine types.
+ * - Machine Base (FRAME type) sticks to ALL machine types.
  * - Specializations stick to SAME type + FRAME only.
  * - All types stick to Frame Family (when active).
  * - All types are permissive to Slime/Honey/OddSlime (so grab immunity
@@ -28,7 +28,7 @@ public interface IMachineFamily {
 
     /**
      * Returns this block's machine type for stickiness grouping.
-     * Machine Frame returns FRAME (universal connector).
+     * Machine Base returns FRAME (universal connector).
      * Each specialization returns its specific type.
      */
     MachineType getMachineType();

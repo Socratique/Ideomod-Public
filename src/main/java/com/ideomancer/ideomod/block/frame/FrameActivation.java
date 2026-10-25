@@ -32,7 +32,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * =======================
  * - ONLY MachineFrameBlock can emit anti-signal. No other Machine Family
  *   member (Track, Trolley, future specializations) ever suppresses frames.
- * - A Machine Frame receiving redstone power becomes a SUPPRESSOR:
+ * - A Machine Base receiving redstone power becomes a SUPPRESSOR:
  *   - It stops emitting activation signal entirely
  *   - It emits an anti-activation signal with strength = redstone level
  *   - Anti-signal decays by 1 per conductor block, same as activation
@@ -56,12 +56,12 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * 1. DISCOVER: BFS from change point through all IFrameBlock conductors.
  * 2. WIPE: Set all IFrameBlock to ACTIVE=false.
  * 3. FIND SOURCES: Find Machine Blocks adjacent to network.
- * 4. ACTIVATE: BFS from activation sources. Machine Frames only activate
+ * 4. ACTIVATE: BFS from activation sources. Machine Bases only activate
  *    when unpowered; all other Machine Family blocks always activate.
  *    Strength 15 decaying by 1 per conductor.
  *    Each entry carries available materials + signal strength.
  *    Each block records the max strength received.
- * 5. SUPPRESS: BFS from powered Machine Frames ONLY, anti-strength =
+ * 5. SUPPRESS: BFS from powered Machine Bases ONLY, anti-strength =
  *    redstone level, decaying by 1. Any block reached by anti-signal
  *    is deactivated. Other Machine Family blocks never suppress.
  * 6. APPLY: Set ACTIVE=true only on blocks with activation > 0 and
@@ -279,7 +279,7 @@ public class FrameActivation {
             }
         }
 
-        // Step 5: Propagate anti-activation signal from powered Machine Frames ONLY
+        // Step 5: Propagate anti-activation signal from powered Machine Bases ONLY
         Map<Long, Integer> antiStrength = new HashMap<>();
 
         for (BlockPos machinePos : machineSources) {

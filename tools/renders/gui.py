@@ -1,5 +1,5 @@
 """
-Pictures of the Machine Frame GUI, one panel per mode.
+Pictures of the Machine Base GUI, one panel per mode.
 
     python tools/renders/gui.py              # writes docs/media/gui.png
 
@@ -155,7 +155,7 @@ def panel(v, sheet, buttons, title, spec=None, transit=None, mode=None, sel=None
 
 
 PANELS = [
-    ("Empty slot: a plain Machine Frame", dict(title="Machine Frame")),
+    ("Empty slot: a plain Machine Base", dict(title="Machine Base")),
     ("Repeater: delay, 1 to 4 redstone ticks", dict(title="Machine Repeater", spec="repeater", mode="repeater", sel=2)),
     ("Comparator: output strength, 1 to 15", dict(title="Machine Transformer", spec="comparator", mode="transformer", sel=8)),
     ("Clock: pulse length, in ticks", dict(title="Machine Timer", spec="clock_00", mode="timer", sel=20)),

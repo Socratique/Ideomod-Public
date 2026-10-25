@@ -36,7 +36,7 @@ We use two layers to achieve one-way (asymmetric) stickiness:
 
 Only return `false` for TRUE mutual exclusions where neither side should ever stick to the other (like slime vs honey in vanilla).
 
-**Exception: Machine Family inter-specialization isolation.** Track's `canStickTo(Trolley)` returns false because neither direction of sticking is desired. This is a true mutual exclusion between different MachineTypes, handled correctly at Layer 1. Machine Frame (MachineType.FRAME) bridges them.
+**Exception: Machine Family inter-specialization isolation.** Track's `canStickTo(Trolley)` returns false because neither direction of sticking is desired. This is a true mutual exclusion between different MachineTypes, handled correctly at Layer 1. Machine Base (MachineType.FRAME) bridges them.
 
 ### Layer 2: Mixin grab immunity rules (restrictive)
 
@@ -96,16 +96,16 @@ The `MachineType` enum (`block/machine/MachineType.java`) identifies each Machin
 
 ### Stickiness Matrix
 
-Who grabs whom (rows = grabber, columns = target). "Machine Frame" = MachineType.FRAME. "Machine Spec" = any specialization. "Same-Type Spec" = same MachineType. "Diff-Type Spec" = different MachineType.
+Who grabs whom (rows = grabber, columns = target). "Machine Base" = MachineType.FRAME. "Machine Spec" = any specialization. "Same-Type Spec" = same MachineType. "Diff-Type Spec" = different MachineType.
 
 (Raw vanilla iron_block / copper_block were removed from frame-family stickiness on 2026-04-19. Cross-frame mediation via INNER_CONDUCTOR was also removed -- frames now require exact same-material match.)
 
-|              | Slime | Honey | Odd Slime | Machine Frame | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Oddstone | Normal |
+|              | Slime | Honey | Odd Slime | Machine Base | Same-Type Spec | Diff-Type Spec | Frame Fam (active) | Frame Fam (inactive) | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-------------:|:--------------:|:--------------:|:------------------:|:--------------------:|:--------:|:------:|
 | **Slime**    |  YES  |  no*  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |    no    |  YES   |
 | **Honey**    |  no*  |  YES  |    no*    |      YES      |      YES       |      YES       |        YES         |         YES          |    no    |  YES   |
 | **Odd Slime**|  no*  |  no*  |  YES (d)  |    YES (d)    |    YES (d)     |    YES (d)     |      YES (d)       |       YES (d)        |    no    | YES (d)|
-| **Machine Frame**|no |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |    no    |   no   |
+| **Machine Base**|no |  no   |    no     |      YES      |      YES       |      YES       |        YES         |         no           |    no    |   no   |
 | **Machine Spec**|no  |  no   |    no     |      YES      |      YES       |       no       |        YES         |         no           |    no    |   no   |
 | **Frame Fam (active)**| no | no | no     |      YES      |      YES       |      YES       |      YES (m)       |         no           |    no    |   no   |
 | **Framed Slime (act.)**| YES | no* | no* |      YES      |      YES       |      YES       |      YES (m)       |         no           |    no    |  YES   |
@@ -117,11 +117,11 @@ Who grabs whom (rows = grabber, columns = target). "Machine Frame" = MachineType
 | **Oddstone** |  YES  |  YES  |    YES    |       no      |       no       |       no       |        no          |         no           |   YES    |   no   |
 
 Legend: `no*` = mutual canStickTo exclusion | `no` = grab immunity or MachineType rejection | `(d)` = directional | `(m)` = material-matched, exact same frame material | `(i)` = inner sticky only
-Machine Frame (FRAME) bridges all specialization types. Diff-Type Spec rejected at Layer 1 (canStickTo false).
+Machine Base (FRAME) bridges all specialization types. Diff-Type Spec rejected at Layer 1 (canStickTo false).
 
 ### How Each Pair Is Implemented
 
-**Machine Family -> Machine Family**: TYPE-AWARE. `canMachineFamilyStickTo(myType, other)` checks `myType.canStickToMachineType(otherType)`. MachineType.FRAME sticks to all types (universal connector). Specializations stick to same-type + FRAME only. Track does NOT stick to Trolley. Machine Frame bridges different specialization types. This is Layer 1 (canStickTo), not grab immunity.
+**Machine Family -> Machine Family**: TYPE-AWARE. `canMachineFamilyStickTo(myType, other)` checks `myType.canStickToMachineType(otherType)`. MachineType.FRAME sticks to all types (universal connector). Specializations stick to same-type + FRAME only. Track does NOT stick to Trolley. Machine Base bridges different specialization types. This is Layer 1 (canStickTo), not grab immunity.
 
 **Machine Family -> Slime**: BLOCKED. Both `canStickTo` return `true` (permissive). Grab immunity rule: machine family grabber + slime target = blocked.
 

@@ -14,7 +14,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * instance. Every method call looks up whatever MachineFrameBlockEntity
  * currently exists at the stored position and forwards to it.
  *
- * This means the menu seamlessly survives block swaps (Machine Frame <->
+ * This means the menu seamlessly survives block swaps (Machine Base <->
  * specializations) because the swap replaces the block and block entity
  * at the position, and next time the menu reads a slot it just finds the
  * new block entity sitting there.

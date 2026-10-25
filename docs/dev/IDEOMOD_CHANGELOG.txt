@@ -1,5 +1,15 @@
 # Ideomod Changelog
 
+## [2026-10-25h] The Machine Frame is now the Machine Base
+
+- Renamed (Ideomancer's call) so it isn't mistaken for the Iron and Copper Frames, which work quite
+  differently. Display name only: the block's id stays ideomod:machine_block, so worlds are unaffected,
+  and the Java classes keep their MachineFrame* names. "Machine blocks" still means the whole family.
+- Updated: language file (block name and GUI title), README, current dev docs, code comments, GameTest
+  messages, the render scripts; re-rendered the block catalogue, the GUI picture and the frames and
+  track explainer GIFs. Older changelog entries and dated audits keep the old name. Same change as the
+  private Ideomod. GameTests: 16/16 pass.
+
 ## [2026-10-25g] Move checks no longer leave "in branching" state behind
 
 - Bug: the resolver mixin marked "inside addBranchingBlocks" with a flag cleared at TAIL. Mixin's

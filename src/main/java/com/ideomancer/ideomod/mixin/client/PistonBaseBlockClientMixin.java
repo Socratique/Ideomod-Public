@@ -173,7 +173,7 @@ public abstract class PistonBaseBlockClientMixin {
                 allBlocks.add(checkPos);
 
                 // Scan sticky group attached to this sympathetic oddstone
-                // (machine frames, activated framed blocks, etc.)
+                // (Machine Bases, activated framed blocks, etc.)
                 if (checkState.isStickyBlock()) {
                     ideomod$scanStickyGroupInto(level, checkPos, allBlocks);
                 }

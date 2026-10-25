@@ -15,7 +15,7 @@ package com.ideomancer.ideomod.block.machine;
  */
 public enum MachineType {
 
-    /** Machine Frame -- universal connector. Sticks to all machine types. */
+    /** Machine Base -- universal connector. Sticks to all machine types. */
     FRAME,
 
     /** Machine Conductor -- pure signal/stickiness relay. */

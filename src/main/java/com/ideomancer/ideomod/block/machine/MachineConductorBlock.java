@@ -26,7 +26,7 @@ import java.util.Set;
  * through a full solid block. Connects to vanilla redstone components on all 6 faces.
  * Outputs weak power only (like dust — powers blocks but not through them).
  *
- * Created by inserting Redstone Dust into a Machine Frame.
+ * Created by inserting Redstone Dust into a Machine Base.
  *
  * === INPUT/OUTPUT FACE MODEL ===
  *
@@ -369,7 +369,7 @@ public class MachineConductorBlock extends AbstractMachineBlock {
 
     /**
      * Conductor does not use the default setPlacedBy specialization swap.
-     * Conductors are created by inserting redstone into a Machine Frame,
+     * Conductors are created by inserting redstone into a Machine Base,
      * not by placing a conductor block directly.
      */
     @Override

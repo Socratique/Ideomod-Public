@@ -78,7 +78,7 @@ FLAT = {
 }
 
 TITLES = {
-    "ideomod:machine_block": "Machine Frame", "ideomod:hollow_stone": "Hollowstone",
+    "ideomod:machine_block": "Machine Base", "ideomod:hollow_stone": "Hollowstone",
     "ideomod:oddstone_repulser": "Repulser", "ideomod:oddstone_attractor": "Attractor",
     "ideomod:framed_block": "Framed Block",
 }

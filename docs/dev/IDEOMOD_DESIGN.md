@@ -3,7 +3,7 @@
 <!-- NOTE: ASCII-only formatting. No emoji, no Unicode arrows/dashes/quotes. Use [DONE] [WIP] [DESIGNED] [IDEA] [HOLD] for status tags, -> for arrows, -- for dashes, x for multiplication. -->
 *Last updated: 2026-10-25, third pass (Ideomancer: Redstone Rod recipe final; Drill stays a test block until balancing decides its role; Ghost Block kept separate from projected blocks; the core idea of the Machine Family written in; Machine Specializations [DONE], with room for more.)*
 *Last updated: 2026-10-25, second pass (Current Recipes table rewritten from the recipe files -- it still listed the spring placeholders; Ideoblock marked [HOLD]: dropped from Ideomod-Public and the Machine Mod on 2026-10-09, still in the private original.)*
-*Last updated: 2026-10-25 (Ideomancer's decisions of 2026-10-24/25 written in: real recipes -- Machine Frame needs Hollow Stone, Iron/Copper Frames from ingots + nuggets, Repulser/Attractor craftable, Odd Slime from an Oddstone ringed by slime balls with an Oddstone core inside; the Copper Nugget item; the Machine Frame's own textures and powered look; a full Fluid Pipe keeps its fluid; sympathetic range 12 and the push-limit rule for linked blocks; Hollow Stone marked [DONE]; branch-tree rules: side-only limbs, mostly normal trees, small branch-only trees.)*
+*Last updated: 2026-10-25 (Ideomancer's decisions of 2026-10-24/25 written in: real recipes -- Machine Base needs Hollow Stone, Iron/Copper Frames from ingots + nuggets, Repulser/Attractor craftable, Odd Slime from an Oddstone ringed by slime balls with an Oddstone core inside; the Copper Nugget item; the Machine Base's own textures and powered look; a full Fluid Pipe keeps its fluid; sympathetic range 12 and the push-limit rule for linked blocks; Hollow Stone marked [DONE]; branch-tree rules: side-only limbs, mostly normal trees, small branch-only trees.)*
 *Last updated: 2026-10-17 (Branch + Bush blocks prototyped and rewritten to the Ideomancer's placement rules: branches have an axis and join only when one points at the other (T, L, no lattice); bushes use 26 neighbours -- edges and corners fill only with the diagonal, so L-shapes keep their notch. Both now [WIP]. Later the same day: branch texturing hand-set (ring end caps, grain along every stick, bark at bends); bushes on vanilla oak leaves in two layers.)*
 *Last updated: 2026-07-17 (Enchanting Overhaul expansion -- imported the full consolidated enchant list from the "Yeet" brainstorm session that was never written in: movement enchants (Swiftness, Water/Lava/Blaze Walking), armor (Pockets, Endurance), farming (Harvest, Sowing, Reaping), gathering (Felling, Vein Miner), utility (Reach, universalized Channeling), Yeet; full Spell Enchants category (Fireball, Gust, Inferno Ring, Combustion, Destruction, Combustive/Destructive Shot, Explosive, Warp/Blink Shot) with shared durability-cost mechanic; new curses (Encumbrance, Feebleness, Dropping, Blunting); Mythical rarity tier + Sacrifice; Enchant Universalization system; Weight knockback note; Disenchanting Table subtraction mechanic; Wand item stub added (flagged, needs definition))*
 *Last updated: 2026-04-19 (Frame Family simplified -- raw vanilla iron/copper removed as conductors and sticky members; cross-frame mediation removed and INNER_CONDUCTOR property deleted; Oddstone silk-touch loot fix; OddstoneConfig deleted; FurnaceArray frame tag consolidated)*
@@ -245,7 +245,7 @@ When a lava source block is adjacent to Oddstone, the lava source transforms int
 Each face of a Hollow Stone block has a small square hole visible in its texture. Right-clicking with a block in hand places that block "inside" the Hollow Stone -- visible through the holes on each face. Uses the same dynamic rendering approach as Framed Blocks (BlockEntityRenderer fetches inner block texture at render time), but inverted: the shell is the Hollow Stone with holes, the inner block shows through them.
 
 **Role in progression:**
-Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10-24] Machine Frame recipe: Hollow Stone in the centre, copper ingots left and right, redstone above and below, iron ingots in the corners -> 1. This creates the progression chain: find Oddstone -> expose to lava (or find naturally) -> collect Hollow Stone Shards -> craft Hollow Stone -> craft Machine Blocks.
+Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10-24] Machine Base recipe: Hollow Stone in the centre, copper ingots left and right, redstone above and below, iron ingots in the corners -> 1. This creates the progression chain: find Oddstone -> expose to lava (or find naturally) -> collect Hollow Stone Shards -> craft Hollow Stone -> craft Machine Blocks.
 
 **Design notes:**
 - Oddstone is not consumed, so a single Oddstone vein near lava becomes a renewable Hollow Stone source (bring lava buckets, place sources adjacent to Oddstone, collect the results).
@@ -262,7 +262,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 ### Machine Block [DONE]
 > **Core idea (Ideomancer, 2026-10-25): machine blocks let you shift complex redstone circuits into flying machines.** The circuit is built from blocks that stick together and move, so it keeps working while it travels.
 >
-> Modular mechanical chassis. Every Machine Family block shares a single-slot block entity (MachineFrameBlockEntity). Insert an item into the slot to swap the block to a specialization. Remove the item to revert to Machine Frame. Each specialization is a unique registered block. Now called "Machine Frame" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
+> Modular mechanical chassis. Every Machine Family block shares a single-slot block entity (MachineFrameBlockEntity). Insert an item into the slot to swap the block to a specialization. Remove the item to revert to Machine Base. Each specialization is a unique registered block. Now called "Machine Base" in code (MachineFrameBlock), registry ID stays `machine_block` for world compatibility.
 
 | Property | Value |
 |----------|-------|
@@ -272,7 +272,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 | Tool | Pickaxe |
 | Type | Block Entity (single item slot, shared by all specializations) |
 | Placement | Non-directional (base form) |
-| Redstone | Accepts redstone signal. Only Machine Frames emit anti-signal to suppress frame activation. |
+| Redstone | Accepts redstone signal. Only Machine Bases emit anti-signal to suppress frame activation. |
 | Recipe | Hollow Stone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners -> 1 (Ideomancer, 2026-10-24) |
 
 **Specializations (insert item to transform):**
@@ -284,7 +284,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 | Redstone dust | Conductor | MachineConductorBlock | CONDUCTOR | [DONE] |
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket (a water or lava bucket gives a full pipe) | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
-| Machine Frame (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
+| Machine Base (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
 | Repeater | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
 | Comparator | Transformer | MachineTransformerBlock | TRANSFORMER | [DONE] |
 | Clock | Timer | MachineTimerBlock | TIMER | [DONE] |
@@ -301,9 +301,9 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| Machine Family stickiness | [DONE] | MachineType-aware. Machine Frame (FRAME) sticks to ALL machine types. Specializations stick to same-type + FRAME only. All types stick to Frame Family (active) and are permissive to slime/honey/odd_slime. |
-| Anti-signal emission | [DONE] | Only Machine Frames emit anti-signal. All other Machine Family blocks always emit activation. |
-| Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15). Machine Frames only when unpowered; specializations always. |
+| Machine Family stickiness | [DONE] | MachineType-aware. Machine Base (FRAME) sticks to ALL machine types. Specializations stick to same-type + FRAME only. All types stick to Frame Family (active) and are permissive to slime/honey/odd_slime. |
+| Anti-signal emission | [DONE] | Only Machine Bases emit anti-signal. All other Machine Family blocks always emit activation. |
+| Frame network activation | [DONE] | All Machine Family blocks emit activation signal (strength 15). Machine Bases only when unpowered; specializations always. |
 | Item slot + GUI | [DONE] | All machine blocks share MachineFrameBlockEntity. Right-click opens GUI. Insert item to specialize, remove to de-specialize. Any item accepted; only mapped items trigger swap. |
 | Block swap system | [DONE] | MachineSwapHelper central utility. PositionBoundContainer keeps GUI open across swaps. Client sync via syncToClients() after swap. |
 | Drop preservation | [DONE] | getDrops() adds BlockEntityTag only when slot has content. Empty blocks drop tagless. |
@@ -321,11 +321,11 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 | Piston head block | [DONE] | MachinePistonHeadBlock. 8x16 shape. FACING+STICKY. Parent survival check. No drops. |
 | BESR arm animation | [DONE] | MachinePistonArmRenderer. Per-face interpolated animation. 2-tick duration. Transient state in MachineFrameBlockEntity. |
 | Brace push limit increase | [DONE] | Each Machine Brace in a push group adds +6 to the push limit (base 12), up to 60. Cascading: limit grows as Braces are discovered. Implemented via @ModifyConstant in PistonStructureResolverMixin. |
-| Lazy swap mapping | [DONE] | Specializations using mod items as triggers (Brace uses Machine Frame item) register lazily via ensureBraceMapping() to avoid DeferredRegister timing issues. |
+| Lazy swap mapping | [DONE] | Specializations using mod items as triggers (Brace uses Machine Base item) register lazily via ensureBraceMapping() to avoid DeferredRegister timing issues. |
 | Grabber toggleable stickiness | [DONE] | Edge-triggered toggle. POWERED=true adds vanilla slime/honey stickiness on top of Machine Family stickiness. Two variants: SLIME_GRABBER, HONEY_GRABBER. |
 | Transmitter wireless redstone | [DONE] | Oddstone-channel-based wireless. SOURCE/RECEIVER mutually exclusive modes. Signal attenuation (output = source - 1). Anti-feedback architecture. Level-aware indicator tint. |
 | Piston settlement window | [DONE] | 1-tick pistonSettling flag in MachineFrameBlockEntity. Suppresses neighborChanged during push group placement for Grabber, Toggle, and other edge-triggered blocks. Prevents spurious toggles. |
-| Machine Frame look | [DONE] | Ideomancer's textures (2026-10-24): unpowered (sending activation) = `machine_frame_active`; powered by redstone (suppressing) = `machine_frame_inactive`, the red machine indicator showing through its hole (two-layer model, like the Repeater). POWERED blockstate, display only. |
+| Machine Base look | [DONE] | Ideomancer's textures (2026-10-24): unpowered (sending activation) = `machine_frame_active`; powered by redstone (suppressing) = `machine_frame_inactive`, the red machine indicator showing through its hole (two-layer model, like the Repeater). POWERED blockstate, display only. |
 | Full Fluid Pipe drop | [DONE] | A full pipe broken and placed again stays full (its slot holds the filled bucket; filled buckets also map to the Fluid Pipe and the pipe reads its fluid from the bucket). Fixed 2026-10-25. |
 | Spec item change callbacks | [DONE] | AbstractMachineBlock.onSpecItemChanging/onSpecItemChanged. Two-phase lifecycle for pre/post specialization item changes. Used by Transmitter for channel change cleanup. |
 
@@ -334,7 +334,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 ### Machine Specializations [DONE]
 > Functional variants created by inserting an item into any Machine Family block's GUI slot. Each specialization is a unique registered block. Most share MachineFrameBlockEntity; specializations with extra state (like Pipe and Fluid Pipe) use their own BE subclass with a separate BlockEntityType. Every specialization below is implemented. More may be added later (Ideomancer, 2026-10-25); each new one should serve the core idea: redstone circuits that can be moved as flying machines.
 
-**Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Frame (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Frame bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
+**Stickiness model:** Each specialization has a MachineType. Specializations only stick to same-type blocks + Machine Base (MachineType.FRAME, universal bridge) + Frame Family (when active). Different specialization types do NOT stick to each other without a Machine Base bridging them. This is handled by canStickTo (Layer 1) via MachineType.canStickToMachineType(), NOT by grab immunity rules.
 
 **Machine Conductor:** [DONE]
 Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) through a full block. Connects to vanilla redstone on all 6 faces. Input/output face model: receives on one face, outputs on other 5. Sources (levers) = no decay, wire (dust/conductors) = -1 decay. Strong power output (getDirectSignal) matches vanilla dust. Known issues: dust sees strong power through solid blocks (needs RedStoneWireBlock mixin).
@@ -343,10 +343,10 @@ Solid-block redstone wire. Carries vanilla redstone signal (0-15, decays by 1) t
 Push-only item transport. Hopper specialization item. Own BE subclass (MachinePipeBlockEntity) with transit slot (1 stack, slot 1), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FILLED BooleanProperty drives texture swap. No pulling -- items enter via player hand, hopper, or pipe-to-pipe push. Redstone locks the pipe (powered = frozen). Output priority relative to input face: forward, right, left, up, down. Round-robin resets on input face change. Pipe-to-pipe push notifies receiver of input face. Piston-safe: movedByPiston guard in onRemove, minimum cooldown after landing. Comparator reads transit slot fullness. ThreadLocal pendingInputFace in WorldlyContainer bridges face parameter to setItem for automation input tracking.
 
 **Machine Fluid Pipe:** [DONE]
-Fluid vacuum and depositor. Bucket specialization item. Own BE subclass (MachineFluidPipeBlockEntity) with fluid type tracking (FluidType enum: EMPTY/WATER/LAVA), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FLUID_TYPE EnumProperty drives inner cuboid texture via blockstate variants. Redstone behavior is OPPOSITE of item Pipe: powered = actively pulling (pump metaphor), unpowered = idle (still auto-pushes if holding fluid). Pull scans all 6 faces for water/lava source blocks (only source blocks -- flowing ignored, infinite water sources survive) and full cauldrons. Push sends fluid to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely per vanilla bucket behavior). Water+lava collision: receiving pipe's bucket replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Frame (no special case code). Bucket item in slot 0 swaps to match fluid state (water_bucket/lava_bucket/bucket) via setItemDirect(). No transit slot -- fluid state is BE data, not a slot item. IFluidHandler capability for mod interop (1000mB = 1 bucket). Comparator output: 0=empty, 15=has fluid. Lava light emission: level 10 (reduced from 15 for small window). Dual-cuboid block model with cutout render type: outer texture has 4x4 transparent window, inner cuboid shows dark grey (empty), animated water_still with biome tint (water), or animated lava_still (lava). Water tint via ModColorHandlers block color handler (tintIndex 0 -> BiomeColors.getAverageWaterColor).
+Fluid vacuum and depositor. Bucket specialization item. Own BE subclass (MachineFluidPipeBlockEntity) with fluid type tracking (FluidType enum: EMPTY/WATER/LAVA), transfer cooldown (8 ticks), round-robin output index, and input face tracking. FLUID_TYPE EnumProperty drives inner cuboid texture via blockstate variants. Redstone behavior is OPPOSITE of item Pipe: powered = actively pulling (pump metaphor), unpowered = idle (still auto-pushes if holding fluid). Pull scans all 6 faces for water/lava source blocks (only source blocks -- flowing ignored, infinite water sources survive) and full cauldrons. Push sends fluid to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely per vanilla bucket behavior). Water+lava collision: receiving pipe's bucket replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Base (no special case code). Bucket item in slot 0 swaps to match fluid state (water_bucket/lava_bucket/bucket) via setItemDirect(). No transit slot -- fluid state is BE data, not a slot item. IFluidHandler capability for mod interop (1000mB = 1 bucket). Comparator output: 0=empty, 15=has fluid. Lava light emission: level 10 (reduced from 15 for small window). Dual-cuboid block model with cutout render type: outer texture has 4x4 transparent window, inner cuboid shows dark grey (empty), animated water_still with biome tint (water), or animated lava_still (lava). Water tint via ModColorHandlers block color handler (tintIndex 0 -> BiomeColors.getAverageWaterColor).
 
 **Machine Track:** [DONE]
-Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Frame bridges them.
+Pushes adjacent Machine Trolleys one block in facing direction per redstone pulse. Internal POWER blockstate (0-15) for Track-to-Track chaining only -- isolated from vanilla redstone system (isSignalSource=false, no signal output to non-Track blocks). Track does NOT stick to Trolley (different MachineTypes) -- Machine Base bridges them.
 
 **Machine Repeater:** [DONE]
 Omnidirectional redstone repeater. Receives signal on any face, outputs full-strength 15 on all other faces with configurable delay (1-4 redstone ticks). Specialization item: vanilla Repeater (Items.REPEATER). Shares MachineFrameBlockEntity with repeaterDelay field. Blockstate: POWERED (boolean) + DELAY (1-4). No locking (three-axis makes locking impractical; players who need locking use vanilla repeaters). GUI shows 4 numbered buttons for delay selection. Anti-feedback via 5-layer architecture: output-face early-return in neighborChanged, protected inputFace (only modified in tick when powered), input-face-first tick evaluation, updatingPos ThreadLocal for re-entrant protection, shouldSignal ThreadLocal<BlockPos> for position-based self-read suppression (same-type devices can power each other through solid blocks; Conductor uses class-wide suppression like dust). Signal detection delegated to MachineRedstoneHelper. Powers through solid blocks via updateNeighborsAt(pos.relative(dir)) on all 6 directions when POWERED changes (matching vanilla repeater behavior). Dual-cuboid visual model with tinted underlay (black=off, red=on). Custom networking (RepeaterDelayPacket via Forge SimpleChannel).
@@ -400,13 +400,13 @@ Sticky variant pulls the block in front of the head on retraction via BlockMoveH
 | Feature | Status | Notes |
 |---------|--------|-------|
 | Cargo carrying | [DONE] | Carries anything stuck to it via Machine Family or slime stickiness. |
-| Machine Family stickiness | [DONE] | MachineType.TROLLEY. Sticks to other Trolleys + Machine Frames + Frame Family (active). |
+| Machine Family stickiness | [DONE] | MachineType.TROLLEY. Sticks to other Trolleys + Machine Bases + Frame Family (active). |
 | Block entity + GUI | [DONE] | Shares MachineFrameBlockEntity. Right-click opens GUI with minecart in slot. |
 | Frame activation | [DONE] | Always emits activation (strength 15). Never suppresses. |
 
 **Design notes:**
 - No active behavior. Pure cargo block.
-- Created by inserting a Minecart into a Machine Frame's GUI slot.
+- Created by inserting a Minecart into a Machine Base's GUI slot.
 
 ---
 
@@ -526,7 +526,7 @@ All 8 frame/framed block JSON models updated with inverted cuboid element (from 
 | Machine-activated stickiness | [DONE] | BooleanProperty ACTIVE (default false). isStickyBlock() returns ACTIVE value. Activation driven by FrameActivation.markDirty() -- redstone-style batched wipe-and-rebuild (markDirty + end-of-tick processing) from Machine Block sources. |
 | Material exclusivity | [DONE] | Iron frames stick to iron frames only. Copper to copper only. Cross-material IFrameBlock check falls through (does not short-circuit to false) so inner stickiness permissive entries can still match. Both materials stick to Machine Family when active. |
 | Slime/honey exclusivity | [DONE] | canStickTo permissive (lets slime/honey grab frames). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules prevent frames from grabbing slime/honey/odd slime. |
-| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Cross-material does not propagate -- iron only chains through iron, copper through copper. Anti-signal suppression via redstone-powered Machine Frames only. |
+| Activation chaining | [DONE] | Signal strength 15, decays by 1 per conductor block. Max range 15 blocks from Machine Family source. Machine Bases only activate when unpowered; all other Machine Family blocks always activate. Cross-material does not propagate -- iron only chains through iron, copper through copper. Anti-signal suppression via redstone-powered Machine Bases only. |
 | Vanilla metal conductors | [REMOVED 2026-04-19] | Previously iron_block and copper_block participated in frame activation and stickiness. Removed -- the feature had no visual indication on the vanilla blocks, so players couldn't tell when a metal block was part of a sticky group or signal chain. |
 | Cross-frame mediation | [REMOVED 2026-04-19] | Previously framed blocks with a cross-material inner conductor (e.g., copper-framed iron) were universal-bridge mediators. Removed alongside the vanilla metal feature -- the rule "this framed copper acts like both copper and iron" required mental cross-referencing of inner block + frame material with no clean visual signal. INNER_CONDUCTOR blockstate property deleted. |
 | Activation-gated stickiness | [DONE] | Frame-to-frame stickiness requires ACTIVE on both sides. Machine blocks only grab active frames. |
@@ -538,8 +538,8 @@ All lifecycle hooks (onPlace, onRemove, neighborChanged) call FrameActivation.ma
 1. DISCOVER: BFS from change point through all connected IFrameBlock conductors (any material, active or not)
 2. WIPE: Set all discovered IFrameBlocks to active=false
 3. FIND SOURCES: Check all network blocks + change position for adjacent Machine Blocks
-4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Material routing: each conductor accepts and outputs only its own frame material -- iron-only through iron frames, copper-only through copper frames. No cross-material mediation.
-5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Frames ONLY (no other Machine Family blocks), strength = redstone level, decaying by 1. Binary override.
+4. PROPAGATE ACTIVATION: BFS from activation sources, strength 15 decaying by 1. Machine Bases only activate when unpowered; all other Machine Family blocks always activate. Material routing: each conductor accepts and outputs only its own frame material -- iron-only through iron frames, copper-only through copper frames. No cross-material mediation.
+5. PROPAGATE ANTI-SIGNAL: BFS from powered Machine Bases ONLY (no other Machine Family blocks), strength = redstone level, decaying by 1. Binary override.
 6. APPLY: Block activates only if activation > 0 AND anti-signal == 0.
 
 Machine Blocks also call FrameActivation.markDirty() in their own lifecycle hooks.
@@ -1419,7 +1419,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 - Slime -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Honey -> Odd Slime: **BLOCKED** (mutual exclusion via canStickTo)
 - Odd Slime directional rule: stickiness disabled when pushDirection != FACING
-- Machine Track <-> Machine Trolley: **NOT STICKY** (different MachineTypes. Machine Frame bridges them. Track pushes Trolley via BlockMoveHelper, not stickiness.)
+- Machine Track <-> Machine Trolley: **NOT STICKY** (different MachineTypes. Machine Base bridges them. Track pushes Trolley via BlockMoveHelper, not stickiness.)
 
 ---
 
@@ -2248,7 +2248,7 @@ Read from `data/ideomod/recipes/` on 2026-10-25. Pictures of each: README, made 
 
 | Output | Recipe | Notes |
 |--------|--------|-------|
-| Machine Frame x1 | `IRI / CHC / IRI`: I iron ingot, R redstone, C copper ingot, H Hollow Stone | Ideomancer, 2026-10-24 |
+| Machine Base x1 | `IRI / CHC / IRI`: I iron ingot, R redstone, C copper ingot, H Hollow Stone | Ideomancer, 2026-10-24 |
 | Iron Frame x4 | `INI / N.N / INI`: I iron ingot, N iron nugget | Ideomancer, 2026-10-24 |
 | Copper Frame x4 | `INI / N.N / INI`: I copper ingot, N any `forge:nuggets/copper` | Ideomancer, 2026-10-24 |
 | Framed block | Any frame + any frameable block, anywhere in the grid | Special recipe (`FramedBlockRecipe`) |

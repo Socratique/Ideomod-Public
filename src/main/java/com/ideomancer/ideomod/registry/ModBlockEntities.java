@@ -24,9 +24,9 @@ public class ModBlockEntities {
             DeferredRegister.create(ForgeRegistries.BLOCK_ENTITY_TYPES, Ideomod.MOD_ID);
 
     /**
-     * Machine Frame block entity type. Shared by all Machine Family blocks
+     * Machine Base block entity type. Shared by all Machine Family blocks
      * that use the base MachineFrameBlockEntity (single specialization slot):
-     * Machine Frame, Machine Track, Machine Trolley, Machine Conductor,
+     * Machine Base, Machine Track, Machine Trolley, Machine Conductor,
      * Machine Piston, Machine Sticky Piston, Machine Brace, Machine Repeater,
      * Machine Toggle, Machine Transformer, Machine Timer.
      * Each specialization stores its trigger item in the single slot.

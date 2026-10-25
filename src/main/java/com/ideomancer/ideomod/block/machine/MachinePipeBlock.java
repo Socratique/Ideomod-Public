@@ -24,7 +24,7 @@ import com.ideomancer.ideomod.registry.ModBlockEntities;
  *
  * BEHAVIOUR:
  * ==========
- * - Specialization item: Hopper in Machine Frame GUI slot
+ * - Specialization item: Hopper in Machine Base GUI slot
  * - Transit slot: holds 1 stack, visible in GUI
  * - Push only: items are pushed to adjacent containers at hopper speed (8 ticks)
  * - No pull: items enter via player hand, hopper, or another pipe pushing in

@@ -27,12 +27,12 @@ import org.slf4j.LoggerFactory;
  *
  * BEHAVIOUR:
  * ==========
- * - Specialization item: Bucket (empty) in Machine Frame GUI slot
+ * - Specialization item: Bucket (empty) in Machine Base GUI slot
  * - No transit slot (fluid state is tracked as BE data, not a slot item)
  * - Redstone powered = actively pulling fluid from adjacent source blocks/cauldrons
  * - Auto-push: when holding fluid, pushes to adjacent empty fluid pipes on cooldown
  * - Deposit: when no valid pipe target, places fluid in world or fills cauldron
- * - Water+Lava collision: bucket replaced with obsidian -> auto-revert to Machine Frame
+ * - Water+Lava collision: bucket replaced with obsidian -> auto-revert to Machine Base
  *
  * REDSTONE (OPPOSITE of item Pipe):
  * ==================================

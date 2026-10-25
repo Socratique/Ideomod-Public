@@ -345,10 +345,10 @@ public class IdeomodGameTests {
         });
     }
 
-    // ==================== Machine Frame look ====================
+    // ==================== Machine Base look ====================
 
     /**
-     * The Machine Frame shows POWERED (Sean's "inactive" texture) while it has
+     * The Machine Base shows POWERED (Sean's "inactive" texture) while it has
      * redstone power and goes back when the power is removed. Display only:
      * FrameActivation reads the redstone level itself.
      */
@@ -359,20 +359,20 @@ public class IdeomodGameTests {
         helper.setBlock(frame, ModBlocks.MACHINE_BLOCK.get());
         helper.runAfterDelay(2, () -> {
             if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) {
-                helper.fail("Machine Frame shows powered with no power", frame);
+                helper.fail("Machine Base shows powered with no power", frame);
                 return;
             }
             helper.setBlock(power, Blocks.REDSTONE_BLOCK);
         });
         helper.runAfterDelay(4, () -> {
             if (!helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) {
-                helper.fail("Machine Frame did not show powered next to a redstone block", frame);
+                helper.fail("Machine Base did not show powered next to a redstone block", frame);
                 return;
             }
             helper.setBlock(power, Blocks.AIR);
         });
         helper.runAfterDelay(6, () -> {
-            if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) helper.fail("Machine Frame stayed powered after the power was removed", frame);
+            if (helper.getBlockState(frame).getValue(MachineFrameBlock.POWERED)) helper.fail("Machine Base stayed powered after the power was removed", frame);
             else helper.succeed();
         });
     }
@@ -381,11 +381,11 @@ public class IdeomodGameTests {
 
     /**
      * A copper frame touching both an iron frame and a copper path from the same
-     * Machine Frame must still activate. Before the fix the iron neighbour got to
+     * Machine Base must still activate. Before the fix the iron neighbour got to
      * it first (the UP seed is processed before SOUTH), marked its spot as reached
      * with an iron-only signal, and the real copper signal was then skipped.
      *
-     *   y=2:  [iron I] [copper C]       M = Machine Frame (2,1,2), I above it,
+     *   y=2:  [iron I] [copper C]       M = Machine Base (2,1,2), I above it,
      *   y=1:  [M]      [copper K]       K south of M, C above K and south of I.
      */
     @GameTest(template = EMPTY)
@@ -397,8 +397,8 @@ public class IdeomodGameTests {
         helper.setBlock(c, ModBlocks.COPPER_FRAME.get());
         helper.setBlock(m, ModBlocks.MACHINE_BLOCK.get());
         helper.runAfterDelay(6, () -> {
-            if (!helper.getBlockState(k).getValue(FrameBlock.ACTIVE)) { helper.fail("copper frame next to the Machine Frame is off", k); return; }
-            if (!helper.getBlockState(iron).getValue(FrameBlock.ACTIVE)) { helper.fail("iron frame next to the Machine Frame is off", iron); return; }
+            if (!helper.getBlockState(k).getValue(FrameBlock.ACTIVE)) { helper.fail("copper frame next to the Machine Base is off", k); return; }
+            if (!helper.getBlockState(iron).getValue(FrameBlock.ACTIVE)) { helper.fail("iron frame next to the Machine Base is off", iron); return; }
             if (!helper.getBlockState(c).getValue(FrameBlock.ACTIVE)) { helper.fail("copper frame reachable by copper stayed off beside an iron frame", c); return; }
             helper.succeed();
         });
@@ -542,7 +542,7 @@ public class IdeomodGameTests {
     /**
      * A full Fluid Pipe that is broken drops as a Fluid Pipe holding its water bucket; placed
      * again (load the drop's BlockEntityTag, then setPlacedBy, as a BlockItem does) it must
-     * still be a Fluid Pipe full of water, not a plain Machine Frame. A Machine Frame given a
+     * still be a Fluid Pipe full of water, not a plain Machine Base. A Machine Base given a
      * water bucket becomes a full Fluid Pipe too.
      */
     @GameTest(template = EMPTY)
@@ -580,7 +580,7 @@ public class IdeomodGameTests {
             }
             BlockState fs = helper.getBlockState(frame);
             if (!fs.is(ModBlocks.MACHINE_FLUID_PIPE.get()) || fs.getValue(MachineFluidPipeBlock.FLUID_TYPE) != FluidType.LAVA) {
-                helper.fail("Machine Frame given a lava bucket became " + fs, frame); return;
+                helper.fail("Machine Base given a lava bucket became " + fs, frame); return;
             }
             helper.succeed();
         }

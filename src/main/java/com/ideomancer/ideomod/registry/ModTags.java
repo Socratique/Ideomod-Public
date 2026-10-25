@@ -81,7 +81,7 @@ public class ModTags {
     public static class Items {
         /**
          * Items that trigger the Machine Pulser specialization when inserted
-         * into a Machine Frame. Contains all vanilla button items.
+         * into a Machine Base. Contains all vanilla button items.
          *
          * Tag file: data/ideomod/tags/items/pulser_items.json
          */
@@ -90,7 +90,7 @@ public class ModTags {
 
         /**
          * Items that trigger the Machine Transmitter specialization when inserted
-         * into a Machine Frame. Contains all Oddstone block items (oddstone,
+         * into a Machine Base. Contains all Oddstone block items (oddstone,
          * cobbled oddstone, oddstone bricks, and all wall/stair/slab variants).
          *
          * Tag file: data/ideomod/tags/items/transmitter_items.json

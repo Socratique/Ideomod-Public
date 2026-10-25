@@ -117,7 +117,7 @@ public class ModColorHandlers {
             return 0xFFFFFF;
         }, ModBlocks.MACHINE_CONDUCTOR.get());
 
-        // Machine Frame: only the powered model has an indicator (tintIndex 1), seen
+        // Machine Base: only the powered model has an indicator (tintIndex 1), seen
         // through the hole in Sean's inactive texture: full red, like a Repeater that's on.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {

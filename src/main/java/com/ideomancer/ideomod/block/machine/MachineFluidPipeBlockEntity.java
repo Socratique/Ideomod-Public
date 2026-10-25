@@ -106,7 +106,7 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
      * EMPTY -> Items.BUCKET, WATER -> Items.WATER_BUCKET, LAVA -> Items.LAVA_BUCKET.
      * Uses setItemDirect() to avoid triggering a swap check (changing the item
      * to a water/lava bucket would make it an unrecognised specialization item
-     * and revert to Machine Frame -- we don't want that).
+     * and revert to Machine Base -- we don't want that).
      */
     public void setFluidType(FluidType type) {
         if (this.fluidType != type) {
@@ -207,7 +207,7 @@ public class MachineFluidPipeBlockEntity extends MachineFrameBlockEntity {
     /**
      * Handles the water+lava collision when a fluid pipe pushes into this pipe.
      * Replaces the bucket in slot 0 with obsidian, which triggers
-     * MachineSwapHelper to revert this block to a Machine Frame.
+     * MachineSwapHelper to revert this block to a Machine Base.
      *
      * @return true if a collision occurred (and the block will revert)
      */

@@ -379,8 +379,8 @@ public abstract class PistonBaseBlockMixin {
 
     /**
      * Scan for additional IPistonMovable blocks attached to the pulled block
-     * via stickiness. This handles cases where a sticky Machine Frame drags
-     * other Machine Frames during retraction.
+     * via stickiness. This handles cases where a sticky Machine Base drags
+     * other Machine Bases during retraction.
      *
      * Uses MovementScanHelper.scanStickyGroup to find the group, then
      * iterates to save block entity data for each block.

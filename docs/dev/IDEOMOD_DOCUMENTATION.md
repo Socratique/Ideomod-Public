@@ -340,9 +340,9 @@ The `StickyType` enum (in `block/movement/StickyType.java`) serves as the single
 
 ### Stickiness Matrix
 
-Rows = grabber, columns = target. "Machine Fam" = Machine Frame, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron/Copper Framed Blocks. Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules.
+Rows = grabber, columns = target. "Machine Fam" = Machine Base, Machine Track, Machine Trolley. "Frame Fam" = Iron Frame, Copper Frame, Iron/Copper Framed Blocks. Frame Family shown as one row for base frame behavior since both materials share the same grab immunity rules.
 
-*Note: This is the overview matrix with collapsed columns. See CODEBASE_REFERENCE.md and STICKINESS_SYSTEM.md for the detailed matrix with Machine Frame / Same-Type Spec / Diff-Type Spec columns separated.*
+*Note: This is the overview matrix with collapsed columns. See CODEBASE_REFERENCE.md and STICKINESS_SYSTEM.md for the detailed matrix with Machine Base / Same-Type Spec / Diff-Type Spec columns separated.*
 
 |              | Slime | Honey | Odd Slime | Machine Fam | Frame Fam | Oddstone | Normal |
 |:-------------|:-----:|:-----:|:---------:|:-----------:|:---------:|:--------:|:------:|
@@ -385,7 +385,7 @@ Legend: `no*` = mutual canStickTo exclusion (Layer 1) | `no` = grab immunity rul
 
 **OddstoneBlock**: Now uses `StickyType.ODDSTONE.canGrab()` which returns true only for SLIME, HONEY, ODD_SLIME (not ODDSTONE). Also returns true for FramedBlock with INNER_STICKY matching any of SLIME/HONEY/ODD_SLIME/ODDSTONE. Oddstone-to-oddstone connections no longer happen via direct stickiness -- all resolve through sympathetic channels. False for everything else (including MachineBlock, Frame Family without sticky inner, OddstoneBlock targets).
 
-**Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All implement IMachineFamily with a MachineType. `canStickTo()` delegates to `IMachineFamily.canMachineFamilyStickTo(myType, other)`. Machine Frame (MachineType.FRAME) returns true for ANY Machine Family block. Specializations return true only for same-type + FRAME. All types return true for Frame Family (via `FrameActivation.isActive(other)`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. Inter-specialization isolation (Track doesn't stick to Trolley) handled at Layer 1, not by grab immunity.
+**Machine Family (MachineFrameBlock, MachineTrackBlock, MachineTrolleyBlock)**: All implement IMachineFamily with a MachineType. `canStickTo()` delegates to `IMachineFamily.canMachineFamilyStickTo(myType, other)`. Machine Base (MachineType.FRAME) returns true for ANY Machine Family block. Specializations return true only for same-type + FRAME. All types return true for Frame Family (via `FrameActivation.isActive(other)`), SlimeBlock, HoneyBlock, OddSlimeBlock. False for everything else. Inter-specialization isolation (Track doesn't stick to Trolley) handled at Layer 1, not by grab immunity.
 
 **OddSlimeBlock**: Returns false for SlimeBlock, HoneyBlock (mutual exclusion). Returns true for everything else (Oddstone, MachineBlock, OddSlimeBlock, normal blocks). Asymmetric behaviors handled by immunity rules + directional rules.
 
@@ -722,7 +722,7 @@ Feature 5 -- Machine Piston immovability (in same HEAD inject, runs FIRST):
 When the block is a `MachinePistonBlock` and `hasExtendedHead()` returns true (any neighbor is a `MachinePistonHeadBlock` pointing back at the piston position), returns false (immovable). Matches vanilla piston behavior where extended pistons cannot be pushed. Runs before all other feature checks (oddstone pull immunity, framed immovable inner, IPistonMovable bypass).
 
 Feature 1 -- isPushable override (HEAD inject, cancellable):
-Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Frames to be pushed and pulled by pistons. Uses `MovementScanHelper` for efficient block state lookups. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
+Vanilla ends `isPushable()` with `return !blockstate.hasBlockEntity()`. Our inject checks `getBlockEntity(pos) instanceof IPistonMovable` and returns true, bypassing the vanilla block entity check. This allows Machine Bases to be pushed and pulled by pistons. Uses `MovementScanHelper` for efficient block state lookups. Also handles Oddstone pull immunity: during retraction, ThreadLocal<BlockPos> `ideomod$pullTargetPos` stores the exact pull position (pistonPos + direction * 2). If block at pos is oddstone (real OddstoneBlock or FramedBlock with INNER_STICKY=ODDSTONE) AND pos matches pullTargetPos, returns false. Position-specific — only the direct pull target is immune, not oddstone elsewhere in a sticky group.
 
 Feature 4 -- Framed block immovable inner (in same HEAD inject):
 When a FramedBlock wraps an immovable inner block, isPushable returns false. Uses the `#ideomod:immovable_when_framed` tag (data-driven, extensible by datapacks — default: obsidian, crying_obsidian, reinforced_deepslate), plus `getDestroySpeed == -1.0f` for bedrock-type blocks. Runs BEFORE Feature 1's IPistonMovable check so framed obsidian is blocked despite having an IPistonMovable block entity. Includes diagnostic logging for both success and BE-lookup-failure cases. Key discovery: vanilla does NOT use PushReaction.BLOCK for obsidian — the initial implementation using PushReaction silently failed.
@@ -774,9 +774,9 @@ Public API: `markDirty(Level, BlockPos)` (primary entry point for all callers), 
 
 ### Signal Strength Model
 
-**Activation signal**: All Machine Family blocks (Machine Frames, Tracks, Trolleys, future specializations) are activation sources. Machine Frames emit activation at strength 15 only when unpowered (not receiving redstone). All other Machine Family blocks always emit activation at strength 15 regardless of redstone state. Each conductor block decays the signal by 1 (like redstone dust). Maximum activation range: 15 blocks from source. Each block records the strongest signal received from any path (shortest path wins).
+**Activation signal**: All Machine Family blocks (Machine Bases, Tracks, Trolleys, future specializations) are activation sources. Machine Bases emit activation at strength 15 only when unpowered (not receiving redstone). All other Machine Family blocks always emit activation at strength 15 regardless of redstone state. Each conductor block decays the signal by 1 (like redstone dust). Maximum activation range: 15 blocks from source. Each block records the strongest signal received from any path (shortest path wins).
 
-**Anti-activation signal**: Only MachineFrameBlock can emit anti-signal -- no other Machine Family member (Track, Trolley, future specializations) ever suppresses frames. A Machine Frame receiving redstone power becomes a SUPPRESSOR. It stops emitting activation entirely and instead emits an anti-signal with strength equal to its redstone input level (1-15). Anti-signal also decays by 1 per conductor. Any block reached by anti-signal (strength > 0) is DEACTIVATED, regardless of how strong the activation signal from other sources is. This is a binary override, not subtraction. All other Machine Family blocks always emit activation at strength 15 regardless of their redstone state.
+**Anti-activation signal**: Only MachineFrameBlock can emit anti-signal -- no other Machine Family member (Track, Trolley, future specializations) ever suppresses frames. A Machine Base receiving redstone power becomes a SUPPRESSOR. It stops emitting activation entirely and instead emits an anti-signal with strength equal to its redstone input level (1-15). Anti-signal also decays by 1 per conductor. Any block reached by anti-signal (strength > 0) is DEACTIVATED, regardless of how strong the activation signal from other sources is. This is a binary override, not subtraction. All other Machine Family blocks always emit activation at strength 15 regardless of their redstone state.
 
 **Example**: Machine -- 15 frames -- Machine(redstone=5). The left machine sends activation 15, 14, 13... 1 across all 15 frames. The right machine sends anti-signal 5, 4, 3, 2, 1 into the last 5 frames. Result: first 10 frames active, last 5 suppressed.
 
@@ -799,8 +799,8 @@ When `recalculate()` is called:
 1. **DISCOVER**: BFS from the change point through all connected IFrameBlock conductors (any material, active or inactive). Finds the entire network.
 2. **WIPE**: Set every discovered IFrameBlock to ACTIVE=false (UPDATE_CLIENTS only, no neighbor cascade).
 3. **FIND SOURCES**: For every block in the network AND the change position, check 6 neighbors for Machine Blocks.
-4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Frames only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts and outputs only its own frame material -- no cross-material mediation. Signal decays by 1 per hop. Records max strength per position.
-5. **PROPAGATE ANTI-SIGNAL**: From powered Machine Frames ONLY (no other Machine Family blocks), BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
+4. **PROPAGATE ACTIVATION**: BFS from activation sources, signal strength 15. Machine Bases only activate when unpowered; all other Machine Family blocks always activate. Each entry carries available materials + strength. A conductor accepts and outputs only its own frame material -- no cross-material mediation. Signal decays by 1 per hop. Records max strength per position.
+5. **PROPAGATE ANTI-SIGNAL**: From powered Machine Bases ONLY (no other Machine Family blocks), BFS with strength = redstone input level. Same material routing and decay. Records max anti-strength per position.
 6. **APPLY**: For each network block: IFrameBlocks get ACTIVE=true if activation > 0 AND anti-signal == 0.
 
 Public queries:
@@ -1190,7 +1190,7 @@ Zero overhead when nobody holds it (just a player list scan).
 
 All Machine Family blocks extend `AbstractMachineBlock`, which extends `Block` and implements `EntityBlock` and `IMachineFamily`. Provides default implementations for: `use()` (GUI open), `newBlockEntity()`, `getRenderShape(ENTITYBLOCK_ANIMATED)`, `isStickyBlock(true)`, `canStickTo()` (delegates to `IMachineFamily.canMachineFamilyStickTo()`), `onPlace()`/`onRemove()`/`neighborChanged()` (with `FrameActivation.markDirty()`), `setPlacedBy()` (specialization swap from item NBT), `getDrops()` (conditional BlockEntityTag), `getCloneItemStack()` (registry-based middle-click). Subclasses override only `getMachineType()` for simple specializations, or override lifecycle methods for unique behavior (redstone, push scheduling).
 
-### Machine Frame -- Universal Connector + Machine Family Base
+### Machine Base -- Universal Connector + Machine Family Base
 
 Registry ID: `machine_block` (unchanged for world compatibility). Class: MachineFrameBlock extends AbstractMachineBlock. `MachineType.FRAME`.
 
@@ -1199,7 +1199,7 @@ Registry ID: `machine_block` (unchanged for world compatibility). Class: Machine
 | **Universal stickiness** | MachineType.FRAME sticks to ALL machine types via `canStickToMachineType()`. Also sticks to Frame Family (active) and is permissive to slime/honey/odd_slime (grab immunity blocks reverse). |
 | **Block entity with GUI** | Most machine blocks share MachineFrameBlockEntity. Pipe uses MachinePipeBlockEntity subclass (adds transit slot, own BE type). Fluid Pipe uses MachineFluidPipeBlockEntity subclass (adds fluid type tracking, IFluidHandler, own BE type). Unified MachineFrameMenu with dynamic TransitSlot. PositionBoundContainer keeps GUI open across swaps. GUI renders from ideomod_gui.png spritesheet (151px fixed height). |
 | **Specialization swap** | When slot contents change, MachineSwapHelper.checkAndSwap() determines target block from item registry. Block replaced in-world, item transferred to new BE via setItemDirect(). |
-| **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Frame emits anti-signal. All other specializations always activate. |
+| **Anti-signal emission** | Only block in Machine Family that can suppress frame networks. Powered Machine Base emits anti-signal. All other specializations always activate. |
 | **Frame activation** | Emits activation (strength 15) when unpowered. Lifecycle hooks call FrameActivation.markDirty(). |
 | **Drop preservation** | getDrops() adds BlockEntityTag only when slot has content. Empty frames drop tagless. getCloneItemStack() uses registry-based createCloneStack() (client-safe). |
 | **Piston movement** | PushReaction.NORMAL. IPistonMovable preserves slot contents through all move types. |
@@ -1226,7 +1226,7 @@ Registry ID: `machine_track`. Class: MachineTrackBlock extends AbstractMachineBl
 
 Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing powered rail in slot). Maintains internal POWER blockstate (0-15, decay by 1) for Track-to-Track signal chaining. POWER is NOT exposed to vanilla's redstone system (isSignalSource=false, getSignal=0, getDirectSignal=0). Accepts input from conduit blocks (other Tracks, Conductors) via direct blockstate reads and from any vanilla redstone source via level.getSignal(). No input whitelist needed -- since Tracks emit no vanilla signal, there is no feedback risk. On rising edge, pushes ALL adjacent Trolleys opposite to signal source direction. Uses BlockMoveHelper for piston-style movement.
 
-Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Frames + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
+Stickiness: MachineType.TRACK -- sticks to other Tracks + Machine Bases + Frame Family (active). Does NOT stick to Trolleys or other specialization types.
 
 **Visual** (2026-10-22): two-layer model (Repeater pattern). Outer `machine_track.png` has a transparent 4x4 window in the middle of each face; inner underlay cuboid (0.05 inset) uses the shared `machine_indicator.png`, tintIndex 1, tinted GREY by POWER (`ModColorHandlers.TRACK_GREYS`, 0x303030 at 0 to 0xE0E0E0 at 15). Grey, not red: Track power is internal and invisible to vanilla redstone. Power drops by 1 per Track, so a pulse shows fading along a line.
 
@@ -1236,7 +1236,7 @@ Frame activation: Always emits activation (strength 15). Lifecycle hooks call Fr
 
 Registry ID: `machine_trolley`. Class: MachineTrolleyBlock extends AbstractMachineBlock. `MachineType.TROLLEY`. ~20 lines.
 
-Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing minecart in slot). No active behavior -- pure cargo. Pushed by Tracks. Stickiness: MachineType.TROLLEY -- sticks to other Trolleys + Machine Frames + Frame Family (active). Does NOT stick to Tracks. Frame activation: always emits (strength 15).
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing minecart in slot). No active behavior -- pure cargo. Pushed by Tracks. Stickiness: MachineType.TROLLEY -- sticks to other Trolleys + Machine Bases + Frame Family (active). Does NOT stick to Tracks. Frame activation: always emits (strength 15).
 
 ### Machine Conductor -- Solid-Block Redstone Wire
 
@@ -1256,7 +1256,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing redstone dust in s
 
 **Dust interaction**: Reads dust POWER directly with -1 decay (dust's getSignal is directional and may return 0 if not "pointing" at us).
 
-Stickiness: MachineType.CONDUCTOR -- sticks to other Conductors + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, or other specialization types.
+Stickiness: MachineType.CONDUCTOR -- sticks to other Conductors + Machine Bases + Frame Family (active). Does NOT stick to Tracks, Trolleys, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1303,7 +1303,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing repeater in slot +
 
 **Visual**: Dual-cuboid model (Fluid Pipe pattern). Inner underlay cuboid (0.05 inset) uses `machine_indicator.png` (solid white) tinted via tintIndex 1 -- dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses 4 delay-variant textures with transparent windows. 4 block models (tint handles on/off). Blockstate maps both powered states to same model per delay.
 
-Stickiness: MachineType.REPEATER -- sticks to other Repeaters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Tracks, Pipes, or other specialization types.
+Stickiness: MachineType.REPEATER -- sticks to other Repeaters + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1352,7 +1352,7 @@ When powered, input face shows the "off" texture (machine_toggle) while other 5 
 
 **Known limitation**: Vanilla block color handlers don't receive face direction, so all 6 faces of the inner indicator get the same tint color. The input face is distinguished by the outer texture only (off vs on). Future improvement: investigate per-face indicator suppression via BESR or split-element model approach (see Known Issue #5).
 
-Stickiness: MachineType.TOGGLE -- sticks to other Toggles + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Tracks, Pipes, or other specialization types.
+Stickiness: MachineType.TOGGLE -- sticks to other Toggles + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Repeaters, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1389,7 +1389,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing comparator in slot
 
 **Visual**: Dual-cuboid model (same pattern as Repeater/Toggle). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` (solid white) tinted via tintIndex 1. Level-aware tint: unpowered = POWER_COLORS[0] (dark maroon), powered = POWER_COLORS[outputLevel] (dimmer red at low levels, brighter at high). Outer shell uses `machine_transformer.png` texture with transparent indicator windows. Single block model for all 30 blockstate variants (15 levels x 2 powered states) -- tint handles visual differentiation.
 
-Stickiness: MachineType.TRANSFORMER -- sticks to other Transformers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Tracks, Pipes, or other specialization types.
+Stickiness: MachineType.TRANSFORMER -- sticks to other Transformers + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1443,7 +1443,7 @@ While the timer is running, input signal changes are tracked for arming but don'
 
 **Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when unpowered, bright red (POWER_COLORS[15]) when powered. Outer shell uses `machine_timer.png` texture (placeholder -- needs user art). Single block model for both powered variants.
 
-Stickiness: MachineType.TIMER -- sticks to other Timers + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Tracks, Pipes, or other specialization types.
+Stickiness: MachineType.TIMER -- sticks to other Timers + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Tracks, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1488,7 +1488,7 @@ Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits pe
 
 **Fuel slot automation**: WorldlyContainer exposes only fuel slot (slot 1) to external faces via getSlotsForFace. canPlaceItemThroughFace accepts items with burn time > 0. canTakeItemThroughFace allows extraction only for non-fuel items (empty buckets after lava bucket consumption). IItemHandler capability via SidedInvWrapper for Forge-compatible automation (pipes, hoppers).
 
-**Item preservation on specialization removal**: When the furnace is removed from slot 0 (triggering a swap back to Machine Frame), MachineSwapHelper.ejectSecondaryItems() drops the fuel slot contents as item entities at the block position before the swap replaces the BE. MachineEngineBlock.onRemove() has `!MachineSwapHelper.isSwapping()` guard to avoid double-drop.
+**Item preservation on specialization removal**: When the furnace is removed from slot 0 (triggering a swap back to Machine Base), MachineSwapHelper.ejectSecondaryItems() drops the fuel slot contents as item entities at the block position before the swap replaces the BE. MachineEngineBlock.onRemove() has `!MachineSwapHelper.isSwapping()` guard to avoid double-drop.
 
 **Piston safety**: onRemove checks `!movedByPiston` -- skips fuel item drop when moved by piston (items preserved via IPistonMovable save/loadMovementData). MachineEngineBlockEntity overrides saveMovementData/loadMovementData to persist fuel item, litTime, litDuration, pulseInterval, pulseCounter through piston moves.
 
@@ -1504,7 +1504,7 @@ Fuel-burning pulse clock. Burns fuel items (using Forge burn times) and emits pe
 
 **Visual**: Dual-cuboid model (same pattern as Repeater/Toggle/Transformer/Timer). Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Binary tint: dark maroon when POWERED=false, bright red (POWER_COLORS[15]) when POWERED=true. Outer shell uses `machine_engine.png` / `machine_engine_lit.png` textures (placeholder -- needs user art). LIT blockstate drives texture variant swap.
 
-Stickiness: MachineType.ENGINE -- sticks to other Engines + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Pipes, or other specialization types.
+Stickiness: MachineType.ENGINE -- sticks to other Engines + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1529,7 +1529,7 @@ Shares MachineFrameBlockEntity (right-click opens GUI showing slime/honey block 
 
 **Piston Settlement Window**: When moved by piston (`movedByPiston=true` in onPlace), sets `pistonSettling=true` on the block entity and schedules a 1-tick settle tick. During the settlement window, neighborChanged is completely suppressed (returns immediately if `be.isPistonSettling()`). This prevents spurious toggles caused by sequential block placement in push groups -- blocks land one at a time, so a grabber may see a temporary signal drop (adjacent transmitter not placed yet) followed by a rise (transmitter lands), which would falsely trigger a toggle. The settle tick clears the flag and re-snapshots the signal landscape (`be.setInputWasLow(!hasSignal)`).
 
-**Stickiness**: MachineType.SLIME_GRABBER / HONEY_GRABBER. When POWERED=false: sticks to same-type + Machine Frames + Frame Family (active) only. When POWERED=true: additionally sticks like the corresponding vanilla sticky block. canStickTo is permissive (Layer 1); grab immunity carve-out in StickinessRules Rule 2 exempts powered grabbers matching the target's sticky type.
+**Stickiness**: MachineType.SLIME_GRABBER / HONEY_GRABBER. When POWERED=false: sticks to same-type + Machine Bases + Frame Family (active) only. When POWERED=true: additionally sticks like the corresponding vanilla sticky block. canStickTo is permissive (Layer 1); grab immunity carve-out in StickinessRules Rule 2 exempts powered grabbers matching the target's sticky type.
 
 **Visual**: Dual-cuboid model. Inner cuboid renders the slime/honey block via BESR (same approach as FramedBlockRenderer). Outer shell uses `machine_grabber` (off) / `machine_grabber_on` (on) textures with transparent centers revealing the inner block. No indicator tint -- on/off distinguished by outer texture only.
 
@@ -1586,7 +1586,7 @@ For cross-block swaps (e.g., conductor→transmitter), the old block's `onSpecIt
 
 **Visual**: Dual-cuboid model. Inner underlay cuboid (0.05 inset) uses shared `machine_indicator.png` tinted via tintIndex 1. Level-aware tint: reads `transmitterSignalStrength` from MachineFrameBlockEntity (not from blockstate), returns `POWER_COLORS[strength]` where 0 = dark maroon and 15 = bright red. This provides a continuous visual gradient reflecting the actual signal level being transmitted/received. Client-side BE sync via `syncToClients()` after strength changes; `onDataPacket()` compares old/new strength and calls `requestModelDataUpdate()` to trigger chunk re-render for tint update. Outer shell uses `machine_transmitter.png` texture (placeholder).
 
-Stickiness: MachineType.TRANSMITTER -- sticks to other Transmitters + Machine Frames + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Engines, Pipes, Grabbers, or other specialization types.
+Stickiness: MachineType.TRANSMITTER -- sticks to other Transmitters + Machine Bases + Frame Family (active). Does NOT stick to Conductors, Repeaters, Toggles, Transformers, Timers, Engines, Pipes, Grabbers, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1620,7 +1620,7 @@ Non-directional Machine Family block. Own BE subclass: MachinePipeBlockEntity (B
 
 **GUI**: Uses unified MachineFrameMenu with dynamic TransitSlot. TransitSlot.isActive() returns true only when BE is MachinePipeBlockEntity. Screen renders slot tile at (79,37) only when isPipe().
 
-Stickiness: MachineType.PIPE -- sticks to other Pipes + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, or other specialization types.
+Stickiness: MachineType.PIPE -- sticks to other Pipes + Machine Bases + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1638,7 +1638,7 @@ Non-directional Machine Family block. Own BE subclass: MachineFluidPipeBlockEnti
 | **Blockstate properties** | FLUID_TYPE (EnumProperty: empty, water, lava) |
 | **Container size** | 1 (slot 0 = specialization only, no transit slot) |
 
-**Behaviour**: Fluid vacuum and depositor. Redstone powered = actively pulling fluid from adjacent source blocks/cauldrons (opposite of item Pipe -- "pump" metaphor). Unpowered = idle (still auto-pushes if holding fluid). Pull only takes source blocks (flowing water/lava ignored -- infinite water sources survive). Push sends to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely). Water+lava collision: bucket in slot 0 replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Frame (no special case code needed).
+**Behaviour**: Fluid vacuum and depositor. Redstone powered = actively pulling fluid from adjacent source blocks/cauldrons (opposite of item Pipe -- "pump" metaphor). Unpowered = idle (still auto-pushes if holding fluid). Pull only takes source blocks (flowing water/lava ignored -- infinite water sources survive). Push sends to adjacent empty Fluid Pipes via round-robin, or deposits into world (air -> source block, cauldron -> fills completely). Water+lava collision: bucket in slot 0 replaced with obsidian -> MachineSwapHelper auto-reverts to Machine Base (no special case code needed).
 
 **Bucket state sync**: setFluidType() swaps slot 0 item to match fluid state: EMPTY -> Items.BUCKET, WATER -> Items.WATER_BUCKET, LAVA -> Items.LAVA_BUCKET. Uses setItemDirect() to avoid triggering swap check (water/lava buckets are not registered specialization items and would cause revert).
 
@@ -1658,7 +1658,7 @@ Non-directional Machine Family block. Own BE subclass: MachineFluidPipeBlockEnti
 
 **Piston safety**: IPistonMovable inherited from MachineFrameBlockEntity preserves fluid type, cooldown, round-robin, and input face through piston moves. loadMovementData enforces minimum TRANSFER_COOLDOWN after landing.
 
-Stickiness: MachineType.FLUID_PIPE -- sticks to other Fluid Pipes + Machine Frames + Frame Family (active). Does NOT stick to item Pipes, Tracks, Trolleys, Conductors, or other specialization types.
+Stickiness: MachineType.FLUID_PIPE -- sticks to other Fluid Pipes + Machine Bases + Frame Family (active). Does NOT stick to item Pipes, Tracks, Trolleys, Conductors, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1678,7 +1678,7 @@ Non-directional block (omnidirectional -- no FACING property on the base). Share
 | **Head block** | MachinePistonHeadBlock: 8×8×16 cuboid, FACING + STICKY properties. PushReaction.BLOCK. Breaks to AIR if parent piston missing (updateShape). onRemove notifies parent. No drops. Middle-click returns parent piston item. |
 | **Re-entry guard** | isProcessing ThreadLocal prevents neighborChanged from re-triggering during block events. Animation-in-progress skip prevents new events while animation running on a face. |
 
-Stickiness: MachineType.PISTON -- sticks to other Pistons + Machine Frames + Frame Family (active). Does NOT stick to Sticky Pistons, Tracks, Trolleys, Conductors, Pipes, or other specialization types.
+Stickiness: MachineType.PISTON -- sticks to other Pistons + Machine Bases + Frame Family (active). Does NOT stick to Sticky Pistons, Tracks, Trolleys, Conductors, Pipes, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1688,7 +1688,7 @@ Registry ID: `machine_sticky_piston`. Class: MachineStickyPistonBlock extends Ma
 
 Extends MachinePistonBlock with isSticky()=true. On retraction, pulls the block in front of the head one space backward before the head disappears. Pull skips blocks that are air, destroyable, immovable, or already moving. All other behavior inherited from MachinePistonBlock.
 
-Stickiness: MachineType.STICKY_PISTON -- sticks to other Sticky Pistons + Machine Frames + Frame Family (active). Does NOT stick to regular Pistons or other specialization types.
+Stickiness: MachineType.STICKY_PISTON -- sticks to other Sticky Pistons + Machine Bases + Frame Family (active). Does NOT stick to regular Pistons or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1696,14 +1696,14 @@ Frame activation: Always emits activation (strength 15). Never suppresses.
 
 Registry ID: `machine_brace`. Class: MachineBraceBlock extends AbstractMachineBlock. `MachineType.BRACE`. ~35 lines.
 
-Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing Machine Frame item in slot). No active behavior -- pure structural reinforcement.
+Non-directional block. Shares MachineFrameBlockEntity (right-click opens GUI showing Machine Base item in slot). No active behavior -- pure structural reinforcement.
 
 | Feature | Implementation |
 |---------|---------------|
 | **Push limit increase** | Each Brace in a push group adds +6 to the push limit (base 12). @ModifyConstant in PistonStructureResolverMixin replaces the hardcoded 12 with ideomod$calculatePushLimit(). Cascading: limit grows as Braces are gathered. Cap: 60 blocks (8 Braces). |
-| **Specialization item** | Machine Frame item (our own mod item). Lazy registration via ensureBraceMapping() in MachineSwapHelper -- first specialization to use a mod item as trigger key. |
+| **Specialization item** | Machine Base item (our own mod item). Lazy registration via ensureBraceMapping() in MachineSwapHelper -- first specialization to use a mod item as trigger key. |
 
-Stickiness: MachineType.BRACE -- sticks to other Braces + Machine Frames + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, Pipes, Pistons, or other specialization types.
+Stickiness: MachineType.BRACE -- sticks to other Braces + Machine Bases + Frame Family (active). Does NOT stick to Tracks, Trolleys, Conductors, Pipes, Pistons, or other specialization types.
 
 Frame activation: Always emits activation (strength 15). Never suppresses.
 
@@ -1736,7 +1736,7 @@ Transparent decorative blocks with activation-based stickiness. Implements `IFra
 | **Slime/honey interaction** | canStickTo returns true for slime/honey/odd slime (permissive). Also permissive to FramedBlock with INNER_STICKY>0 (allows cross-material framed sticky blocks to grab frames). Grab immunity rules block frames from grabbing slime/honey/odd slime. Net: slime can grab active frames, frames cannot grab slime. |
 | **Waterlogging** | Implements SimpleWaterloggedBlock. Auto-waterlogs when placed in water. Bucket interaction for add/remove. updateShape() schedules fluid ticks for natural water flow. Water is contained (standard full-cube waterlogged behavior). |
 | **Transparency** | RenderType.cutout() + noOcclusion(). Transparent texture pixels render correctly. Inside-face rendering via inverted cuboid in JSON models. |
-| **No redstone** | `isRedstoneConductor` false (2026-10-22), like glass: a powered frame powers nothing behind it. Framed Blocks follow their inner block; the Machine Frame still conducts. GameTest `framesDoNotCarryRedstone`. |
+| **No redstone** | `isRedstoneConductor` false (2026-10-22), like glass: a powered frame powers nothing behind it. Framed Blocks follow their inner block; the Machine Base still conducts. GameTest `framesDoNotCarryRedstone`. |
 
 
 
@@ -1783,7 +1783,7 @@ Registry ID: `hollow_stone`. Class: `HollowstoneBlock` (implements `EntityBlock`
 
 **Rendering**: `HollowstoneRenderer` BESR — simplified `FramedBlockRenderer`. No FACING transfer, no property delegation. Renders inner block at 0.998 scale with best-of-6-neighbors lighting via `BlockRenderDispatcher.renderSingleBlock()`. Only renders when `hasInnerBlock()` is true. Registered in `Ideomod.clientSetup()`. Render layer: `cutoutMipped` for transparent texture pixels.
 
-**Crafting**: 9 Hollowstone Shards (3x3) → 1 Hollowstone (shaped recipe at `data/ideomod/recipes/hollow_stone.json`). Hollowstone is the centre of the Machine Frame recipe (`machine_block.json`: Hollowstone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners → 1), as the design intends.
+**Crafting**: 9 Hollowstone Shards (3x3) → 1 Hollowstone (shaped recipe at `data/ideomod/recipes/hollow_stone.json`). Hollowstone is the centre of the Machine Base recipe (`machine_block.json`: Hollowstone centre, copper ingots left/right, redstone top/bottom, iron ingots in the corners → 1), as the design intends.
 
 **Loot table**: `data/ideomod/loot_tables/blocks/hollow_stone.json`. Uses `minecraft:alternatives`: silk touch → block drop, else → 5-7 shards with fortune `ore_drops` and `explosion_decay`.
 

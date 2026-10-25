@@ -180,15 +180,15 @@ Hollowstone forms where Oddstone meets lava. Any lava *source* block touching Od
 
 ## The Machine Family
 
-The Machine Frame is one block that becomes many. Right-click it to open a one-slot GUI. The item you put in the slot decides what the block is. Take the item out and it is a Machine Frame again.
+The Machine Base is one block that becomes many. Right-click it to open a one-slot GUI. The item you put in the slot decides what the block is. Take the item out and it is a Machine Base again.
 
-![The Machine Frame GUI in each of its modes](docs/media/gui.png)
+![The Machine Base GUI in each of its modes](docs/media/gui.png)
 
 The GUI changes with the item in the slot. Most machine blocks show only the slot; the six above are the ones with more to them.
 
 | Put this in the slot | It becomes |
 |---|---|
-| *(nothing)* | [Machine Frame](#machine-frame) |
+| *(nothing)* | [Machine Base](#machine-base) |
 | Redstone Dust | [Machine Conductor](#conductor) |
 | Repeater | [Machine Repeater](#repeater) |
 | Lever | [Machine Toggle](#toggle) |
@@ -199,7 +199,7 @@ The GUI changes with the item in the slot. Most machine blocks show only the slo
 | Any Oddstone-family block | [Machine Transmitter](#transmitter) |
 | Piston | [Machine Piston](#machine-piston-and-sticky-piston) |
 | Sticky Piston | [Machine Sticky Piston](#machine-piston-and-sticky-piston) |
-| Machine Frame | [Machine Brace](#brace) |
+| Machine Base | [Machine Brace](#brace) |
 | Powered Rail | [Machine Track](#track-and-trolley) |
 | Minecart | [Machine Trolley](#track-and-trolley) |
 | Slime Block | [Machine Slime Grabber](#grabbers) |
@@ -209,7 +209,7 @@ The GUI changes with the item in the slot. Most machine blocks show only the slo
 
 Things all machine blocks share:
 
-- **They stick together.** A Machine Frame sticks to every machine block. A specialised block sticks only to its own kind and to Machine Frames. So a Track does not stick to a Trolley, and a Piston does not stick to a Sticky Piston.
+- **They stick together.** A Machine Base sticks to every machine block. A specialised block sticks only to its own kind and to Machine Bases. So a Track does not stick to a Trolley, and a Piston does not stick to a Sticky Piston.
 - **They keep their contents when moved.** Pistons can push them, and the slot item, settings, timers, fuel and held items all survive the move.
 - **Slime can grab them, they cannot grab slime.** The exception is a switched-on [Grabber](#grabbers).
 - **They drop as what they are.** A broken Machine Timer drops a Machine Timer with its clock inside. The creative tab has every kind ready-made.
@@ -294,7 +294,7 @@ A Track pushes Trolleys. When a Track's signal turns on, every Trolley touching 
 ![Machine Track and Trolley](docs/media/track.gif)
 
 - One pulse moves a Trolley one block.
-- The Trolley moves as a pushed group, so it carries what is stuck to it: other Trolleys, Machine Frames, and anything those hold.
+- The Trolley moves as a pushed group, so it carries what is stuck to it: other Trolleys, Machine Bases, and anything those hold.
 - Tracks pass their signal along to neighbouring Tracks, losing 1 strength per Track. They do not power anything else. A grey indicator in each Track shows its signal, so a pulse can be seen fading along the line.
 - The Trolley itself does nothing. It is the thing that gets moved.
 
@@ -333,14 +333,14 @@ Holds one bucket of water or lava.
 - **Powered and empty,** it takes an adjacent water or lava source block, or empties a full cauldron. Flowing fluid is ignored.
 - **Holding fluid,** powered or not, it passes it to the next empty Fluid Pipe. If there is none, it places the fluid in the world: a source block into air, or into a cauldron.
 - The redstone logic is the reverse of the Item Pipe: here a signal means "pump".
-- Water meeting lava inside a pipe uses up both and leaves obsidian in the slot, which turns that pipe back into a Machine Frame.
+- Water meeting lava inside a pipe uses up both and leaves obsidian in the slot, which turns that pipe back into a Machine Base.
 - A pipe holding lava gives off light. A comparator reads empty or full.
-- Broken while full, it keeps its fluid: placed again it is still full. A Machine Frame given a water or lava
-  bucket becomes a full Fluid Pipe; taking the bucket out turns it back into a Machine Frame.
+- Broken while full, it keeps its fluid: placed again it is still full. A Machine Base given a water or lava
+  bucket becomes a full Fluid Pipe; taking the bucket out turns it back into a Machine Base.
 
-### Machine Frame
+### Machine Base
 
-With an empty slot, the Machine Frame is the connector. It sticks to every machine block, which makes it the glue of a contraption. It is also what switches [frames](#frames-and-framed-blocks) off.
+With an empty slot, the Machine Base is the connector. It sticks to every machine block, which makes it the glue of a contraption. It is also what switches [frames](#frames-and-framed-blocks) off.
 
 Its look shows which it is doing: unpowered (switching frames on) it shows a filled centre; powered by redstone (switching them off) the centre opens and the red machine indicator shows through.
 
@@ -355,7 +355,7 @@ How activation works:
 - Any machine block touching a frame activates it at strength 15. Each further frame in the chain gets 1 less. A frame with strength above 0 is active, so a chain reaches 15 frames from its source.
 - Activation only travels through frames of one metal. Iron passes it to iron, copper to copper.
 - An active frame sticks to other active frames of the same metal and to machine blocks. It does not grab ordinary blocks.
-- **A Machine Frame that is powered by redstone does the opposite.** It stops activating and sends an "off" signal of the strength it receives, which also drops by 1 per frame. Any frame that signal reaches is inactive, whatever else is activating it. Only the plain Machine Frame does this. Specialised machine blocks always activate.
+- **A Machine Base that is powered by redstone does the opposite.** It stops activating and sends an "off" signal of the strength it receives, which also drops by 1 per frame. Any frame that signal reaches is inactive, whatever else is activating it. Only the plain Machine Base does this. Specialised machine blocks always activate.
 
 So a row of frames is a rigid beam when active, and a row of loose blocks when not, and a lever decides which.
 
@@ -390,7 +390,7 @@ A multiblock. Wall furnaces into a stone shell and they cook 50% faster.
 
 - **Core:** a filled rectangle of furnaces, all the same type (furnace, blast furnace or smoker) and all facing the same way. Up to 5 wide and 5 tall by default.
 - **Shell:** a box one block larger on every side and three blocks deep. The back layer is solid. The middle layer rings the furnaces. The front layer is a ring too, with air in front of every furnace so you can reach it. One furnace needs 25 shell blocks.
-- **Shell blocks:** 38 stone-type blocks (the `ideomod:furnace_array_frame` tag): stone and stone bricks, deepslate variants, bricks, polished stones, blackstone, nether bricks, quartz, cut copper, Machine Frames and others. You can mix them.
+- **Shell blocks:** 38 stone-type blocks (the `ideomod:furnace_array_frame` tag): stone and stone bricks, deepslate variants, bricks, polished stones, blackstone, nether bricks, quartz, cut copper, Machine Bases and others. You can mix them.
 - **Effect:** each furnace is renamed "Enhanced Furnace" (or Blast Furnace, or Smoker) and cooks 50% faster. Fuel burns at the usual rate, so each piece of fuel cooks more.
 - The structure is found when you place or break a block near it, and stops working when the shell is broken.
 
@@ -429,7 +429,7 @@ Pictures drawn in the 1.20.1 crafting windows by `tools/renders/recipes.py`, str
 ### Machines, frames and tools
 
 <table>
-<tr><td align="center"><img src="docs/media/recipes/machine_block.png" width="352" alt="Machine Frame"><br>Machine Frame</td><td align="center"><img src="docs/media/recipes/hollow_stone.png" width="352" alt="Hollowstone, from shards"><br>Hollowstone, from shards</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/machine_block.png" width="352" alt="Machine Base"><br>Machine Base</td><td align="center"><img src="docs/media/recipes/hollow_stone.png" width="352" alt="Hollowstone, from shards"><br>Hollowstone, from shards</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/iron_frame.png" width="352" alt="Iron Frame ×4"><br>Iron Frame ×4</td><td align="center"><img src="docs/media/recipes/copper_frame.png" width="352" alt="Copper Frame ×4"><br>Copper Frame ×4</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/framed_block.png" width="352" alt="Framed block: any frame + any frameable block"><br>Framed block: any frame + any frameable block</td><td align="center"><img src="docs/media/recipes/drill.png" width="352" alt="Drill"><br>Drill</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/oddstone_repulser.png" width="352" alt="Repulser"><br>Repulser</td><td align="center"><img src="docs/media/recipes/oddstone_attractor.png" width="352" alt="Attractor"><br>Attractor</td></tr>
@@ -451,7 +451,7 @@ Minecraft 1.20.1 has no copper nugget, so Ideomod adds one (it shows as the iron
 <tr><td align="center"><img src="docs/media/recipes/stonecutter_cobbled_oddstone.png" width="352" alt="Stonecutter: Cobbled Oddstone"><br>Stonecutter: Cobbled Oddstone</td><td align="center"><img src="docs/media/recipes/stonecutter_oddstone_bricks.png" width="352" alt="Stonecutter: Oddstone Bricks"><br>Stonecutter: Oddstone Bricks</td></tr>
 </table>
 
-Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Frames need a trip to the lava-side Hollowstone formations first. The Structure Debug Stick has no recipe and is creative-only.
+Oddstone and Hollowstone come from the world (Hollowstone also from nine shards), so Machine Bases need a trip to the lava-side Hollowstone formations first. The Structure Debug Stick has no recipe and is creative-only.
 
 Mining Oddstone with a normal pickaxe drops Oddstone. Silk Touch gives Cobbled Oddstone, the reverse of vanilla stone.
 

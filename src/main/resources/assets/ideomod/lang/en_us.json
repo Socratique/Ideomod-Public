@@ -1,7 +1,7 @@
 {
   "block.ideomod.drill": "Drill",
   "block.ideomod.oddstone": "Oddstone",
-  "block.ideomod.machine_block": "Machine Frame",
+  "block.ideomod.machine_block": "Machine Base",
   "block.ideomod.oddstone_portal": "Oddstone Portal",
   "block.ideomod.odd_slime": "Odd Slime",
   "block.ideomod.oddstone_repulser": "Oddstone Repulser",
@@ -15,7 +15,7 @@
   "block.ideomod.copper_framed_block": "Copper Framed Block",
   "itemGroup.ideomod.ideomod_tab": "Ideomod",
   "itemGroup.ideomod.framed_blocks_tab": "Framed Blocks",
-  "ideomod.container.machine_frame": "Machine Frame",
+  "ideomod.container.machine_frame": "Machine Base",
   "ideomod.container.enhanced_furnace": "Enhanced Furnace",
   "ideomod.container.enhanced_blast_furnace": "Enhanced Blast Furnace",
   "ideomod.container.enhanced_smoker": "Enhanced Smoker",

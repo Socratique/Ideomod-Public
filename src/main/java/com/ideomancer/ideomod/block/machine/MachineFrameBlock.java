@@ -10,10 +10,10 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
 
 /**
- * Machine Frame -- the universal connector in the Machine Family.
+ * Machine Base -- the universal connector in the Machine Family.
  *
  * All shared behavior (GUI, drops, clone, block entity, lifecycle hooks,
- * stickiness) is inherited from AbstractMachineBlock. Machine Frame adds
+ * stickiness) is inherited from AbstractMachineBlock. Machine Base adds
  * only the static utility methods that other systems reference, and its
  * POWERED look: unpowered it sends out activation (Sean's "active" texture),
  * powered by redstone it suppresses instead ("inactive", red indicator in the hole).

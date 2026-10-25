@@ -167,8 +167,8 @@ def frames(tx):
     o = build()
     for i, f in enumerate(o["f"]):
         s.labels.append((f, str(15 - i), AMBER))
-    s.labels.append((o["m"], "Machine Frame", CYAN))
-    s.say("A Machine Frame activates Iron Frames next to it: strength 15, minus 1 per frame.", 2600)
+    s.labels.append((o["m"], "Machine Base", CYAN))
+    s.say("A Machine Base activates Iron Frames next to it: strength 15, minus 1 per frame.", 2600)
     del s.labels[:]
     o["pl"].set(on=True)
     s.caption = "Active frames stick to each other and to machine blocks: one rigid piece."
@@ -177,12 +177,12 @@ def frames(tx):
     s.snap(2000)
 
     o = build()
-    s.say("Same build again. This time, power the Machine Frame first.", 1700)
+    s.say("Same build again. This time, power the Machine Base first.", 1700)
     o["lever"].set(on=True)
     o["m"].set(powered=True)
     for f in o["f"]:
         f.set(active=False)
-    s.say("A powered Machine Frame switches the frames it reaches off.", 2000)
+    s.say("A powered Machine Base switches the frames it reaches off.", 2000)
     o["pl"].set(on=True)
     s.caption = "Inactive frames are not sticky: the piston moves one frame and nothing else."
     s.snap(500)
@@ -199,7 +199,7 @@ def track(tx):
     cargo = s.add(1, 2, 1, "machine_frame")
     s.labels.append((tracks[4], "Track line", CYAN))
     s.labels.append((cargo, "Trolley + cargo", CYAN))
-    s.say("A line of Tracks, with a Trolley sitting on top carrying a Machine Frame.", 2400)
+    s.say("A line of Tracks, with a Trolley sitting on top carrying a Machine Base.", 2400)
     del s.labels[:]
     s.say("A Track pushes the Trolleys touching it, away from where its signal came from.", 2400)
     for i in range(3):
@@ -549,7 +549,7 @@ CATALOGUE = [
     ("Oddstone Repulser", "repulser", {"facing": "south"}), ("Oddstone Attractor", "attractor", {"facing": "south"}),
     ("Iron Frame", "frame", {"mat": "iron"}), ("Copper Frame", "frame", {"mat": "copper"}),
     ("Iron Framed Stone", "framed", {"mat": "iron", "inner": "stone"}),
-    ("Machine Frame", "machine_frame", {}), ("Machine Track", "track", {}), ("Machine Trolley", "trolley", {}),
+    ("Machine Base", "machine_frame", {}), ("Machine Track", "track", {}), ("Machine Trolley", "trolley", {}),
     ("Machine Conductor", "conductor", {"power": 15}), ("Machine Repeater", "repeater", {"on": True}),
     ("Machine Toggle", "toggle", {"on": True}), ("Machine Transformer", "transformer", {"power": 8}),
     ("Machine Timer", "timer", {"on": True}), ("Machine Engine", "engine", {"lit": True, "on": True}),

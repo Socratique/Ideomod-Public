@@ -22,7 +22,7 @@ import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
  * pushed by a piston, slime grabs Oddstone because slime sticks to
  * everything except honey. There's no vanilla way to prevent this.
  * 
- * But we want Oddstone and Machine Frame to have asymmetric stickiness
+ * But we want Oddstone and Machine Base to have asymmetric stickiness
  * with slime - one direction works, the other doesn't.
  * 
  * Additionally, Odd Slime needs DIRECTIONAL stickiness — it only grabs
