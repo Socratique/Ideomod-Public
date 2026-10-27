@@ -664,4 +664,64 @@ public class IdeomodGameTests {
     private static Direction directionTo(BlockPos from, BlockPos to) {
         return Direction.fromDelta(to.getX() - from.getX(), to.getY() - from.getY(), to.getZ() - from.getZ());
     }
+
+    // ==================== Grabbers grab like slime ====================
+
+    /**
+     * A switched-on Slime Grabber holds a machine block of another type (here a Machine Piston),
+     * as slime does; switched off it doesn't. A vanilla piston pushes the Grabber east; the
+     * Machine Piston beside it (north) comes along only when the Grabber is on.
+     *
+     *   z=1/4: [Machine Piston]          (north of the Grabber)
+     *   z=2/5: [piston ->] [Grabber]
+     */
+    @GameTest(template = EMPTY)
+    public static void grabberHoldsOtherMachineBlocksWhenOn(GameTestHelper helper) {
+        for (int x = 0; x <= 5; x++) for (int z = 0; z <= 5; z++) helper.setBlock(x, 1, z, Blocks.AIR);
+        boolean[] on = {true, false};
+        for (int lane = 0; lane < 2; lane++) {
+            int z = 2 + lane * 3; // lanes apart, so one Grabber can't reach the other lane
+            helper.setBlock(1, 1, z, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST));
+            helper.setBlock(2, 1, z, ModBlocks.MACHINE_SLIME_GRABBER.get().defaultBlockState()
+                    .setValue(com.ideomancer.ideomod.block.machine.MachineGrabberBlock.POWERED, on[lane]));
+            helper.setBlock(2, 1, z - 1, ModBlocks.MACHINE_PISTON.get());
+        }
+        helper.runAfterDelay(2, () -> { helper.setBlock(0, 1, 2, Blocks.REDSTONE_BLOCK); helper.setBlock(0, 1, 5, Blocks.REDSTONE_BLOCK); });
+        helper.runAfterDelay(8, () -> {
+            boolean carried = helper.getBlockState(new BlockPos(3, 1, 1)).is(ModBlocks.MACHINE_PISTON.get());
+            boolean leftBehind = helper.getBlockState(new BlockPos(2, 1, 4)).is(ModBlocks.MACHINE_PISTON.get());
+            if (!carried) helper.fail("a switched-on Grabber did not take the Machine Piston beside it along");
+            else if (!leftBehind) helper.fail("a switched-off Grabber took the Machine Piston along");
+            else helper.succeed();
+        });
+    }
+
+    /**
+     * A switched-on Grabber is grabbed like slime: a moving machine block does not drag it along
+     * (Rule 5, as Rule 2 for real slime). A vanilla piston pushes a Machine Piston west; a
+     * switched-on Grabber sits on top of it, and a Machine Sticky Piston behind the Grabber (east).
+     * The Machine Piston moves alone; the Grabber and the Sticky Piston stay where they are.
+     *
+     *   y=2:            [Grabber on] [Sticky Piston]
+     *   y=1:  [<- ...]  [Machine Piston] [vanilla piston facing west]
+     */
+    @GameTest(template = EMPTY)
+    public static void pushedMachineBlockLeavesSwitchedOnGrabber(GameTestHelper helper) {
+        for (int x = 0; x <= 5; x++) for (int y = 1; y <= 3; y++) helper.setBlock(x, y, 2, Blocks.AIR);
+        helper.setBlock(4, 1, 2, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.WEST));
+        helper.setBlock(3, 1, 2, ModBlocks.MACHINE_PISTON.get());
+        helper.setBlock(3, 2, 2, ModBlocks.MACHINE_SLIME_GRABBER.get().defaultBlockState()
+                .setValue(com.ideomancer.ideomod.block.machine.MachineGrabberBlock.POWERED, true));
+        helper.setBlock(4, 2, 2, ModBlocks.MACHINE_STICKY_PISTON.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(5, 1, 2, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            boolean moved = helper.getBlockState(new BlockPos(2, 1, 2)).is(ModBlocks.MACHINE_PISTON.get());
+            boolean grabberStayed = helper.getBlockState(new BlockPos(3, 2, 2)).is(ModBlocks.MACHINE_SLIME_GRABBER.get());
+            boolean stickyStayed = helper.getBlockState(new BlockPos(4, 2, 2)).is(ModBlocks.MACHINE_STICKY_PISTON.get());
+            if (!moved) helper.fail("the Machine Piston was not pushed");
+            else if (!grabberStayed) helper.fail("the pushed Machine Piston dragged the switched-on Grabber along");
+            else if (!stickyStayed) helper.fail("the Sticky Piston behind the Grabber moved");
+            else helper.succeed();
+        });
+    }
 }

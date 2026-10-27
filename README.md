@@ -305,7 +305,7 @@ A slime block or honey block with a switch. Each redstone pulse flips it on or o
 ![Machine Grabber](docs/media/grabber.gif)
 
 - **Off:** it sticks only to machine blocks and active frames.
-- **On:** it also grabs as a slime block (Slime Grabber) or honey block (Honey Grabber) does.
+- **On:** it also grabs as a slime block (Slime Grabber) or honey block (Honey Grabber) does. Like slime, it grabs only when it is the one moving: a machine block pushed past or under it does not drag it along (unless that block sticks to Grabbers anyway, as a Machine Base does).
 
 For one tick after being moved by a piston, Grabbers and Toggles ignore redstone changes, so a contraption does not flip its own switches while its parts land.
 

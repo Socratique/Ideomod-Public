@@ -60,6 +60,11 @@ public interface IMachineFamily {
     static boolean canMachineFamilyStickTo(MachineType myType, BlockState other) {
         Block otherBlock = other.getBlock();
 
+        // A switched-on Grabber holds any machine block, as slime does (README: "On: it also
+        // grabs as a slime block does"). Without this the Grabber agreed to stick but the other
+        // machine block refused, so it glued nothing but its own kind (found 2026-10-25).
+        if (otherBlock instanceof MachineGrabberBlock && other.getValue(MachineGrabberBlock.POWERED)) return true;
+
         // Machine Family: type-aware check
         if (otherBlock instanceof IMachineFamily otherMachine) {
             return myType.canStickToMachineType(otherMachine.getMachineType());

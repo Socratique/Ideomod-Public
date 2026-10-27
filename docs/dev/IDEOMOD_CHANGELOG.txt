@@ -1,5 +1,19 @@
 # Ideomod Changelog
 
+## [2026-10-27a] Switched-on Grabbers grab like slime, both ways round
+
+- Bug: a switched-on Slime/Honey Grabber is meant to grab "as a slime block does", and slime grabs
+  machine blocks. But Forge glues two blocks only if both agree, and machine blocks only accepted
+  their own type, frames and real slime/honey, so a switched-on Grabber held nothing but other
+  Grabbers and frames. Machine blocks now accept a powered Grabber's grip (IMachineFamily).
+- And that agreement must stay one-way, as for slime: a moving machine block must not drag a
+  switched-on Grabber along (a machine block cannot grab slime: Rule 2). Grab-immunity Rule 5: a
+  machine block that doesn't stick to Grabbers by type cannot grab a switched-on Grabber; Machine
+  Bases and Grabbers still hold it, and a switched-on Grabber that moves still grabs everything
+  beside it. Ported from the private Ideomod (f50606b + 9f66000).
+- GameTests grabberHoldsOtherMachineBlocksWhenOn and pushedMachineBlockLeavesSwitchedOnGrabber;
+  README Grabbers section updated. 18/18 pass.
+
 ## [2026-10-25h] The Machine Frame is now the Machine Base
 
 - Renamed (Ideomancer's call) so it isn't mistaken for the Iron and Copper Frames, which work quite

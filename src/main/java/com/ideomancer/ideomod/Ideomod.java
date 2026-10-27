@@ -7,6 +7,7 @@ import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.IFrameBlock;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
+import com.ideomancer.ideomod.block.machine.IMachineFamily;
 import com.ideomancer.ideomod.block.machine.MachineGrabberBlock;
 import com.ideomancer.ideomod.block.machine.MachineSwapHelper;
 import com.ideomancer.ideomod.network.ModNetworking;
@@ -185,6 +186,23 @@ public class Ideomod {
                     }
 
                     return false;
+                }
+        );
+
+        // --- Rule 5: A switched-on Grabber is grabbed like slime: only by what would grab slime ---
+        // Machine blocks accept a switched-on Grabber's grip (IMachineFamily), so the Grabber can
+        // hold them as slime does. That agreement must stay one-way: a moving machine block does not
+        // drag a switched-on Grabber along, just as it doesn't drag slime (Rule 2). It still comes
+        // along with machine blocks that stick to Grabbers by type (Machine Bases, its own kind), and
+        // a switched-on Grabber that moves still grabs everything beside it.
+        StickinessRules.registerGrabImmunity(
+                (grabber, target) -> {
+                    if (!(target.getBlock() instanceof MachineGrabberBlock targetGrabber)
+                            || !target.getValue(MachineGrabberBlock.POWERED)) return false;
+                    if (!(grabber.getBlock() instanceof IMachineFamily grabberMachine)) return false;
+                    if (grabber.getBlock() instanceof MachineGrabberBlock
+                            && grabber.getValue(MachineGrabberBlock.POWERED)) return false;
+                    return !grabberMachine.getMachineType().canStickToMachineType(targetGrabber.getMachineType());
                 }
         );
 
