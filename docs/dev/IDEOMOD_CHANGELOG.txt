@@ -1,5 +1,10 @@
 # Ideomod Changelog
 
+## [2026-11-02c] Illusioner and zombie horse avoid Oddstone
+
+- Added to the default affected_mobs list (now 64), so every vanilla land mob avoids Oddstone; only
+  fliers and swimmers, which never path over blocks, are left out. Existing config files keep their list.
+
 ## [2026-11-02b] Portal frames are Cobbled Oddstone
 
 - The Ideomancer's call: an Oddstone portal's frame is now Cobbled Oddstone, not plain Oddstone. Cobbled
