@@ -780,4 +780,28 @@ public class IdeomodGameTests {
             helper.succeed();
         }
     }
+
+    /**
+     * Every crafting and smelting recipe of this mod that belongs in the recipe book has an unlock
+     * advancement (recipes/<name>) whose reward is that recipe, so it appears in the book.
+     */
+    @GameTest(template = EMPTY)
+    public static void everyBookRecipeHasAnUnlock(GameTestHelper helper) {
+        var server = helper.getLevel().getServer();
+        java.util.List<String> missing = new java.util.ArrayList<>();
+        for (net.minecraft.world.item.crafting.Recipe<?> recipe : server.getRecipeManager().getRecipes()) {
+            net.minecraft.resources.ResourceLocation id = recipe.getId();
+            if (!id.getNamespace().equals(Ideomod.MOD_ID) || recipe.isSpecial()) continue;
+            var type = recipe.getType();
+            if (type != net.minecraft.world.item.crafting.RecipeType.CRAFTING
+                    && type != net.minecraft.world.item.crafting.RecipeType.SMELTING) continue;
+            var adv = server.getAdvancements().getAdvancement(
+                    new net.minecraft.resources.ResourceLocation(Ideomod.MOD_ID, "recipes/" + id.getPath()));
+            if (adv == null || !java.util.Arrays.asList(adv.getRewards().getRecipes()).contains(id)) {
+                missing.add(id.getPath());
+            }
+        }
+        if (missing.isEmpty()) helper.succeed();
+        else helper.fail("recipes with no recipe-book unlock: " + missing);
+    }
 }

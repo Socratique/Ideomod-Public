@@ -1,5 +1,15 @@
 # Ideomod Changelog
 
+## [2026-11-02d] Recipe-book unlocks
+
+- Recipes now appear in the recipe book (the Ideomancer's rules): Oddstone unlocks the Oddstone-family
+  recipes, Odd Slime, Repulser and Attractor (Cobbled and Bricks also unlock their own); Hollowstone unlocks
+  the Machine Base (and Placer); a Hollowstone Shard unlocks Hollowstone; iron/copper ingots or nuggets
+  unlock the frames and nugget recipes; redstone torch the Rod; piston the Drill; oak log the Branch;
+  leaves the Bush. Unlock advancements in data/ideomod/advancements/recipes/. Framed blocks stay special.
+- Recipes got recipe-book tabs (category): building, redstone, misc; the smelting recipe, blocks.
+- GameTest everyBookRecipeHasAnUnlock.
+
 ## [2026-11-02c] Illusioner and zombie horse avoid Oddstone
 
 - Added to the default affected_mobs list (now 64), so every vanilla land mob avoids Oddstone; only

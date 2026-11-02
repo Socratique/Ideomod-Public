@@ -1,13 +1,21 @@
 {
   "type": "minecraft:crafting_shaped",
+  "category": "misc",
   "pattern": [
     "INI",
     "N N",
     "INI"
   ],
   "key": {
-    "I": { "item": "minecraft:iron_ingot" },
-    "N": { "item": "minecraft:iron_nugget" }
+    "I": {
+      "item": "minecraft:iron_ingot"
+    },
+    "N": {
+      "item": "minecraft:iron_nugget"
+    }
   },
-  "result": { "item": "ideomod:iron_frame", "count": 4 }
+  "result": {
+    "item": "ideomod:iron_frame",
+    "count": 4
+  }
 }

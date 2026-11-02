@@ -1,0 +1,47 @@
+{
+  "parent": "minecraft:recipes/root",
+  "criteria": {
+    "has_cobbled_oddstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "ideomod:cobbled_oddstone"
+            ]
+          }
+        ]
+      }
+    },
+    "has_oddstone": {
+      "trigger": "minecraft:inventory_changed",
+      "conditions": {
+        "items": [
+          {
+            "items": [
+              "ideomod:oddstone"
+            ]
+          }
+        ]
+      }
+    },
+    "has_the_recipe": {
+      "trigger": "minecraft:recipe_unlocked",
+      "conditions": {
+        "recipe": "ideomod:cobbled_oddstone_stairs"
+      }
+    }
+  },
+  "requirements": [
+    [
+      "has_cobbled_oddstone",
+      "has_oddstone",
+      "has_the_recipe"
+    ]
+  ],
+  "rewards": {
+    "recipes": [
+      "ideomod:cobbled_oddstone_stairs"
+    ]
+  }
+}
