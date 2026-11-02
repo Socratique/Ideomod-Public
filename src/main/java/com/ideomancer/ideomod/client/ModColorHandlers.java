@@ -118,7 +118,7 @@ public class ModColorHandlers {
         }, ModBlocks.MACHINE_CONDUCTOR.get());
 
         // Machine Frame: only the powered model has an indicator (tintIndex 1), seen
-        // through the hole in Sean's inactive texture: full red, like a Repeater that's on.
+        // through the hole in the Ideomancer's inactive texture: full red, like a Repeater that's on.
         event.register((state, level, pos, tintIndex) -> {
             if (tintIndex == 1) {
                 return state.getValue(MachineFrameBlock.POWERED) ? POWER_COLORS[15] : POWER_COLORS[0];
