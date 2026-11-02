@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod;
 
+import com.ideomancer.ideomod.compat.MachineModCompat;
 import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.item.RedstoneRodSignalManager;
 import com.ideomancer.ideomod.block.frame.FrameActivation;
@@ -52,6 +53,7 @@ public class Ideomod {
 
     public Ideomod() {
         IEventBus modEventBus = FMLJavaModLoadingContext.get().getModEventBus();
+        MachineModCompat.register(modEventBus);
 
         ModBlocks.BLOCKS.register(modEventBus);
         ModItems.ITEMS.register(modEventBus);

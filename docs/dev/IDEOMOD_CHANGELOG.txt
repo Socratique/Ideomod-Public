@@ -1,5 +1,17 @@
 # Ideomod Changelog
 
+## [2026-11-02] Worlds from Ideomancer's Machine Mod open here intact
+
+- Ideomancer's Machine Mod (a cut of Ideomod: Oddstone and the Machine Family) now has its own mod id,
+  machinemod, so the two can be installed together. When both are, it steps aside and registers
+  nothing, and Ideomod provides everything.
+- New compat/MachineModCompat: machinemod:<name> translates to ideomod:<name>. Blocks and items go
+  through Forge's MissingMappingsEvent; block entity types, which Forge does not save with a world
+  and so never reports missing, through registry aliases (so a machine keeps its contents).
+- Checked on real Forge servers: a world built with the Machine Mod, opened with Ideomod alone and
+  with both installed, kept a Machine Repeater with its repeater and delay 3, an Iron Framed Oddstone
+  and Oddstone in a chest. Not checked in a game client.
+
 ## [2026-10-27a] Switched-on Grabbers grab like slime, both ways round
 
 - Bug: a switched-on Slime/Honey Grabber is meant to grab "as a slime block does", and slime grabs
