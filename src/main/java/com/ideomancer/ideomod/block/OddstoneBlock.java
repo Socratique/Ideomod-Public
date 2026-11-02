@@ -22,7 +22,6 @@ import net.minecraft.world.level.material.FluidState;
 import net.minecraft.world.level.pathfinder.BlockPathTypes;
 import net.minecraft.world.level.pathfinder.PathComputationType;
 import org.jetbrains.annotations.Nullable;
-import com.ideomancer.ideomod.block.portal.OddstonePortalHandler;
 
 /**
  * Oddstone - a strange stone block with five unique properties:
@@ -62,16 +61,11 @@ public class OddstoneBlock extends Block implements ISympathetic {
     }
 
     // ========================================================================
-    // FEATURE 5: Portal Frame — delegates to OddstonePortalHandler
+    // FEATURE 5: Lava, on neighbour change (portal frames are Cobbled Oddstone's job)
     // ========================================================================
 
     /**
-     * Neighbor changes are still relevant for portal DEACTIVATION validation.
-     * When a neighbor changes next to an Oddstone that's adjacent to a portal,
-     * the handler re-validates the frame structure (corners present, oddstone
-     * present). If the frame is broken, the portal deactivates.
-     *
-     * Activation is handled by EnderPearlPortalHandler, not by neighborChanged.
+     * A neighbour change can bring lava next to Oddstone: turn it into Hollowstone.
      */
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
@@ -81,8 +75,6 @@ public class OddstoneBlock extends Block implements ISympathetic {
 
         // Feature 6: Lava Transformation — convert adjacent lava sources to Hollowstone
         convertAdjacentLava(level, pos);
-
-        OddstonePortalHandler.onNeighborChanged(serverLevel, pos, neighborPos);
     }
 
     /**
@@ -129,17 +121,6 @@ public class OddstoneBlock extends Block implements ISympathetic {
                 }
             }
         }
-    }
-
-    @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos,
-                          BlockState newState, boolean movedByPiston) {
-        if (!level.isClientSide() && !newState.is(this)) {
-            if (level instanceof ServerLevel serverLevel) {
-                OddstonePortalHandler.onBlockRemoved(serverLevel, pos);
-            }
-        }
-        super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     // ========================================================================

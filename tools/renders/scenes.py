@@ -377,7 +377,7 @@ def portal(tx):
         for x in range(5):
             for y in range(5):
                 if x in (0, 4) or y in (0, 4):
-                    s.add(x0 + x, y, 1, corners.get((x, y), "oddstone"))
+                    s.add(x0 + x, y, 1, corners.get((x, y), "cobbled_oddstone"))
 
     def light(x0):
         return [s.add(x0 + x, y, 1, "portal", axis="x") for x in (1, 2, 3) for y in (1, 2, 3)]

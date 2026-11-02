@@ -28,7 +28,7 @@ import net.minecraftforge.eventbus.api.SubscribeEvent;
  * 2. For frame edge hits: the pearl hit an Oddstone block in the frame.
  *    Try to detect a valid frame from that Oddstone.
  * 3. For interior hits: the pearl passed through air and hit the far side.
- *    Check adjacent blocks for Oddstone to find a frame.
+ *    Check adjacent blocks for frame blocks (Cobbled Oddstone) to find a frame.
  * 4. If a valid frame is found and successfully activated, cancel the
  *    pearl's teleport effect and discard the entity.
  *
@@ -55,8 +55,8 @@ public class EnderPearlPortalHandler {
         BlockPos hitPos = blockHit.getBlockPos();
         BlockState hitState = level.getBlockState(hitPos);
 
-        // Strategy 1: Pearl hit an Oddstone block directly (frame edge)
-        if (hitState.is(ModBlocks.ODDSTONE.get())) {
+        // Strategy 1: Pearl hit a frame block (Cobbled Oddstone) directly
+        if (PortalUtils.isFrameBlock(hitState)) {
             if (tryActivateFromOddstone(serverLevel, hitPos)) {
                 cancelPearl(event, pearl);
                 return;
@@ -77,11 +77,11 @@ public class EnderPearlPortalHandler {
             }
         }
 
-        // Strategy 3: Pearl hit a corner block. Check adjacent Oddstone.
+        // Strategy 3: Pearl hit a corner block. Check adjacent frame blocks.
         if (PortalUtils.isCornerBlock(level, hitPos)) {
             for (Direction dir : Direction.values()) {
                 BlockPos neighbor = hitPos.relative(dir);
-                if (level.getBlockState(neighbor).is(ModBlocks.ODDSTONE.get())) {
+                if (PortalUtils.isFrameBlock(level.getBlockState(neighbor))) {
                     if (tryActivateFromOddstone(serverLevel, neighbor)) {
                         cancelPearl(event, pearl);
                         return;
@@ -92,7 +92,7 @@ public class EnderPearlPortalHandler {
     }
 
     /**
-     * Attempts to activate a portal starting from an Oddstone frame block.
+     * Attempts to activate a portal starting from a frame block (Cobbled Oddstone).
      * Delegates to OddstonePortalHandler.tryActivate().
      *
      * @return true if a portal was successfully activated
@@ -103,7 +103,7 @@ public class EnderPearlPortalHandler {
 
     /**
      * Attempts to activate a portal from an interior air position.
-     * Checks all 6 neighbors for Oddstone blocks and tries activation
+     * Checks all 6 neighbors for frame blocks and tries activation
      * from each one found.
      *
      * @return true if a portal was successfully activated
@@ -111,7 +111,7 @@ public class EnderPearlPortalHandler {
     private boolean tryActivateFromInterior(ServerLevel level, BlockPos interiorPos) {
         for (Direction dir : Direction.values()) {
             BlockPos neighbor = interiorPos.relative(dir);
-            if (level.getBlockState(neighbor).is(ModBlocks.ODDSTONE.get())) {
+            if (PortalUtils.isFrameBlock(level.getBlockState(neighbor))) {
                 if (OddstonePortalHandler.tryActivate(level, neighbor)) {
                     return true;
                 }

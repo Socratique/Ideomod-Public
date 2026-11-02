@@ -81,7 +81,7 @@ It comes in three full blocks (Oddstone, Cobbled Oddstone, Oddstone Bricks), eac
 | Grabs slime, honey and Odd Slime | yes | yes | no |
 | Mobs avoid it | yes | yes | no |
 | Blocks redstone like glass does | yes | yes | no |
-| Forms portal frames | yes | no | no |
+| Forms portal frames | no | Cobbled only | no |
 | Cools lava into Hollowstone | yes | no | no |
 
 ### Sympathetic movement
@@ -153,7 +153,9 @@ They act on a rising edge, so one pulse is one block. The target is plain Oddsto
 
 ## Oddstone Portals
 
-A portal frame is an upright rectangle of Oddstone with a mineral block at each of the four corners.
+A portal frame is an upright rectangle of **Cobbled Oddstone** with a mineral block at each of the four corners.
+Cobbled Oddstone has to be smelted (or Silk-Touched) out of Oddstone, so a portal takes some work, and
+natural Oddstone ore never forms part of a frame. (Plain Oddstone frames, as before 2026-11-02, do not light.)
 
 ![Oddstone Portal](docs/media/portal.gif)
 
@@ -165,7 +167,7 @@ A portal frame is an upright rectangle of Oddstone with a mineral block at each 
 - **Linked portals:** walking in puts you at the matching spot in the other portal, facing out of it. This works between portals of different sizes.
 - **Unlinked portals:** walking in throws you 200 to 1000 blocks in a random direction, onto the surface, and costs 5 hearts.
 - **Limits:** players only, with a 4 second cooldown.
-- **Closing:** break or move any frame Oddstone or corner block. The partner becomes unlinked.
+- **Closing:** break or move any frame block or corner block. The partner becomes unlinked.
 - **Look:** a lit portal is a slow light-blue swirl with white sparks. Like a nether portal it gives off (light-blue) particles and hums now and then.
 
 ## Hollowstone

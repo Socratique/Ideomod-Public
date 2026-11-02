@@ -243,7 +243,7 @@ public class OddstonePortalFrameDetector {
     // ========================================================================
 
     private static boolean isOddstone(Level level, BlockPos pos) {
-        return level.getBlockState(pos).is(ModBlocks.ODDSTONE.get());
+        return PortalUtils.isFrameBlock(level.getBlockState(pos));
     }
 
     /**

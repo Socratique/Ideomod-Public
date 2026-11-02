@@ -155,7 +155,7 @@ public class OddstonePortalBlock extends Block {
             BlockPos checkPos = pos.relative(dir);
             BlockState checkState = level.getBlockState(checkPos);
             if (!checkState.is(ModBlocks.ODDSTONE_PORTAL.get())
-                && !checkState.is(ModBlocks.ODDSTONE.get())
+                && !PortalUtils.isFrameBlock(checkState)
                 && !PortalUtils.isCornerBlock(checkState)) {
                 return Blocks.AIR.defaultBlockState();
             }

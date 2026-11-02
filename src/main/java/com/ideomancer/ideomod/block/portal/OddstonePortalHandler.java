@@ -282,8 +282,8 @@ public class OddstonePortalHandler {
     }
 
     private static boolean isValidFrameOddstone(Level level, BlockPos pos) {
-        if (!level.getBlockState(pos).is(ModBlocks.ODDSTONE.get())) {
-            Ideomod.LOGGER.debug("Portal frame invalid - expected Oddstone at {}", pos);
+        if (!PortalUtils.isFrameBlock(level.getBlockState(pos))) {
+            Ideomod.LOGGER.debug("Portal frame invalid - expected Cobbled Oddstone at {}", pos);
             return false;
         }
         return true;

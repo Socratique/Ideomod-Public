@@ -1,5 +1,21 @@
 # Ideomod Changelog
 
+## [2026-11-02b] Portal frames are Cobbled Oddstone
+
+- The Ideomancer's call: an Oddstone portal's frame is now Cobbled Oddstone, not plain Oddstone. Cobbled
+  Oddstone has to be smelted (or Silk-Touched) out of Oddstone, so a portal takes some work (12 blocks for
+  the smallest frame, 76 for the largest), and natural Oddstone ore can never form part of a frame.
+  Plain Oddstone frames no longer light. Corners, sizes, addresses and linking are unchanged.
+- One check for "is this a frame block": PortalUtils.isFrameBlock. The ender-pearl lighting, the frame
+  detector, the portal block's shape check and the break check all use it.
+- The hooks that re-check or close a portal when a frame block changes (neighborChanged, onRemove) moved
+  from OddstoneBlock to CobbledOddstoneBlock. Oddstone keeps its lava-to-Hollowstone neighbour check.
+- GameTests cobbledOddstoneRingLightsAndClosesWhenBroken and plainOddstoneRingDoesNotLight. Also checked
+  on a real Forge server: a dropped ender pearl lights a Cobbled ring, not a plain Oddstone one, and
+  breaking a frame block closes the portal. Not checked in a game client.
+- README, the portal illustration and the test-world portal station follow. Portals already lit in a
+  world with plain Oddstone frames close the next time a frame block changes; rebuild them in Cobbled.
+
 ## [2026-11-02] Worlds from Ideomancer's Machine Mod open here intact
 
 - Ideomancer's Machine Mod (a cut of Ideomod: Oddstone and the Machine Family) now has its own mod id,

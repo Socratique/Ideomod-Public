@@ -25,6 +25,20 @@ import com.ideomancer.ideomod.block.OddstoneBlock;
 public class PortalUtils {
 
     // ========================================================================
+    // FRAME BLOCK
+    // ========================================================================
+
+    /**
+     * Checks if a block state is a portal frame block: Cobbled Oddstone (the Ideomancer,
+     * 2026-11-02; plain Oddstone before). Only the full block, not its stairs, slabs or walls.
+     * Cobbled Oddstone has to be smelted or Silk-Touched out of Oddstone, so a portal costs work,
+     * and natural Oddstone ore can never form part of a frame.
+     */
+    public static boolean isFrameBlock(BlockState state) {
+        return state.is(ModBlocks.COBBLED_ODDSTONE.get());
+    }
+
+    // ========================================================================
     // CORNER BLOCK VALIDATION
     // ========================================================================
 

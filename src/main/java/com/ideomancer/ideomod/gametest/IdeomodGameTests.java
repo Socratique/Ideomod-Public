@@ -29,6 +29,7 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.item.crafting.Ingredient;
 import net.minecraft.world.item.crafting.Recipe;
 import net.minecraft.world.item.crafting.ShapedRecipe;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.piston.PistonBaseBlock;
 import net.minecraft.world.level.block.RedStoneWireBlock;
@@ -723,5 +724,60 @@ public class IdeomodGameTests {
             else if (!stickyStayed) helper.fail("the Sticky Piston behind the Grabber moved");
             else helper.succeed();
         });
+    }
+
+    // ========================================================================
+    // PORTALS: frames are Cobbled Oddstone (the Ideomancer, 2026-11-02)
+    // ========================================================================
+
+    /** An upright 5x5 ring (3x3 opening) in the x-y plane at z = 3: frame block on the edges, corner at the corners. */
+    private static void buildPortalRing(GameTestHelper helper, Block frame, Block corner) {
+        for (int x = 1; x <= 5; x++) {
+            for (int y = 1; y <= 5; y++) {
+                boolean edgeX = x == 1 || x == 5, edgeY = y == 1 || y == 5;
+                if (edgeX && edgeY) helper.setBlock(x, y, 3, corner);
+                else if (edgeX || edgeY) helper.setBlock(x, y, 3, frame);
+                else helper.setBlock(x, y, 3, Blocks.AIR);
+            }
+        }
+    }
+
+    private static boolean lightPortal(GameTestHelper helper, int x, int y, int z) {
+        return com.ideomancer.ideomod.block.portal.OddstonePortalHandler.tryActivate(
+                helper.getLevel(), helper.absolutePos(new BlockPos(x, y, z)));
+    }
+
+    /** A Cobbled Oddstone ring with mineral corners lights, and breaking one frame block closes it. */
+    @GameTest(template = EMPTY)
+    public static void cobbledOddstoneRingLightsAndClosesWhenBroken(GameTestHelper helper) {
+        buildPortalRing(helper, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.IRON_BLOCK);
+        if (!lightPortal(helper, 2, 1, 3)) {
+            helper.fail("a Cobbled Oddstone ring with iron corners did not light", new BlockPos(2, 1, 3));
+            return;
+        }
+        if (!helper.getBlockState(new BlockPos(3, 3, 3)).is(ModBlocks.ODDSTONE_PORTAL.get())) {
+            helper.fail("the opening did not fill with portal", new BlockPos(3, 3, 3));
+            return;
+        }
+        helper.setBlock(2, 1, 3, Blocks.AIR);
+        helper.runAfterDelay(4, () -> {
+            if (helper.getBlockState(new BlockPos(3, 3, 3)).is(ModBlocks.ODDSTONE_PORTAL.get())) {
+                helper.fail("the portal stayed lit after a frame block was broken", new BlockPos(3, 3, 3));
+            } else {
+                helper.succeed();
+            }
+        });
+    }
+
+    /** A ring of plain Oddstone no longer forms a portal. */
+    @GameTest(template = EMPTY)
+    public static void plainOddstoneRingDoesNotLight(GameTestHelper helper) {
+        buildPortalRing(helper, ModBlocks.ODDSTONE.get(), Blocks.GOLD_BLOCK);
+        if (lightPortal(helper, 2, 1, 3)
+                || helper.getBlockState(new BlockPos(3, 3, 3)).is(ModBlocks.ODDSTONE_PORTAL.get())) {
+            helper.fail("a plain Oddstone ring lit; frames should need Cobbled Oddstone", new BlockPos(3, 3, 3));
+        } else {
+            helper.succeed();
+        }
     }
 }
