@@ -16,7 +16,7 @@ from PIL import Image
 HERE = os.path.dirname(os.path.abspath(__file__))
 OUT = os.path.join(HERE, "..", "..", "src", "main", "resources", "assets", "ideomod", "textures", "block")
 FRAMES = 32
-# light blue (Sean, 2026-10-24): deep blue -> sky blue -> near-white, white sparks
+# light blue (the Ideomancer, 2026-10-24): deep blue -> sky blue -> near-white, white sparks
 RAMP = [(22, 52, 96), (36, 82, 140), (58, 118, 184), (86, 156, 218), (124, 192, 238), (170, 222, 250), (214, 242, 255)]
 CYAN = (240, 252, 255)   # spark colour
 ALPHA = 200   # see-through, like a nether portal

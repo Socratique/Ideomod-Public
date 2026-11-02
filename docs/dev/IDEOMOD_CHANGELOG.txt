@@ -108,7 +108,7 @@
 
 ## [2026-10-25c] Sympathetic links respect the push limit
 
-Sean's rule: a linked Oddstone that would itself go over the push limit is left behind (the
+The Ideomancer's rule: a linked Oddstone that would itself go over the push limit is left behind (the
 rest moves); one that would push or pull other blocks over the limit fails the whole move.
 
 - `PistonStructureResolverMixin.ideomod$sympatheticSearch` ignored `addBlockLine`'s result for
@@ -126,13 +126,13 @@ rest moves); one that would push or pull other blocks over the limit fails the w
   block + Oddstone, shapeless). Checked by `recipesHaveTheirShapes`.
 - Model: like vanilla slime, an inner core (3..13, the Oddstone texture) inside the
   translucent shell. Facing and rotations unchanged.
-- Textures unchanged (Sean's): new Odd Slime and Oddstone textures are commissioned. Claude's
+- Textures unchanged (the Ideomancer's): new Odd Slime and Oddstone textures are commissioned. Claude's
   2026-10-24 texture drafts stay parked on the local `beta/indicators` branch.
 - README: Odd Slime section mentions the core; recipe picture and Odd Slime GIF redrawn.
 
 ## [2026-10-25] Fixes: mixed-metal frames, Transmitter strength, log noise; sympathetic range 12
 
-From a review of the README's rough edges against the code (Sean, 2026-10-25).
+From a review of the README's rough edges against the code (the Ideomancer, 2026-10-25).
 
 - **Frame activation, mixed metals** (`FrameActivation.propagateSignal`): a neighbour is only
   queued if it shares a metal with the signal. Before, an iron frame could queue a copper
@@ -146,26 +146,26 @@ From a review of the README's rough edges against the code (Sean, 2026-10-25).
 - **Log noise**: the Engine's per-pulse/fuel/signal lines, the block mover's "SAVED
   IPistonMovable data" line and the client piston capture/renderer lines are now DEBUG.
   Startup and portal events stay INFO.
-- **Sympathetic range default 5 -> 12** (Sean). The same setting is the Transmitter range, so
+- **Sympathetic range default 5 -> 12** (the Ideomancer). The same setting is the Transmitter range, so
   that is 12 too. Existing `config/ideomod/ideomod.json` files keep their own value.
 - README: rough edges brought up to date (recipes exist; fixed items removed; inventory
   translucency, Toggle tint and the April footage added); range 12 throughout.
 - 12/12 GameTests pass; jar check passes.
 - README: the "placeholder art" rough edge now names only the Machine Timer. The Engine and
-  Transmitter textures are Sean's; the Timer's is the stand-in Claude drew on 2026-03-22.
+  Transmitter textures are the Ideomancer's; the Timer's is the stand-in Claude drew on 2026-03-22.
 - CODEBASE_REFERENCE / DOCUMENTATION: testing line, sympathetic default, the frame-activation
   metal check and the Transmitter read brought up to date.
 
-## [2026-10-24e] Machine Frame: Sean's new textures, powered look
+## [2026-10-24e] Machine Frame: the Ideomancer's new textures, powered look
 
-- New textures by Sean: `machine_frame_active.png` (unpowered: sends out activation; hole
+- New textures by the Ideomancer: `machine_frame_active.png` (unpowered: sends out activation; hole
   filled, copper rivets lit) and `machine_frame_inactive.png` (redstone-powered: suppresses;
   the shared red indicator shows through its hole, like the other machines). Replaces Claude's `machine_block.png` (deleted).
 - `MachineFrameBlock` gains `POWERED` (vanilla BlockStateProperties.POWERED), set on placement,
   on neighbour change and after a piston move or swap back from a specialization. Display only:
   `FrameActivation` still reads the redstone level itself.
 - Blockstate `powered=false|true` -> models `machine_block` / `machine_block_powered`
-  (`render_type: cutout`). The powered model is two layers like the Repeater's: an inner `machine_indicator` cube (tintIndex 1, full red) under Sean's shell. The old model's
+  (`render_type: cutout`). The powered model is two layers like the Repeater's: an inner `machine_indicator` cube (tintIndex 1, full red) under the Ideomancer's shell. The old model's
   `tintindex 0` on every face is gone (no colour handler has supplied a tint for it).
 - GameTest `machineFrameShowsPower`. 10/10 GameTests pass; jar check passes.
 - README renders (blocks.png, frames.gif, track.gif, recipe pictures) redrawn with the new
@@ -174,7 +174,7 @@ From a review of the README's rough edges against the code (Sean, 2026-10-25).
 
 ## [2026-10-24d] Machine Frame recipe makes 1; recipe pictures in the README
 
-- `machine_block.json` now makes 1 Machine Frame (was 4); Sean's call. GameTest updated.
+- `machine_block.json` now makes 1 Machine Frame (was 4); the Ideomancer's call. GameTest updated.
 - New `tools/renders/recipes.py`: one picture per recipe in `docs/media/recipes/`, drawn in the
   1.20.1 crafting table, furnace and stonecutter windows (window, font and vanilla icons read from
   a local client jar; block items as small isometric blocks; recipes read from the JSON, so the
@@ -195,14 +195,14 @@ From a review of the README's rough edges against the code (Sean, 2026-10-25).
   Iron Frame. Was 4 ingots in a diamond.
 - Look: no texture of its own. The model uses vanilla's
   `minecraft:item/iron_nugget` and `ModColorHandlers` tints it copper
-  (`COPPER_NUGGET_TINT` 0xFF8C5A; Sean's call, 2026-10-24). Nothing of Mojang's is
+  (`COPPER_NUGGET_TINT` 0xFF8C5A; the Ideomancer's call, 2026-10-24). Nothing of Mojang's is
   shipped, and no new art is needed.
 - `recipesHaveTheirShapes` also checks the Copper Frame and both nugget
   recipes. 9/9 GameTests pass; jar check passes.
 
 ## [2026-10-24b] Recipes: Machine Frame needs Hollowstone; Iron Frame uses nuggets; Repulser and Attractor craftable
 
-From the recipe review (Beta Release ToDo: "review recipes"), Sean's recipes:
+From the recipe review (Beta Release ToDo: "review recipes"), the Ideomancer's recipes:
 
 - **Machine Frame** (`machine_block.json`), still makes 4:
   ```
@@ -240,7 +240,7 @@ themes".
 
 - Own texture: `oddstone_portal.png`, 32 frames of 16x16 (frametime 2,
   interpolated), original art drawn by `tools/textures/make_portal_texture.py`:
-  a seamless LIGHT BLUE swirl (Sean's choice, 2026-10-24) from deep blue
+  a seamless LIGHT BLUE swirl (the Ideomancer's choice, 2026-10-24) from deep blue
   through sky blue to near-white, with white sparks. Replaces the vanilla `nether_portal`
   texture the models used (with a tintindex but no tint registered, so it
   showed as a plain nether portal).

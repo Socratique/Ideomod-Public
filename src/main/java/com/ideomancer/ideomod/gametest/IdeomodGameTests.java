@@ -349,7 +349,7 @@ public class IdeomodGameTests {
     // ==================== Machine Base look ====================
 
     /**
-     * The Machine Base shows POWERED (Sean's "inactive" texture) while it has
+     * The Machine Base shows POWERED (the Ideomancer's "inactive" texture) while it has
      * redstone power and goes back when the power is removed. Display only:
      * FrameActivation reads the redstone level itself.
      */
@@ -427,7 +427,7 @@ public class IdeomodGameTests {
         });
     }
 
-    // ==================== Sympathetic links and the push limit (Sean, 2026-10-25) ====================
+    // ==================== Sympathetic links and the push limit (the Ideomancer, 2026-10-25) ====================
     // Run in their own batch: they lower the global push limit to 3 (a 7x7 test area cannot
     // hold 12-block lines) and must not overlap other tests that move bigger groups.
 
