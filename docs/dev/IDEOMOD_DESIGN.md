@@ -801,6 +801,7 @@ Pulse fires ->
 | Directional scan | [DONE] | Scans 12-block line from FACING direction. Finds farthest Oddstone. |
 | Ranged pull | [DONE] | Pulls found Oddstone toward the Attractor by 1 block. Uses vanilla piston move logic via RangedPistonUtil. |
 | Full structure pull | [DONE] | Same as Repulser -- pulls the whole piston group, not just the Oddstone. |
+| Odd force beam | [DONE] | Both devices: when one fires and finds Oddstone, a 10x10 beam of the odd force texture (Ideomancer's) runs from its face to the furthest Oddstone in its line for the 2-tick push or pull; the far end follows sliding blocks, arrows point the way the force acts. Client only (OddForceBeams + OddForceBeamRenderer). (Ideomancer, 2026-11-04) |
 | Block event sync | [DONE] | Same block event pattern as Repulser for client-server animation. |
 
 **Known issues:**

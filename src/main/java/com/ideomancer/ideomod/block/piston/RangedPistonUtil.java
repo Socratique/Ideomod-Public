@@ -59,6 +59,7 @@ public class RangedPistonUtil {
                 ? scanForNearest(level, devicePos, facing, filter)
                 : scanForFarthest(level, devicePos, facing, filter);
         if (targetPos == null) return false;
+        OddForceBeams.start(level, devicePos, facing, repulse);
         Direction pushDir = repulse ? facing : facing.getOpposite();
         return BlockMoveHelper.moveBlockAt(level, devicePos, targetPos, pushDir);
     }
