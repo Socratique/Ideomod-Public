@@ -757,7 +757,7 @@ Pulse fires ->
 | Placement | Directional (faces player look direction, piston-style) |
 | Activation | Redstone pulse (rising edge) |
 | Range | 12 blocks |
-| Target | Oddstone blocks only |
+| Target | Any Oddstone block: all three full blocks, their walls/stairs/slabs, and framed ones (Ideomancer, 2026-11-05; was plain Oddstone only) |
 | Movable | Yes (can be pushed by pistons) |
 | Recipe | Cobbled Oddstone along the top and bottom rows; middle row redstone, piston, Oddstone -> 1 (Ideomancer, 2026-10-24) |
 
@@ -790,7 +790,7 @@ Pulse fires ->
 | Placement | Directional (faces player look direction, piston-style) |
 | Activation | Redstone pulse (rising edge) |
 | Range | 12 blocks |
-| Target | Oddstone blocks only |
+| Target | Any Oddstone block: all three full blocks, their walls/stairs/slabs, and framed ones (Ideomancer, 2026-11-05; was plain Oddstone only) |
 | Movable | Yes (can be pushed by pistons) |
 | Recipe | As the Repulser, with a sticky piston in place of the piston -> 1 (Ideomancer, 2026-10-24) |
 

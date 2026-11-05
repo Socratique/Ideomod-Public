@@ -149,7 +149,7 @@ Two blocks that move Oddstone at a distance. Each acts along the line it faces, 
 - **Repulser:** on each redstone pulse, pushes the *nearest* Oddstone on its line one block away.
 - **Attractor:** on each redstone pulse, pulls the *farthest* Oddstone on its line one block closer.
 
-They act on a rising edge, so one pulse is one block. The target is plain Oddstone or a Framed Oddstone. The move is a normal piston move starting at the target, so stickiness, sympathetic links and the push limit all apply. Nothing happens if the move is blocked or would push a block into the device.
+They act on a rising edge, so one pulse is one block. The target is any Oddstone block: Oddstone, Cobbled Oddstone or Oddstone Bricks, their walls, stairs and slabs, or any of them framed. The move is a normal piston move starting at the target, so stickiness, sympathetic links and the push limit all apply. Nothing happens if the move is blocked or would push a block into the device.
 
 ## Oddstone Portals
 

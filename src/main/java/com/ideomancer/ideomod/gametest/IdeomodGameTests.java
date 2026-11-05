@@ -3,6 +3,7 @@ package com.ideomancer.ideomod.gametest;
 import com.ideomancer.ideomod.Ideomod;
 import com.ideomancer.ideomod.config.IdeomodConfig;
 import com.ideomancer.ideomod.block.HollowstoneBlock;
+import com.ideomancer.ideomod.block.piston.AbstractRangedPistonBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachineFrameBlock;
@@ -424,6 +425,36 @@ public class IdeomodGameTests {
             int seen = MachineRedstoneHelper.getIncomingSignalFromFace(helper.getLevel(), reader, Direction.WEST, new ThreadLocal<>());
             if (seen != 14) helper.fail("a machine next to the receiver reads " + seen + ", expected 14", receiver);
             else helper.succeed();
+        });
+    }
+
+    // ==================== Repulser and Attractor targets ====================
+
+    /** The Repulser pushes any Oddstone block, not only plain Oddstone: here Cobbled Oddstone. */
+    @GameTest(template = EMPTY)
+    public static void repulserPushesCobbledOddstone(GameTestHelper helper) {
+        helper.setBlock(0, 1, 1, ModBlocks.ODDSTONE_REPULSER.get().defaultBlockState()
+                .setValue(AbstractRangedPistonBlock.FACING, Direction.EAST));
+        helper.setBlock(3, 1, 1, ModBlocks.COBBLED_ODDSTONE.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            if (helper.getBlockState(new BlockPos(4, 1, 1)).is(ModBlocks.COBBLED_ODDSTONE.get())
+                    && helper.getBlockState(new BlockPos(3, 1, 1)).isAir()) helper.succeed();
+            else helper.fail("Repulser did not push the Cobbled Oddstone one block", new BlockPos(3, 1, 1));
+        });
+    }
+
+    /** The Attractor pulls any Oddstone block: here an Oddstone Brick Slab. */
+    @GameTest(template = EMPTY)
+    public static void attractorPullsOddstoneBrickSlab(GameTestHelper helper) {
+        helper.setBlock(0, 1, 1, ModBlocks.ODDSTONE_ATTRACTOR.get().defaultBlockState()
+                .setValue(AbstractRangedPistonBlock.FACING, Direction.EAST));
+        helper.setBlock(4, 1, 1, ModBlocks.ODDSTONE_BRICK_SLAB.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            if (helper.getBlockState(new BlockPos(3, 1, 1)).is(ModBlocks.ODDSTONE_BRICK_SLAB.get())
+                    && helper.getBlockState(new BlockPos(4, 1, 1)).isAir()) helper.succeed();
+            else helper.fail("Attractor did not pull the Oddstone Brick Slab one block", new BlockPos(4, 1, 1));
         });
     }
 
