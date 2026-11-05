@@ -51,6 +51,8 @@ public enum StickyType {
         // rules; only their sympathetic channel differs.
         if (block instanceof com.ideomancer.ideomod.block.CobbledOddstoneBlock) return ODDSTONE;
         if (block instanceof com.ideomancer.ideomod.block.OddstoneBricksBlock) return ODDSTONE;
+        // Oddstone walls, stairs and slabs (Ideomancer, 2026-11-05)
+        if (block instanceof com.ideomancer.ideomod.block.ISympathetic) return ODDSTONE;
         return NONE;
     }
 

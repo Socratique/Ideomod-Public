@@ -78,7 +78,7 @@ It comes in three full blocks (Oddstone, Cobbled Oddstone, Oddstone Bricks), eac
 | | Oddstone | Cobbled / Bricks | Walls, stairs, slabs |
 |---|:---:|:---:|:---:|
 | Sympathetic movement | yes | yes | yes |
-| Grabs slime, honey and Odd Slime | yes | yes | no |
+| Grabs slime, honey and Odd Slime | yes | yes | yes |
 | Mobs avoid it | yes | yes | yes |
 | Blocks redstone like glass does | yes | yes | yes |
 | Forms portal frames | no | Cobbled only | no |
@@ -106,7 +106,7 @@ A sticky piston cannot pull a sympathetic block directly. It retracts and leaves
 
 ### One-way stickiness
 
-Oddstone, Cobbled Oddstone and Oddstone Bricks grab slime blocks, honey blocks and Odd Slime. Nothing can grab them back.
+Every Oddstone block (Oddstone, Cobbled Oddstone and Oddstone Bricks, and their walls, stairs and slabs) grabs slime blocks, honey blocks and Odd Slime. Nothing can grab them back.
 
 ![One-way stickiness](docs/media/one_way.gif)
 

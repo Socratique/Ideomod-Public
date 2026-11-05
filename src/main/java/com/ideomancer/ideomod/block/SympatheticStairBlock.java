@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block;
 
+import com.ideomancer.ideomod.block.movement.StickyType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
@@ -45,7 +46,10 @@ public class SympatheticStairBlock extends StairBlock implements ISympathetic {
 
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        return false;
+        // Like the full Oddstone blocks: grabs slime, honey and Odd Slime; never other
+        // Oddstone (that link is sympathetic). Nothing grabs it back (grab immunity Rule 1).
+        StickyType otherType = StickyType.of(other);
+        return StickyType.ODDSTONE.canGrab(otherType) && otherType != StickyType.NONE;
     }
 
     /** Land mobs avoid it, as they do the full Oddstone blocks (see OddstonePathing). */

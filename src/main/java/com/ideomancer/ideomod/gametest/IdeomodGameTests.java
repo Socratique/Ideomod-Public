@@ -491,6 +491,36 @@ public class IdeomodGameTests {
         });
     }
 
+    /** An Oddstone slab grabs slime by contact, as the full blocks do: the slime moves with it. */
+    @GameTest(template = EMPTY)
+    public static void oddstoneSlabGrabsSlime(GameTestHelper helper) {
+        helper.setBlock(0, 2, 1, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST));
+        helper.setBlock(1, 2, 1, ModBlocks.ODDSTONE_SLAB.get());
+        helper.setBlock(1, 2, 2, Blocks.SLIME_BLOCK);
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 2, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            boolean slabMoved = helper.getBlockState(new BlockPos(2, 2, 1)).is(ModBlocks.ODDSTONE_SLAB.get());
+            boolean slimeCame = helper.getBlockState(new BlockPos(2, 2, 2)).is(Blocks.SLIME_BLOCK);
+            if (slabMoved && slimeCame) helper.succeed();
+            else helper.fail("slab moved=" + slabMoved + ", slime came along=" + slimeCame, new BlockPos(1, 2, 2));
+        });
+    }
+
+    /** Slime cannot grab Oddstone stairs, as it cannot grab the full blocks: the stairs stay put. */
+    @GameTest(template = EMPTY)
+    public static void slimeCannotGrabOddstoneStairs(GameTestHelper helper) {
+        helper.setBlock(0, 2, 1, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST));
+        helper.setBlock(1, 2, 1, Blocks.SLIME_BLOCK);
+        helper.setBlock(1, 2, 2, ModBlocks.COBBLED_ODDSTONE_STAIRS.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 2, 0, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(8, () -> {
+            boolean slimeMoved = helper.getBlockState(new BlockPos(2, 2, 1)).is(Blocks.SLIME_BLOCK);
+            boolean stairsStayed = helper.getBlockState(new BlockPos(1, 2, 2)).is(ModBlocks.COBBLED_ODDSTONE_STAIRS.get());
+            if (slimeMoved && stairsStayed) helper.succeed();
+            else helper.fail("slime moved=" + slimeMoved + ", stairs stayed=" + stairsStayed, new BlockPos(1, 2, 2));
+        });
+    }
+
     // ==================== Repulser and Attractor targets ====================
 
     /** The Repulser pushes any Oddstone block, not only plain Oddstone: here Cobbled Oddstone. */

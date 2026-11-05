@@ -1,5 +1,6 @@
 package com.ideomancer.ideomod.block;
 
+import com.ideomancer.ideomod.block.movement.StickyType;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.level.BlockGetter;
@@ -15,9 +16,9 @@ import net.minecraft.world.level.block.state.BlockState;
  * other sympathetic blocks this slab will link with at range.
  *
  * isStickyBlock() returns true so vanilla's resolver calls addBranchingBlocks,
- * which triggers the sympathetic search mixin. canStickTo() always returns false
- * so slabs never grab neighbors via direct contact — all connections resolve
- * through sympathetic movement only.
+ * which triggers the sympathetic search mixin. canStickTo() answers as the full Oddstone blocks do:
+ * it grabs slime, honey and Odd Slime, and links to other Oddstone only through
+ * sympathetic movement.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
@@ -42,7 +43,10 @@ public class SympatheticSlabBlock extends SlabBlock implements ISympathetic {
 
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
-        return false;
+        // Like the full Oddstone blocks: grabs slime, honey and Odd Slime; never other
+        // Oddstone (that link is sympathetic). Nothing grabs it back (grab immunity Rule 1).
+        StickyType otherType = StickyType.of(other);
+        return StickyType.ODDSTONE.canGrab(otherType) && otherType != StickyType.NONE;
     }
 
     /** Land mobs avoid it, as they do the full Oddstone blocks (see OddstonePathing). */
