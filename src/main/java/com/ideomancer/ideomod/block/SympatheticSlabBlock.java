@@ -1,5 +1,10 @@
 package com.ideomancer.ideomod.block;
 
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.level.BlockGetter;
+import net.minecraft.world.level.pathfinder.BlockPathTypes;
+import org.jetbrains.annotations.Nullable;
 import net.minecraft.world.level.block.SlabBlock;
 import net.minecraft.world.level.block.state.BlockBehaviour;
 import net.minecraft.world.level.block.state.BlockState;
@@ -38,5 +43,19 @@ public class SympatheticSlabBlock extends SlabBlock implements ISympathetic {
     @Override
     public boolean canStickTo(BlockState state, BlockState other) {
         return false;
+    }
+
+    /** Land mobs avoid it, as they do the full Oddstone blocks (see OddstonePathing). */
+    @Override
+    public @Nullable BlockPathTypes getBlockPathType(BlockState state, BlockGetter level,
+                                                      BlockPos pos, @Nullable Mob mob) {
+        return OddstonePathing.onBlock(mob);
+    }
+
+    @Override
+    public @Nullable BlockPathTypes getAdjacentBlockPathType(BlockState state, BlockGetter level,
+                                                              BlockPos pos, @Nullable Mob mob,
+                                                              BlockPathTypes originalType) {
+        return OddstonePathing.beside(mob);
     }
 }

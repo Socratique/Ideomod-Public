@@ -79,8 +79,8 @@ It comes in three full blocks (Oddstone, Cobbled Oddstone, Oddstone Bricks), eac
 |---|:---:|:---:|:---:|
 | Sympathetic movement | yes | yes | yes |
 | Grabs slime, honey and Odd Slime | yes | yes | no |
-| Mobs avoid it | yes | yes | no |
-| Blocks redstone like glass does | yes | yes | no |
+| Mobs avoid it | yes | yes | yes |
+| Blocks redstone like glass does | yes | yes | yes |
 | Forms portal frames | no | Cobbled only | no |
 | Cools lava into Hollowstone | yes | no | no |
 
@@ -114,11 +114,11 @@ They only grab those sticky blocks. They do not grab ordinary blocks, and they d
 
 ### Mob avoidance
 
-Mobs path around Oddstone, Cobbled Oddstone and Oddstone Bricks, and treat the blocks next to them as dangerous. The list of affected mobs is in the config (62 vanilla mobs by default).
+Mobs path around Oddstone, Cobbled Oddstone and Oddstone Bricks, and their walls, stairs and slabs, and treat the blocks next to them as dangerous. The list of affected mobs is in the config (62 vanilla mobs by default).
 
 ### Redstone insulation
 
-The three full blocks do not conduct redstone. A powered Oddstone block does not power what is behind it, the same as glass.
+No Oddstone block conducts redstone: not the three full blocks, and not a double slab. A powered Oddstone block does not power what is behind it, the same as glass.
 
 ### In-game footage
 

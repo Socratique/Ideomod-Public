@@ -118,6 +118,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> ODDSTONE_STAIRS = BLOCKS.register("oddstone_stairs",
@@ -128,6 +129,7 @@ public class ModBlocks {
                             .strength(2.0f, 6.0f)
                             .requiresCorrectToolForDrops()
                             .sound(SoundType.STONE)
+                            .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> ODDSTONE_SLAB = BLOCKS.register("oddstone_slab",
@@ -136,6 +138,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     // --- Cobbled Oddstone walls/stairs/slabs (each shape = own isolated channel) ---
@@ -145,6 +148,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> COBBLED_ODDSTONE_STAIRS = BLOCKS.register("cobbled_oddstone_stairs",
@@ -155,6 +159,7 @@ public class ModBlocks {
                             .strength(2.0f, 6.0f)
                             .requiresCorrectToolForDrops()
                             .sound(SoundType.STONE)
+                            .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> COBBLED_ODDSTONE_SLAB = BLOCKS.register("cobbled_oddstone_slab",
@@ -163,6 +168,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     // --- Oddstone Brick walls/stairs/slabs (each shape = own isolated channel) ---
@@ -172,6 +178,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> ODDSTONE_BRICK_STAIRS = BLOCKS.register("oddstone_brick_stairs",
@@ -182,6 +189,7 @@ public class ModBlocks {
                             .strength(2.0f, 6.0f)
                             .requiresCorrectToolForDrops()
                             .sound(SoundType.STONE)
+                            .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     public static final RegistryObject<Block> ODDSTONE_BRICK_SLAB = BLOCKS.register("oddstone_brick_slab",
@@ -190,6 +198,7 @@ public class ModBlocks {
                     .strength(2.0f, 6.0f)
                     .requiresCorrectToolForDrops()
                     .sound(SoundType.STONE)
+                    .isRedstoneConductor((state, level, pos) -> false)
             ));
 
     // ========================================================================

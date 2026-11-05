@@ -428,6 +428,69 @@ public class IdeomodGameTests {
         });
     }
 
+    // ==================== Oddstone walls, stairs and slabs (the Ideomancer, 2026-11-05) ====================
+
+    private static Block[] oddstoneShapes() {
+        return new Block[] {
+                ModBlocks.ODDSTONE_WALL.get(), ModBlocks.ODDSTONE_STAIRS.get(), ModBlocks.ODDSTONE_SLAB.get(),
+                ModBlocks.COBBLED_ODDSTONE_WALL.get(), ModBlocks.COBBLED_ODDSTONE_STAIRS.get(), ModBlocks.COBBLED_ODDSTONE_SLAB.get(),
+                ModBlocks.ODDSTONE_BRICK_WALL.get(), ModBlocks.ODDSTONE_BRICK_STAIRS.get(), ModBlocks.ODDSTONE_BRICK_SLAB.get() };
+    }
+
+    /** Land mobs avoid every Oddstone wall, stairs and slab, as they do the full blocks. */
+    @GameTest(template = EMPTY)
+    public static void landMobsAvoidOddstoneShapes(GameTestHelper helper) {
+        net.minecraft.world.entity.Mob zombie = helper.spawn(net.minecraft.world.entity.EntityType.ZOMBIE, 4, 1, 4);
+        BlockPos rel = new BlockPos(1, 1, 1);
+        BlockPos abs = helper.absolutePos(rel);
+        for (Block shape : oddstoneShapes()) {
+            helper.setBlock(rel, shape);
+            BlockState state = helper.getBlockState(rel);
+            net.minecraft.world.level.pathfinder.BlockPathTypes on =
+                    state.getBlockPathType(helper.getLevel(), abs, zombie);
+            net.minecraft.world.level.pathfinder.BlockPathTypes beside =
+                    state.getAdjacentBlockPathType(helper.getLevel(), abs, zombie,
+                            net.minecraft.world.level.pathfinder.BlockPathTypes.OPEN);
+            if (on != net.minecraft.world.level.pathfinder.BlockPathTypes.DAMAGE_OTHER
+                    || beside != net.minecraft.world.level.pathfinder.BlockPathTypes.DANGER_OTHER) {
+                zombie.discard();
+                helper.fail("a zombie does not avoid " + shape + " (on: " + on + ", beside: " + beside + ")", rel);
+                return;
+            }
+        }
+        zombie.discard();
+        helper.succeed();
+    }
+
+    /** A double Oddstone slab of each kind does not carry redstone: a repeater into it does not light a lamp behind it. */
+    @GameTest(template = EMPTY)
+    public static void doubleOddstoneSlabsDoNotCarryRedstone(GameTestHelper helper) {
+        Block[] slabs = { ModBlocks.ODDSTONE_SLAB.get(), ModBlocks.COBBLED_ODDSTONE_SLAB.get(), ModBlocks.ODDSTONE_BRICK_SLAB.get() };
+        for (int x = 0; x <= 5; x++) for (int z = 0; z <= 5; z++) helper.setBlock(x, 0, z, Blocks.STONE);
+        for (int i = 0; i < slabs.length; i++) {
+            int z = i * 2;
+            helper.setBlock(3, 1, z, slabs[i].defaultBlockState().setValue(net.minecraft.world.level.block.SlabBlock.TYPE,
+                    net.minecraft.world.level.block.state.properties.SlabType.DOUBLE));
+            helper.setBlock(4, 1, z, Blocks.REDSTONE_LAMP);
+            helper.setBlock(2, 1, z, Blocks.REPEATER.defaultBlockState().setValue(RepeaterBlock.FACING, Direction.WEST));
+            helper.setBlock(1, 1, z, Blocks.REDSTONE_BLOCK);
+        }
+        helper.runAfterDelay(8, () -> {
+            for (int i = 0; i < slabs.length; i++) {
+                int z = i * 2;
+                if (!helper.getBlockState(new BlockPos(2, 1, z)).getValue(RepeaterBlock.POWERED)) {
+                    helper.fail("test set-up: the repeater is not powered", new BlockPos(2, 1, z));
+                    return;
+                }
+                if (helper.getBlockState(new BlockPos(4, 1, z)).getValue(RedstoneLampBlock.LIT)) {
+                    helper.fail("a double " + slabs[i] + " carried redstone to the lamp", new BlockPos(3, 1, z));
+                    return;
+                }
+            }
+            helper.succeed();
+        });
+    }
+
     // ==================== Repulser and Attractor targets ====================
 
     /** The Repulser pushes any Oddstone block, not only plain Oddstone: here Cobbled Oddstone. */
