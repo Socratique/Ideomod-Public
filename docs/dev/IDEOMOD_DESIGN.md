@@ -58,27 +58,22 @@
 
 ---
 
-### Drill Block [HOLD]
-> Directional mining block. Redstone-activated 3x3 excavator. Implemented and functional. A test block for now -- the second block ever made for the mod. **Its future (Ideomancer, 2026-10-25):** decided by balancing -- either a Machine Family block, a unique loot-only block, or something else.
+### Machine Drill [DONE]
+> A Machine Base holding a pickaxe (Ideomancer, 2026-11-06). Replaces the standalone Drill block, the second block ever made for the mod and the reason Machine Blocks and frames exist: a slime flying machine cannot carry a 3x3 bore through a tunnel.
 
 | Property | Value |
 |----------|-------|
-| ID | `drill` |
-| Placement | Piston-style (faces player look direction) |
-| Activation | Redstone pulse -> mines 3x3 in front |
-| Drops | Mined items spawn at drill position |
-| Limits | Skips bedrock / indestructible blocks |
-| Movable | Yes (pistons can push it) |
-| Recipe | `III / IPI / IRI`: iron ingots, piston centre, redstone bottom middle (test recipe; goes with its final role) |
-
-**Known issues:**
-- None currently
+| ID | `machine_drill` (Machine Family specialization; the old `drill` id loads as a Machine Base) |
+| Made by | Any pickaxe in a Machine Base's slot (`PickaxeItem`); canonical item for creative/clone: iron pickaxe |
+| Activation | Like the Machine Piston, no front: a rising signal on a face mines the 3x3 on the opposite face, one block deep. Per-face memory in blockstate `signal_faces` (moves with it) |
+| Tool | The pickaxe: tier decides what can be cut (blocks needing a better tier are skipped), enchantments apply to drops (Fortune, Silk Touch) and wear (Unbreaking); Efficiency does nothing |
+| Wear | 1 durability per block cut; when the pickaxe breaks the slot empties and it becomes a Machine Base |
+| Drops | Mined items spawn at the Drill; ore XP as by hand. Air, fluids and unbreakable blocks are skipped |
+| Recipe | None of its own (Machine Base + pickaxe). The old test recipe is gone |
+| Texture | Placeholder by Claude: Machine Base frame with the old drill bit in the middle |
 
 **Future ideas:**
-- *[IDEA] Tiered drills? Iron -> Diamond -> Netherite with larger areas or speed*
-- *[IDEA] Fortune/Silk Touch compatibility via adjacent enchanted block?*
-
----
+- *[IDEA] In Ideomod the Drill may still become rarer (e.g. gated behind something found as loot); the pickaxe mechanics stay.*
 
 ### Oddstone [DONE]
 > Strange stone with mob avoidance, redstone insulation, and sympathetic movement.
@@ -286,6 +281,7 @@ Hollow Stone is a required crafting ingredient for Machine Blocks. [DONE 2026-10
 | Hopper | Pipe | MachinePipeBlock | PIPE | [DONE] |
 | Bucket (a water or lava bucket gives a full pipe) | Fluid Pipe | MachineFluidPipeBlock | FLUID_PIPE | [DONE] |
 | Machine Base (item) | Brace | MachineBraceBlock | BRACE | [DONE] |
+| Any pickaxe | Drill | MachineDrillBlock | DRILL | [DONE] |
 | Repeater | Repeater | MachineRepeaterBlock | REPEATER | [DONE] |
 | Comparator | Transformer | MachineTransformerBlock | TRANSFORMER | [DONE] |
 | Clock | Timer | MachineTimerBlock | TIMER | [DONE] |
@@ -2257,7 +2253,6 @@ Read from `data/ideomod/recipes/` on 2026-10-25. Pictures of each: README, made 
 | Oddstone Repulser x1 | `CCC / RPO / CCC`: C Cobbled Oddstone, R redstone, P piston, O Oddstone | Ideomancer, 2026-10-24 |
 | Oddstone Attractor x1 | As the Repulser with a sticky piston | Ideomancer, 2026-10-24 |
 | Odd Slime x1 | `SSS / SOS / SSS`: S slime ball, O Oddstone | Ideomancer, 2026-10-25 |
-| Drill x1 | `III / IPI / IRI`: I iron ingot, P piston, R redstone | Test recipe: the Drill is a test block until its role is decided |
 | Redstone Rod x1 | Diagonal: stick (bottom left), iron ingot (middle), redstone torch (top right) | Final (Ideomancer, 2026-10-25) |
 | Hollow Stone x1 | 9 Hollow Stone Shards (3x3) | Shards come from mining Hollow Stone |
 | Copper Nugget x9 | 1 copper ingot (shapeless); 9 nuggets -> 1 copper ingot | |

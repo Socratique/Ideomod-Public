@@ -125,6 +125,11 @@ public final class MachineSwapHelper {
         RegistrySupplier supplier = itemToBlock.get(item);
         if (supplier != null) return supplier.get();
 
+        // Any pickaxe -> Machine Drill (the pickaxe is its tool; Ideomancer, 2026-11-06)
+        if (item instanceof net.minecraft.world.item.PickaxeItem) {
+            return ModBlocks.MACHINE_DRILL.get();
+        }
+
         // Tag-based fallback: any button item -> Machine Pulser
         if (item.builtInRegistryHolder().is(ModTags.Items.PULSER_ITEMS)) {
             return ModBlocks.MACHINE_PULSER.get();
@@ -163,6 +168,8 @@ public final class MachineSwapHelper {
         for (Map.Entry<net.minecraft.world.item.Item, RegistrySupplier> entry : itemToBlock.entrySet()) {
             blockToItem.put(entry.getValue().get(), entry.getKey());
         }
+        // Drill: any pickaxe; iron pickaxe is the canonical reverse item
+        blockToItem.put(ModBlocks.MACHINE_DRILL.get(), Items.IRON_PICKAXE);
         // Pulser: tag-based mapping uses stone_button as canonical reverse item
         blockToItem.put(ModBlocks.MACHINE_PULSER.get(), Items.STONE_BUTTON);
         // Transmitter: tag-based mapping uses oddstone as canonical reverse item

@@ -36,6 +36,9 @@ public enum MachineType {
     /** Machine Brace -- structural reinforcement, increases push limit. */
     BRACE,
 
+    /** Machine Drill -- a Machine Base holding a pickaxe; mines 3x3 opposite a signal. */
+    DRILL,
+
     /** Machine Repeater -- three-axis redstone repeater. */
     REPEATER,
 

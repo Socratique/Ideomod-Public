@@ -51,7 +51,6 @@ public class ModCreativeTabs {
                     .icon(() -> new ItemStack(ModItems.ODDSTONE.get()))
                     .title(Component.translatable("itemGroup." + Ideomod.MOD_ID + ".ideomod_tab"))
                     .displayItems((parameters, output) -> {
-                        output.accept(ModItems.DRILL.get());
                         output.accept(ModItems.ODDSTONE.get());
                         output.accept(ModItems.COBBLED_ODDSTONE.get());
                         output.accept(ModItems.ODDSTONE_BRICKS.get());
@@ -80,6 +79,7 @@ public class ModCreativeTabs {
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_PISTON.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_STICKY_PISTON.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_BRACE.get()));
+                        output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_DRILL.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_REPEATER.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TOGGLE.get()));
                         output.accept(MachineSwapHelper.createPreloadedStack(ModBlocks.MACHINE_TRANSFORMER.get()));

@@ -62,10 +62,26 @@ public final class MachineModCompat {
     private static <T> void remap(MissingMappingsEvent event, ResourceKey<? extends Registry<T>> key,
                                   IForgeRegistry<T> registry) {
         for (MissingMappingsEvent.Mapping<T> mapping : event.getMappings(key, MACHINE_MOD_ID)) {
-            ResourceLocation ours = new ResourceLocation(Ideomod.MOD_ID, mapping.getKey().getPath());
+            ResourceLocation ours = new ResourceLocation(Ideomod.MOD_ID, renamed(mapping.getKey().getPath()));
             if (registry.containsKey(ours)) {
                 mapping.remap(registry.getValue(ours));
             }
         }
+        // our own names that no longer exist
+        for (MissingMappingsEvent.Mapping<T> mapping : event.getMappings(key, Ideomod.MOD_ID)) {
+            String path = mapping.getKey().getPath();
+            ResourceLocation now = new ResourceLocation(Ideomod.MOD_ID, renamed(path));
+            if (!renamed(path).equals(path) && registry.containsKey(now)) {
+                mapping.remap(registry.getValue(now));
+            }
+        }
+    }
+
+    /**
+     * Names that changed. The old standalone Drill (2026-11-06: now the Machine Drill, a Machine
+     * Base holding a pickaxe) comes back as a Machine Base, ready for a pickaxe.
+     */
+    private static String renamed(String path) {
+        return path.equals("drill") ? "machine_block" : path;
     }
 }

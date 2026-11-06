@@ -557,7 +557,7 @@ CATALOGUE = [
     ("Honey Grabber", "grabber", {"variant": "honey", "on": True}), ("Machine Transmitter", "transmitter", {"power": 12}),
     ("Machine Pipe", "pipe", {}), ("Machine Fluid Pipe", "fluid_pipe", {"fluid": "water"}),
     ("Machine Piston", "machine_piston", {"arms": {"up": 1.0}}), ("Machine Sticky Piston", "machine_piston", {"sticky": True}),
-    ("Machine Brace", "brace", {}), ("Drill", "drill", {"facing": "south"}),
+    ("Machine Brace", "brace", {}), ("Machine Drill", "machine_drill", {}),
 ]
 
 

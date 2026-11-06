@@ -1,11 +1,11 @@
 package com.ideomancer.ideomod.registry;
 
 import com.ideomancer.ideomod.Ideomod;
-import com.ideomancer.ideomod.block.DrillBlock;
 import com.ideomancer.ideomod.block.frame.FrameBlock;
 import com.ideomancer.ideomod.block.frame.FrameMaterial;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
+import com.ideomancer.ideomod.block.machine.MachineDrillBlock;
 import com.ideomancer.ideomod.block.machine.MachineBraceBlock;
 import com.ideomancer.ideomod.block.machine.MachineConductorBlock;
 import com.ideomancer.ideomod.block.machine.MachineEngineBlock;
@@ -73,12 +73,6 @@ public class ModBlocks {
     // BASIC BLOCKS
     // ========================================================================
     
-    public static final RegistryObject<Block> DRILL = BLOCKS.register("drill",
-            () -> new DrillBlock(BlockBehaviour.Properties.of()
-                    .mapColor(MapColor.METAL)
-                    .strength(3.5f, 6.0f)
-                    .requiresCorrectToolForDrops()
-            ));
     
     public static final RegistryObject<Block> ODDSTONE = BLOCKS.register("oddstone",
             () -> new OddstoneBlock(BlockBehaviour.Properties.of()
@@ -339,6 +333,15 @@ public class ModBlocks {
 
     public static final RegistryObject<Block> MACHINE_BRACE = BLOCKS.register("machine_brace",
             () -> new MachineBraceBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
+    public static final RegistryObject<Block> MACHINE_DRILL = BLOCKS.register("machine_drill",
+            () -> new MachineDrillBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)
                     .strength(3.0f, 6.0f)
                     .requiresCorrectToolForDrops()

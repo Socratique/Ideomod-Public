@@ -42,6 +42,7 @@ public class ModBlockEntities {
                             ModBlocks.MACHINE_PISTON.get(),
                             ModBlocks.MACHINE_STICKY_PISTON.get(),
                             ModBlocks.MACHINE_BRACE.get(),
+                            ModBlocks.MACHINE_DRILL.get(),
                             ModBlocks.MACHINE_REPEATER.get(),
                             ModBlocks.MACHINE_TOGGLE.get(),
                             ModBlocks.MACHINE_TRANSFORMER.get(),

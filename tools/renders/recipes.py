@@ -58,7 +58,6 @@ BLOCKS = {
     "ideomod:odd_slime": lambda: MODELS["odd_slime"]({"facing": "up"}),
     "ideomod:oddstone_repulser": lambda: MODELS["repulser"]({"facing": "up"}),
     "ideomod:oddstone_attractor": lambda: MODELS["attractor"]({"facing": "up"}),
-    "ideomod:drill": lambda: MODELS["drill"]({"facing": "up"}),
     "ideomod:framed_block": lambda: MODELS["framed"]({"mat": "iron", "inner": "stone"}),
     "minecraft:piston": lambda: MODELS["piston"]({"facing": "up"}),
     "minecraft:sticky_piston": lambda: MODELS["piston"]({"facing": "up", "sticky": True}),

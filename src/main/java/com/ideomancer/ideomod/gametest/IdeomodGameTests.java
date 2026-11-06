@@ -428,6 +428,71 @@ public class IdeomodGameTests {
         });
     }
 
+    // ==================== Machine Drill (the Ideomancer, 2026-11-06) ====================
+
+    /** Puts a Machine Base at pos with the given pickaxe in its slot; it should become a Machine Drill. */
+    private static MachineFrameBlockEntity placeDrill(GameTestHelper helper, BlockPos pos, ItemStack pickaxe) {
+        helper.setBlock(pos, ModBlocks.MACHINE_BLOCK.get());
+        if (helper.getBlockEntity(pos) instanceof MachineFrameBlockEntity base) base.setItem(0, pickaxe);
+        return helper.getBlockEntity(pos) instanceof MachineFrameBlockEntity be ? be : null;
+    }
+
+    /** Any pickaxe in a Machine Base's slot makes it a Machine Drill. */
+    @GameTest(template = EMPTY)
+    public static void pickaxeMakesAMachineDrill(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 1, 2);
+        placeDrill(helper, pos, new ItemStack(Items.STONE_PICKAXE));
+        if (helper.getBlockState(pos).is(ModBlocks.MACHINE_DRILL.get())) helper.succeed();
+        else helper.fail("a Machine Base with a pickaxe is " + helper.getBlockState(pos), pos);
+    }
+
+    /**
+     * A signal on the west face mines the 3x3 on the east face, one point of wear per block cut.
+     * An iron pickaxe cannot cut the obsidian in the middle, so it stays and costs nothing.
+     */
+    @GameTest(template = EMPTY)
+    public static void machineDrillMinesOppositeTheSignal(GameTestHelper helper) {
+        BlockPos drill = new BlockPos(2, 2, 3);
+        for (int y = 1; y <= 3; y++) for (int z = 2; z <= 4; z++) helper.setBlock(3, y, z, Blocks.STONE);
+        helper.setBlock(3, 2, 3, Blocks.OBSIDIAN);
+        helper.setBlock(1, 2, 2, Blocks.STONE); // a block on the signal side, which must not be touched
+        placeDrill(helper, drill, new ItemStack(Items.IRON_PICKAXE));
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(6, () -> {
+            for (int y = 1; y <= 3; y++) for (int z = 2; z <= 4; z++) {
+                BlockPos p = new BlockPos(3, y, z);
+                boolean middle = y == 2 && z == 3;
+                if (middle && !helper.getBlockState(p).is(Blocks.OBSIDIAN)) { helper.fail("an iron pickaxe cut obsidian", p); return; }
+                if (!middle && !helper.getBlockState(p).isAir()) { helper.fail("this block was not mined", p); return; }
+            }
+            if (!helper.getBlockState(new BlockPos(1, 2, 2)).is(Blocks.STONE)) { helper.fail("the Drill mined the signal side", new BlockPos(1, 2, 2)); return; }
+            if (!(helper.getBlockEntity(drill) instanceof MachineFrameBlockEntity be)) { helper.fail("the Drill is gone", drill); return; }
+            int wear = be.getSpecializationItem().getDamageValue();
+            if (wear != 8) { helper.fail("pickaxe wear should be 8 (8 blocks cut), is " + wear, drill); return; }
+            helper.succeed();
+        });
+    }
+
+    /** When the pickaxe breaks, the slot empties and the Drill is a Machine Base again. */
+    @GameTest(template = EMPTY)
+    public static void brokenPickaxeTurnsTheDrillBackIntoABase(GameTestHelper helper) {
+        BlockPos drill = new BlockPos(2, 2, 3);
+        helper.setBlock(3, 2, 3, Blocks.STONE);
+        ItemStack worn = new ItemStack(Items.WOODEN_PICKAXE);
+        worn.setDamageValue(worn.getMaxDamage() - 1); // one use left
+        placeDrill(helper, drill, worn);
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(6, () -> {
+            if (!helper.getBlockState(new BlockPos(3, 2, 3)).isAir()) { helper.fail("the last use did not mine", new BlockPos(3, 2, 3)); return; }
+            if (helper.getBlockState(drill).is(ModBlocks.MACHINE_BLOCK.get())
+                    && helper.getBlockEntity(drill) instanceof MachineFrameBlockEntity be && be.getSpecializationItem().isEmpty()) {
+                helper.succeed();
+            } else {
+                helper.fail("after the pickaxe broke the block is " + helper.getBlockState(drill), drill);
+            }
+        });
+    }
+
     // ==================== Oddstone walls, stairs and slabs (the Ideomancer, 2026-11-05) ====================
 
     private static Block[] oddstoneShapes() {

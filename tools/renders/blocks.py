@@ -156,11 +156,6 @@ def attractor(p):
     return directional("oddstone_attractor_front", "oddstone_attractor_back", "oddstone_attractor_side", p.get("facing", "up"))
 
 
-def drill(p):
-    front = "drill_front_on" if p.get("on") else "drill_front"
-    return directional(front, "drill_back", "drill_side", p.get("facing", "up"))
-
-
 def frame(p):
     mat = p.get("mat", "iron")
     return see_through("%s_frame%s" % (mat, "_active" if p.get("active") else ""))
@@ -242,13 +237,14 @@ MODELS = {
     "oddstone": lambda p: cube("oddstone"),
     "cobbled_oddstone": lambda p: cube("cobbled_oddstone"),
     "oddstone_bricks": lambda p: cube("oddstone_bricks"),
-    "odd_slime": odd_slime, "repulser": repulser, "attractor": attractor, "drill": drill,
+    "odd_slime": odd_slime, "repulser": repulser, "attractor": attractor,
     "frame": frame, "framed": framed, "hollowstone": hollowstone, "portal": portal,
     # The Ideomancer's textures: unpowered sends activation ("active"); powered suppresses, red indicator in the hole
     "machine_frame": lambda p: indicator("machine_frame_inactive", 15) if p.get("powered") else cube("machine_frame_active"),
     "track": lambda p: layered("machine_track", "machine_indicator", tint=track_grey(p.get("power", 0))),
     "trolley": lambda p: cube("machine_trolley"),
     "brace": lambda p: cube("machine_extender"),
+    "machine_drill": lambda p: cube("machine_drill"),
     "conductor": lambda p: indicator("machine_conductor", p.get("power", 0)),
     "repeater": lambda p: indicator("machine_repeater_%d" % p.get("delay", 1), 15 if p.get("on") else 0),
     "toggle": toggle,

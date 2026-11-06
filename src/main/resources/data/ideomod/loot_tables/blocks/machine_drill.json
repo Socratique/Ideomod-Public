@@ -3,11 +3,10 @@
   "pools": [
     {
       "rolls": 1,
-      "bonus_rolls": 0,
       "entries": [
         {
           "type": "minecraft:item",
-          "name": "ideomod:drill"
+          "name": "ideomod:machine_drill"
         }
       ],
       "conditions": [

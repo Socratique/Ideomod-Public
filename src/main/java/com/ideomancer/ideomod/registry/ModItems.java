@@ -20,8 +20,6 @@ public class ModItems {
     public static final DeferredRegister<Item> ITEMS = 
             DeferredRegister.create(ForgeRegistries.ITEMS, Ideomod.MOD_ID);
     
-    public static final RegistryObject<Item> DRILL = ITEMS.register("drill",
-            () -> new BlockItem(ModBlocks.DRILL.get(), new Item.Properties()));
     
     public static final RegistryObject<Item> ODDSTONE = ITEMS.register("oddstone",
             () -> new BlockItem(ModBlocks.ODDSTONE.get(), new Item.Properties()));
@@ -107,6 +105,9 @@ public class ModItems {
 
     public static final RegistryObject<Item> MACHINE_BRACE = ITEMS.register("machine_brace",
             () -> new BlockItem(ModBlocks.MACHINE_BRACE.get(), new Item.Properties()));
+
+    public static final RegistryObject<Item> MACHINE_DRILL = ITEMS.register("machine_drill",
+            () -> new BlockItem(ModBlocks.MACHINE_DRILL.get(), new Item.Properties()));
 
     public static final RegistryObject<Item> MACHINE_REPEATER = ITEMS.register("machine_repeater",
             () -> new BlockItem(ModBlocks.MACHINE_REPEATER.get(), new Item.Properties()));

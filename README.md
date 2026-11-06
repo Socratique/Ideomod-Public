@@ -9,7 +9,7 @@
 ### Disclaimers
 
 - The implementation and development of this mod was almost entirely handled and written by Claude, directed by me.
-- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Drill textures were also made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
+- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Machine Drill texture is a placeholder made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
 - This Repo was put together by Claude. The intro and Disclaimers were written by me.
 
 **Status: work in progress.** This README describes the code on `main` as it is today. The last release, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases) (put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install); `main` has moved on since then (new recipes, the copper nugget, fixes, see [the changelog](docs/dev/IDEOMOD_CHANGELOG.txt)), so build it yourself for the latest. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
@@ -202,6 +202,7 @@ The GUI changes with the item in the slot. Most machine blocks show only the slo
 | Piston | [Machine Piston](#machine-piston-and-sticky-piston) |
 | Sticky Piston | [Machine Sticky Piston](#machine-piston-and-sticky-piston) |
 | Machine Base | [Machine Brace](#brace) |
+| Any pickaxe | [Machine Drill](#machine-drill) |
 | Powered Rail | [Machine Track](#track-and-trolley) |
 | Minecart | [Machine Trolley](#track-and-trolley) |
 | Slime Block | [Machine Slime Grabber](#grabbers) |
@@ -311,6 +312,19 @@ A slime block or honey block with a switch. Each redstone pulse flips it on or o
 
 For one tick after being moved by a piston, Grabbers and Toggles ignore redstone changes, so a contraption does not flip its own switches while its parts land.
 
+### Mining
+
+#### Machine Drill
+
+A Machine Base with a pickaxe in its slot. Like the Machine Piston it has no front: a signal on one face mines the 3×3 of blocks on the opposite face, one block deep. Signals on several faces mine several sides.
+
+- The pickaxe is the tool. Its tier decides what the Drill can cut: a block that needs a better pickaxe to drop anything is left in place, so an iron pickaxe does not cut obsidian.
+- Enchantments work as they do in your hand: Fortune and Silk Touch change the drops, and Unbreaking slows the wear. Efficiency does nothing, because the Drill is instant.
+- Every block cut costs the pickaxe one point of durability. When it breaks, the Drill turns back into a Machine Base.
+- Items drop at the Drill. Air, water, lava and unbreakable blocks are skipped.
+- It mines once per pulse: the signal has to go off and on again.
+- An old Drill block or item from an earlier version loads as a Machine Base.
+
 ### Transport blocks
 
 #### Item Pipe
@@ -400,8 +414,6 @@ A multiblock. Wall furnaces into a stone shell and they cook 50% faster.
 
 **Redstone Rod.** A hand tool. Right-click a block face to give that block a full-strength redstone pulse from that side, one redstone tick long. It fires before the block's own right-click, so it does not open GUIs. Good for testing a contraption by hand.
 
-**Drill.** On a redstone pulse, breaks the 3×3 area of blocks directly in front of it, one block deep, and drops the items at the drill.
-
 **Judgement.** When a player kills an animal or a villager, there is a 1 in 200 chance that every animal and villager within 32 blocks stops and turns to stare at the player for five seconds.
 
 **Structure Debug Stick.** A creative-only tool. While you hold it, chat reports when a Furnace Array forms or breaks and what portals are doing.
@@ -433,9 +445,9 @@ Pictures drawn in the 1.20.1 crafting windows by `tools/renders/recipes.py`, str
 <table>
 <tr><td align="center"><img src="docs/media/recipes/machine_block.png" width="352" alt="Machine Base"><br>Machine Base</td><td align="center"><img src="docs/media/recipes/hollow_stone.png" width="352" alt="Hollowstone, from shards"><br>Hollowstone, from shards</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/iron_frame.png" width="352" alt="Iron Frame ×4"><br>Iron Frame ×4</td><td align="center"><img src="docs/media/recipes/copper_frame.png" width="352" alt="Copper Frame ×4"><br>Copper Frame ×4</td></tr>
-<tr><td align="center"><img src="docs/media/recipes/framed_block.png" width="352" alt="Framed block: any frame + any frameable block"><br>Framed block: any frame + any frameable block</td><td align="center"><img src="docs/media/recipes/drill.png" width="352" alt="Drill"><br>Drill</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/framed_block.png" width="352" alt="Framed block: any frame + any frameable block"><br>Framed block: any frame + any frameable block</td><td align="center"><img src="docs/media/recipes/redstone_rod.png" width="352" alt="Redstone Rod"><br>Redstone Rod</td></tr>
 <tr><td align="center"><img src="docs/media/recipes/oddstone_repulser.png" width="352" alt="Repulser"><br>Repulser</td><td align="center"><img src="docs/media/recipes/oddstone_attractor.png" width="352" alt="Attractor"><br>Attractor</td></tr>
-<tr><td align="center"><img src="docs/media/recipes/odd_slime.png" width="352" alt="Odd Slime"><br>Odd Slime</td><td align="center"><img src="docs/media/recipes/redstone_rod.png" width="352" alt="Redstone Rod"><br>Redstone Rod</td></tr>
+<tr><td align="center"><img src="docs/media/recipes/odd_slime.png" width="352" alt="Odd Slime"><br>Odd Slime</td><td></td></tr>
 <tr><td align="center"><img src="docs/media/recipes/copper_nugget.png" width="352" alt="Copper Nugget ×9"><br>Copper Nugget ×9</td><td align="center"><img src="docs/media/recipes/copper_ingot_from_nuggets.png" width="352" alt="Copper ingot from nuggets"><br>Copper ingot from nuggets</td></tr>
 </table>
 
@@ -508,7 +520,7 @@ This is a snapshot, so here is what is known to be unfinished. Most of these com
 
 ```
 src/main/java/com/ideomancer/ideomod/
-  block/            Oddstone family, Odd Slime, Hollowstone, Drill
+  block/            Oddstone family, Odd Slime, Hollowstone
   block/machine/    the Machine Family
   block/frame/      frames, framed blocks, frame activation
   block/movement/   stickiness rules and the shared block mover
