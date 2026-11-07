@@ -458,7 +458,7 @@ public class IdeomodGameTests {
         helper.setBlock(1, 2, 2, Blocks.STONE); // a block on the signal side, which must not be touched
         placeDrill(helper, drill, new ItemStack(Items.IRON_PICKAXE));
         helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
-        helper.runAfterDelay(6, () -> {
+        helper.runAfterDelay(20, () -> {
             for (int y = 1; y <= 3; y++) for (int z = 2; z <= 4; z++) {
                 BlockPos p = new BlockPos(3, y, z);
                 boolean middle = y == 2 && z == 3;
@@ -473,6 +473,39 @@ public class IdeomodGameTests {
         });
     }
 
+    /** A cut takes as long as mining by hand: stone with an iron pickaxe is 8 ticks, so it is still there 3 ticks in. */
+    @GameTest(template = EMPTY)
+    public static void machineDrillTakesMiningTime(GameTestHelper helper) {
+        BlockPos drill = new BlockPos(2, 2, 3);
+        BlockPos stone = new BlockPos(3, 2, 3);
+        helper.setBlock(stone, Blocks.STONE);
+        placeDrill(helper, drill, new ItemStack(Items.IRON_PICKAXE));
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(5, () -> {
+            if (!helper.getBlockState(stone).is(Blocks.STONE)) helper.fail("the stone broke at once; a cut should take time", stone);
+        });
+        helper.runAfterDelay(16, () -> {
+            if (helper.getBlockState(stone).isAir()) helper.succeed();
+            else helper.fail("the stone was not mined in time", stone);
+        });
+    }
+
+    /** While it is cutting, a piston cannot move the Drill (obsidian with a diamond pickaxe takes 188 ticks). */
+    @GameTest(template = EMPTY)
+    public static void drillingDrillCannotBePushed(GameTestHelper helper) {
+        BlockPos drill = new BlockPos(2, 2, 3);
+        helper.setBlock(3, 2, 3, Blocks.OBSIDIAN);
+        placeDrill(helper, drill, new ItemStack(Items.DIAMOND_PICKAXE));
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(4, () -> helper.setBlock(2, 1, 3, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP)));
+        helper.runAfterDelay(5, () -> helper.setBlock(2, 0, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(12, () -> {
+            if (!helper.getBlockState(drill).is(ModBlocks.MACHINE_DRILL.get())) { helper.fail("the Drill was moved while cutting", drill); return; }
+            if (!helper.getBlockState(new BlockPos(3, 2, 3)).is(Blocks.OBSIDIAN)) { helper.fail("the obsidian broke far too soon", new BlockPos(3, 2, 3)); return; }
+            helper.succeed();
+        });
+    }
+
     /** When the pickaxe breaks, the slot empties and the Drill is a Machine Base again. */
     @GameTest(template = EMPTY)
     public static void brokenPickaxeTurnsTheDrillBackIntoABase(GameTestHelper helper) {
@@ -482,7 +515,7 @@ public class IdeomodGameTests {
         worn.setDamageValue(worn.getMaxDamage() - 1); // one use left
         placeDrill(helper, drill, worn);
         helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
-        helper.runAfterDelay(6, () -> {
+        helper.runAfterDelay(40, () -> {
             if (!helper.getBlockState(new BlockPos(3, 2, 3)).isAir()) { helper.fail("the last use did not mine", new BlockPos(3, 2, 3)); return; }
             if (helper.getBlockState(drill).is(ModBlocks.MACHINE_BLOCK.get())
                     && helper.getBlockEntity(drill) instanceof MachineFrameBlockEntity be && be.getSpecializationItem().isEmpty()) {

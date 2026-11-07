@@ -9,7 +9,7 @@
 ### Disclaimers
 
 - The implementation and development of this mod was almost entirely handled and written by Claude, directed by me.
-- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The Machine Drill texture is a placeholder made by Claude, as was the animated Oddstone portal texture; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
+- Almost all textures were made by me, influenced by some vanilla textures. The Oddstone texture was generated with Stable Diffusion and cleaned up by Claude. The other Oddstone-family textures were generated algorithmically by Claude, using the same colour palette with Minecraft's textures as reference. The animated Oddstone portal texture was made by Claude; the Repulser and Attractor were moved onto the current Oddstone texture by Claude, keeping my original designs.
 - This Repo was put together by Claude. The intro and Disclaimers were written by me.
 
 **Status: work in progress.** This README describes the code on `main` as it is today. The last release, version 0.1.1, is on the [Releases page](https://github.com/Socratique/Ideomod-Public/releases) (put the jar in the `mods` folder of a Minecraft 1.20.1 Forge install); `main` has moved on since then (new recipes, the copper nugget, fixes, see [the changelog](docs/dev/IDEOMOD_CHANGELOG.txt)), so build it yourself for the latest. Things will change, and some parts are rough (see [Known rough edges](#known-rough-edges)).
@@ -319,10 +319,11 @@ For one tick after being moved by a piston, Grabbers and Toggles ignore redstone
 A Machine Base with a pickaxe in its slot. Like the Machine Piston it has no front: a signal on one face mines the 3×3 of blocks on the opposite face, one block deep. Signals on several faces mine several sides.
 
 - The pickaxe is the tool. Its tier decides what the Drill can cut: a block that needs a better pickaxe to drop anything is left in place, so an iron pickaxe does not cut obsidian.
-- Enchantments work as they do in your hand: Fortune and Silk Touch change the drops, and Unbreaking slows the wear. Efficiency does nothing, because the Drill is instant.
+- Enchantments work as they do in your hand: Efficiency speeds it up, Fortune and Silk Touch change the drops, and Unbreaking slows the wear.
 - Every block cut costs the pickaxe one point of durability. When it breaks, the Drill turns back into a Machine Base.
 - Items drop at the Drill. Air, water, lava and unbreakable blocks are skipped.
-- It mines once per pulse: the signal has to go off and on again.
+- Each block takes as long as it would to mine by hand with that pickaxe, and shows the same cracks while it is cut. Each breaks when its own time is up, so stone goes before the obsidian beside it.
+- A pulse on a side that is still being cut does nothing. While it is cutting, the Drill cannot be moved by pistons.
 - An old Drill block or item from an earlier version loads as a Machine Base.
 
 ### Transport blocks

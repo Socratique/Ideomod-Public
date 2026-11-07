@@ -65,12 +65,13 @@
 |----------|-------|
 | ID | `machine_drill` (Machine Family specialization; the old `drill` id loads as a Machine Base) |
 | Made by | Any pickaxe in a Machine Base's slot (`PickaxeItem`); canonical item for creative/clone: iron pickaxe |
-| Activation | Like the Machine Piston, no front: a rising signal on a face mines the 3x3 on the opposite face, one block deep. Per-face memory in blockstate `signal_faces` (moves with it) |
-| Tool | The pickaxe: tier decides what can be cut (blocks needing a better tier are skipped), enchantments apply to drops (Fortune, Silk Touch) and wear (Unbreaking); Efficiency does nothing |
+| Activation | Like the Machine Piston, no front: a rising signal on a face starts a cut of the 3x3 on the opposite face, one block deep. Per-face memory in blockstate `signal_faces` (moves with it) |
+| Timing | Each block is mined as by hand with that pickaxe (tool speed + Efficiency / hardness / 30, or 100 if it drops nothing) and shows vanilla crack overlays; each breaks when its own time is up (Ideomancer, 2026-11-07). A pulse on a side still being cut does nothing. Immovable by pistons while cutting (blockstate `drilling`, PistonBaseBlockMixin Feature 6). Cuts in progress are in memory only, lost on restart |
+| Tool | The pickaxe: tier decides what can be cut (blocks needing a better tier are skipped), enchantments apply to speed (Efficiency), drops (Fortune, Silk Touch) and wear (Unbreaking) |
 | Wear | 1 durability per block cut; when the pickaxe breaks the slot empties and it becomes a Machine Base |
 | Drops | Mined items spawn at the Drill; ore XP as by hand. Air, fluids and unbreakable blocks are skipped |
 | Recipe | None of its own (Machine Base + pickaxe). The old test recipe is gone |
-| Texture | Placeholder by Claude: Machine Base frame with the old drill bit in the middle |
+| Texture | The Ideomancer's (2026-11-06). An arm with spinning teeth was designed but dropped: it would be hidden inside the block it mines (2026-11-07) |
 
 **Future ideas:**
 - *[IDEA] In Ideomod the Drill may still become rarer (e.g. gated behind something found as loot); the pickaxe mechanics stay.*

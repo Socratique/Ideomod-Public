@@ -5,6 +5,7 @@ import com.ideomancer.ideomod.block.OddstoneBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlock;
 import com.ideomancer.ideomod.block.frame.FramedBlockEntity;
 import com.ideomancer.ideomod.block.machine.MachinePistonBlock;
+import com.ideomancer.ideomod.block.machine.MachineDrillBlock;
 import com.ideomancer.ideomod.block.movement.IPistonMovable;
 import com.ideomancer.ideomod.block.movement.MovingBlockEntityData;
 import com.ideomancer.ideomod.block.movement.MovementScanHelper;
@@ -96,6 +97,10 @@ import java.util.Set;
  * Uses MachinePistonBlock.hasExtendedHead() to check all 6 neighbors
  * for head blocks pointing back at the piston.
  *
+ * FEATURE 6: MACHINE DRILL IMMOVABILITY (isPushable)
+ * ===================================================
+ * A Machine Drill cannot be pushed or pulled while it is cutting (DRILLING).
+ *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 @Mixin(PistonBaseBlock.class)
@@ -137,6 +142,15 @@ public abstract class PistonBaseBlockMixin {
                 cir.setReturnValue(false);
                 return;
             }
+        }
+
+        // --- Feature 6: Machine Drill immovability while cutting ---
+        // A Drill in the middle of a cut (blockstate DRILLING) cannot be pushed or pulled,
+        // so a moving machine waits for its drill.
+        if (blockState.getBlock() instanceof MachineDrillBlock
+                && blockState.getValue(MachineDrillBlock.DRILLING)) {
+            cir.setReturnValue(false);
+            return;
         }
 
         // --- Feature 3: Oddstone pull immunity during sticky piston retraction ---
