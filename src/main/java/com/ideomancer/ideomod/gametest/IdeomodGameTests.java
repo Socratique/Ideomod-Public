@@ -490,6 +490,37 @@ public class IdeomodGameTests {
         });
     }
 
+    /** It needs a constant signal: taking the signal away part-way stops the cut, and the block stays. */
+    @GameTest(template = EMPTY)
+    public static void machineDrillStopsWhenTheSignalGoes(GameTestHelper helper) {
+        BlockPos stone = new BlockPos(3, 2, 3);
+        helper.setBlock(stone, Blocks.STONE);
+        placeDrill(helper, new BlockPos(2, 2, 3), new ItemStack(Items.WOODEN_PICKAXE)); // stone: 23 ticks
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(10, () -> helper.setBlock(1, 2, 3, Blocks.AIR));
+        helper.runAfterDelay(40, () -> {
+            if (helper.getBlockState(stone).is(Blocks.STONE)) helper.succeed();
+            else helper.fail("the cut went on after the signal stopped", stone);
+        });
+    }
+
+    /** While the signal lasts it keeps cutting: a block put back in front is cut too. */
+    @GameTest(template = EMPTY)
+    public static void machineDrillKeepsCuttingWhilePowered(GameTestHelper helper) {
+        BlockPos stone = new BlockPos(3, 2, 3);
+        helper.setBlock(stone, Blocks.STONE);
+        placeDrill(helper, new BlockPos(2, 2, 3), new ItemStack(Items.IRON_PICKAXE)); // stone: 8 ticks
+        helper.runAfterDelay(2, () -> helper.setBlock(1, 2, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(16, () -> {
+            if (!helper.getBlockState(stone).isAir()) helper.fail("the first stone was not cut", stone);
+            helper.setBlock(stone, Blocks.STONE);
+        });
+        helper.runAfterDelay(30, () -> {
+            if (helper.getBlockState(stone).isAir()) helper.succeed();
+            else helper.fail("the stone put back was not cut while the signal stayed on", stone);
+        });
+    }
+
     /** While it is cutting, a piston cannot move the Drill (obsidian with a diamond pickaxe takes 188 ticks). */
     @GameTest(template = EMPTY)
     public static void drillingDrillCannotBePushed(GameTestHelper helper) {

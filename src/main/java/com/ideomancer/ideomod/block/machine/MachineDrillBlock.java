@@ -21,7 +21,6 @@ import net.minecraft.world.level.block.entity.BlockEntityType;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BooleanProperty;
-import net.minecraft.world.level.block.state.properties.IntegerProperty;
 import net.minecraft.world.level.material.PushReaction;
 import net.minecraft.world.level.storage.loot.LootParams;
 import net.minecraft.world.level.storage.loot.parameters.LootContextParams;
@@ -37,15 +36,20 @@ import java.util.WeakHashMap;
 /**
  * Machine Drill -- a Machine Base holding a pickaxe (Ideomancer, 2026-11-06).
  *
- * Like the Machine Piston it has no front: a rising redstone signal on one face starts a cut
- * of the 3x3 of blocks on the opposite face, one block deep. Signals on several faces cut
+ * Like the Machine Piston it has no front: while a face has a redstone signal, the Drill
+ * cuts the 3x3 of blocks on the opposite face, one block deep. Signals on several faces cut
  * several sides.
  *
- * A cut takes time (Ideomancer, 2026-11-07): each block is mined as a player would mine it
- * with that pickaxe -- the same speed (tier, Efficiency), showing the same crack overlay --
- * and breaks when its own time is up, so stone goes before obsidian beside it. A pulse on a
- * side that is still being cut does nothing. While any cut is running the Drill cannot be
- * moved by pistons (blockstate DRILLING), so a tunnel bore waits for its drill.
+ * It needs a constant signal (Ideomancer, 2026-11-07): when a face loses its signal, the cut
+ * on that side stops and its cracks clear, as when a player lets go of the mouse. While the
+ * signal lasts it keeps cutting whatever comes into the 3x3 (falling gravel, blocks put back,
+ * a new wall after the Drill was moved).
+ *
+ * Each block is mined as a player would mine it with that pickaxe -- the same speed (tier,
+ * Efficiency), showing the same crack overlay -- and breaks when its own time is up, so stone
+ * goes before obsidian beside it. While any cut is running the Drill cannot be moved by
+ * pistons (blockstate DRILLING; PistonBaseBlockMixin Feature 6), so a tunnel bore waits for
+ * its drill.
  *
  * The pickaxe in the slot is the tool, used as a player would use it:
  *   - its tier decides what the Drill can cut: a block that needs a better pickaxe to drop
@@ -53,19 +57,17 @@ import java.util.WeakHashMap;
  *   - its enchantments apply to the drops (Fortune, Silk Touch), the speed (Efficiency)
  *     and the wear (Unbreaking);
  *   - every block cut costs it one point of durability. When it breaks (or is taken out),
- *     the cut stops, the cracks clear, and the Drill turns back into a plain Machine Base.
+ *     the cuts stop, the cracks clear, and the Drill turns back into a plain Machine Base.
  * Items drop at the Drill. Air, fluids and unbreakable blocks are skipped.
  *
- * Which faces had a signal is kept in the blockstate (SIGNAL_FACES, one bit per face). The
- * cuts in progress live only in memory, server side: after a restart a half-done cut is
- * simply gone, and DRILLING clears itself on the next tick.
+ * All of this runs in the Drill's server tick, which reads the signal on each face itself
+ * (so a Drill that arrives somewhere already powered starts at once). The cuts in progress
+ * live only in memory: after a restart they start again from nothing.
  *
  * Written by Claude, directed and guided by The Ideomancer.
  */
 public class MachineDrillBlock extends AbstractMachineBlock {
 
-    /** Faces that had a redstone signal at the last check: bit = Direction.get3DDataValue(). */
-    public static final IntegerProperty SIGNAL_FACES = IntegerProperty.create("signal_faces", 0, 63);
     /** True while a cut is running; the Drill cannot be pushed then. */
     public static final BooleanProperty DRILLING = BooleanProperty.create("drilling");
 
@@ -94,12 +96,12 @@ public class MachineDrillBlock extends AbstractMachineBlock {
 
     public MachineDrillBlock(Properties properties) {
         super(properties);
-        this.registerDefaultState(this.stateDefinition.any().setValue(SIGNAL_FACES, 0).setValue(DRILLING, false));
+        this.registerDefaultState(this.stateDefinition.any().setValue(DRILLING, false));
     }
 
     @Override
     protected void createBlockStateDefinition(StateDefinition.Builder<Block, BlockState> builder) {
-        builder.add(SIGNAL_FACES, DRILLING);
+        builder.add(DRILLING);
     }
 
     @Override
@@ -115,65 +117,6 @@ public class MachineDrillBlock extends AbstractMachineBlock {
     @Override
     public PushReaction getPistonPushReaction(BlockState state) {
         return state.getValue(DRILLING) ? PushReaction.BLOCK : PushReaction.NORMAL;
-    }
-
-    // ========================================================================
-    // SIGNAL: a rising edge on one face starts a cut of the opposite side
-    // ========================================================================
-
-    @Override
-    public void neighborChanged(BlockState state, Level level, BlockPos pos,
-                                Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
-        super.neighborChanged(state, level, pos, neighborBlock, neighborPos, movedByPiston);
-        if (level.isClientSide()) return;
-
-        BlockState now = level.getBlockState(pos);
-        if (now.getBlock() != this) return; // swapped away (e.g. by the super call)
-
-        int old = now.getValue(SIGNAL_FACES);
-        int mask = 0;
-        for (Direction face : Direction.values()) {
-            if (level.getSignal(pos.relative(face), face) > 0) mask |= 1 << face.get3DDataValue();
-        }
-        if (mask == old) return;
-
-        int rising = mask & ~old;
-        boolean started = false;
-        if (rising != 0 && level.getBlockEntity(pos) instanceof MachineFrameBlockEntity be
-                && isDrillTool(be.getSpecializationItem())) {
-            for (Direction face : Direction.values()) {
-                if ((rising & (1 << face.get3DDataValue())) != 0) {
-                    started |= startCut(level, pos, face.getOpposite(), be.getSpecializationItem());
-                }
-            }
-        }
-        BlockState next = now.setValue(SIGNAL_FACES, mask);
-        if (started) next = next.setValue(DRILLING, true);
-        level.setBlock(pos, next, Block.UPDATE_CLIENTS);
-    }
-
-    /** Queues the cuttable blocks of the 3x3 on that side. False if nothing there can be cut. */
-    private static boolean startCut(Level level, BlockPos pos, Direction side, ItemStack pickaxe) {
-        List<Cut> cuts = CUTS.computeIfAbsent(level, l -> new HashMap<>())
-                .computeIfAbsent(pos.immutable(), p -> new ArrayList<>());
-        for (Cut c : cuts) {
-            if (c.side == side) return false; // that side is still being cut
-        }
-        BlockPos centre = pos.relative(side);
-        Direction[] across = across(side);
-        boolean any = false;
-        for (int i = -1; i <= 1; i++) {
-            for (int j = -1; j <= 1; j++) {
-                BlockPos target = centre.relative(across[0], i).relative(across[1], j).immutable();
-                BlockState state = level.getBlockState(target);
-                if (cuttable(level, target, state, pickaxe)) {
-                    cuts.add(new Cut(side, target, state, mineTicks(level, target, state, pickaxe)));
-                    any = true;
-                }
-            }
-        }
-        if (cuts.isEmpty()) CUTS.get(level).remove(pos);
-        return any;
     }
 
     /** Two directions across the face, for the 3x3. */
@@ -211,7 +154,7 @@ public class MachineDrillBlock extends AbstractMachineBlock {
     }
 
     // ========================================================================
-    // TICK: advance the cuts, show the cracks, break what is done
+    // TICK: read the signal, take up new blocks, advance the cuts, break what is done
     // ========================================================================
 
     @Nullable
@@ -223,55 +166,103 @@ public class MachineDrillBlock extends AbstractMachineBlock {
     }
 
     private static void serverTick(Level level, BlockPos pos, BlockState state, MachineFrameBlockEntity be) {
-        Map<BlockPos, List<Cut>> here = CUTS.get(level);
-        List<Cut> cuts = here == null ? null : here.get(pos);
-        if (cuts == null || cuts.isEmpty()) {
-            if (state.getValue(DRILLING)) level.setBlock(pos, state.setValue(DRILLING, false), Block.UPDATE_CLIENTS);
-            return;
-        }
         ItemStack pickaxe = be.getSpecializationItem();
-        if (!isDrillTool(pickaxe)) {
-            cancel(level, pos);
-            return;
+        boolean hasTool = isDrillTool(pickaxe);
+
+        // which sides are being worked: the side opposite each face with a signal
+        int sides = 0;
+        if (hasTool) {
+            for (Direction face : Direction.values()) {
+                if (level.getSignal(pos.relative(face), face) > 0) sides |= 1 << face.getOpposite().get3DDataValue();
+            }
         }
 
-        // work on a copy: breaking blocks can start new cuts through neighborChanged
-        for (Cut c : new ArrayList<>(cuts)) {
-            BlockState now = level.getBlockState(c.pos);
-            if (now != c.state) { // something else was put there: start again on it, or give up on it
-                clearCrack(level, c);
-                if (!cuttable(level, c.pos, now, pickaxe)) {
+        Map<BlockPos, List<Cut>> here = CUTS.get(level);
+        List<Cut> cuts = here == null ? null : here.get(pos);
+
+        // a side that lost its signal (or a Drill with no pickaxe) stops, and its cracks clear
+        if (cuts != null) {
+            for (Cut c : new ArrayList<>(cuts)) {
+                if ((sides & (1 << c.side.get3DDataValue())) == 0) {
+                    clearCrack(level, c);
                     cuts.remove(c);
-                    continue;
                 }
-                c.state = now;
-                c.total = mineTicks(level, c.pos, now, pickaxe);
-                c.elapsed = 0;
-            }
-            c.elapsed++;
-            if (c.elapsed < c.total) {
-                int stage = Math.min(9, 10 * c.elapsed / c.total);
-                if (stage != c.stage) {
-                    level.destroyBlockProgress(c.crackId, c.pos, stage);
-                    c.stage = stage;
-                }
-                continue;
-            }
-            clearCrack(level, c);
-            cuts.remove(c);
-            if (breakBlock((ServerLevel) level, pos, c.pos, pickaxe)) {
-                // the pickaxe broke: stop everything, empty the slot (the Drill becomes a Machine Base)
-                cancel(level, pos);
-                be.setItem(0, ItemStack.EMPTY);
-                return;
             }
         }
-        be.setChanged();
-        if (cuts.isEmpty()) {
-            here.remove(pos);
-            BlockState st = level.getBlockState(pos);
-            if (st.getBlock() instanceof MachineDrillBlock && st.getValue(DRILLING)) {
-                level.setBlock(pos, st.setValue(DRILLING, false), Block.UPDATE_CLIENTS);
+
+        // a side with a signal takes up anything new in its 3x3
+        if (sides != 0) {
+            for (Direction side : Direction.values()) {
+                if ((sides & (1 << side.get3DDataValue())) != 0) {
+                    if (cuts == null) {
+                        cuts = CUTS.computeIfAbsent(level, l -> new HashMap<>())
+                                .computeIfAbsent(pos.immutable(), p -> new ArrayList<>());
+                        here = CUTS.get(level);
+                    }
+                    takeUp(level, pos, side, pickaxe, cuts);
+                }
+            }
+        }
+
+        // advance the cuts (on a copy: breaking blocks can change things around us)
+        if (cuts != null) {
+            for (Cut c : new ArrayList<>(cuts)) {
+                BlockState now = level.getBlockState(c.pos);
+                if (now != c.state) { // something else is there now: start again on it, or give up on it
+                    clearCrack(level, c);
+                    if (!cuttable(level, c.pos, now, pickaxe)) {
+                        cuts.remove(c);
+                        continue;
+                    }
+                    c.state = now;
+                    c.total = mineTicks(level, c.pos, now, pickaxe);
+                    c.elapsed = 0;
+                }
+                c.elapsed++;
+                if (c.elapsed < c.total) {
+                    int stage = Math.min(9, 10 * c.elapsed / c.total);
+                    if (stage != c.stage) {
+                        level.destroyBlockProgress(c.crackId, c.pos, stage);
+                        c.stage = stage;
+                    }
+                    continue;
+                }
+                clearCrack(level, c);
+                cuts.remove(c);
+                if (breakBlock((ServerLevel) level, pos, c.pos, pickaxe)) {
+                    // the pickaxe broke: stop everything, empty the slot (the Drill becomes a Machine Base)
+                    cancel(level, pos);
+                    be.setItem(0, ItemStack.EMPTY);
+                    return;
+                }
+                be.setChanged();
+            }
+            if (cuts.isEmpty() && here != null) here.remove(pos);
+        }
+
+        boolean drilling = cuts != null && !cuts.isEmpty();
+        BlockState st = level.getBlockState(pos);
+        if (st.getBlock() instanceof MachineDrillBlock && st.getValue(DRILLING) != drilling) {
+            level.setBlock(pos, st.setValue(DRILLING, drilling), Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /** Adds every cuttable block of the 3x3 on that side that is not being cut already. */
+    private static void takeUp(Level level, BlockPos pos, Direction side, ItemStack pickaxe, List<Cut> cuts) {
+        BlockPos centre = pos.relative(side);
+        Direction[] across = across(side);
+        for (int i = -1; i <= 1; i++) {
+            for (int j = -1; j <= 1; j++) {
+                BlockPos target = centre.relative(across[0], i).relative(across[1], j);
+                boolean queued = false;
+                for (Cut c : cuts) {
+                    if (c.pos.equals(target)) { queued = true; break; }
+                }
+                if (queued) continue;
+                BlockState state = level.getBlockState(target);
+                if (cuttable(level, target, state, pickaxe)) {
+                    cuts.add(new Cut(side, target.immutable(), state, mineTicks(level, target, state, pickaxe)));
+                }
             }
         }
     }

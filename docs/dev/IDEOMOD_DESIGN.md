@@ -65,8 +65,8 @@
 |----------|-------|
 | ID | `machine_drill` (Machine Family specialization; the old `drill` id loads as a Machine Base) |
 | Made by | Any pickaxe in a Machine Base's slot (`PickaxeItem`); canonical item for creative/clone: iron pickaxe |
-| Activation | Like the Machine Piston, no front: a rising signal on a face starts a cut of the 3x3 on the opposite face, one block deep. Per-face memory in blockstate `signal_faces` (moves with it) |
-| Timing | Each block is mined as by hand with that pickaxe (tool speed + Efficiency / hardness / 30, or 100 if it drops nothing) and shows vanilla crack overlays; each breaks when its own time is up (Ideomancer, 2026-11-07). A pulse on a side still being cut does nothing. Immovable by pistons while cutting (blockstate `drilling`, PistonBaseBlockMixin Feature 6). Cuts in progress are in memory only, lost on restart |
+| Activation | Like the Machine Piston, no front: while a face has a signal it cuts the 3x3 on the opposite face, one block deep. Needs a constant signal: signal off = that side's cut stops and its cracks clear; while on, it keeps cutting whatever comes into the 3x3 (Ideomancer, 2026-11-07). Signals are read in the Drill's server tick |
+| Timing | Each block is mined as by hand with that pickaxe (tool speed + Efficiency / hardness / 30, or 100 if it drops nothing) and shows vanilla crack overlays; each breaks when its own time is up (Ideomancer, 2026-11-07). Immovable by pistons while cutting (blockstate `drilling`, PistonBaseBlockMixin Feature 6). Cuts in progress are in memory only, lost on restart |
 | Tool | The pickaxe: tier decides what can be cut (blocks needing a better tier are skipped), enchantments apply to speed (Efficiency), drops (Fortune, Silk Touch) and wear (Unbreaking) |
 | Wear | 1 durability per block cut; when the pickaxe breaks the slot empties and it becomes a Machine Base |
 | Drops | Mined items spawn at the Drill; ore XP as by hand. Air, fluids and unbreakable blocks are skipped |

@@ -316,14 +316,15 @@ For one tick after being moved by a piston, Grabbers and Toggles ignore redstone
 
 #### Machine Drill
 
-A Machine Base with a pickaxe in its slot. Like the Machine Piston it has no front: a signal on one face mines the 3×3 of blocks on the opposite face, one block deep. Signals on several faces mine several sides.
+A Machine Base with a pickaxe in its slot. Like the Machine Piston it has no front: while one face has a redstone signal, it cuts the 3×3 of blocks on the opposite face, one block deep. Signals on several faces cut several sides.
 
 - The pickaxe is the tool. Its tier decides what the Drill can cut: a block that needs a better pickaxe to drop anything is left in place, so an iron pickaxe does not cut obsidian.
 - Enchantments work as they do in your hand: Efficiency speeds it up, Fortune and Silk Touch change the drops, and Unbreaking slows the wear.
 - Every block cut costs the pickaxe one point of durability. When it breaks, the Drill turns back into a Machine Base.
 - Items drop at the Drill. Air, water, lava and unbreakable blocks are skipped.
 - Each block takes as long as it would to mine by hand with that pickaxe, and shows the same cracks while it is cut. Each breaks when its own time is up, so stone goes before the obsidian beside it.
-- A pulse on a side that is still being cut does nothing. While it is cutting, the Drill cannot be moved by pistons.
+- It needs a constant signal. If the signal goes, the cut on that side stops and its cracks clear. While the signal stays on, it keeps cutting whatever comes into the 3×3.
+- While it is cutting, the Drill cannot be moved by pistons.
 - An old Drill block or item from an earlier version loads as a Machine Base.
 
 ### Transport blocks
