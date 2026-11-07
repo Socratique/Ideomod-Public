@@ -9,6 +9,8 @@ import net.minecraft.core.Direction;
 import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.level.TicketType;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
@@ -379,15 +381,9 @@ public class OddstonePortalBlock extends Block {
         // Teleport with rotation. Anything moving (an item thrown in, a minecart)
         // has its motion turned by the same amount, so it carries on out of the
         // far portal the way a player walking through would.
-        if (entity instanceof ServerPlayer player) {
-            player.teleportTo(level, targetX, targetY, targetZ, yaw, pitch);
-        } else {
-            float turn = yaw - entity.getYRot();
-            Vec3 motion = entity.getDeltaMovement().yRot((float) -Math.toRadians(turn));
-            entity.teleportTo(level, targetX, targetY, targetZ, Set.of(), yaw, pitch);
-            entity.setDeltaMovement(motion);
-            entity.hurtMarked = true;
-        }
+        float turn = yaw - entity.getYRot();
+        Vec3 motion = entity.getDeltaMovement().yRot((float) -Math.toRadians(turn));
+        moveThrough(level, entity, targetX, targetY, targetZ, yaw, pitch, motion);
 
         Ideomod.LOGGER.debug("{} teleported via Oddstone Portal to ({}, {}, {}), yaw={}",
                 entity.getName().getString(), targetX, targetY, targetZ, yaw);
@@ -552,15 +548,12 @@ public class OddstonePortalBlock extends Block {
         int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, targetX, targetZ);
         BlockPos targetPos = new BlockPos(targetX, surfaceY + 1, targetZ);
 
-        entity.teleportTo(
-                targetPos.getX() + 0.5,
-                targetPos.getY(),
-                targetPos.getZ() + 0.5
-        );
+        Entity arrived = moveThrough(level, entity, targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5,
+                entity.getYRot(), entity.getXRot(), entity.getDeltaMovement());
 
         // Only living things take the damage: an item or a minecart would be destroyed by it.
-        if (entity instanceof LivingEntity) {
-            entity.hurt(level.damageSources().magic(), IdeomodConfig.getScatterDamage());
+        if (arrived instanceof LivingEntity) {
+            arrived.hurt(level.damageSources().magic(), IdeomodConfig.getScatterDamage());
         }
 
         Ideomod.LOGGER.info("{} scatter-teleported by unlinked Oddstone Portal to {}",
@@ -583,7 +576,48 @@ public class OddstonePortalBlock extends Block {
         BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);
         if (target == null) target = frameCorner.above();
 
-        entity.teleportTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
+        moveThrough(level, entity, target.getX() + 0.5, target.getY(), target.getZ() + 0.5,
+                entity.getYRot(), entity.getXRot(), entity.getDeltaMovement());
+    }
+
+    // ========================================================================
+    // MOVING THROUGH
+    // ========================================================================
+
+    /**
+     * Moves an entity to the far side and returns the entity that arrived.
+     *
+     * A player is teleported. Anything else is put down as a fresh copy and the
+     * original removed, the way a nether portal moves things between dimensions.
+     * Simply moving it would make clients slide boats and minecarts (which smooth
+     * their movement over 10 ticks) the whole way between the two portals.
+     * The copy keeps the same UUID and everything saved on it (contents, name,
+     * leash, health), and the cooldown, so it does not go straight back.
+     */
+    private static Entity moveThrough(ServerLevel level, Entity entity, double x, double y, double z,
+                                      float yaw, float pitch, Vec3 motion) {
+        if (entity instanceof ServerPlayer player) {
+            player.teleportTo(level, x, y, z, yaw, pitch);
+            return player;
+        }
+        Entity copy = entity.getType().create(level);
+        if (copy == null) {
+            entity.teleportTo(level, x, y, z, Set.of(), yaw, pitch);
+            entity.setDeltaMovement(motion);
+            entity.hurtMarked = true;
+            return entity;
+        }
+        // Like a nether portal, hold the arrival area loaded for a while (TicketType.PORTAL,
+        // 15 seconds), so what arrives in an unloaded area is loaded in, ticks and is saved.
+        BlockPos arrival = BlockPos.containing(x, y, z);
+        level.getChunkSource().addRegionTicket(TicketType.PORTAL, new ChunkPos(arrival), 3, arrival);
+        copy.restoreFrom(entity);
+        copy.moveTo(x, y, z, yaw, pitch);
+        copy.setYHeadRot(yaw);
+        copy.setDeltaMovement(motion);
+        entity.remove(Entity.RemovalReason.CHANGED_DIMENSION);
+        level.addWithUUID(copy);
+        return copy;
     }
 
     // ========================================================================

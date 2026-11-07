@@ -1481,7 +1481,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
 | Travel cooldown | 4 seconds (vanilla portal cooldown); staying inside keeps it topped up, as with a nether portal, so nothing bounces back |
-| What travels | As a nether portal (Ideomancer, 2026-11-07): players, mobs, items, projectiles, empty minecarts and boats; not riders, the vehicles carrying them, or bosses (`canChangeDimensions`). Motion is turned with the exit. Instant, no nether-style wait, to keep the doorway feel |
+| What travels | As a nether portal (Ideomancer, 2026-11-07): players, mobs, items, projectiles, empty minecarts and boats; not riders, the vehicles carrying them, or bosses (`canChangeDimensions`). Motion is turned with the exit. Non-players arrive as a fresh copy (same UUID and data), as a nether portal does between dimensions, with a TicketType.PORTAL ticket at the arrival; plain moving made clients slide boats and minecarts the whole way. Instant, no nether-style wait, to keep the doorway feel |
 
 **Valid corner blocks:** Coal, Iron, Copper, Gold, Redstone, Lapis, Diamond, Emerald, Netherite, Quartz, Amethyst, Raw Iron, Raw Copper, Raw Gold (crafted *_block forms)
 

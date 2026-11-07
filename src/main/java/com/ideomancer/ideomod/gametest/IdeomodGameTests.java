@@ -1051,21 +1051,25 @@ public class IdeomodGameTests {
     }
 
     /**
-     * Like a nether portal, a dropped item goes through to the linked portal; and it stays
-     * there after the cooldown instead of bouncing back, because staying inside keeps the cooldown up.
+     * Like a nether portal, a dropped item goes through to the linked portal (arriving as a fresh
+     * copy with the same UUID); and it stays there after the cooldown instead of bouncing back,
+     * because staying inside keeps the cooldown up.
      */
     @GameTest(template = EMPTY, timeoutTicks = 200)
     public static void itemGoesThroughALinkedPortalAndStays(GameTestHelper helper) {
         if (!buildLinkedPair(helper, Blocks.EMERALD_BLOCK)) { helper.fail("the linked pair did not light"); return; }
         net.minecraft.world.entity.item.ItemEntity item = helper.spawnItem(Items.DIAMOND, 3.5F, 2.2F, 1.5F);
         item.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        java.util.UUID id = item.getUUID();
         helper.runAfterDelay(5, () -> {
-            if (!item.isAlive()) helper.fail("the item was destroyed");
-            else if (!atFarPortal(helper, item)) helper.fail("the item did not go through to the linked portal");
+            net.minecraft.world.entity.Entity e = helper.getLevel().getEntity(id);
+            if (e == null) helper.fail("the item was lost");
+            else if (!atFarPortal(helper, e)) helper.fail("the item did not go through to the linked portal");
         });
         helper.runAfterDelay(120, () -> {
-            if (!item.isAlive()) helper.fail("the item was destroyed");
-            else if (!atFarPortal(helper, item)) helper.fail("the item bounced back after the cooldown");
+            net.minecraft.world.entity.Entity e = helper.getLevel().getEntity(id);
+            if (e == null) helper.fail("the item was lost");
+            else if (!atFarPortal(helper, e)) helper.fail("the item bounced back after the cooldown");
             else helper.succeed();
         });
     }
@@ -1075,22 +1079,43 @@ public class IdeomodGameTests {
     public static void mobGoesThroughALinkedPortal(GameTestHelper helper) {
         if (!buildLinkedPair(helper, Blocks.DIAMOND_BLOCK)) { helper.fail("the linked pair did not light"); return; }
         net.minecraft.world.entity.Mob pig = helper.spawnWithNoFreeWill(net.minecraft.world.entity.EntityType.PIG, new net.minecraft.world.phys.Vec3(3.5, 2, 1.5));
+        java.util.UUID id = pig.getUUID();
         helper.runAfterDelay(5, () -> {
-            if (atFarPortal(helper, pig)) helper.succeed();
+            net.minecraft.world.entity.Entity e = helper.getLevel().getEntity(id);
+            if (e != null && atFarPortal(helper, e)) helper.succeed();
             else helper.fail("the pig did not go through to the linked portal");
         });
     }
 
-    /** An unlinked portal scatters an item far away, but does not destroy it (the damage is for living things). */
+    /** An empty boat goes through too, arriving as a fresh copy (so clients don't slide it the whole way). */
+    @GameTest(template = EMPTY)
+    public static void boatGoesThroughALinkedPortal(GameTestHelper helper) {
+        if (!buildLinkedPair(helper, Blocks.GOLD_BLOCK)) { helper.fail("the linked pair did not light"); return; }
+        net.minecraft.world.entity.Entity boat = helper.spawn(net.minecraft.world.entity.EntityType.BOAT, new net.minecraft.world.phys.Vec3(3.5, 2, 1.5));
+        java.util.UUID id = boat.getUUID();
+        helper.runAfterDelay(5, () -> {
+            net.minecraft.world.entity.Entity e = helper.getLevel().getEntity(id);
+            if (e == null) helper.fail("the boat was lost");
+            else if (!atFarPortal(helper, e)) helper.fail("the boat did not go through to the linked portal");
+            else if (e == boat) helper.fail("the boat was moved, not put down fresh; clients would slide it");
+            else helper.succeed();
+        });
+    }
+
+    /**
+     * An unlinked portal scatters an item far away, but does not destroy it (the damage is for living things):
+     * the item is moved on, as a fresh copy in the far chunk, not killed. (The far chunk generates slowly in
+     * the test server, so this checks how the item left rather than finding where it landed.)
+     */
     @GameTest(template = EMPTY)
     public static void unlinkedPortalScattersAnItemWithoutDestroyingIt(GameTestHelper helper) {
         buildPortalRing(helper, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.LAPIS_BLOCK);
         if (!lightPortal(helper, 2, 1, 3)) { helper.fail("the portal did not light"); return; }
         net.minecraft.world.entity.item.ItemEntity item = helper.spawnItem(Items.DIAMOND, 3.5F, 2.2F, 3.5F);
-        BlockPos start = item.blockPosition();
         helper.runAfterDelay(5, () -> {
-            if (item.getRemovalReason() != null && item.getRemovalReason().shouldDestroy()) helper.fail("the scattered item was destroyed (" + item.getRemovalReason() + ")");
-            else if (item.blockPosition().distManhattan(start) < 150) helper.fail("the item was not scattered");
+            var reason = item.getRemovalReason();
+            if (reason == null) helper.fail("the item did not go through the portal");
+            else if (reason != net.minecraft.world.entity.Entity.RemovalReason.CHANGED_DIMENSION) helper.fail("the item was destroyed (" + reason + ")");
             else helper.succeed();
         });
     }
