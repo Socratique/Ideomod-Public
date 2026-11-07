@@ -13,6 +13,9 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.phys.Vec3;
+import java.util.Set;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.LevelAccessor;
@@ -43,7 +46,12 @@ import org.joml.Vector3f;
  * as if walking through a doorway.
  * 
  * LINKED portals: position-preserving teleport to partner.
- * UNLINKED portals: scatter-teleport 200-1000 blocks + 5 hearts damage.
+ * UNLINKED portals: scatter-teleport 200-1000 blocks + 5 hearts damage
+ * (damage to living things only).
+ *
+ * WHAT GOES THROUGH: as with a nether portal, players, mobs, items,
+ * projectiles and empty minecarts and boats; not riders, the vehicles
+ * carrying them, or bosses. Moving things keep moving, turned with the exit.
  * 
  * DEACTIVATION: portal blocks break (via updateShape) when any adjacent
  * frame or corner block is removed. onRemove unregisters the portal address.
@@ -168,38 +176,48 @@ public class OddstonePortalBlock extends Block {
     // TELEPORTATION
     // ========================================================================
 
+    /**
+     * Anything that could use a nether portal goes through: players, mobs, dropped
+     * items, empty minecarts and boats. As with a nether portal (1.20.1), riders and
+     * the vehicles carrying them do not, nor do bosses (canChangeDimensions).
+     * Like a nether portal, staying inside keeps the cooldown topped up, so whatever
+     * comes out and stays in the far portal does not bounce back; it has to leave first.
+     */
     @Override
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (level.isClientSide()) return;
         if (!(level instanceof ServerLevel serverLevel)) return;
-        if (!(entity instanceof ServerPlayer player)) return;
-        if (player.isOnPortalCooldown()) return;
+        if (entity.isPassenger() || entity.isVehicle() || !entity.canChangeDimensions()) return;
+        if (entity.isOnPortalCooldown()) {
+            entity.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());
+            return;
+        }
 
-        player.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());
+        entity.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());
 
         OddstonePortalSavedData data = OddstonePortalSavedData.get(serverLevel);
         OddstonePortalSavedData.PortalEntry entry = findPortalEntry(serverLevel, pos, state, data);
 
         if (entry == null) {
             Ideomod.LOGGER.warn("Orphaned portal block at {} - no registration found", pos);
-            scatterTeleport(serverLevel, player);
+            scatterTeleport(serverLevel, entity);
             return;
         }
 
         if (entry.isLinked()) {
-            linkedTeleport(serverLevel, player, entry, pos, state);
+            linkedTeleport(serverLevel, entity, entry, pos, state);
         } else {
-            scatterTeleport(serverLevel, player);
+            scatterTeleport(serverLevel, entity);
         }
     }
 
     /**
-     * Teleports the player to the linked partner portal, preserving their
+     * Teleports the entity to the linked partner portal, preserving their
      * relative position within the portal frame.
      * 
      * HOW POSITION TRANSFER WORKS:
      * ============================
-     * 1. Find the player's offset from the bottom-left of THIS portal's interior
+     * 1. Find the entity's offset from the bottom-left of THIS portal's interior
      *    (as a fraction: 0.0 = left/bottom edge, 1.0 = right/top edge)
      * 2. Apply that same fraction to the PARTNER portal's interior
      * 3. Teleport to the resulting position
@@ -209,18 +227,18 @@ public class OddstonePortalBlock extends Block {
      * 
      * HOW ROTATION WORKS:
      * ===================
-     * All teleports apply a 180° yaw rotation so the player exits
+     * All teleports apply a 180° yaw rotation so the entity exits
      * facing AWAY from the destination portal — like walking through
      * a doorway.
      *
      * When source and destination portals have different axes (X vs Z),
-     * an additional 90° rotation is applied first to align the player
+     * an additional 90° rotation is applied first to align the entity
      * with the destination portal's orientation.
      * 
      * Same-axis portals: 180° rotation (face away from destination).
      * Cross-axis portals: 90° + 180° rotation.
      */
-    private void linkedTeleport(ServerLevel level, ServerPlayer player,
+    private void linkedTeleport(ServerLevel level, Entity entity,
                                  OddstonePortalSavedData.PortalEntry entry,
                                  BlockPos portalBlockPos, BlockState portalState) {
         BlockPos partnerPos = entry.getPartnerPos();
@@ -231,7 +249,7 @@ public class OddstonePortalBlock extends Block {
 
         if (partnerEntry == null) {
             Ideomod.LOGGER.warn("Partner portal at {} not found in registry", partnerPos);
-            scatterTeleport(level, player);
+            scatterTeleport(level, entity);
             return;
         }
 
@@ -241,14 +259,14 @@ public class OddstonePortalBlock extends Block {
         PortalBounds thisBounds = findPortalBounds(level, portalBlockPos, thisHDir, entry);
 
         if (thisBounds == null) {
-            simpleTeleport(level, player, partnerPos, partnerEntry);
+            simpleTeleport(level, entity, partnerPos, partnerEntry);
             return;
         }
 
-        // -- Step 2: Calculate player's relative position (0.0 to 1.0) --
-        double playerX = player.getX();
-        double playerY = player.getY();
-        double playerZ = player.getZ();
+        // -- Step 2: Calculate entity's relative position (0.0 to 1.0) --
+        double playerX = entity.getX();
+        double playerY = entity.getY();
+        double playerZ = entity.getZ();
 
         // Horizontal fraction along the portal
         // Guard: if portal has zero span (corrupted SavedData), default to center (0.5)
@@ -285,12 +303,12 @@ public class OddstonePortalBlock extends Block {
             // Cached geometry missing — need to find a portal block for live scan
             BlockPos partnerPortalBlock = findAnyPortalBlock(level, partnerPos, partnerHDir);
             if (partnerPortalBlock == null) {
-                simpleTeleport(level, player, partnerPos, partnerEntry);
+                simpleTeleport(level, entity, partnerPos, partnerEntry);
                 return;
             }
             partnerBounds = findPortalBoundsLive(level, partnerPortalBlock);
             if (partnerBounds == null) {
-                simpleTeleport(level, player, partnerPos, partnerEntry);
+                simpleTeleport(level, entity, partnerPos, partnerEntry);
                 return;
             }
         }
@@ -313,8 +331,8 @@ public class OddstonePortalBlock extends Block {
         }
 
         // -- Step 5: Calculate rotation for cross-axis teleports --
-        float yaw = player.getYRot();
-        float pitch = player.getXRot();
+        float yaw = entity.getYRot();
+        float pitch = entity.getXRot();
 
         if (thisAxis != partnerAxis) {
             // Portals are on different axes — rotate 90°.
@@ -327,7 +345,7 @@ public class OddstonePortalBlock extends Block {
             // rotates from X to Z, which is a 90° clockwise rotation.
             // When going from Z-axis → X-axis, it's 90° counterclockwise.
             //
-            // We rotate the player's yaw by the same amount so they
+            // We rotate the entity's yaw by the same amount so they
             // exit facing through the destination portal naturally.
             //
             // Yaw in Minecraft:
@@ -347,7 +365,7 @@ public class OddstonePortalBlock extends Block {
 
         }
 
-        // Rotate 180° so the player exits facing AWAY from the destination
+        // Rotate 180° so the entity exits facing AWAY from the destination
         // portal — as if they walked straight through a doorway. This stacks
         // with the cross-axis 90° rotation above:
         //   Same-axis portals: 0° + 180° = 180° (face away from destination)
@@ -358,11 +376,21 @@ public class OddstonePortalBlock extends Block {
         while (yaw > 180.0F) yaw -= 360.0F;
         while (yaw <= -180.0F) yaw += 360.0F;
 
-        // Teleport with rotation
-        player.teleportTo(level, targetX, targetY, targetZ, yaw, pitch);
+        // Teleport with rotation. Anything moving (an item thrown in, a minecart)
+        // has its motion turned by the same amount, so it carries on out of the
+        // far portal the way a player walking through would.
+        if (entity instanceof ServerPlayer player) {
+            player.teleportTo(level, targetX, targetY, targetZ, yaw, pitch);
+        } else {
+            float turn = yaw - entity.getYRot();
+            Vec3 motion = entity.getDeltaMovement().yRot((float) -Math.toRadians(turn));
+            entity.teleportTo(level, targetX, targetY, targetZ, Set.of(), yaw, pitch);
+            entity.setDeltaMovement(motion);
+            entity.hurtMarked = true;
+        }
 
-        Ideomod.LOGGER.debug("Player {} teleported via Oddstone Portal to ({}, {}, {}), yaw={}",
-                player.getName().getString(), targetX, targetY, targetZ, yaw);
+        Ideomod.LOGGER.debug("{} teleported via Oddstone Portal to ({}, {}, {}), yaw={}",
+                entity.getName().getString(), targetX, targetY, targetZ, yaw);
     }
 
     /**
@@ -416,7 +444,7 @@ public class OddstonePortalBlock extends Block {
         final double maxH;   // Maximum horizontal coordinate
         final double minV;   // Minimum Y
         final double maxV;   // Maximum Y
-        final double fixedCoord; // The coordinate on the thin axis (for placing the player)
+        final double fixedCoord; // The coordinate on the thin axis (for placing the entity)
 
         PortalBounds(double minH, double maxH, double minV, double maxV, double fixedCoord) {
             this.minH = minH;
@@ -512,28 +540,31 @@ public class OddstonePortalBlock extends Block {
     // SCATTER TELEPORT
     // ========================================================================
 
-    private void scatterTeleport(ServerLevel level, ServerPlayer player) {
+    private void scatterTeleport(ServerLevel level, Entity entity) {
         double angle = level.getRandom().nextDouble() * Math.PI * 2;
         int minDist = IdeomodConfig.getScatterDistanceMin();
         int maxDist = IdeomodConfig.getScatterDistanceMax();
         double distance = minDist + level.getRandom().nextDouble() * (maxDist - minDist);
-        int targetX = player.blockPosition().getX() + (int) (Math.cos(angle) * distance);
-        int targetZ = player.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
+        int targetX = entity.blockPosition().getX() + (int) (Math.cos(angle) * distance);
+        int targetZ = entity.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
 
         // getHeight returns the Y of the highest block — we need to stand ON TOP of it
         int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, targetX, targetZ);
         BlockPos targetPos = new BlockPos(targetX, surfaceY + 1, targetZ);
 
-        player.teleportTo(
+        entity.teleportTo(
                 targetPos.getX() + 0.5,
                 targetPos.getY(),
                 targetPos.getZ() + 0.5
         );
 
-        player.hurt(level.damageSources().magic(), IdeomodConfig.getScatterDamage());
+        // Only living things take the damage: an item or a minecart would be destroyed by it.
+        if (entity instanceof LivingEntity) {
+            entity.hurt(level.damageSources().magic(), IdeomodConfig.getScatterDamage());
+        }
 
-        Ideomod.LOGGER.info("Player {} scatter-teleported by unlinked Oddstone Portal to {}",
-                player.getName().getString(), targetPos);
+        Ideomod.LOGGER.info("{} scatter-teleported by unlinked Oddstone Portal to {}",
+                entity.getName().getString(), targetPos);
     }
 
     // ========================================================================
@@ -543,7 +574,7 @@ public class OddstonePortalBlock extends Block {
     /**
      * Simple fallback teleport to the first portal block we can find.
      */
-    private void simpleTeleport(ServerLevel level, ServerPlayer player,
+    private void simpleTeleport(ServerLevel level, Entity entity,
                                  BlockPos frameCorner,
                                  OddstonePortalSavedData.PortalEntry partnerEntry) {
         Direction.Axis partnerAxis = partnerEntry.getAxisAsEnum();
@@ -552,7 +583,7 @@ public class OddstonePortalBlock extends Block {
         BlockPos target = findAnyPortalBlock(level, frameCorner, hDir);
         if (target == null) target = frameCorner.above();
 
-        player.teleportTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
+        entity.teleportTo(target.getX() + 0.5, target.getY(), target.getZ() + 0.5);
     }
 
     // ========================================================================

@@ -1022,6 +1022,79 @@ public class IdeomodGameTests {
         });
     }
 
+    /** The same ring as buildPortalRing, at any z. */
+    private static void buildPortalRingAt(GameTestHelper helper, int z, Block frame, Block corner) {
+        for (int x = 1; x <= 5; x++) {
+            for (int y = 1; y <= 5; y++) {
+                boolean edgeX = x == 1 || x == 5, edgeY = y == 1 || y == 5;
+                if (edgeX && edgeY) helper.setBlock(x, y, z, corner);
+                else if (edgeX || edgeY) helper.setBlock(x, y, z, frame);
+                else helper.setBlock(x, y, z, Blocks.AIR);
+            }
+        }
+    }
+
+    /** Whether an entity is in the opening of the far ring (z = 5) of a linked pair. */
+    private static boolean atFarPortal(GameTestHelper helper, net.minecraft.world.entity.Entity entity) {
+        BlockPos at = entity.blockPosition();
+        BlockPos a = helper.absolutePos(new BlockPos(2, 2, 5)), b = helper.absolutePos(new BlockPos(4, 4, 5));
+        return at.getX() >= Math.min(a.getX(), b.getX()) && at.getX() <= Math.max(a.getX(), b.getX())
+                && at.getY() >= a.getY() && at.getY() <= b.getY()
+                && at.getZ() >= Math.min(a.getZ(), b.getZ()) && at.getZ() <= Math.max(a.getZ(), b.getZ());
+    }
+
+    /** Two rings with the same corners, at z = 1 and z = 5: a linked pair. */
+    private static boolean buildLinkedPair(GameTestHelper helper, Block corner) {
+        buildPortalRingAt(helper, 1, ModBlocks.COBBLED_ODDSTONE.get(), corner);
+        buildPortalRingAt(helper, 5, ModBlocks.COBBLED_ODDSTONE.get(), corner);
+        return lightPortal(helper, 2, 1, 1) && lightPortal(helper, 2, 1, 5);
+    }
+
+    /**
+     * Like a nether portal, a dropped item goes through to the linked portal; and it stays
+     * there after the cooldown instead of bouncing back, because staying inside keeps the cooldown up.
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 200)
+    public static void itemGoesThroughALinkedPortalAndStays(GameTestHelper helper) {
+        if (!buildLinkedPair(helper, Blocks.EMERALD_BLOCK)) { helper.fail("the linked pair did not light"); return; }
+        net.minecraft.world.entity.item.ItemEntity item = helper.spawnItem(Items.DIAMOND, 3.5F, 2.2F, 1.5F);
+        item.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
+        helper.runAfterDelay(5, () -> {
+            if (!item.isAlive()) helper.fail("the item was destroyed");
+            else if (!atFarPortal(helper, item)) helper.fail("the item did not go through to the linked portal");
+        });
+        helper.runAfterDelay(120, () -> {
+            if (!item.isAlive()) helper.fail("the item was destroyed");
+            else if (!atFarPortal(helper, item)) helper.fail("the item bounced back after the cooldown");
+            else helper.succeed();
+        });
+    }
+
+    /** Like a nether portal, a mob goes through to the linked portal. */
+    @GameTest(template = EMPTY)
+    public static void mobGoesThroughALinkedPortal(GameTestHelper helper) {
+        if (!buildLinkedPair(helper, Blocks.DIAMOND_BLOCK)) { helper.fail("the linked pair did not light"); return; }
+        net.minecraft.world.entity.Mob pig = helper.spawnWithNoFreeWill(net.minecraft.world.entity.EntityType.PIG, new net.minecraft.world.phys.Vec3(3.5, 2, 1.5));
+        helper.runAfterDelay(5, () -> {
+            if (atFarPortal(helper, pig)) helper.succeed();
+            else helper.fail("the pig did not go through to the linked portal");
+        });
+    }
+
+    /** An unlinked portal scatters an item far away, but does not destroy it (the damage is for living things). */
+    @GameTest(template = EMPTY)
+    public static void unlinkedPortalScattersAnItemWithoutDestroyingIt(GameTestHelper helper) {
+        buildPortalRing(helper, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.LAPIS_BLOCK);
+        if (!lightPortal(helper, 2, 1, 3)) { helper.fail("the portal did not light"); return; }
+        net.minecraft.world.entity.item.ItemEntity item = helper.spawnItem(Items.DIAMOND, 3.5F, 2.2F, 3.5F);
+        BlockPos start = item.blockPosition();
+        helper.runAfterDelay(5, () -> {
+            if (item.getRemovalReason() != null && item.getRemovalReason().shouldDestroy()) helper.fail("the scattered item was destroyed (" + item.getRemovalReason() + ")");
+            else if (item.blockPosition().distManhattan(start) < 150) helper.fail("the item was not scattered");
+            else helper.succeed();
+        });
+    }
+
     /** A ring of plain Oddstone no longer forms a portal. */
     @GameTest(template = EMPTY)
     public static void plainOddstoneRingDoesNotLight(GameTestHelper helper) {

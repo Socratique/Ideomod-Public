@@ -1480,7 +1480,8 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Activation | ALL Oddstone in frame must receive redstone signal simultaneously |
 | Deactivation | Any frame Oddstone loses power, or any frame/corner block broken |
 | Portal block | Light blue tinted nether portal texture, light level 11, no collision, indestructible |
-| Travel cooldown | 4 seconds (vanilla portal cooldown) |
+| Travel cooldown | 4 seconds (vanilla portal cooldown); staying inside keeps it topped up, as with a nether portal, so nothing bounces back |
+| What travels | As a nether portal (Ideomancer, 2026-11-07): players, mobs, items, projectiles, empty minecarts and boats; not riders, the vehicles carrying them, or bosses (`canChangeDimensions`). Motion is turned with the exit. Instant, no nether-style wait, to keep the doorway feel |
 
 **Valid corner blocks:** Coal, Iron, Copper, Gold, Redstone, Lapis, Diamond, Emerald, Netherite, Quartz, Amethyst, Raw Iron, Raw Copper, Raw Gold (crafted *_block forms)
 
@@ -1491,7 +1492,7 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 | Frame detection | [DONE] | Scans from interior outward (nether portal style). Works from any frame block. |
 | Corner address system | [DONE] | Position-sensitive (TL/TR/BR/BL). Normalized so front/back produce same address. |
 | Linked travel | [DONE] | Teleports to partner portal. Relative position mapped as 0.0--1.0 fraction, scales across different-sized portals. |
-| Unlinked scatter teleport | [DONE] | Penalty: random 200--1000 blocks, surface landing, 5 hearts magic damage. Looks identical to linked portal. |
+| Unlinked scatter teleport | [DONE] | Penalty: random 200--1000 blocks, surface landing, 5 hearts magic damage (living things only; items and vehicles are thrown but not damaged). Looks identical to linked portal. |
 | Per-dimension registries | [DONE] | Overworld and Nether store separate address spaces. Uses SavedData, persists across saves. |
 | Pair exclusivity | [DONE] | Third portal with same address refuses to light. |
 | Redstone-gated activation | [DONE] | All Oddstone must be powered. Prevents partial-frame lighting. |
