@@ -27,6 +27,9 @@ import net.minecraft.world.level.block.entity.BlockEntity;
  * and is non-interactable. This lets the unified menu show/hide the transit
  * slot dynamically without closing the GUI on specialization swaps.
  *
+ * Slots 1-9 are the 3x3 store when the BE is a MachineStorageBlockEntity
+ * (slot 1 is shared with the transit slot, which is then inactive).
+ *
  * When a player inserts an item into slot 1 via GUI, this is treated as
  * input from Direction.UP (top of block) for the pipe's round-robin system.
  *
@@ -65,6 +68,15 @@ public class PositionBoundContainer implements Container {
     private MachineEngineBlockEntity getEngineBE() {
         BlockEntity be = level.getBlockEntity(pos);
         return be instanceof MachineEngineBlockEntity engine ? engine : null;
+    }
+
+    private MachineStorageBlockEntity getStorageBE() {
+        BlockEntity be = level.getBlockEntity(pos);
+        return be instanceof MachineStorageBlockEntity storage ? storage : null;
+    }
+
+    public boolean isStorage() {
+        return getStorageBE() != null;
     }
 
     public boolean isPipe() {
@@ -138,7 +150,7 @@ public class PositionBoundContainer implements Container {
     // CONTAINER FORWARDING
     // ========================================================================
 
-    @Override public int getContainerSize() { return 2; }
+    @Override public int getContainerSize() { return 10; }
 
     @Override
     public boolean isEmpty() {
@@ -148,6 +160,11 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public ItemStack getItem(int slot) {
+        if (slot >= 1) {
+            MachineStorageBlockEntity storage = getStorageBE();
+            if (storage != null) return storage.getItem(slot);
+            if (slot > 1) return ItemStack.EMPTY;
+        }
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
             if (pipe != null) return pipe.getTransitItem();
@@ -161,6 +178,11 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public ItemStack removeItem(int slot, int amount) {
+        if (slot >= 1) {
+            MachineStorageBlockEntity storage = getStorageBE();
+            if (storage != null) return storage.removeItem(slot, amount);
+            if (slot > 1) return ItemStack.EMPTY;
+        }
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
             if (pipe != null) return pipe.removeItem(slot, amount);
@@ -174,6 +196,11 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public ItemStack removeItemNoUpdate(int slot) {
+        if (slot >= 1) {
+            MachineStorageBlockEntity storage = getStorageBE();
+            if (storage != null) return storage.removeItemNoUpdate(slot);
+            if (slot > 1) return ItemStack.EMPTY;
+        }
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
             if (pipe != null) return pipe.removeItemNoUpdate(slot);
@@ -187,6 +214,14 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public void setItem(int slot, ItemStack stack) {
+        if (slot >= 1) {
+            MachineStorageBlockEntity storage = getStorageBE();
+            if (storage != null) {
+                storage.setItem(slot, stack);
+                return;
+            }
+            if (slot > 1) return;
+        }
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             MachinePipeBlockEntity pipe = getPipeBE();
             if (pipe != null) {
@@ -241,6 +276,10 @@ public class PositionBoundContainer implements Container {
 
     @Override
     public boolean canPlaceItem(int slot, ItemStack stack) {
+        if (slot >= 1) {
+            if (getStorageBE() != null) return true;
+            if (slot > 1) return false;
+        }
         if (slot == MachinePipeBlockEntity.TRANSIT_SLOT) {
             if (getPipeBE() != null) return true;
             if (getEngineBE() != null) return net.minecraftforge.common.ForgeHooks.getBurnTime(stack, null) > 0;

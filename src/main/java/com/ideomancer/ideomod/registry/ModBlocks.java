@@ -340,6 +340,16 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
+    public static final RegistryObject<Block> MACHINE_STORAGE = BLOCKS.register("machine_storage",
+            () -> new com.ideomancer.ideomod.block.machine.MachineStorageBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
     public static final RegistryObject<Block> MACHINE_DRILL = BLOCKS.register("machine_drill",
             () -> new MachineDrillBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)

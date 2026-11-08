@@ -980,6 +980,159 @@ public class IdeomodGameTests {
     }
 
     // ========================================================================
+    // MACHINE STORAGE
+    // ========================================================================
+
+    private static com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity placeStorage(GameTestHelper helper, BlockPos pos, int cobble) {
+        helper.setBlock(pos, ModBlocks.MACHINE_BLOCK.get());
+        com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity base = (com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(pos);
+        base.setItem(0, new ItemStack(Items.CHEST));
+        com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity storage = (com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity) helper.getBlockEntity(pos);
+        if (cobble > 0) storage.setItem(1, new ItemStack(Items.COBBLESTONE, cobble));
+        return storage;
+    }
+
+    private static int cobbleIn(net.minecraft.world.Container container) {
+        return container.countItem(Items.COBBLESTONE);
+    }
+
+    private static net.minecraft.world.level.block.entity.ChestBlockEntity placeChest(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, Blocks.CHEST);
+        return (net.minecraft.world.level.block.entity.ChestBlockEntity) helper.getBlockEntity(pos);
+    }
+
+    /** A chest or a barrel in a Machine Base makes a Machine Storage. */
+    @GameTest(template = EMPTY)
+    public static void chestOrBarrelMakesAMachineStorage(GameTestHelper helper) {
+        BlockPos a = new BlockPos(2, 2, 3), b = new BlockPos(4, 2, 3);
+        placeStorage(helper, a, 0);
+        helper.setBlock(b, ModBlocks.MACHINE_BLOCK.get());
+        com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity base = (com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(b);
+        base.setItem(0, new ItemStack(Items.BARREL));
+        if (!helper.getBlockState(a).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a chest did not make a Machine Storage", a);
+        else if (!helper.getBlockState(b).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a barrel did not make a Machine Storage", b);
+        else helper.succeed();
+    }
+
+    /** Each time the signal turns on, one item goes out; holding the signal sends no more. */
+    @GameTest(template = EMPTY)
+    public static void storagePushesOneItemPerPulse(GameTestHelper helper) {
+        BlockPos signal = new BlockPos(1, 2, 3);
+        var storage = placeStorage(helper, new BlockPos(2, 2, 3), 5);
+        var chest = placeChest(helper, new BlockPos(3, 2, 3));
+        helper.runAfterDelay(3, () -> helper.setBlock(signal, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(14, () -> {
+            if (cobbleIn(chest) != 1) helper.fail("held signal: expected 1 item in the chest, found " + cobbleIn(chest));
+            helper.setBlock(signal, Blocks.AIR);
+        });
+        helper.runAfterDelay(18, () -> helper.setBlock(signal, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(26, () -> {
+            if (cobbleIn(chest) != 2) helper.fail("second pulse: expected 2 items in the chest, found " + cobbleIn(chest));
+            else if (cobbleIn(storage) != 3) helper.fail("expected 3 items left, found " + cobbleIn(storage));
+            else helper.succeed();
+        });
+    }
+
+    /** With two outputs it takes turns. */
+    @GameTest(template = EMPTY)
+    public static void storageTakesTurnsBetweenOutputs(GameTestHelper helper) {
+        BlockPos signal = new BlockPos(1, 2, 3);
+        placeStorage(helper, new BlockPos(2, 2, 3), 5);
+        var east = placeChest(helper, new BlockPos(3, 2, 3));
+        var north = placeChest(helper, new BlockPos(2, 2, 2));
+        helper.runAfterDelay(3, () -> helper.setBlock(signal, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(7, () -> helper.setBlock(signal, Blocks.AIR));
+        helper.runAfterDelay(10, () -> helper.setBlock(signal, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(16, () -> {
+            if (cobbleIn(east) == 1 && cobbleIn(north) == 1) helper.succeed();
+            else helper.fail("expected one item each, found east " + cobbleIn(east) + ", north " + cobbleIn(north));
+        });
+    }
+
+    /** It never pushes to a face that fed it, and forgets that face once the feeder is gone. */
+    @GameTest(template = EMPTY, timeoutTicks = 120)
+    public static void storageNeverPushesBackToAFeeder(GameTestHelper helper) {
+        BlockPos signal = new BlockPos(1, 2, 3), side = new BlockPos(3, 2, 3);
+        var storage = placeStorage(helper, new BlockPos(2, 2, 3), 0);
+        helper.setBlock(side, ModBlocks.MACHINE_BLOCK.get());
+        com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity base = (com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(side);
+        base.setItem(0, new ItemStack(Items.HOPPER));
+        com.ideomancer.ideomod.block.machine.MachinePipeBlockEntity pipe = (com.ideomancer.ideomod.block.machine.MachinePipeBlockEntity) helper.getBlockEntity(side);
+        pipe.setTransitItem(new ItemStack(Items.COBBLESTONE, 2));
+        pipe.onItemReceived(Direction.EAST);
+        helper.runAfterDelay(30, () -> {
+            if (cobbleIn(storage) != 2) helper.fail("the pipe did not fill the Storage: " + cobbleIn(storage));
+            helper.setBlock(signal, Blocks.REDSTONE_BLOCK);
+        });
+        helper.runAfterDelay(50, () -> {
+            if (cobbleIn(storage) != 2) helper.fail("the Storage pushed back into the pipe that fed it");
+            helper.setBlock(signal, Blocks.AIR);
+            helper.setBlock(side, Blocks.AIR);
+        });
+        helper.runAfterDelay(54, () -> placeChest(helper, side));
+        helper.runAfterDelay(58, () -> helper.setBlock(signal, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(66, () -> {
+            net.minecraft.world.level.block.entity.ChestBlockEntity chest = (net.minecraft.world.level.block.entity.ChestBlockEntity) helper.getBlockEntity(side);
+            if (cobbleIn(chest) == 1) helper.succeed();
+            else helper.fail("the feeder's face was not forgotten after the pipe went");
+        });
+    }
+
+    /** One Storage pushing into another sets the direction: the second never pushes back. */
+    @GameTest(template = EMPTY)
+    public static void storageFedByStorageDoesNotPushBack(GameTestHelper helper) {
+        BlockPos forA = new BlockPos(1, 2, 3), forB = new BlockPos(4, 2, 3);
+        var a = placeStorage(helper, new BlockPos(2, 2, 3), 5);
+        var b = placeStorage(helper, new BlockPos(3, 2, 3), 0);
+        helper.runAfterDelay(3, () -> helper.setBlock(forA, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(9, () -> helper.setBlock(forB, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(16, () -> {
+            if (cobbleIn(b) == 1 && cobbleIn(a) == 4) helper.succeed();
+            else helper.fail("expected 4 and 1, found " + cobbleIn(a) + " and " + cobbleIn(b));
+        });
+    }
+
+    /** A piston moves it with its contents. */
+    @GameTest(template = EMPTY)
+    public static void storageMovesWithItsContents(GameTestHelper helper) {
+        BlockPos from = new BlockPos(2, 2, 3), to = new BlockPos(2, 3, 3);
+        placeStorage(helper, from, 7);
+        helper.setBlock(2, 1, 3, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP));
+        helper.runAfterDelay(2, () -> helper.setBlock(2, 0, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(12, () -> {
+            if (!helper.getBlockState(to).is(ModBlocks.MACHINE_STORAGE.get())) { helper.fail("the Storage did not move", to); return; }
+            com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity moved = (com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity) helper.getBlockEntity(to);
+            if (cobbleIn(moved) == 7) helper.succeed();
+            else helper.fail("the contents did not move with it: " + cobbleIn(moved));
+        });
+    }
+
+    /** Broken, it spills what it holds. */
+    @GameTest(template = EMPTY)
+    public static void brokenStorageSpillsItsContents(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 2, 3);
+        placeStorage(helper, pos, 5);
+        helper.runAfterDelay(2, () -> helper.destroyBlock(pos));
+        helper.runAfterDelay(4, () -> {
+            helper.assertItemEntityPresent(Items.COBBLESTONE, pos, 3.0);
+            helper.succeed();
+        });
+    }
+
+    /** Taking the chest out makes it a Machine Base again and drops what it held. */
+    @GameTest(template = EMPTY)
+    public static void takingTheChestOutDropsTheContents(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 2, 3);
+        var storage = placeStorage(helper, pos, 5);
+        helper.runAfterDelay(2, () -> storage.setItem(0, ItemStack.EMPTY));
+        helper.runAfterDelay(4, () -> {
+            helper.assertBlockPresent(ModBlocks.MACHINE_BLOCK.get(), pos);
+            helper.assertItemEntityPresent(Items.COBBLESTONE, pos, 3.0);
+            helper.succeed();
+        });
+    }
+
+    // ========================================================================
     // PORTALS: frames are Cobbled Oddstone (the Ideomancer, 2026-11-02)
     // ========================================================================
 

@@ -21,6 +21,9 @@ public enum MachineType {
     /** Machine Conductor -- pure signal/stickiness relay. */
     CONDUCTOR,
 
+    /** Machine Storage -- a 3x3 store that pushes one item per pulse. */
+    STORAGE,
+
     /** Machine Pipe -- directional item transport. */
     PIPE,
 

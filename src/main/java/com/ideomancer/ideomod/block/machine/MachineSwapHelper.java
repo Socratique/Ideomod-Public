@@ -65,6 +65,8 @@ public final class MachineSwapHelper {
         itemToBlock.put(Items.REDSTONE,       () -> ModBlocks.MACHINE_CONDUCTOR.get());
         itemToBlock.put(Items.HOPPER,         () -> ModBlocks.MACHINE_PIPE.get());
         itemToBlock.put(Items.BUCKET,         () -> ModBlocks.MACHINE_FLUID_PIPE.get());
+        itemToBlock.put(Items.CHEST,          () -> ModBlocks.MACHINE_STORAGE.get());
+        itemToBlock.put(Items.BARREL,         () -> ModBlocks.MACHINE_STORAGE.get());
         itemToBlock.put(Items.PISTON,         () -> ModBlocks.MACHINE_PISTON.get());
         itemToBlock.put(Items.STICKY_PISTON,  () -> ModBlocks.MACHINE_STICKY_PISTON.get());
         itemToBlock.put(Items.REPEATER,       () -> ModBlocks.MACHINE_REPEATER.get());
@@ -168,6 +170,8 @@ public final class MachineSwapHelper {
         for (Map.Entry<net.minecraft.world.item.Item, RegistrySupplier> entry : itemToBlock.entrySet()) {
             blockToItem.put(entry.getValue().get(), entry.getKey());
         }
+        // Storage: a chest or a barrel; the chest is the canonical reverse item
+        blockToItem.put(ModBlocks.MACHINE_STORAGE.get(), Items.CHEST);
         // Drill: any pickaxe; iron pickaxe is the canonical reverse item
         blockToItem.put(ModBlocks.MACHINE_DRILL.get(), Items.IRON_PICKAXE);
         // Pulser: tag-based mapping uses stone_button as canonical reverse item
@@ -285,6 +289,7 @@ public final class MachineSwapHelper {
      * Affected specializations:
      * - Machine Engine: fuel slot (slot 1)
      * - Machine Pipe: transit slot (slot 1)
+     * - Machine Storage: the 3x3 store (slots 1-9)
      */
     private static void ejectSecondaryItems(Level level, BlockPos pos) {
         BlockEntity be = level.getBlockEntity(pos);
@@ -294,6 +299,11 @@ public final class MachineSwapHelper {
                 net.minecraft.world.Containers.dropItemStack(
                         level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, fuel);
                 engineBE.setFuelItem(ItemStack.EMPTY);
+            }
+        } else if (be instanceof MachineStorageBlockEntity storageBE) {
+            for (int slot = MachineStorageBlockEntity.FIRST_SLOT; slot < storageBE.getContainerSize(); slot++) {
+                net.minecraft.world.Containers.dropItemStack(
+                        level, pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5, storageBE.removeItemNoUpdate(slot));
             }
         } else if (be instanceof MachinePipeBlockEntity pipeBE) {
             ItemStack transit = pipeBE.getTransitItem();

@@ -2,6 +2,7 @@
   "replace": false,
   "values": [
     "ideomod:machine_drill",
+    "ideomod:machine_storage",
     "ideomod:oddstone",
     "ideomod:machine_block",
     "ideomod:oddstone_repulser",

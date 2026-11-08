@@ -71,6 +71,9 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     public static final int TRANSIT_SLOT_INDEX = 1;
     public static final int PLAYER_INV_START = 2;
     public static final int PLAYER_INV_END = 38;
+    /** The Machine Storage's 3x3, added after the player's slots so the indices above don't move. */
+    public static final int STORAGE_SLOT_START = 38;
+    public static final int STORAGE_SLOT_END = 47;
 
     private static final int DATA_REPEATER_DELAY = 0;
     private static final int DATA_IS_REPEATER = 1;
@@ -139,10 +142,17 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         for (int col = 0; col < 9; col++) {
             this.addSlot(new Slot(playerInv, col, 8 + col * 18, invBaseY + HOTBAR_OFFSET));
         }
+        // Centred under the specialization slot; only active on a Machine Storage.
+        for (int row = 0; row < 3; row++) {
+            for (int col = 0; col < 3; col++) {
+                this.addSlot(new StorageSlot(this.container, 1 + col + row * 3, 62 + col * 18, 38 + row * 18));
+            }
+        }
     }
 
     public BlockPos getBlockPos() { return this.blockPos; }
     public boolean isPipe() { return this.container.isPipe(); }
+    public boolean isStorage() { return this.container.isStorage(); }
     public boolean isRepeater() { return this.machineData.get(DATA_IS_REPEATER) == 1; }
     public boolean isTransformer() { return this.machineData.get(DATA_IS_TRANSFORMER) == 1; }
     public boolean isTimer() { return this.machineData.get(DATA_IS_TIMER) == 1; }
@@ -190,12 +200,14 @@ public class MachineFrameMenu extends AbstractContainerMenu {
         if (slot != null && slot.hasItem()) {
             ItemStack slotItem = slot.getItem();
             result = slotItem.copy();
-            if (index < PLAYER_INV_START) {
+            if (index < PLAYER_INV_START || index >= PLAYER_INV_END) {
                 if (!this.moveItemStackTo(slotItem, PLAYER_INV_START, PLAYER_INV_END, true))
                     return ItemStack.EMPTY;
             } else {
                 boolean moved = false;
-                if (isPipe())
+                if (isStorage())
+                    moved = this.moveItemStackTo(slotItem, STORAGE_SLOT_START, STORAGE_SLOT_END, false);
+                if (!moved && isPipe())
                     moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
                 if (!moved && isEngine() && net.minecraftforge.common.ForgeHooks.getBurnTime(slotItem, null) > 0)
                     moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
@@ -220,6 +232,17 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     private static class SpecSlot extends Slot {
         public SpecSlot(PositionBoundContainer container, int slot, int x, int y) { super(container, slot, x, y); }
         @Override public int getMaxStackSize() { return 1; }
+    }
+
+    private static class StorageSlot extends Slot {
+        private final PositionBoundContainer container;
+        public StorageSlot(PositionBoundContainer container, int slot, int x, int y) {
+            super(container, slot, x, y);
+            this.container = container;
+        }
+        @Override public boolean mayPlace(ItemStack stack) { return container.isStorage(); }
+        @Override public boolean mayPickup(Player player) { return container.isStorage() && this.hasItem(); }
+        @Override public boolean isActive() { return container.isStorage(); }
     }
 
     private static class TransitSlot extends Slot {

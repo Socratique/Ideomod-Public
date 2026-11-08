@@ -78,6 +78,17 @@ public class ModBlockEntities {
                     ).build(null));
 
     /**
+     * Machine Storage block entity type. Separate from MACHINE_FRAME because
+     * the storage has nine more slots and its own NBT.
+     */
+    public static final RegistryObject<BlockEntityType<com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity>> MACHINE_STORAGE =
+            BLOCK_ENTITIES.register("machine_storage",
+                    () -> BlockEntityType.Builder.of(
+                            com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity::new,
+                            ModBlocks.MACHINE_STORAGE.get()
+                    ).build(null));
+
+    /**
      * Machine Fluid Pipe block entity type. Separate from MACHINE_FRAME because
      * the fluid pipe has fluid type tracking, ticker, IFluidHandler capability,
      * and fluid-pipe-specific NBT. Only used by MachineFluidPipeBlock.

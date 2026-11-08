@@ -162,6 +162,14 @@ public class MachineFrameScreen extends AbstractContainerScreen<MachineFrameMenu
             g.blit(GUI_SHEET, x + 79, y + 37, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
         }
 
+        if (this.menu.isStorage()) {
+            for (int row = 0; row < 3; row++) {
+                for (int col = 0; col < 3; col++) {
+                    g.blit(GUI_SHEET, x + 61 + col * SLOT_SIZE, y + 37 + row * SLOT_SIZE, SLOT_U, SLOT_V, SLOT_SIZE, SLOT_SIZE, TEX, TEX);
+                }
+            }
+        }
+
         if (this.menu.isRepeater()) {
             renderDelayButtons(g, x, y);
         }
