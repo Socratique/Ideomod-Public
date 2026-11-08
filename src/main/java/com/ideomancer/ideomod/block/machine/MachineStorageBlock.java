@@ -21,7 +21,7 @@ import net.minecraftforge.items.ItemHandlerHelper;
 import org.jetbrains.annotations.Nullable;
 
 /**
- * Machine Storage -- a Machine Base holding a chest or barrel: a 3x3 store that
+ * Machine Storage -- a Machine Base holding a barrel: a 3x3 store that
  * moves with its contents, unlike a vanilla chest.
  *
  * A signal turning on, on any face, pushes out ONE item (The Ideomancer, 2026-11-08).

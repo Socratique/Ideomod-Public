@@ -986,7 +986,7 @@ public class IdeomodGameTests {
     private static com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity placeStorage(GameTestHelper helper, BlockPos pos, int cobble) {
         helper.setBlock(pos, ModBlocks.MACHINE_BLOCK.get());
         com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity base = (com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(pos);
-        base.setItem(0, new ItemStack(Items.CHEST));
+        base.setItem(0, new ItemStack(Items.BARREL));
         com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity storage = (com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity) helper.getBlockEntity(pos);
         if (cobble > 0) storage.setItem(1, new ItemStack(Items.COBBLESTONE, cobble));
         return storage;
@@ -1001,16 +1001,16 @@ public class IdeomodGameTests {
         return (net.minecraft.world.level.block.entity.ChestBlockEntity) helper.getBlockEntity(pos);
     }
 
-    /** A chest or a barrel in a Machine Base makes a Machine Storage. */
+    /** A barrel in a Machine Base makes a Machine Storage; a chest does not. */
     @GameTest(template = EMPTY)
-    public static void chestOrBarrelMakesAMachineStorage(GameTestHelper helper) {
+    public static void barrelMakesAMachineStorage(GameTestHelper helper) {
         BlockPos a = new BlockPos(2, 2, 3), b = new BlockPos(4, 2, 3);
         placeStorage(helper, a, 0);
         helper.setBlock(b, ModBlocks.MACHINE_BLOCK.get());
         com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity base = (com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(b);
-        base.setItem(0, new ItemStack(Items.BARREL));
-        if (!helper.getBlockState(a).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a chest did not make a Machine Storage", a);
-        else if (!helper.getBlockState(b).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a barrel did not make a Machine Storage", b);
+        base.setItem(0, new ItemStack(Items.CHEST));
+        if (!helper.getBlockState(a).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a barrel did not make a Machine Storage", a);
+        else if (helper.getBlockState(b).is(ModBlocks.MACHINE_STORAGE.get())) helper.fail("a chest made a Machine Storage; only a barrel should", b);
         else helper.succeed();
     }
 
@@ -1119,9 +1119,9 @@ public class IdeomodGameTests {
         });
     }
 
-    /** Taking the chest out makes it a Machine Base again and drops what it held. */
+    /** Taking the barrel out makes it a Machine Base again and drops what it held. */
     @GameTest(template = EMPTY)
-    public static void takingTheChestOutDropsTheContents(GameTestHelper helper) {
+    public static void takingTheBarrelOutDropsTheContents(GameTestHelper helper) {
         BlockPos pos = new BlockPos(2, 2, 3);
         var storage = placeStorage(helper, pos, 5);
         helper.runAfterDelay(2, () -> storage.setItem(0, ItemStack.EMPTY));

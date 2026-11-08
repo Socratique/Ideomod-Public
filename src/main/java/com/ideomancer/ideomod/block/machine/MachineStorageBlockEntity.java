@@ -22,7 +22,7 @@ import org.jetbrains.annotations.Nullable;
 /**
  * Block entity for the Machine Storage.
  *
- * Slot 0: specialization item (chest or barrel) -- inherited.
+ * Slot 0: specialization item (barrel) -- inherited.
  * Slots 1-9: the 3x3 store.
  *
  * Remembers, one flag per face, which faces have given it items. Only items coming
