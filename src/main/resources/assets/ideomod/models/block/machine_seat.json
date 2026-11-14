@@ -1,9 +1,9 @@
 {
   "parent": "minecraft:block/block",
   "textures": {
-    "particle": "ideomod:block/machine_seat",
-    "side": "ideomod:block/machine_seat",
-    "inside": "ideomod:block/machine_seat_inside"
+    "particle": "ideomod:block/machine_seat_side",
+    "side": "ideomod:block/machine_seat_side",
+    "bottom": "ideomod:block/machine_seat_bottom"
   },
   "elements": [
     {
@@ -19,11 +19,11 @@
       ],
       "faces": {
         "down": {
-          "texture": "#side",
+          "texture": "#bottom",
           "cullface": "down"
         },
         "up": {
-          "texture": "#inside"
+          "texture": "#bottom"
         },
         "north": {
           "texture": "#side",
@@ -60,7 +60,7 @@
           "cullface": "north"
         },
         "south": {
-          "texture": "#inside"
+          "texture": "#side"
         },
         "west": {
           "texture": "#side",
@@ -93,7 +93,7 @@
           "cullface": "south"
         },
         "north": {
-          "texture": "#inside"
+          "texture": "#side"
         },
         "west": {
           "texture": "#side",
@@ -126,7 +126,7 @@
           "cullface": "west"
         },
         "east": {
-          "texture": "#inside"
+          "texture": "#side"
         },
         "up": {
           "texture": "#side",
@@ -151,7 +151,7 @@
           "cullface": "east"
         },
         "west": {
-          "texture": "#inside"
+          "texture": "#side"
         },
         "up": {
           "texture": "#side",
