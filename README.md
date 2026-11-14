@@ -204,6 +204,7 @@ The GUI changes with the item in the slot. Most machine blocks show only the slo
 | Sticky Piston | [Machine Sticky Piston](#machine-piston-and-sticky-piston) |
 | Machine Base | [Machine Brace](#brace) |
 | Any pickaxe | [Machine Drill](#machine-drill) |
+| Any boat or raft | [Machine Seat](#machine-seat) |
 | Barrel | [Machine Storage](#machine-storage) |
 | Powered Rail | [Machine Track](#track-and-trolley) |
 | Minecart | [Machine Trolley](#track-and-trolley) |
@@ -328,6 +329,20 @@ A Machine Base with a pickaxe in its slot. Like the Machine Piston it has no fro
 - It needs a constant signal. If the signal goes, the cut on that side stops and its cracks clear. While the signal stays on, it keeps cutting whatever comes into the 3×3.
 - While it is cutting, the Drill cannot be moved by pistons.
 - An old Drill block or item from an earlier version loads as a Machine Base.
+
+### Steering
+
+#### Machine Seat
+
+A Machine Base with a boat or raft in its slot (not a chest boat). A block with an open top that you sit in, to drive a machine from inside it.
+
+- **Right-click to sit in it.** Sneak to get out: you step out beside it, forward first, as out of a boat. With every side blocked, you stand up inside it.
+- **Sneak + right-click** with an empty hand opens the slot, to take the boat out.
+- **The move keys send a redstone pulse out of the face they point to,** relative to where you look: forward out of the face you look toward, back out of the face behind you, left and right out of the sides. Up and down looks don't count, only the direction you face.
+- **Jump sends a pulse out of the bottom face.**
+- **Holding a key repeats the pulse,** every half second (`seat.repeat_interval`). Each pulse lasts 2 ticks and reaches only the block on that face, which it powers like a lever would (through a solid block too).
+- **It carries you.** When a piston or any mover pushes the Seat, you move with it, so you can ride the flying machine you are steering. No pulse goes out while the Seat is moving; a held key fires again when it lands.
+- If the Seat is broken, you are put off.
 
 ### Transport blocks
 
@@ -514,6 +529,7 @@ On a server, the server's file is the one that counts: each player who joins is 
 | `engine` | `durations` | 5 to 40, step 5 | Engine GUI buttons, in ticks |
 | `engine` | `default_index` | 3 | Default Engine button (20 ticks) |
 | `pulser` | `pulse_duration` | 2 | Pulser output length, in ticks |
+| `seat` | `repeat_interval` | 10 | Ticks between a Machine Seat's pulses while a key is held (2 to 100) |
 
 Commands, both for operators:
 

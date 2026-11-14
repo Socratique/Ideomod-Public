@@ -151,6 +151,13 @@ public class IdeomodConfig {
     private static int pulserPulseDuration = 2;
 
     // ========================================================================
+    // SEAT
+    // ========================================================================
+
+    /** Game ticks between the Machine Seat's pulses while a key is held. */
+    private static int seatRepeatInterval = 10;
+
+    // ========================================================================
     // GETTERS — Oddstone
     // ========================================================================
 
@@ -345,6 +352,15 @@ public class IdeomodConfig {
         return pulserPulseDuration;
     }
 
+    /**
+     * Game ticks between the Machine Seat's pulses while a move key is held.
+     * Default: 10 (half a second).
+     */
+    public static int getSeatRepeatInterval() {
+        ensureLoaded();
+        return seatRepeatInterval;
+    }
+
     // ========================================================================
     // LOADING & PARSING
     // ========================================================================
@@ -496,6 +512,12 @@ public class IdeomodConfig {
         if (pulser != null) {
             pulserPulseDuration = clamp(getInt(pulser, "pulse_duration", pulserPulseDuration), 1, 100);
         }
+
+        // --- Seat ---
+        JsonObject seat = getSection(root, "seat");
+        if (seat != null) {
+            seatRepeatInterval = clamp(getInt(seat, "repeat_interval", seatRepeatInterval), 2, 100);
+        }
     }
 
     // ========================================================================
@@ -594,6 +616,12 @@ public class IdeomodConfig {
         pulser.addProperty("_comment", "Machine Pulser fixed pulse duration in game ticks (2 game ticks = 1 redstone tick). Range: 1-100.");
         pulser.addProperty("pulse_duration", pulserPulseDuration);
         root.add("pulser", pulser);
+
+        // --- Seat ---
+        JsonObject seat = new JsonObject();
+        seat.addProperty("_comment", "Machine Seat: game ticks between pulses while a move key is held. Range: 2-100.");
+        seat.addProperty("repeat_interval", seatRepeatInterval);
+        root.add("seat", seat);
 
         return root;
     }

@@ -10,6 +10,7 @@
     "PistonBaseBlockMixin",
     "PistonMovingBlockEntityMixin",
     "EntityMovementMixin",
+    "LivingEntityAccessor",
     "LevelSignalMixin",
     "RedStoneWireBlockMixin",
     "client.PistonBaseBlockClientMixin"

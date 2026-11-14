@@ -34,13 +34,15 @@ public final class MachineModCompat {
     }
 
     /**
-     * Block entity types are not saved with the world, so Forge raises no missing-mappings event for
-     * them: an alias is the only way a chunk's "machinemod:machine_block" entity finds our type (and
-     * keeps the machine's contents).
+     * Block entity and entity types are not saved with the world, so Forge raises no missing-mappings
+     * event for them: an alias is the only way a chunk's "machinemod:machine_block" block entity finds
+     * our type (and keeps the machine's contents), or a "machinemod:machine_seat" its rider.
      */
     private static void addBlockEntityAliases(RegisterEvent event) {
         if (event.getRegistryKey().equals(ForgeRegistries.Keys.BLOCK_ENTITY_TYPES)) {
             addAliases(ForgeRegistries.BLOCK_ENTITY_TYPES);
+        } else if (event.getRegistryKey().equals(ForgeRegistries.Keys.ENTITY_TYPES)) {
+            addAliases(ForgeRegistries.ENTITY_TYPES);
         }
     }
 

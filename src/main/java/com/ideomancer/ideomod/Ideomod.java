@@ -59,6 +59,7 @@ public class Ideomod {
         ModItems.ITEMS.register(modEventBus);
         ModCreativeTabs.CREATIVE_TABS.register(modEventBus);
         ModBlockEntities.BLOCK_ENTITIES.register(modEventBus);
+        com.ideomancer.ideomod.registry.ModEntities.ENTITY_TYPES.register(modEventBus);
         ModMenuTypes.MENUS.register(modEventBus);
         ModParticles.PARTICLES.register(modEventBus);
         ModRecipeSerializers.RECIPE_SERIALIZERS.register(modEventBus);

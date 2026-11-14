@@ -131,6 +131,12 @@ public final class MachineSwapHelper {
             return ModBlocks.MACHINE_DRILL.get();
         }
 
+        // Any boat or raft -> Machine Seat (Ideomancer, 2026-11-12). Chest boats are not boats here.
+        if (item.builtInRegistryHolder().is(net.minecraft.tags.ItemTags.BOATS)
+                && !item.builtInRegistryHolder().is(net.minecraft.tags.ItemTags.CHEST_BOATS)) {
+            return ModBlocks.MACHINE_SEAT.get();
+        }
+
         // Tag-based fallback: any button item -> Machine Pulser
         if (item.builtInRegistryHolder().is(ModTags.Items.PULSER_ITEMS)) {
             return ModBlocks.MACHINE_PULSER.get();
@@ -171,6 +177,8 @@ public final class MachineSwapHelper {
         }
         // Drill: any pickaxe; iron pickaxe is the canonical reverse item
         blockToItem.put(ModBlocks.MACHINE_DRILL.get(), Items.IRON_PICKAXE);
+        // Seat: any boat; oak boat is the canonical reverse item
+        blockToItem.put(ModBlocks.MACHINE_SEAT.get(), Items.OAK_BOAT);
         // Pulser: tag-based mapping uses stone_button as canonical reverse item
         blockToItem.put(ModBlocks.MACHINE_PULSER.get(), Items.STONE_BUTTON);
         // Transmitter: tag-based mapping uses oddstone as canonical reverse item

@@ -1,5 +1,16 @@
 # Ideomod Changelog
 
+## [2026-11-14] Machine Seat
+
+- New Machine specialization (the Ideomancer's idea): a Machine Base holding any boat or raft becomes a Machine
+  Seat, a block with an open top. Right-click to sit; sneak + right-click opens the slot. The move keys send a
+  pulse out of the face they point to, relative to where you look; jump pulses the bottom face. Holding a key
+  repeats every seat.repeat_interval ticks (10). The rider is carried when the Seat is moved, and steps out
+  beside it, forward first. Placeholder textures.
+- MachineModCompat aliases machinemod: entity types too, so a seated rider in a Machine Mod world keeps the seat.
+- Checked in a real client (Liveplay, Machine Mod build): every key's face, the held-key repeat, a piston push
+  with the rider aboard, the GUI, getting out, and breaking the Seat under the rider.
+
 ## [2026-11-02d] Recipe-book unlocks
 
 - Recipes now appear in the recipe book (the Ideomancer's rules): Oddstone unlocks the Oddstone-family

@@ -359,6 +359,17 @@ public class ModBlocks {
                     .pushReaction(PushReaction.NORMAL)
             ));
 
+    public static final RegistryObject<Block> MACHINE_SEAT = BLOCKS.register("machine_seat",
+            () -> new com.ideomancer.ideomod.block.machine.MachineSeatBlock(BlockBehaviour.Properties.of()
+                    .mapColor(MapColor.METAL)
+                    .strength(3.0f, 6.0f)
+                    .requiresCorrectToolForDrops()
+                    .sound(SoundType.METAL)
+                    .noOcclusion()
+                    .isRedstoneConductor((state, level, pos) -> false)
+                    .pushReaction(PushReaction.NORMAL)
+            ));
+
     public static final RegistryObject<Block> MACHINE_REPEATER = BLOCKS.register("machine_repeater",
             () -> new MachineRepeaterBlock(BlockBehaviour.Properties.of()
                     .mapColor(MapColor.METAL)

@@ -1308,4 +1308,161 @@ public class IdeomodGameTests {
         if (missing.isEmpty()) helper.succeed();
         else helper.fail("recipes with no recipe-book unlock: " + missing);
     }
+
+    // ========================================================================
+    // MACHINE SEAT
+    // ========================================================================
+
+    private static void placeSeat(GameTestHelper helper, BlockPos pos) {
+        helper.setBlock(pos, ModBlocks.MACHINE_BLOCK.get());
+        ((com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(pos)).setItem(0, new ItemStack(Items.OAK_BOAT));
+    }
+
+    /**
+     * Sits a stand-in player in the Seat at pos, facing the given way. Its aiStep does nothing:
+     * a rider is ticked by its seat even after the test is over, and helper.makeMockPlayer()
+     * would then pick up items from the tests around it (it took the diamond arriving through
+     * a neighbouring portal test). It also keeps the keys set below from fading each tick.
+     */
+    private static Player sitIn(GameTestHelper helper, BlockPos pos, Direction facing) {
+        Player player = new Player(helper.getLevel(), BlockPos.ZERO, 0.0f,
+                new com.mojang.authlib.GameProfile(java.util.UUID.randomUUID(), "seat-test")) {
+            @Override public boolean isSpectator() { return false; }
+            @Override public boolean isCreative() { return true; }
+            @Override public void aiStep() {}
+        };
+        player.setYRot(facing.toYRot());
+        var seat = com.ideomancer.ideomod.block.machine.MachineSeatEntity.create(helper.getLevel(), helper.absolutePos(pos));
+        helper.getLevel().addFreshEntity(seat);
+        if (!player.startRiding(seat)) helper.fail("the player could not sit in the Seat", pos);
+        return player;
+    }
+
+    /** Redstone lamps on the four sides and under the Seat. */
+    private static void lampsAround(GameTestHelper helper, BlockPos seat) {
+        for (Direction d : new Direction[]{Direction.NORTH, Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.DOWN}) {
+            helper.setBlock(seat.relative(d), Blocks.REDSTONE_LAMP);
+        }
+    }
+
+    private static boolean lit(GameTestHelper helper, BlockPos pos) {
+        return helper.getBlockState(pos).getValue(net.minecraft.world.level.block.RedstoneLampBlock.LIT);
+    }
+
+    /** Any boat or raft makes a Machine Seat; a chest boat does not. */
+    @GameTest(template = EMPTY)
+    public static void boatMakesAMachineSeat(GameTestHelper helper) {
+        BlockPos a = new BlockPos(1, 2, 3), b = new BlockPos(3, 2, 3), c = new BlockPos(5, 2, 3);
+        helper.setBlock(a, ModBlocks.MACHINE_BLOCK.get());
+        helper.setBlock(b, ModBlocks.MACHINE_BLOCK.get());
+        helper.setBlock(c, ModBlocks.MACHINE_BLOCK.get());
+        ((com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(a)).setItem(0, new ItemStack(Items.SPRUCE_BOAT));
+        ((com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(b)).setItem(0, new ItemStack(Items.BAMBOO_RAFT));
+        ((com.ideomancer.ideomod.block.machine.MachineFrameBlockEntity) helper.getBlockEntity(c)).setItem(0, new ItemStack(Items.OAK_CHEST_BOAT));
+        if (!helper.getBlockState(a).is(ModBlocks.MACHINE_SEAT.get())) helper.fail("a boat did not make a Machine Seat", a);
+        else if (!helper.getBlockState(b).is(ModBlocks.MACHINE_SEAT.get())) helper.fail("a raft did not make a Machine Seat", b);
+        else if (helper.getBlockState(c).is(ModBlocks.MACHINE_SEAT.get())) helper.fail("a chest boat made a Machine Seat", c);
+        else helper.succeed();
+    }
+
+    /** Facing north: forward pulses the north face, left the west face, jump the bottom; nothing else lights. */
+    @GameTest(template = EMPTY)
+    public static void seatKeysPulseTheFacesTheyPointTo(GameTestHelper helper) {
+        BlockPos seat = new BlockPos(3, 2, 3);
+        placeSeat(helper, seat);
+        lampsAround(helper, seat);
+        Player player = sitIn(helper, seat, Direction.NORTH);
+        player.zza = 1.0f;
+        helper.runAfterDelay(3, () -> {
+            if (!lit(helper, seat.north())) { helper.fail("forward did not pulse the north face", seat.north()); return; }
+            for (Direction d : new Direction[]{Direction.SOUTH, Direction.EAST, Direction.WEST, Direction.DOWN}) {
+                if (lit(helper, seat.relative(d))) { helper.fail("forward also lit the " + d + " face", seat.relative(d)); return; }
+            }
+            player.zza = 0.0f;
+            player.xxa = 1.0f; // strafe left
+            player.setJumping(true);
+        });
+        helper.runAfterDelay(7, () -> {
+            if (!lit(helper, seat.west())) helper.fail("left did not pulse the west face (left of north)", seat.west());
+            else if (!lit(helper, seat.below())) helper.fail("jump did not pulse the bottom face", seat.below());
+            else if (lit(helper, seat.east())) helper.fail("left lit the east face", seat.east());
+            else helper.succeed();
+        });
+    }
+
+    /** A held key repeats its pulse every repeat_interval (10) ticks; let go, it stops. */
+    @GameTest(template = EMPTY, timeoutTicks = 80)
+    public static void seatHeldKeyRepeats(GameTestHelper helper) {
+        BlockPos seat = new BlockPos(3, 2, 3);
+        placeSeat(helper, seat);
+        lampsAround(helper, seat);
+        Player player = sitIn(helper, seat, Direction.EAST);
+        player.zza = 1.0f;
+        int[] rises = {0};
+        boolean[] was = {false};
+        helper.onEachTick(() -> {
+            boolean now = lit(helper, seat.east());
+            if (now && !was[0]) rises[0]++;
+            was[0] = now;
+        });
+        helper.runAfterDelay(30, () -> player.zza = 0.0f);
+        helper.runAfterDelay(60, () -> {
+            if (rises[0] == 3) helper.succeed();
+            else helper.fail("expected 3 pulses from holding forward for 30 ticks, saw " + rises[0], seat.east());
+        });
+    }
+
+    /** A piston carries the Seat and the rider with it. */
+    @GameTest(template = EMPTY)
+    public static void seatCarriesItsRider(GameTestHelper helper) {
+        BlockPos from = new BlockPos(2, 2, 3), to = new BlockPos(2, 3, 3);
+        placeSeat(helper, from);
+        Player player = sitIn(helper, from, Direction.NORTH);
+        helper.setBlock(2, 1, 3, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP));
+        helper.runAfterDelay(2, () -> helper.setBlock(2, 0, 3, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(12, () -> {
+            if (!helper.getBlockState(to).is(ModBlocks.MACHINE_SEAT.get())) { helper.fail("the Seat did not move", to); return; }
+            if (!(player.getVehicle() instanceof com.ideomancer.ideomod.block.machine.MachineSeatEntity seat)) { helper.fail("the rider fell out of the Seat", to); return; }
+            if (!seat.getAnchor().equals(helper.absolutePos(to))) helper.fail("the seat did not follow the block: anchor " + seat.getAnchor(), to);
+            else if (Math.abs(seat.getY() - (helper.absolutePos(to).getY() + com.ideomancer.ideomod.block.machine.MachineSeatEntity.SEAT_HEIGHT)) > 0.01) helper.fail("the seat is not on the block: y " + seat.getY(), to);
+            else helper.succeed();
+        });
+    }
+
+    /** Breaking the Seat puts the rider off and removes the seat. */
+    @GameTest(template = EMPTY)
+    public static void brokenSeatPutsTheRiderOff(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 2, 3);
+        placeSeat(helper, pos);
+        Player player = sitIn(helper, pos, Direction.NORTH);
+        var seat = player.getVehicle();
+        helper.runAfterDelay(2, () -> helper.destroyBlock(pos));
+        helper.runAfterDelay(4, () -> {
+            if (player.isPassenger()) helper.fail("the rider is still sitting", pos);
+            else if (seat == null || !seat.isRemoved()) helper.fail("the seat entity was not removed", pos);
+            else helper.succeed();
+        });
+    }
+
+    /** Getting off (sneak) steps out beside the Seat, forward first, like out of a boat; with every side blocked, inside. */
+    @GameTest(template = EMPTY)
+    public static void seatRiderStepsOutForward(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(3, 2, 2), boxed = new BlockPos(3, 2, 5);
+        for (int x = 0; x <= 6; x++) for (int z = 0; z <= 6; z++) helper.setBlock(x, 1, z, Blocks.STONE);
+        placeSeat(helper, pos);
+        placeSeat(helper, boxed);
+        for (Direction d : Direction.Plane.HORIZONTAL) helper.setBlock(boxed.relative(d), Blocks.STONE);
+        Player free = sitIn(helper, pos, Direction.NORTH);
+        Player stuck = sitIn(helper, boxed, Direction.NORTH);
+        helper.runAfterDelay(2, () -> {
+            free.stopRiding();
+            stuck.stopRiding();
+            BlockPos expect = helper.absolutePos(pos.north());
+            BlockPos stuckAt = helper.absolutePos(boxed);
+            if (free.isPassenger() || stuck.isPassenger()) helper.fail("a rider is still sitting", pos);
+            else if (!free.blockPosition().equals(expect)) helper.fail("the rider got off at " + free.blockPosition() + ", expected one block forward at " + expect, pos);
+            else if (!stuck.blockPosition().equals(stuckAt)) helper.fail("a boxed-in rider got off at " + stuck.blockPosition() + ", expected inside the Seat", boxed);
+            else helper.succeed();
+        });
+    }
 }

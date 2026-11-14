@@ -109,6 +109,9 @@ public class ModItems {
     public static final RegistryObject<Item> MACHINE_STORAGE = ITEMS.register("machine_storage",
             () -> new BlockItem(ModBlocks.MACHINE_STORAGE.get(), new Item.Properties()));
 
+    public static final RegistryObject<Item> MACHINE_SEAT = ITEMS.register("machine_seat",
+            () -> new BlockItem(ModBlocks.MACHINE_SEAT.get(), new Item.Properties()));
+
     public static final RegistryObject<Item> MACHINE_DRILL = ITEMS.register("machine_drill",
             () -> new BlockItem(ModBlocks.MACHINE_DRILL.get(), new Item.Properties()));
 

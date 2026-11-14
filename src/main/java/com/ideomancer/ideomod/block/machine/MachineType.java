@@ -24,6 +24,9 @@ public enum MachineType {
     /** Machine Storage -- a 3x3 store that pushes one item per pulse. */
     STORAGE,
 
+    /** Machine Seat -- sit in it; the move keys and jump send pulses out of its faces. */
+    SEAT,
+
     /** Machine Pipe -- directional item transport. */
     PIPE,
 

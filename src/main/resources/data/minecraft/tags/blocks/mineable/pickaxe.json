@@ -3,6 +3,7 @@
   "values": [
     "ideomod:machine_drill",
     "ideomod:machine_storage",
+    "ideomod:machine_seat",
     "ideomod:oddstone",
     "ideomod:machine_block",
     "ideomod:oddstone_repulser",
