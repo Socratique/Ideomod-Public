@@ -3,7 +3,8 @@
   "textures": {
     "particle": "ideomod:block/machine_seat_side",
     "side": "ideomod:block/machine_seat_side",
-    "bottom": "ideomod:block/machine_seat_bottom"
+    "bottom": "ideomod:block/machine_seat_bottom",
+    "inside": "ideomod:block/machine_seat_inside"
   },
   "elements": [
     {
@@ -23,7 +24,7 @@
           "cullface": "down"
         },
         "up": {
-          "texture": "#bottom"
+          "texture": "#inside"
         },
         "north": {
           "texture": "#side",
@@ -71,7 +72,7 @@
           "cullface": "east"
         },
         "up": {
-          "texture": "#side",
+          "texture": "#inside",
           "cullface": "up"
         }
       }
@@ -104,7 +105,7 @@
           "cullface": "east"
         },
         "up": {
-          "texture": "#side",
+          "texture": "#inside",
           "cullface": "up"
         }
       }
@@ -129,7 +130,7 @@
           "texture": "#side"
         },
         "up": {
-          "texture": "#side",
+          "texture": "#inside",
           "cullface": "up"
         }
       }
@@ -154,7 +155,7 @@
           "texture": "#side"
         },
         "up": {
-          "texture": "#side",
+          "texture": "#inside",
           "cullface": "up"
         }
       }
