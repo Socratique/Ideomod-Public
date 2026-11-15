@@ -1,5 +1,11 @@
 # Ideomod Changelog
 
+## [2026-11-15] Machine Seat: the Ideomancer's second textures
+
+- New side texture (a port at the bottom) and new bottom texture (a port in the centre, on the underside).
+- The first bottom texture stays as machine_seat_inside, now on the inside floor and the top rim (the rim
+  used the side texture before, which looked wrong from above).
+
 ## [2026-11-15] Continents world type
 
 - New world type "Continents" (ideomod:continents), picked on the Create World screen. It keeps the vanilla
