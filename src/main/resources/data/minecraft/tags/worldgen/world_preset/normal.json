@@ -1,6 +1,7 @@
 {
   "replace": false,
   "values": [
+    "ideomod:continents",
     "ideomod:ore_only"
   ]
 }

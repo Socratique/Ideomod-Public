@@ -1523,14 +1523,24 @@ Written by an unnamed person -- the player character's past self (Steve, though 
 
 ## 4. WORLDGEN & GEOLOGY
 
-### Continental Terrain [IDEA]
+### Continental Terrain [WIP]
 > Large-scale terrain generation with elevation layers and realistic geography.
 
+| Feature | Status | Notes |
+|---------|--------|-------|
+| Continents in one ocean | [WIP] | World type "Continents" (`ideomod:continents`). Continentalness noise two octaves larger than vanilla plus an ocean bias. About 25% land. The Ideomancer approved the ocean amount from the maps (2026-11-15). |
+| Highland tiers | [WIP] | Extra noise shaped into flat tiers (+24, +48 blocks), added to terrain height on land only. Edges are cliffs in some places and ramps in others. Fades out under tall peaks to stay below the build limit. |
+| Vanilla rivers removed | [WIP] | No river channels, no river biomes. Makes room for the planned river and lake painters. |
+| 1.5x horizontal scale | [WIP] | Erosion, ridges, temperature and vegetation stretched 1.5x. |
+| Custom river/lake generation | [IDEA] | Lakes at any elevation, rivers flowing downhill between them and to the ocean. |
+| Dry basins below sea level, islands from the elevation field | [IDEA] | From the 2026-02-09 plan: a land/ocean map decides where water fills. Needs Java. |
+
 **Design notes:**
-- Continental reshaping for more realistic landmasses
-- Elevation layer system
-- Custom river/lake generation
-- Reference: ReTerraForged, TerraBlender
+- Keep the vanilla base and add to it; no full rewrite (the Ideomancer, 2026-02-06).
+- Style reference: hand-made maps with flat benches ending in sheer cliffs, terraced slopes, cliffs at the water.
+- All settings are at the top of `tools/worldgen/build_continents.py`, which generates the JSON.
+- Open: tall mountains on highlands are flattened by the fade; the alternative is a taller world.
+- Reference: ReTerraForged, TerraBlender, Tectonic
 
 ---
 

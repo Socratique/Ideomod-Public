@@ -465,6 +465,7 @@ Slime and honey blocks behave as in vanilla, except that they cannot grab Oddsto
 
 - **Oddstone** generates as an ore in every overworld biome: veins of up to 7, replacing stone and deepslate, five tries per chunk below Y 0 and three between Y 0 and 63.
 - **Hollowstone formations** generate at underground lava: a few Oddstone blocks on the shore of a lava pool, with the lava next to them turned to Hollowstone.
+- **Continents** is an extra world type: larger landmasses separated by open ocean, highland regions that end in cliffs or slopes, and no vanilla rivers. The Default world type is unchanged.
 - **Ore Only (Debug)** is an extra world type. It generates the overworld and then removes everything that is not an ore, Oddstone or Hollowstone. It is for checking ore distribution.
 
 ## Recipes

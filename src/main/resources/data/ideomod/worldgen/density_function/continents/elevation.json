@@ -1,0 +1,189 @@
+{
+ "type": "minecraft:flat_cache",
+ "argument": {
+  "type": "minecraft:cache_2d",
+  "argument": {
+   "type": "minecraft:mul",
+   "argument1": {
+    "type": "minecraft:add",
+    "argument1": {
+     "type": "minecraft:spline",
+     "spline": {
+      "coordinate": "ideomod:continents/elevation_noise",
+      "points": [
+       {
+        "location": -1.0,
+        "value": 0.0,
+        "derivative": 0.0
+       },
+       {
+        "location": -0.16,
+        "value": 0.0,
+        "derivative": 0.0
+       },
+       {
+        "location": 0.0,
+        "value": 0.1875,
+        "derivative": 0.0
+       },
+       {
+        "location": 0.14,
+        "value": 0.1875,
+        "derivative": 0.0
+       },
+       {
+        "location": 0.3,
+        "value": 0.375,
+        "derivative": 0.0
+       },
+       {
+        "location": 1.0,
+        "value": 0.375,
+        "derivative": 0.0
+       }
+      ]
+     }
+    },
+    "argument2": {
+     "type": "minecraft:mul",
+     "argument1": {
+      "type": "minecraft:clamp",
+      "input": {
+       "type": "minecraft:add",
+       "argument1": 0.65,
+       "argument2": {
+        "type": "minecraft:mul",
+        "argument1": 4.0,
+        "argument2": {
+         "type": "minecraft:shifted_noise",
+         "noise": "ideomod:continents/cliffness",
+         "shift_x": "minecraft:shift_x",
+         "shift_y": 0.0,
+         "shift_z": "minecraft:shift_z",
+         "xz_scale": 0.25,
+         "y_scale": 0.0
+        }
+       }
+      },
+      "min": 0.0,
+      "max": 1.0
+     },
+     "argument2": {
+      "type": "minecraft:add",
+      "argument1": {
+       "type": "minecraft:spline",
+       "spline": {
+        "coordinate": "ideomod:continents/elevation_noise",
+        "points": [
+         {
+          "location": -1.0,
+          "value": 0.0,
+          "derivative": 0.0
+         },
+         {
+          "location": -0.084,
+          "value": 0.0,
+          "derivative": 0.0
+         },
+         {
+          "location": -0.076,
+          "value": 0.1875,
+          "derivative": 0.0
+         },
+         {
+          "location": 0.216,
+          "value": 0.1875,
+          "derivative": 0.0
+         },
+         {
+          "location": 0.224,
+          "value": 0.375,
+          "derivative": 0.0
+         },
+         {
+          "location": 1.0,
+          "value": 0.375,
+          "derivative": 0.0
+         }
+        ]
+       }
+      },
+      "argument2": {
+       "type": "minecraft:mul",
+       "argument1": -1.0,
+       "argument2": {
+        "type": "minecraft:spline",
+        "spline": {
+         "coordinate": "ideomod:continents/elevation_noise",
+         "points": [
+          {
+           "location": -1.0,
+           "value": 0.0,
+           "derivative": 0.0
+          },
+          {
+           "location": -0.16,
+           "value": 0.0,
+           "derivative": 0.0
+          },
+          {
+           "location": 0.0,
+           "value": 0.1875,
+           "derivative": 0.0
+          },
+          {
+           "location": 0.14,
+           "value": 0.1875,
+           "derivative": 0.0
+          },
+          {
+           "location": 0.3,
+           "value": 0.375,
+           "derivative": 0.0
+          },
+          {
+           "location": 1.0,
+           "value": 0.375,
+           "derivative": 0.0
+          }
+         ]
+        }
+       }
+      }
+     }
+    }
+   },
+   "argument2": {
+    "type": "minecraft:mul",
+    "argument1": {
+     "type": "minecraft:clamp",
+     "input": {
+      "type": "minecraft:mul",
+      "argument1": 25.0,
+      "argument2": {
+       "type": "minecraft:add",
+       "argument1": 0.11,
+       "argument2": "ideomod:continents/continents"
+      }
+     },
+     "min": 0.0,
+     "max": 1.0
+    },
+    "argument2": {
+     "type": "minecraft:clamp",
+     "input": {
+      "type": "minecraft:mul",
+      "argument1": -2.5,
+      "argument2": {
+       "type": "minecraft:add",
+       "argument1": -0.85,
+       "argument2": "ideomod:continents/offset_base"
+      }
+     },
+     "min": 0.0,
+     "max": 1.0
+    }
+   }
+  }
+ }
+}
