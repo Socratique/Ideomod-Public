@@ -210,8 +210,21 @@ public abstract class PistonBaseBlockMixin {
 
         BlockEntity be = level.getBlockEntity(pos);
         if (be instanceof IPistonMovable) {
-            cir.setReturnValue(true);
+            // Vanilla's own first checks still apply (they are skipped by answering here):
+            // nothing moves outside the world border, nor up out of the top of the world or
+            // down out of the bottom. Without them a machine block pushed off the edge was
+            // deleted with its contents.
+            cir.setReturnValue(ideomod$insideWorld(level, pos, pushDirection));
         }
+    }
+
+    /** Vanilla PistonBaseBlock.isPushable's bounds checks, for a block that is not air. */
+    @Unique
+    private static boolean ideomod$insideWorld(Level level, BlockPos pos, Direction pushDirection) {
+        if (pos.getY() < level.getMinBuildHeight() || pos.getY() > level.getMaxBuildHeight() - 1) return false;
+        if (!level.getWorldBorder().isWithinBounds(pos)) return false;
+        if (pushDirection == Direction.DOWN && pos.getY() == level.getMinBuildHeight()) return false;
+        return !(pushDirection == Direction.UP && pos.getY() == level.getMaxBuildHeight() - 1);
     }
 
     // ========================================================================
