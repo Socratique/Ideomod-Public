@@ -840,6 +840,31 @@ public class IdeomodGameTests {
         }
     }
 
+    /**
+     * A powered empty Fluid Pipe takes a real water source beside it, but leaves a waterlogged block
+     * alone (it used to take the water by deleting the whole slab, frame or chest).
+     */
+    @GameTest(template = EMPTY)
+    public static void fluidPipeLeavesWaterloggedBlocksAlone(GameTestHelper helper) {
+        BlockPos pipePos = new BlockPos(2, 2, 2), slab = new BlockPos(3, 2, 2);
+        helper.setBlock(pipePos, ModBlocks.MACHINE_FLUID_PIPE.get());
+        helper.setBlock(slab, Blocks.OAK_SLAB.defaultBlockState().setValue(net.minecraft.world.level.block.SlabBlock.WATERLOGGED, true));
+        helper.setBlock(2, 3, 2, Blocks.REDSTONE_BLOCK);
+        helper.runAfterDelay(20, () -> {
+            if (!helper.getBlockState(slab).is(Blocks.OAK_SLAB)) { helper.fail("the waterlogged slab was taken: " + helper.getBlockState(slab), slab); return; }
+            if (helper.getBlockEntity(pipePos) instanceof MachineFluidPipeBlockEntity p && p.getFluidType() != FluidType.EMPTY) {
+                helper.fail("the pipe took water out of a waterlogged block", pipePos); return;
+            }
+            // and a real source still works
+            helper.setBlock(1, 2, 2, Blocks.WATER);
+            helper.runAfterDelay(20, () -> {
+                if (helper.getBlockEntity(pipePos) instanceof MachineFluidPipeBlockEntity p && p.getFluidType() == FluidType.WATER
+                        && !helper.getBlockState(new BlockPos(1, 2, 2)).is(Blocks.WATER)) helper.succeed();
+                else helper.fail("the pipe did not take a real water source", pipePos);
+            });
+        });
+    }
+
     // ==================== Recipes ====================
 
     /**

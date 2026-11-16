@@ -147,7 +147,8 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
 
             // Check for water source block
             FluidState fluidState = targetState.getFluidState();
-            if (fluidState.is(Fluids.WATER) && fluidState.isSource()) {
+            if (fluidState.is(Fluids.WATER) && fluidState.isSource()
+                    && targetState.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) {
                 // Remove the water source block
                 level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 3);
                 pipe.setFluidType(FluidType.WATER);
@@ -158,7 +159,8 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
             }
 
             // Check for lava source block
-            if (fluidState.is(Fluids.LAVA) && fluidState.isSource()) {
+            if (fluidState.is(Fluids.LAVA) && fluidState.isSource()
+                    && targetState.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) {
                 level.setBlock(targetPos, Blocks.AIR.defaultBlockState(), 3);
                 pipe.setFluidType(FluidType.LAVA);
                 pipe.onFluidReceived(dir);
@@ -199,14 +201,16 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
             BlockState inputState = level.getBlockState(inputPos);
             FluidState inputFluid = inputState.getFluidState();
 
-            if (inputFluid.is(Fluids.WATER) && inputFluid.isSource()) {
+            if (inputFluid.is(Fluids.WATER) && inputFluid.isSource()
+                    && inputState.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) {
                 level.setBlock(inputPos, Blocks.AIR.defaultBlockState(), 3);
                 pipe.setFluidType(FluidType.WATER);
                 pipe.onFluidReceived(inputFace);
                 pipe.syncToClients();
                 return true;
             }
-            if (inputFluid.is(Fluids.LAVA) && inputFluid.isSource()) {
+            if (inputFluid.is(Fluids.LAVA) && inputFluid.isSource()
+                    && inputState.getBlock() instanceof net.minecraft.world.level.block.LiquidBlock) {
                 level.setBlock(inputPos, Blocks.AIR.defaultBlockState(), 3);
                 pipe.setFluidType(FluidType.LAVA);
                 pipe.onFluidReceived(inputFace);
@@ -306,7 +310,23 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
             BlockPos targetPos = pos.relative(outputDir);
             BlockState targetState = level.getBlockState(targetPos);
 
-            // Deposit into air
+            // Deposit into air. Water put out in the Nether (an ultra-warm dimension) dries up with
+            // a hiss and smoke, as from a bucket: the pipe empties, nothing is placed.
+            if (targetState.isAir() && myFluid == FluidType.WATER && level.dimensionType().ultraWarm()) {
+                level.playSound(null, targetPos, net.minecraft.sounds.SoundEvents.FIRE_EXTINGUISH,
+                        net.minecraft.sounds.SoundSource.BLOCKS, 0.5F,
+                        2.6F + (level.random.nextFloat() - level.random.nextFloat()) * 0.8F);
+                if (level instanceof net.minecraft.server.level.ServerLevel server) {
+                    server.sendParticles(net.minecraft.core.particles.ParticleTypes.LARGE_SMOKE,
+                            targetPos.getX() + 0.5, targetPos.getY() + 0.5, targetPos.getZ() + 0.5,
+                            8, 0.3, 0.3, 0.3, 0.0);
+                }
+                pipe.setFluidType(FluidType.EMPTY);
+                pipe.syncToClients();
+                pipe.setRoundRobinIndex((tryIndex + 1) % outputOrder.length);
+                LOGGER.debug("Fluid pipe at {} let its water dry up in an ultra-warm dimension at {}", pos, targetPos);
+                return true;
+            }
             if (targetState.isAir()) {
                 BlockState fluidBlock = myFluid == FluidType.WATER
                         ? Blocks.WATER.defaultBlockState()
