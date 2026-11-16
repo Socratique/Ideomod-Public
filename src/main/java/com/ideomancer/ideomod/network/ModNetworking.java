@@ -28,6 +28,17 @@ public class ModNetworking {
 
     private static int packetId = 0;
 
+    /**
+     * Whether this player may change the settings of the machine at pos: not a spectator, and
+     * looking at that machine's menu (the only place the buttons are). The packets used to check
+     * only the distance, so anyone within 8 blocks could change a machine without opening it.
+     */
+    public static boolean hasMenuOpen(net.minecraft.server.level.ServerPlayer player, net.minecraft.core.BlockPos pos) {
+        return !player.isSpectator()
+                && player.containerMenu instanceof com.ideomancer.ideomod.block.machine.MachineFrameMenu menu
+                && menu.getBlockPos().equals(pos);
+    }
+
     public static void registerPackets() {
         CHANNEL.messageBuilder(RepeaterDelayPacket.class, packetId++, NetworkDirection.PLAY_TO_SERVER)
                 .encoder(RepeaterDelayPacket::encode)

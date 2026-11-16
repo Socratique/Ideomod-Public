@@ -31,7 +31,10 @@ public final class MovingFrameData {
      * @param facing       The framed block's FACING direction (for directional inner blocks)
      * @param innerSticky  The framed block's INNER_STICKY value (for constructing correct inner state)
      */
-    public record FrameTransitInfo(ResourceLocation innerBlockId, Direction facing, int innerSticky) {}
+    public record FrameTransitInfo(ResourceLocation innerBlockId, Direction facing, int innerSticky, long storedAt) {}
+
+    /** Entries older than this are dropped; a piston move takes 100 ms. */
+    private static final long KEEP_MS = 1000;
 
     /**
      * Map of destination position -> transit info.
@@ -52,7 +55,7 @@ public final class MovingFrameData {
      */
     public static void store(BlockPos destPos, ResourceLocation innerBlockId,
                               Direction facing, int innerSticky) {
-        TRANSIT_DATA.put(destPos.immutable(), new FrameTransitInfo(innerBlockId, facing, innerSticky));
+        TRANSIT_DATA.put(destPos.immutable(), new FrameTransitInfo(innerBlockId, facing, innerSticky, System.currentTimeMillis()));
     }
 
     /**
@@ -78,6 +81,16 @@ public final class MovingFrameData {
      */
     public static void clearAll() {
         TRANSIT_DATA.clear();
+    }
+
+    /**
+     * Drops entries from finished moves. Called as a move starts, in place of clearAll(), which
+     * also wiped the entries of another piston that started in the same tick (its framed blocks
+     * then rendered hollow in transit).
+     */
+    public static void prune() {
+        long cutoff = System.currentTimeMillis() - KEEP_MS;
+        TRANSIT_DATA.values().removeIf(info -> info.storedAt() < cutoff);
     }
 
     public static int size() {

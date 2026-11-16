@@ -902,6 +902,10 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     private void triggerSwapCheck() {
+        // Server only. On the client this runs when the open menu fills its slot, and the resets
+        // below wiped the client's copy of the settings (a Transmitter's GUI showed strength 0).
+        // The client gets its values from the server's sync.
+        if (this.level != null && this.level.isClientSide()) return;
         // Clear stale directional data from the previous specialization.
         this.inputFace = null;
         // Reset repeater delay to default (prevents stale delay leaking)

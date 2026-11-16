@@ -92,7 +92,10 @@ public class MachinePistonBlock extends AbstractMachineBlock {
                     // Extension complete -- place real head
                     BlockPos headPos = pos.relative(dir);
                     BlockState current = level.getBlockState(headPos);
-                    if (current.isAir() || current.is(Blocks.MOVING_PISTON)) {
+                    // Only into an empty space. A moving block here is something another mover is
+                    // sliding in during the arm's 2 ticks; the head used to overwrite it, deleting
+                    // the block. It now lands, and the next update extends the piston again.
+                    if (current.isAir()) {
                         BlockState headState = pistonBlock.getHeadState(dir);
                         level.setBlock(headPos, headState, 3);
                     }

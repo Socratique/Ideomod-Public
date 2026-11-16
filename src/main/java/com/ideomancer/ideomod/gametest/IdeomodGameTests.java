@@ -993,6 +993,35 @@ public class IdeomodGameTests {
         });
     }
 
+    /**
+     * Shift-clicking a stack of barrels into a Machine Base's menu (vanilla's own quick-move loop)
+     * puts one barrel in, making a Storage, and stops: the rest of the stack used to pour into the
+     * new Storage's slots.
+     */
+    @GameTest(template = EMPTY)
+    public static void shiftClickingAStackIntoABaseMovesOnlyOne(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 1, 2);
+        helper.setBlock(pos, ModBlocks.MACHINE_BLOCK.get());
+        net.minecraftforge.common.util.FakePlayer fp = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(helper.getLevel());
+        fp.getInventory().clearContent();
+        fp.getInventory().setItem(0, new ItemStack(Items.BARREL, 64));
+        var menu = new com.ideomancer.ideomod.block.machine.MachineFrameMenu(1, fp.getInventory(), helper.absolutePos(pos));
+        int index = -1;
+        for (int i = 0; i < menu.slots.size(); i++) {
+            var slot = menu.slots.get(i);
+            if (slot.container == fp.getInventory() && slot.getContainerSlot() == 0) { index = i; break; }
+        }
+        if (index < 0) { helper.fail("no hotbar slot in the menu"); return; }
+        menu.clicked(index, 0, net.minecraft.world.inventory.ClickType.QUICK_MOVE, fp);
+        int left = fp.getInventory().getItem(0).getCount();
+        fp.getInventory().clearContent();
+        if (!helper.getBlockState(pos).is(ModBlocks.MACHINE_STORAGE.get())) { helper.fail("the barrel didn't make a Storage: " + helper.getBlockState(pos), pos); return; }
+        var storage = (com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity) helper.getBlockEntity(pos);
+        int stored = storage.countItem(Items.BARREL) - 1;   // minus the one in the machine slot
+        if (left == 63 && stored == 0) helper.succeed();
+        else helper.fail("shift-click left " + left + " barrels in hand and put " + stored + " in the Storage's slots");
+    }
+
     // ==================== Recipes ====================
 
     /**

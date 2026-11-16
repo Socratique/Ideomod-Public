@@ -61,7 +61,7 @@ public abstract class PistonBaseBlockClientMixin {
 
         if (!level.isClientSide()) return;
 
-        MovingFrameData.clearAll();
+        MovingFrameData.prune();
 
         int captured;
         if (extending) {

@@ -164,7 +164,7 @@ public class BlockMoveHelper {
         // adds them during addBranchingBlocks), so no separate sympathetic
         // scan is needed.
         if (level.isClientSide()) {
-            MovingFrameData.clearAll();
+            MovingFrameData.prune();
             for (BlockPos sourcePos : toPush) {
                 BlockState srcState = level.getBlockState(sourcePos);
                 if (srcState.getBlock() instanceof FramedBlock) {

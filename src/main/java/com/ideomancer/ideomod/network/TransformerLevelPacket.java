@@ -53,6 +53,7 @@ public class TransformerLevelPacket {
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
+            if (!ModNetworking.hasMenuOpen(player, msg.pos)) return;
 
             // Validate level range
             if (msg.level < 1 || msg.level > 15) return;

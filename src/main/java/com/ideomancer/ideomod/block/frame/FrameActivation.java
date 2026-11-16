@@ -147,14 +147,12 @@ public class FrameActivation {
                 // Remove all network positions from pending (they share a network)
                 pending.removeAll(network);
 
-                // Also remove direct neighbors of the change point (they triggered
-                // from the same event and the network covers them)
-                for (Direction dir : Direction.values()) {
-                    pending.remove(changePos.relative(dir));
-                }
+                // (Neighbours of the change point are NOT dropped here: one in another network,
+                // say a frame touching only a second machine changed in the same tick, needs its
+                // own recalculation. Those in this network were removed just above.)
 
                 // Run one recalculation for this entire network
-                recalculate(level, changePos);
+                recalculate(level, changePos, network);
             }
         }
     }
@@ -185,11 +183,8 @@ public class FrameActivation {
 
             Set<BlockPos> network = discoverNetwork(serverLevel, changePos);
             pending.removeAll(network);
-            for (Direction dir : Direction.values()) {
-                pending.remove(changePos.relative(dir));
-            }
 
-            recalculate(serverLevel, changePos);
+            recalculate(serverLevel, changePos, network);
         }
     }
 
@@ -202,6 +197,14 @@ public class FrameActivation {
         public void onServerTick(TickEvent.ServerTickEvent event) {
             if (event.phase == TickEvent.Phase.END) {
                 processDirtyNetworks();
+            }
+        }
+
+        /** Forget a world when it unloads (it used to stay in memory until the game closed). */
+        @SubscribeEvent
+        public void onLevelUnload(net.minecraftforge.event.level.LevelEvent.Unload event) {
+            if (event.getLevel() instanceof ServerLevel level) {
+                dirtyPositions.remove(level);
             }
         }
     }
@@ -230,9 +233,14 @@ public class FrameActivation {
      */
     static void recalculate(Level level, BlockPos changePos) {
         if (level.isClientSide()) return;
+        recalculate(level, changePos, discoverNetwork(level, changePos));
+    }
 
-        // Step 1: Discover the entire conductor network
-        Set<BlockPos> network = discoverNetwork(level, changePos);
+    /** As above, with the network already discovered (the caller just walked it). */
+    static void recalculate(Level level, BlockPos changePos, Set<BlockPos> network) {
+        if (level.isClientSide()) return;
+
+        // Step 1: the entire conductor network (discovered by the caller)
         if (network.isEmpty()) return;
 
         // Step 2: Wipe all activation states (IFrameBlock ACTIVE=false)

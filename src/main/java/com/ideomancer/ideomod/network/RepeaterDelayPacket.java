@@ -53,6 +53,7 @@ public class RepeaterDelayPacket {
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
+            if (!ModNetworking.hasMenuOpen(player, msg.pos)) return;
 
             // Validate delay range
             if (msg.delay < 1 || msg.delay > 4) return;

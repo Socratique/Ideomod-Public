@@ -54,6 +54,7 @@ public class TimerDurationPacket {
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
+            if (!ModNetworking.hasMenuOpen(player, msg.pos)) return;
 
             // Validate duration index against config
             int[] durations = IdeomodConfig.getTimerDurations();

@@ -54,6 +54,7 @@ public class EnginePulseIntervalPacket {
         ctx.enqueueWork(() -> {
             ServerPlayer player = ctx.getSender();
             if (player == null) return;
+            if (!ModNetworking.hasMenuOpen(player, msg.pos)) return;
 
             // Validate interval index against config
             int[] durations = IdeomodConfig.getEngineDurations();

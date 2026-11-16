@@ -196,6 +196,7 @@ public class MachineFrameMenu extends AbstractContainerMenu {
     @Override
     public ItemStack quickMoveStack(Player player, int index) {
         ItemStack result = ItemStack.EMPTY;
+        boolean toSpecSlot = false;
         Slot slot = this.slots.get(index);
         if (slot != null && slot.hasItem()) {
             ItemStack slotItem = slot.getItem();
@@ -211,14 +212,20 @@ public class MachineFrameMenu extends AbstractContainerMenu {
                     moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
                 if (!moved && isEngine() && net.minecraftforge.common.ForgeHooks.getBurnTime(slotItem, null) > 0)
                     moved = this.moveItemStackTo(slotItem, TRANSIT_SLOT_INDEX, TRANSIT_SLOT_INDEX + 1, false);
-                if (!moved)
+                if (!moved) {
                     if (!this.moveItemStackTo(slotItem, SPEC_SLOT_INDEX, SPEC_SLOT_INDEX + 1, false))
                         return ItemStack.EMPTY;
+                    toSpecSlot = true;
+                }
             }
             if (slotItem.isEmpty()) slot.setByPlayer(ItemStack.EMPTY);
             else slot.setChanged();
             if (slotItem.getCount() == result.getCount()) return ItemStack.EMPTY;
             slot.onTake(player, slotItem);
+            // One item went into the machine slot: stop here. Vanilla repeats a shift-click while
+            // it keeps moving the same item, and the Base has just become a Pipe or Storage, so the
+            // rest of the stack used to pour into its new slots.
+            if (toSpecSlot) return ItemStack.EMPTY;
         }
         return result;
     }

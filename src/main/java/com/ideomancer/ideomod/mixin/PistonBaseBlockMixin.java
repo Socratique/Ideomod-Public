@@ -400,79 +400,10 @@ public abstract class PistonBaseBlockMixin {
             savedPositions.add(sourcePos);
         }
 
-        // Sympathetic scan: resolver doesn't know about our sympathetic system
-        scanSympathetic(level, moveDir, dimensionKey, savedPositions);
-    }
-
-    /**
-     * Scan for additional IPistonMovable blocks attached to the pulled block
-     * via stickiness. This handles cases where a sticky Machine Base drags
-     * other Machine Bases during retraction.
-     *
-     * Uses MovementScanHelper.scanStickyGroup to find the group, then
-     * iterates to save block entity data for each block.
-     */
-    private void scanStickyGroup(Level level, BlockPos startPos,
-                                  Direction moveDir, String dimensionKey,
-                                  java.util.Set<BlockPos> savedPositions) {
-        // Use helper to find all blocks in the sticky group
-        // FIX 2026-03-29: Was hardcoded to 12. Now reads from config to match
-        // the client mixin (which uses ideomod$getMaxPushBlocks) and the
-        // brace-aware push limit system.
-        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(
-                level, startPos, MovementScanHelper.getBasePushLimit());
-
-        // Iterate newly found positions and save their data
-        for (BlockPos pos : groupBlocks) {
-            if (!savedPositions.contains(pos)) {
-                BlockPos destPos = pos.relative(moveDir);
-                saveBlockEntityAt(level, pos, destPos, dimensionKey);
-                savedPositions.add(pos);
-            }
-        }
-    }
-
-    /**
-     * Scan for sympathetically linked Oddstone/Framed Oddstone blocks
-     * that the PistonStructureResolverMixin's sympathetic search would
-     * have added to the push list. These blocks are at range (not adjacent)
-     * so the BFS in scanStickyGroup won't find them.
-     *
-     * Uses MovementScanHelper.scanSympathetic to find all sympathetic oddstone
-     * positions, then iterates them to save block entity data and scan their
-     * sticky groups.
-     *
-     * CRITICAL: After finding a sympathetic oddstone, also scans its sticky
-     * group. Without this, blocks attached to the remote oddstone via stickiness
-     * (e.g. machine-activated framed blocks) would not have their block entity
-     * data saved, causing data loss on retraction. This was the root cause of
-     * the "sympathetic retraction with machine-activated framed blocks" bug.
-     */
-    private void scanSympathetic(Level level, Direction moveDir,
-                                  String dimensionKey,
-                                  java.util.Set<BlockPos> savedPositions) {
-        int radius = IdeomodConfig.getSympatheticRadius();
-
-        // Use helper to find all sympathetic oddstone blocks
-        Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, savedPositions, radius);
-
-        // Iterate newly found positions (those not in savedPositions)
-        for (BlockPos checkPos : allFound) {
-            if (!savedPositions.contains(checkPos)) {
-                BlockState checkState = level.getBlockState(checkPos);
-
-                // Save the oddstone's block entity data
-                BlockPos destPos = checkPos.relative(moveDir);
-                saveBlockEntityAt(level, checkPos, destPos, dimensionKey);
-                savedPositions.add(checkPos);
-
-                // Scan its sticky group too (resolver's addBlockLine behavior)
-                if (checkState.isStickyBlock()) {
-                    scanStickyGroup(level, checkPos, moveDir,
-                            dimensionKey, savedPositions);
-                }
-            }
-        }
+        // No separate sympathetic scan: the resolver mixin adds linked Oddstone (and their sticky
+        // groups) to toPush, and vanilla moves exactly toPush. A separate scan also found linked
+        // blocks the resolver leaves behind over the push limit, and stored their data under a
+        // position nothing was moving into, where a later arrival could pick it up.
     }
 
     /**
