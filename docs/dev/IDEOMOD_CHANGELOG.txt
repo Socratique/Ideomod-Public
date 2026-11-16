@@ -1,5 +1,43 @@
 # Ideomod Changelog
 
+## [2026-11-16] Fixes from the release audit, and speed-ups
+
+Found by a code audit (Claude, ChatGPT and a Fable 5.2 reviewer) before the Machine Mod's first release, each
+bug reproduced in game first, each fix checked in game and by a GameTest. Ported from the Machine Mod fork.
+
+Fixed:
+- A machine block caught mid-move when the world was saved and closed (or its chunk unloaded) landed empty;
+  the moving block now carries its data in the save. In-flight data is forgotten when the server stops.
+- Machine and framed blocks pushed out of the top or bottom of the world were deleted with their contents.
+- A mistake in config/ideomod/ideomod.json crashed the game at the next piston move; it is now logged and the
+  readable settings kept. /ideomod reload says when the file had a problem (and still sends players the
+  server's settings).
+- Unlinked portals threw things into the ground near the bottom of the world; they now land on the surface,
+  inside the world border, never into the End's void (Nether arrivals land on the roof).
+- A powered empty Fluid Pipe deleted waterlogged blocks; it now takes only real fluid sources. Its water dries
+  up in the Nether, as from a bucket.
+- Walking on Framed Redstone Ore replaced it with plain ore; a malformed inner block id crashed clients.
+- Filled Hollowstone mined with a pickaxe dropped no shards; a Silk Touch shovel destroyed the block inside.
+- Taking the Oddstone out of a powered source Transmitter left its receivers on.
+- timer.default_index had no effect on new Timers.
+- A portal with copper corners closed itself when a corner oxidised; breaking Oddstone placed against a
+  portal's face closed the portal.
+- Shift-clicking a stack into a Machine Base poured the rest of the stack into the new Pipe or Storage.
+- Smaller: stale data from pulls, hollow framed blocks when two pistons start together, a frame network
+  skipped in one tick, a Machine Piston head overwriting a sliding block, settings packets from players
+  without the menu open, a memory leak on leaving a world.
+- Sticky-piston pulls gave the blocks beside the head an extra update vanilla doesn't; they now match vanilla.
+
+Changed:
+- Hoppers no longer take a machine's item out (they still put one into an empty Machine Base).
+- Fortune on Hollowstone gives at most 9 shards.
+- The Machine Sticky Piston can't pull Oddstone directly, like a vanilla sticky piston.
+
+Faster (nothing plays differently):
+- Transmitters find each other from each chunk's block-entity list, not by checking every block in range.
+- Each piston move works out its blocks once, from vanilla's own resolver.
+- Idle pipes skip the redstone check; a burning Engine no longer alerts comparators every tick.
+
 ## [2026-11-15] Machine Seat: the Ideomancer's second textures
 
 - New side texture (a port at the bottom) and new bottom texture (a port in the centre, on the underside).
