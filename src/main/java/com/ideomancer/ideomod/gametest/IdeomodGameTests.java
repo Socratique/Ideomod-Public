@@ -865,6 +865,43 @@ public class IdeomodGameTests {
         });
     }
 
+    /** Stepping on a framed redstone ore leaves it framed (the ore used to replace the whole block with itself). */
+    @GameTest(template = EMPTY)
+    public static void steppingOnFramedRedstoneOreKeepsTheFrame(GameTestHelper helper) {
+        BlockPos pos = new BlockPos(2, 1, 2);
+        helper.setBlock(pos, ModBlocks.IRON_FRAMED_BLOCK.get());
+        if (!(helper.getBlockEntity(pos) instanceof com.ideomancer.ideomod.block.frame.FramedBlockEntity fbe)) { helper.fail("no framed block entity", pos); return; }
+        net.minecraft.nbt.CompoundTag tag = fbe.saveWithoutMetadata();
+        tag.putString("InnerBlock", "minecraft:redstone_ore");
+        fbe.load(tag);
+        net.minecraft.world.entity.Entity pig = helper.spawn(net.minecraft.world.entity.EntityType.PIG, new BlockPos(2, 2, 2));
+        BlockState state = helper.getBlockState(pos);
+        state.getBlock().stepOn(helper.getLevel(), helper.absolutePos(pos), state, pig);
+        helper.runAfterDelay(2, () -> {
+            if (helper.getBlockState(pos).is(ModBlocks.IRON_FRAMED_BLOCK.get())) helper.succeed();
+            else helper.fail("stepping on it turned the framed redstone ore into " + helper.getBlockState(pos), pos);
+        });
+    }
+
+    /** A framed-block item with a malformed inner id (only via commands) has a name and no inner block, instead of throwing. */
+    @GameTest(template = EMPTY)
+    public static void malformedInnerBlockIdIsTreatedAsEmpty(GameTestHelper helper) {
+        ItemStack stack = new ItemStack(ModBlocks.IRON_FRAMED_BLOCK.get());
+        net.minecraft.nbt.CompoundTag be = new net.minecraft.nbt.CompoundTag();
+        be.putString("InnerBlock", "Bad Id");
+        stack.getOrCreateTag().put("BlockEntityTag", be);
+        try {
+            if (com.ideomancer.ideomod.block.frame.FramedBlockEntity.getInnerBlockIdFromStack(stack) != null) { helper.fail("a malformed id was read as a block"); return; }
+            stack.getHoverName();
+            BlockPos pos = new BlockPos(2, 1, 2);
+            helper.setBlock(pos, ModBlocks.IRON_FRAMED_BLOCK.get());
+            helper.getBlockEntity(pos).load(be);
+            helper.succeed();
+        } catch (RuntimeException e) {
+            helper.fail("a malformed inner id threw: " + e);
+        }
+    }
+
     // ==================== Recipes ====================
 
     /**

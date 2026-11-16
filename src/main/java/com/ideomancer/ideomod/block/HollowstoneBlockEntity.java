@@ -105,7 +105,7 @@ public class HollowstoneBlockEntity extends BlockEntity {
     public void load(CompoundTag tag) {
         super.load(tag);
         if (tag.contains(TAG_INNER_BLOCK)) {
-            innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
+            innerBlockId = ResourceLocation.tryParse(tag.getString(TAG_INNER_BLOCK)); // null (empty) if malformed
             cachedInnerBlock = null;
         } else {
             innerBlockId = null;

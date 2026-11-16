@@ -253,7 +253,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     public void load(CompoundTag tag) {
         super.load(tag);
         if (tag.contains(TAG_INNER_BLOCK)) {
-            innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
+            innerBlockId = ResourceLocation.tryParse(tag.getString(TAG_INNER_BLOCK)); // null (no inner block) if malformed
             cachedInnerBlock = null; // Force re-resolve
         }
         // Attempt immediate blockstate sync. During fresh placement, the level
@@ -318,7 +318,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
     @Override
     public void loadMovementData(CompoundTag tag) {
         if (tag.contains(TAG_INNER_BLOCK)) {
-            innerBlockId = new ResourceLocation(tag.getString(TAG_INNER_BLOCK));
+            innerBlockId = ResourceLocation.tryParse(tag.getString(TAG_INNER_BLOCK)); // null (no inner block) if malformed
             cachedInnerBlock = null;
             setChanged();
             // Sync INNER_STICKY and INNER_LIGHT to blockstate after piston restore
@@ -343,7 +343,7 @@ public class FramedBlockEntity extends BlockEntity implements IPistonMovable {
         if (tag != null && tag.contains("BlockEntityTag")) {
             CompoundTag beTag = tag.getCompound("BlockEntityTag");
             if (beTag.contains(TAG_INNER_BLOCK)) {
-                return new ResourceLocation(beTag.getString(TAG_INNER_BLOCK));
+                return ResourceLocation.tryParse(beTag.getString(TAG_INNER_BLOCK)); // null if malformed
             }
         }
         return null;

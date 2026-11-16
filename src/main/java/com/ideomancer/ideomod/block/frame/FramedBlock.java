@@ -362,7 +362,11 @@ public class FramedBlock extends Block implements IFrameBlock, EntityBlock {
     public void stepOn(Level level, BlockPos pos, BlockState state, Entity entity) {
         FramedBlockEntity fbe = getFramedBE(level, pos);
         if (fbe != null) {
-            fbe.getInnerBlock().stepOn(level, pos, fbe.getInnerDefaultState(), entity);
+            // Redstone ore lights up by setting its own lit state at this position, which would
+            // replace the framed block (frame lost). Inside a frame it simply doesn't light.
+            if (!(fbe.getInnerBlock() instanceof net.minecraft.world.level.block.RedStoneOreBlock)) {
+                fbe.getInnerBlock().stepOn(level, pos, fbe.getInnerDefaultState(), entity);
+            }
             return;
         }
         super.stepOn(level, pos, state, entity);

@@ -109,7 +109,10 @@ public class FramedBlockItemModel implements BakedModel {
             }
 
             String innerBlockIdStr = beTag.getString("InnerBlock");
-            ResourceLocation innerBlockId = new ResourceLocation(innerBlockIdStr);
+            // A malformed id (only possible through commands or edited NBT) used to throw here,
+            // crashing every client that drew the item. It now draws as an empty frame.
+            ResourceLocation innerBlockId = ResourceLocation.tryParse(innerBlockIdStr);
+            if (innerBlockId == null) return original;
 
             BakedModel cached = cache.get(innerBlockId);
             if (cached != null) return cached;
