@@ -104,10 +104,9 @@ public class MachineFluidPipeBlock extends AbstractMachineBlock {
             pipe.setTransferCooldown(pipe.getTransferCooldown() - 1);
         }
 
-        boolean powered = level.hasNeighborSignal(pos);
-
-        // PULL: when powered and empty, try to pull fluid from adjacent
-        if (powered && !pipe.hasFluid() && pipe.getTransferCooldown() <= 0) {
+        // PULL: when powered and empty, try to pull fluid from adjacent. (The redstone check
+        // comes last: it is the costly one, and used to run every tick for every pipe.)
+        if (!pipe.hasFluid() && pipe.getTransferCooldown() <= 0 && level.hasNeighborSignal(pos)) {
             if (tryPullFluid(level, pos, pipe)) {
                 pipe.setTransferCooldown(MachineFluidPipeBlockEntity.getConfigTransferCooldown());
                 pipe.setChanged();

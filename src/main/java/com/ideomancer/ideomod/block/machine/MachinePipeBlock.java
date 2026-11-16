@@ -115,13 +115,10 @@ public class MachinePipeBlock extends AbstractMachineBlock {
             pipe.setTransferCooldown(pipe.getTransferCooldown() - 1);
         }
 
-        // Don't transfer if locked by redstone
-        if (level.hasNeighborSignal(pos)) {
-            return;
-        }
-
-        // Attempt push when cooldown expires and we have items
-        if (pipe.getTransferCooldown() <= 0 && pipe.hasTransitItem()) {
+        // Attempt push when cooldown expires and we have items, unless locked by redstone.
+        // (The redstone check comes last: it is the costly one, and an empty or cooling pipe
+        // has nothing to do either way. It used to run every tick for every pipe.)
+        if (pipe.getTransferCooldown() <= 0 && pipe.hasTransitItem() && !level.hasNeighborSignal(pos)) {
             if (tryPushItem(level, pos, pipe)) {
                 pipe.setTransferCooldown(MachinePipeBlockEntity.getConfigTransferCooldown());
                 pipe.setChanged();

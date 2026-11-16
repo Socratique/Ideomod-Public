@@ -63,6 +63,17 @@ public abstract class PistonStructureResolverMixin {
     // FEATURE 4: RANGED PISTON START POSITION REDIRECT
     // ====================================================================
 
+    /**
+     * Remembers a resolver that succeeded, so the piston mixins can use vanilla's own result
+     * inside moveBlocks (see ResolvedMoves) instead of resolving the same move again.
+     */
+    @Inject(method = "resolve", at = @At("RETURN"))
+    private void ideomod$rememberResolved(CallbackInfoReturnable<Boolean> cir) {
+        if (cir.getReturnValueZ()) {
+            com.ideomancer.ideomod.block.movement.ResolvedMoves.record((PistonStructureResolver) (Object) this);
+        }
+    }
+
     @Inject(method = "resolve", at = @At("HEAD"))
     private void ideomod$redirectStartPos(CallbackInfoReturnable<Boolean> cir) {
         // Every resolve starts outside branching (an exception thrown mid-resolve can't leak state).

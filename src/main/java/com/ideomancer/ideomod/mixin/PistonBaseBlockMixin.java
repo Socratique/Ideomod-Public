@@ -279,128 +279,31 @@ public abstract class PistonBaseBlockMixin {
     // FEATURE 2: SAVE BLOCK ENTITY DATA BEFORE VANILLA PISTON MOVES
     // ========================================================================
 
-    @Inject(method = "moveBlocks", at = @At("HEAD"))
+    /**
+     * Saves the machine data of every block this move carries, from vanilla's own resolver, at
+     * the moment moveBlocks asks it for the blocks to move: after it succeeded (a failed resolve
+     * never gets here), and before any block is replaced, so the block entities are still there.
+     *
+     * (Until 2026-11-16 this ran at HEAD of moveBlocks with a second resolver of its own, which
+     * for a pull meant taking the piston head away early to match vanilla. Same blocks, now
+     * worked out once.)
+     */
+    @Inject(method = "moveBlocks", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/block/piston/PistonStructureResolver;getToPush()Ljava/util/List;",
+            ordinal = 0))
     private void ideomod$saveMovableBlockEntityData(
             Level level, BlockPos pistonPos, Direction direction,
             boolean extending, CallbackInfoReturnable<Boolean> cir) {
 
-        if (level.isClientSide()) return;
+        if (level.isClientSide()) return;   // the client side is PistonBaseBlockClientMixin's
+        PistonStructureResolver resolver = com.ideomancer.ideomod.block.movement.ResolvedMoves.take();
+        if (resolver == null) return;
 
         String dimensionKey = level.dimension().location().toString();
-
-        if (extending) {
-            saveForExtension(level, pistonPos, direction, dimensionKey);
-        } else {
-            saveForRetraction(level, pistonPos, direction, dimensionKey);
+        Direction moveDir = extending ? direction : direction.getOpposite();
+        for (BlockPos sourcePos : resolver.getToPush()) {
+            saveBlockEntityAt(level, sourcePos, sourcePos.relative(moveDir), dimensionKey);
         }
-    }
-
-    /**
-     * Extension: construct a resolver, iterate toPush, save IPistonMovable data.
-     * The resolver works reliably for extension because our isPushable mixin
-     * handles the block entity check.
-     */
-    private void saveForExtension(Level level, BlockPos pistonPos,
-                                   Direction direction, String dimensionKey) {
-        PistonStructureResolver resolver = new PistonStructureResolver(
-                level, pistonPos, direction, true
-        );
-
-        if (!resolver.resolve()) return;
-
-        List<BlockPos> toPush = resolver.getToPush();
-        if (toPush.isEmpty()) return;
-
-        for (BlockPos sourcePos : toPush) {
-            saveBlockEntityAt(level, sourcePos, sourcePos.relative(direction), dimensionKey);
-        }
-    }
-
-    /**
-     * Retraction: save block entity data for blocks being pulled by a sticky piston.
-     *
-     * Uses PistonStructureResolver (same as saveForExtension). The resolver's
-     * addBlockLine + addBranchingBlocks recursion correctly discovers ALL blocks
-     * vanilla will move. Our isPushable mixin makes the resolver work for
-     * IPistonMovable blocks.
-     *
-     * CRITICAL TIMING FIX (2026-03-31c): This method runs at HEAD of moveBlocks,
-     * but vanilla's moveBlocks removes the piston head BEFORE creating its own
-     * resolver. Without this fix, our resolver's forward walk hits the still-present
-     * piston head (which isn't pushable), making addBlockLine return false and
-     * resolve() return false — even though vanilla's resolver succeeds after
-     * removing the head. The result: blocks move but data isn't saved, causing
-     * spec item deletion and state loss (pulsers stuck, etc.).
-     *
-     * Fix: We remove the piston head before creating our resolver, mirroring
-     * vanilla's behavior. We don't need to restore it because vanilla will
-     * remove it in the very next line of moveBlocks after our HEAD returns.
-     *
-     * Finishes with a sympathetic scan for remote oddstone blocks.
-     *
-     * Written by Claude, directed and guided by The Ideomancer.
-     */
-    private void saveForRetraction(Level level, BlockPos pistonPos,
-                                    Direction direction, String dimensionKey) {
-        Direction moveDir = direction.getOpposite(); // blocks move toward the piston
-
-        BlockPos pullPos = pistonPos.relative(direction, 2);
-        BlockState pullState = level.getBlockState(pullPos);
-
-        if (pullState.isAir()) return;
-
-        // FIX 2026-03-31c: Remove the piston head before running our resolver.
-        // Vanilla's moveBlocks removes it before creating its resolver, but our
-        // HEAD injection fires before that. Without this, the resolver's forward
-        // walk from startPos hits the piston head and fails.
-        //
-        // Removed exactly as vanilla's moveBlocks does it: setBlock(AIR, 20), i.e. no neighbour
-        // or shape updates and no client update. (This used level.removeBlock, flag 3, which
-        // gave blocks beside the head an extra update on every sticky-piston pull, observers
-        // and BUD setups included; 2026-11-15, Ideomancer: pulls behave as vanilla.) A failed
-        // resolve puts the head back the same quiet way, so the world is as vanilla finds it.
-        BlockPos headPos = pistonPos.relative(direction);
-        BlockState headState = level.getBlockState(headPos);
-        boolean removedHead = false;
-        if (headState.getBlock() instanceof PistonHeadBlock) {
-            level.setBlock(headPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 20);
-            removedHead = true;
-            Ideomod.LOGGER.debug("[RETRACT] Removed piston head at {} before resolver (vanilla would do this next)",
-                    headPos);
-        }
-
-        PistonStructureResolver resolver = new PistonStructureResolver(
-                level, pistonPos, direction, false  // extending=false for retraction
-        );
-
-        if (!resolver.resolve()) {
-            // If the resolver fails even after head removal, vanilla will also
-            // fail — no blocks will move. Restore the head so vanilla finds it
-            // in the expected state when it tries to remove it.
-            if (removedHead) {
-                level.setBlock(headPos, headState, 20);
-            }
-            Ideomod.LOGGER.debug("[RETRACT] Resolver returned false for retraction at {} — " +
-                    "no blocks will move, skipping save", pistonPos);
-            return;
-        }
-        // Don't restore the head — vanilla's very next line in moveBlocks
-        // will call level.removeBlock(headPos, false). Finding AIR there is
-        // harmless (no-op removal). This avoids a redundant set+remove cycle.
-
-        List<BlockPos> toPush = resolver.getToPush();
-        java.util.Set<BlockPos> savedPositions = new java.util.HashSet<>();
-
-        for (BlockPos sourcePos : toPush) {
-            BlockPos destPos = sourcePos.relative(moveDir);
-            saveBlockEntityAt(level, sourcePos, destPos, dimensionKey);
-            savedPositions.add(sourcePos);
-        }
-
-        // No separate sympathetic scan: the resolver mixin adds linked Oddstone (and their sticky
-        // groups) to toPush, and vanilla moves exactly toPush. A separate scan also found linked
-        // blocks the resolver leaves behind over the push limit, and stored their data under a
-        // position nothing was moving into, where a later arrival could pick it up.
     }
 
     /**

@@ -183,26 +183,21 @@ public class MachineTransmitterBlock extends AbstractMachineBlock {
         int radius = getTransmitterRadius();
         BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
 
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    mutable.set(pos.getX() + dx, pos.getY() + dy, pos.getZ() + dz);
+        for (BlockPos candidate : transmittersInRange(level, pos, radius)) {
+            mutable.set(candidate);
 
-                    BlockState otherState = level.getBlockState(mutable);
-                    if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
+            BlockState otherState = level.getBlockState(mutable);
+            if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
 
-                    // Check if the other transmitter is a SOURCE
-                    if (otherState.getValue(POWERED) && otherState.getValue(SOURCE)) {
-                        String otherChannel = getChannel(level, mutable.immutable());
-                        if (myChannel.equals(otherChannel)) {
-                            // Read the source's stored signal strength
-                            BlockEntity be = level.getBlockEntity(mutable.immutable());
-                            if (be instanceof MachineFrameBlockEntity machineBE) {
-                                maxStrength = Math.max(maxStrength,
-                                        machineBE.getTransmitterSignalStrength());
-                            }
-                        }
+            // Check if the other transmitter is a SOURCE
+            if (otherState.getValue(POWERED) && otherState.getValue(SOURCE)) {
+                String otherChannel = getChannel(level, mutable.immutable());
+                if (myChannel.equals(otherChannel)) {
+                    // Read the source's stored signal strength
+                    BlockEntity be = level.getBlockEntity(mutable.immutable());
+                    if (be instanceof MachineFrameBlockEntity machineBE) {
+                        maxStrength = Math.max(maxStrength,
+                                machineBE.getTransmitterSignalStrength());
                     }
                 }
             }
@@ -230,23 +225,18 @@ public class MachineTransmitterBlock extends AbstractMachineBlock {
         int radius = getTransmitterRadius();
         BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
 
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    mutable.set(pos.getX() + dx, pos.getY() + dy, pos.getZ() + dz);
+        for (BlockPos candidate : transmittersInRange(level, pos, radius)) {
+            mutable.set(candidate);
 
-                    BlockState otherState = level.getBlockState(mutable);
-                    if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
+            BlockState otherState = level.getBlockState(mutable);
+            if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
 
-                    String otherChannel = getChannel(level, mutable.immutable());
-                    if (!channel.equals(otherChannel)) continue;
+            String otherChannel = getChannel(level, mutable.immutable());
+            if (!channel.equals(otherChannel)) continue;
 
-                    BlockPos immutable = mutable.immutable();
-                    if (!level.getBlockTicks().willTickThisTick(immutable, otherState.getBlock())) {
-                        level.scheduleTick(immutable, otherState.getBlock(), 2, TickPriority.NORMAL);
-                    }
-                }
+            BlockPos immutable = mutable.immutable();
+            if (!level.getBlockTicks().willTickThisTick(immutable, otherState.getBlock())) {
+                level.scheduleTick(immutable, otherState.getBlock(), 2, TickPriority.NORMAL);
             }
         }
     }
@@ -275,42 +265,67 @@ public class MachineTransmitterBlock extends AbstractMachineBlock {
         int radius = getTransmitterRadius();
         BlockPos.MutableBlockPos mutable = new BlockPos.MutableBlockPos();
 
-        for (int dx = -radius; dx <= radius; dx++) {
-            for (int dy = -radius; dy <= radius; dy++) {
-                for (int dz = -radius; dz <= radius; dz++) {
-                    if (dx == 0 && dy == 0 && dz == 0) continue;
-                    mutable.set(pos.getX() + dx, pos.getY() + dy, pos.getZ() + dz);
+        for (BlockPos candidate : transmittersInRange(level, pos, radius)) {
+            mutable.set(candidate);
 
-                    BlockState otherState = level.getBlockState(mutable);
-                    if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
+            BlockState otherState = level.getBlockState(mutable);
+            if (!(otherState.getBlock() instanceof MachineTransmitterBlock)) continue;
 
-                    // Only turn off receivers on same channel
-                    if (!otherState.getValue(POWERED) || otherState.getValue(SOURCE)) continue;
+            // Only turn off receivers on same channel
+            if (!otherState.getValue(POWERED) || otherState.getValue(SOURCE)) continue;
 
-                    String otherChannel = getChannel(level, mutable.immutable());
-                    if (!channel.equals(otherChannel)) continue;
+            String otherChannel = getChannel(level, mutable.immutable());
+            if (!channel.equals(otherChannel)) continue;
 
-                    BlockPos immutable = mutable.immutable();
+            BlockPos immutable = mutable.immutable();
 
-                    // Reset stored signal strength
-                    BlockEntity be = level.getBlockEntity(immutable);
-                    if (be instanceof MachineFrameBlockEntity machineBE) {
-                        machineBE.setTransmitterSignalStrength(0);
-                    }
+            // Reset stored signal strength
+            BlockEntity be = level.getBlockEntity(immutable);
+            if (be instanceof MachineFrameBlockEntity machineBE) {
+                machineBE.setTransmitterSignalStrength(0);
+            }
 
-                    level.setBlock(immutable, otherState
-                            .setValue(POWERED, false), 3);
+            level.setBlock(immutable, otherState
+                    .setValue(POWERED, false), 3);
 
-                    LOGGER.debug("[TRANSMITTER] Receiver at {} turned off (source at {} powering down)",
-                            immutable, pos);
+            LOGGER.debug("[TRANSMITTER] Receiver at {} turned off (source at {} powering down)",
+                    immutable, pos);
 
-                    // Notify receiver's neighbors so dust de-powers
-                    for (Direction dir : Direction.values()) {
-                        level.updateNeighborsAt(immutable.relative(dir), otherState.getBlock());
-                    }
+            // Notify receiver's neighbors so dust de-powers
+            for (Direction dir : Direction.values()) {
+                level.updateNeighborsAt(immutable.relative(dir), otherState.getBlock());
+            }
+        }
+    }
+
+    /**
+     * Where a full scan of the cube around center (radius in each direction, center excluded)
+     * would find a Machine Transmitter, in the order that scan visited them: x, then y, then z.
+     *
+     * Every Transmitter has a block entity, and each chunk keeps the positions of its block
+     * entities, so this reads those lists for the chunks the cube covers instead of looking at
+     * every block in it (1,330 lookups per scan at radius 5, 15,624 at radius 12). Same results,
+     * same order; callers still read each block's state when they reach it. Chunks are fetched
+     * the way the block-by-block lookups fetched them, so nothing loads that didn't before.
+     */
+    private static java.util.List<BlockPos> transmittersInRange(Level level, BlockPos center, int radius) {
+        int minX = center.getX() - radius, maxX = center.getX() + radius;
+        int minY = center.getY() - radius, maxY = center.getY() + radius;
+        int minZ = center.getZ() - radius, maxZ = center.getZ() + radius;
+        java.util.List<BlockPos> found = new java.util.ArrayList<>();
+        for (int cx = minX >> 4; cx <= maxX >> 4; cx++) {
+            for (int cz = minZ >> 4; cz <= maxZ >> 4; cz++) {
+                net.minecraft.world.level.chunk.ChunkAccess chunk = level.getChunk(cx, cz);
+                for (BlockPos p : chunk.getBlockEntitiesPos()) {
+                    if (p.getX() < minX || p.getX() > maxX || p.getY() < minY || p.getY() > maxY
+                            || p.getZ() < minZ || p.getZ() > maxZ || p.equals(center)) continue;
+                    if (level.getBlockState(p).getBlock() instanceof MachineTransmitterBlock) found.add(p.immutable());
                 }
             }
         }
+        found.sort(java.util.Comparator.<BlockPos>comparingInt(p -> p.getX())
+                .thenComparingInt(p -> p.getY()).thenComparingInt(p -> p.getZ()));
+        return found;
     }
 
     /**

@@ -173,6 +173,9 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
         }
 
         boolean changed = false;
+        // Whether a comparator could read something different (fuel used, block state changed).
+        // The burn countdown alone only needs saving: the comparator reads the fuel stack.
+        boolean outputChanged = false;
         boolean isPowered = this.getInputFace() != null;
 
         // Step 1: Burn existing fuel — ONLY when powered.
@@ -201,6 +204,7 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
                     }
                 }
                 changed = true;
+                outputChanged = true;
             }
         }
 
@@ -241,6 +245,7 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
                 if (needsUpdate) {
                     level.setBlock(pos, currentState, 3);
                     changed = true;
+                    outputChanged = true;
                 }
             }
         } else {
@@ -252,12 +257,19 @@ public class MachineEngineBlockEntity extends MachineFrameBlockEntity {
                 if (shouldBeLit != currentlyLit) {
                     level.setBlock(pos, currentState.setValue(MachineEngineBlock.LIT, shouldBeLit), 3);
                     changed = true;
+                    outputChanged = true;
                 }
             }
         }
 
         if (changed) {
-            this.setChanged();
+            if (outputChanged) {
+                this.setChanged();
+            } else {
+                // Only the burn countdown moved: mark for saving without re-alerting comparators
+                // every tick (they read the fuel stack, which hasn't changed).
+                level.blockEntityChanged(pos);
+            }
         }
     }
 

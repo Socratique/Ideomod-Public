@@ -49,25 +49,34 @@ public abstract class PistonBaseBlockClientMixin {
     @Unique
     private static final Logger IDEOMOD_LOGGER = LoggerFactory.getLogger("Ideomod");
 
-    @Unique
-    private static int ideomod$getMaxPushBlocks() {
-        return com.ideomancer.ideomod.config.IdeomodConfig.getBasePushLimit();
-    }
 
-    @Inject(method = "moveBlocks", at = @At("HEAD"))
+    /**
+     * Captures the inner blocks of framed blocks and Hollowstone this move carries, for the
+     * transit renderer, from vanilla's own resolver at the moment moveBlocks asks it for the
+     * blocks to move (see ResolvedMoves). Until 2026-11-16 this resolved the move a second time
+     * at HEAD of moveBlocks, plus a separate Oddstone scan on pulls.
+     */
+    @Inject(method = "moveBlocks", at = @At(value = "INVOKE",
+            target = "Lnet/minecraft/world/level/block/piston/PistonStructureResolver;getToPush()Ljava/util/List;",
+            ordinal = 0))
     private void ideomod$captureFramedBlockDataForRenderer(
             Level level, BlockPos pistonPos, Direction direction,
             boolean extending, CallbackInfoReturnable<Boolean> cir) {
 
         if (!level.isClientSide()) return;
+        PistonStructureResolver resolver = com.ideomancer.ideomod.block.movement.ResolvedMoves.take();
+        if (resolver == null) return;
 
         MovingFrameData.prune();
 
-        int captured;
-        if (extending) {
-            captured = ideomod$captureExtension(level, pistonPos, direction);
-        } else {
-            captured = ideomod$captureRetraction(level, pistonPos, direction);
+        Direction moveDir = extending ? direction : direction.getOpposite();
+        int captured = 0;
+        for (BlockPos sourcePos : resolver.getToPush()) {
+            BlockPos destPos = sourcePos.relative(moveDir);
+            if (ideomod$captureIfFramed(level, sourcePos, destPos)
+                    || ideomod$captureIfHollowstone(level, sourcePos, destPos)) {
+                captured++;
+            }
         }
 
         if (captured > 0) {
@@ -75,126 +84,6 @@ public abstract class PistonBaseBlockClientMixin {
                     captured, extending ? "extension" : "retraction", pistonPos);
         }
     }
-
-    @Unique
-    private static int ideomod$captureExtension(Level level, BlockPos pistonPos, Direction direction) {
-        PistonStructureResolver resolver = new PistonStructureResolver(
-                level, pistonPos, direction, true
-        );
-
-        if (!resolver.resolve()) return 0;
-
-        int captured = 0;
-        List<BlockPos> toPush = resolver.getToPush();
-
-        for (BlockPos sourcePos : toPush) {
-            if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(direction))) {
-                captured++;
-            } else if (ideomod$captureIfHollowstone(level, sourcePos, sourcePos.relative(direction))) {
-                captured++;
-            }
-        }
-        return captured;
-    }
-
-    @Unique
-    private static int ideomod$captureRetraction(Level level, BlockPos pistonPos, Direction direction) {
-        Direction moveDir = direction.getOpposite();
-
-        BlockPos pullPos = pistonPos.relative(direction, 2);
-        BlockState pullState = level.getBlockState(pullPos);
-
-        if (pullState.isAir() || pullState.getPistonPushReaction() == net.minecraft.world.level.material.PushReaction.DESTROY) {
-            return 0;
-        }
-
-        // Remove piston head before resolver (mirrors server-side fix).
-        // Removed as vanilla's moveBlocks does it (setBlock AIR, flag 20: no updates).
-        // See PistonBaseBlockMixin.saveForRetraction for full explanation.
-        BlockPos headPos = pistonPos.relative(direction);
-        BlockState headState = level.getBlockState(headPos);
-        boolean removedHead = false;
-        if (headState.getBlock() instanceof PistonHeadBlock) {
-            level.setBlock(headPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 20);
-            removedHead = true;
-        }
-
-        PistonStructureResolver resolver = new PistonStructureResolver(
-                level, pistonPos, direction, false
-        );
-
-        if (!resolver.resolve()) {
-            if (removedHead) {
-                level.setBlock(headPos, headState, 20);
-            }
-            return 0;
-        }
-        // Don't restore — vanilla removes it next anyway.
-
-        List<BlockPos> toPush = resolver.getToPush();
-        Set<BlockPos> allBlocks = new HashSet<>(toPush);
-
-        // Sympathetic scan: resolver doesn't know about our sympathetic system
-        ideomod$captureSympathetic(level, allBlocks);
-
-        int captured = 0;
-        for (BlockPos sourcePos : allBlocks) {
-            if (ideomod$captureIfFramed(level, sourcePos, sourcePos.relative(moveDir))) {
-                captured++;
-            } else if (ideomod$captureIfHollowstone(level, sourcePos, sourcePos.relative(moveDir))) {
-                captured++;
-            }
-        }
-        return captured;
-    }
-
-    /**
-     * Scan for sympathetically linked Oddstone/Framed Oddstone blocks
-     * and add them (plus their sticky groups) to allBlocks.
-     * Client-side mirror of PistonBaseBlockMixin.scanSympathetic().
-     *
-     * Uses MovementScanHelper to find all sympathetic oddstone blocks,
-     * then iterates to scan their sticky groups for capture.
-     *
-     * This ensures framed blocks attached to remote sympathetic oddstone
-     * via machine activation are captured for transit rendering.
-     */
-    @Unique
-    private static void ideomod$captureSympathetic(Level level, Set<BlockPos> allBlocks) {
-        int radius = IdeomodConfig.getSympatheticRadius();
-
-        // Use helper to find all sympathetic oddstone blocks
-        Set<BlockPos> allFound = MovementScanHelper.scanSympathetic(level, allBlocks, radius);
-
-        // Add newly found oddstone blocks
-        for (BlockPos checkPos : allFound) {
-            if (!allBlocks.contains(checkPos)) {
-                BlockState checkState = level.getBlockState(checkPos);
-                allBlocks.add(checkPos);
-
-                // Scan sticky group attached to this sympathetic oddstone
-                // (Machine Bases, activated framed blocks, etc.)
-                if (checkState.isStickyBlock()) {
-                    ideomod$scanStickyGroupInto(level, checkPos, allBlocks);
-                }
-            }
-        }
-    }
-
-    /**
-     * BFS scan of a sticky group starting from startPos, adding all
-     * connected blocks to allBlocks. Used by sympathetic scanning to
-     * find blocks attached to remote oddstone.
-     *
-     * Uses MovementScanHelper.scanStickyGroup to find the group.
-     */
-    @Unique
-    private static void ideomod$scanStickyGroupInto(Level level, BlockPos startPos,
-                                                     Set<BlockPos> allBlocks) {
-        Set<BlockPos> groupBlocks = MovementScanHelper.scanStickyGroup(level, startPos, ideomod$getMaxPushBlocks());
-        allBlocks.addAll(groupBlocks);
-    }
-
 
     /**
      * If the block at sourcePos is a FramedBlock with an inner block,
