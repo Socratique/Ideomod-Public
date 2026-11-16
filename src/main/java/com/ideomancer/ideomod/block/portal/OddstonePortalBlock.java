@@ -537,16 +537,13 @@ public class OddstonePortalBlock extends Block {
     // ========================================================================
 
     private void scatterTeleport(ServerLevel level, Entity entity) {
-        double angle = level.getRandom().nextDouble() * Math.PI * 2;
-        int minDist = IdeomodConfig.getScatterDistanceMin();
-        int maxDist = IdeomodConfig.getScatterDistanceMax();
-        double distance = minDist + level.getRandom().nextDouble() * (maxDist - minDist);
-        int targetX = entity.blockPosition().getX() + (int) (Math.cos(angle) * distance);
-        int targetZ = entity.blockPosition().getZ() + (int) (Math.sin(angle) * distance);
-
-        // getHeight returns the Y of the highest block — we need to stand ON TOP of it
-        int surfaceY = level.getHeight(Heightmap.Types.MOTION_BLOCKING, targetX, targetZ);
-        BlockPos targetPos = new BlockPos(targetX, surfaceY + 1, targetZ);
+        BlockPos targetPos = findScatterTarget(level, entity.blockPosition());
+        if (targetPos == null) {
+            // Every try landed over the void (the End): nothing is thrown out into it.
+            Ideomod.LOGGER.info("{} not scatter-teleported: no ground found around {}",
+                    entity.getName().getString(), entity.blockPosition());
+            return;
+        }
 
         Entity arrived = moveThrough(level, entity, targetPos.getX() + 0.5, targetPos.getY(), targetPos.getZ() + 0.5,
                 entity.getYRot(), entity.getXRot(), entity.getDeltaMovement());
@@ -558,6 +555,35 @@ public class OddstonePortalBlock extends Block {
 
         Ideomod.LOGGER.info("{} scatter-teleported by unlinked Oddstone Portal to {}",
                 entity.getName().getString(), targetPos);
+    }
+
+    /** How many random spots a scatter tries before giving up (only the End's void makes it give up). */
+    private static final int SCATTER_TRIES = 8;
+
+    /**
+     * Where a scatter lands: a random spot scatter_distance_min to _max blocks away (kept inside the
+     * world border), standing on top of whatever is highest there. The spot's chunk is loaded (or
+     * generated) first, as a nether portal does for its far side: an unloaded column has no height,
+     * which used to put arrivals at the bottom of the world. A column with nothing in it (the End's
+     * void) is skipped for another spot; null if every try was void. In the Nether the highest block
+     * is the bedrock roof, so arrivals there land on the roof.
+     */
+    @Nullable
+    public static BlockPos findScatterTarget(ServerLevel level, BlockPos from) {
+        int minDist = IdeomodConfig.getScatterDistanceMin();
+        int maxDist = IdeomodConfig.getScatterDistanceMax();
+        net.minecraft.world.level.border.WorldBorder border = level.getWorldBorder();
+        for (int attempt = 0; attempt < SCATTER_TRIES; attempt++) {
+            double angle = level.getRandom().nextDouble() * Math.PI * 2;
+            double distance = minDist + level.getRandom().nextDouble() * (maxDist - minDist);
+            BlockPos column = border.clampToBounds(
+                    from.getX() + Math.cos(angle) * distance, from.getY(), from.getZ() + Math.sin(angle) * distance);
+            level.getChunk(column.getX() >> 4, column.getZ() >> 4);
+            // The first free Y above the highest motion-blocking block: standing on it.
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, column.getX(), column.getZ());
+            if (y > level.getMinBuildHeight()) return new BlockPos(column.getX(), y, column.getZ());
+        }
+        return null;
     }
 
     // ========================================================================

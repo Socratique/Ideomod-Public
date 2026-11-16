@@ -1308,6 +1308,22 @@ public class IdeomodGameTests {
         });
     }
 
+    /**
+     * An unlinked portal throws things onto the surface: the spot it picks (hundreds of blocks away,
+     * in a chunk nobody has loaded) has open space at the landing block and something solid under it.
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 400)
+    public static void unlinkedPortalLandsOnTheSurface(GameTestHelper helper) {
+        net.minecraft.server.level.ServerLevel level = helper.getLevel();
+        BlockPos target = com.ideomancer.ideomod.block.portal.OddstonePortalBlock.findScatterTarget(level, helper.absolutePos(new BlockPos(2, 2, 2)));
+        if (target == null) { helper.fail("no landing spot found in the overworld"); return; }
+        net.minecraft.world.level.block.state.BlockState at = level.getBlockState(target), below = level.getBlockState(target.below());
+        if (target.getY() <= level.getMinBuildHeight() + 1) helper.fail("landed at the bottom of the world: " + target);
+        else if (at.blocksMotion()) helper.fail("landed inside " + at + " at " + target);
+        else if (!below.blocksMotion() && below.getFluidState().isEmpty()) helper.fail("landed in the air above " + below + " at " + target);
+        else helper.succeed();
+    }
+
     /** A ring of plain Oddstone no longer forms a portal. */
     @GameTest(template = EMPTY)
     public static void plainOddstoneRingDoesNotLight(GameTestHelper helper) {
