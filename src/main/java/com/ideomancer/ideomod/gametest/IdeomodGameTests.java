@@ -1474,7 +1474,9 @@ public class IdeomodGameTests {
     /** Oddstone placed against a portal's face isn't part of its frame: removing it leaves the portal open. */
     @GameTest(template = EMPTY)
     public static void oddstoneAgainstThePortalFaceIsNotFrame(GameTestHelper helper) {
-        buildPortalRingAt(helper, 2, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.IRON_BLOCK);
+        // Coal corners: no other test uses them. Tests run side by side, and a portal with the same
+        // corners as another test's would link to it and be affected when that one closes.
+        buildPortalRingAt(helper, 2, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.COAL_BLOCK);
         if (!lightPortal(helper, 2, 1, 2)) { helper.fail("the ring did not light"); return; }
         helper.setBlock(3, 3, 3, ModBlocks.COBBLED_ODDSTONE.get());
         helper.runAfterDelay(2, () -> helper.setBlock(3, 3, 3, Blocks.AIR));
