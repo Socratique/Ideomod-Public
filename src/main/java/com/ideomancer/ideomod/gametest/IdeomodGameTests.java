@@ -1022,6 +1022,34 @@ public class IdeomodGameTests {
         else helper.fail("shift-click left " + left + " barrels in hand and put " + stored + " in the Storage's slots");
     }
 
+    /**
+     * A Machine Sticky Piston, like a vanilla one, can't pull Oddstone directly: pushed out, the
+     * Cobbled Oddstone stays when the piston retracts, while stone in the same setup comes back.
+     */
+    @GameTest(template = EMPTY)
+    public static void machineStickyPistonDoesNotPullOddstone(GameTestHelper helper) {
+        Block[] blocks = {ModBlocks.COBBLED_ODDSTONE.get(), Blocks.STONE};
+        for (int i = 0; i < 2; i++) {
+            int z = 1 + 3 * i;
+            helper.setBlock(new BlockPos(1, 1, z), ModBlocks.MACHINE_BLOCK.get());
+            ((MachineFrameBlockEntity) helper.getBlockEntity(new BlockPos(1, 1, z))).setItem(0, new ItemStack(Items.STICKY_PISTON));
+            helper.setBlock(new BlockPos(2, 1, z), blocks[i]);
+        }
+        helper.runAfterDelay(2, () -> { helper.setBlock(0, 1, 1, Blocks.REDSTONE_BLOCK); helper.setBlock(0, 1, 4, Blocks.REDSTONE_BLOCK); });
+        helper.runAfterDelay(12, () -> {
+            if (!helper.getBlockState(new BlockPos(3, 1, 1)).is(blocks[0]) || !helper.getBlockState(new BlockPos(3, 1, 4)).is(blocks[1])) {
+                helper.fail("the Machine Sticky Pistons did not push"); return;
+            }
+            helper.setBlock(0, 1, 1, Blocks.AIR);
+            helper.setBlock(0, 1, 4, Blocks.AIR);
+        });
+        helper.runAfterDelay(24, () -> {
+            if (!helper.getBlockState(new BlockPos(3, 1, 1)).is(blocks[0])) helper.fail("the Machine Sticky Piston pulled Oddstone back", new BlockPos(2, 1, 1));
+            else if (!helper.getBlockState(new BlockPos(2, 1, 4)).is(Blocks.STONE)) helper.fail("the Machine Sticky Piston no longer pulls stone", new BlockPos(2, 1, 4));
+            else helper.succeed();
+        });
+    }
+
     // ==================== Recipes ====================
 
     /**

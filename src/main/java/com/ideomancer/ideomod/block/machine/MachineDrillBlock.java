@@ -277,7 +277,7 @@ public class MachineDrillBlock extends AbstractMachineBlock {
                 .withOptionalParameter(LootContextParams.BLOCK_ENTITY, targetEntity);
         List<ItemStack> drops = state.getDrops(loot);
 
-        state.spawnAfterBreak(level, target, pickaxe, true); // ore experience, as mining by hand
+        state.spawnAfterBreak(level, target, pickaxe, true); // block side effects (e.g. infested stone's silverfish); no experience: the Drill mines, not you (Ideomancer)
         level.destroyBlock(target, false);
 
         Vec3 at = Vec3.atCenterOf(drillPos);

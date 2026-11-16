@@ -354,19 +354,16 @@ public abstract class PistonBaseBlockMixin {
         // HEAD injection fires before that. Without this, the resolver's forward
         // walk from startPos hits the piston head and fails.
         //
-        // We use level.removeBlock(pos, false) — EXACTLY matching vanilla's call.
-        // This uses flag 3 (UPDATE_NEIGHBORS | UPDATE_CLIENTS) with isMoving=false,
-        // which is safe because vanilla has already set the piston to EXTENDED=false
-        // in triggerEvent before calling moveBlocks. PistonHeadBlock.onRemove only
-        // tries to destroy the piston base when EXTENDED=true, so it's a no-op here.
-        //
-        // Using the same flags ensures our resolver sees the exact same post-removal
-        // world state (including any neighbor update cascades) that vanilla's would.
+        // Removed exactly as vanilla's moveBlocks does it: setBlock(AIR, 20), i.e. no neighbour
+        // or shape updates and no client update. (This used level.removeBlock, flag 3, which
+        // gave blocks beside the head an extra update on every sticky-piston pull, observers
+        // and BUD setups included; 2026-11-15, Ideomancer: pulls behave as vanilla.) A failed
+        // resolve puts the head back the same quiet way, so the world is as vanilla finds it.
         BlockPos headPos = pistonPos.relative(direction);
         BlockState headState = level.getBlockState(headPos);
         boolean removedHead = false;
         if (headState.getBlock() instanceof PistonHeadBlock) {
-            level.removeBlock(headPos, false);
+            level.setBlock(headPos, net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 20);
             removedHead = true;
             Ideomod.LOGGER.debug("[RETRACT] Removed piston head at {} before resolver (vanilla would do this next)",
                     headPos);
@@ -381,7 +378,7 @@ public abstract class PistonBaseBlockMixin {
             // fail — no blocks will move. Restore the head so vanilla finds it
             // in the expected state when it tries to remove it.
             if (removedHead) {
-                level.setBlock(headPos, headState, 3);
+                level.setBlock(headPos, headState, 20);
             }
             Ideomod.LOGGER.debug("[RETRACT] Resolver returned false for retraction at {} — " +
                     "no blocks will move, skipping save", pistonPos);

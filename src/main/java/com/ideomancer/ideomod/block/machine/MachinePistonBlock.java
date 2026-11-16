@@ -225,7 +225,10 @@ public class MachinePistonBlock extends AbstractMachineBlock {
             BlockState pullState = level.getBlockState(pullPos);
             if (!pullState.isAir() && pullState.getPistonPushReaction() != PushReaction.DESTROY
                     && pullState.getPistonPushReaction() != PushReaction.BLOCK
-                    && !pullState.is(Blocks.MOVING_PISTON)) {
+                    && !pullState.is(Blocks.MOVING_PISTON)
+                    // Oddstone can't be pulled directly, as with a vanilla sticky piston (it can
+                    // still be dragged along by a group the piston pulls).
+                    && !com.ideomancer.ideomod.block.movement.MovementScanHelper.isOddstoneOrFramedOddstone(level, pullPos)) {
                 level.setBlock(headPos, Blocks.AIR.defaultBlockState(), 18);
                 BlockMoveHelper.moveBlockAt(level, pos, pullPos, extensionDir.getOpposite());
                 pulledBlocks = true;
