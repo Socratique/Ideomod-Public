@@ -947,6 +947,52 @@ public class IdeomodGameTests {
         helper.succeed();
     }
 
+    /**
+     * A hopper under a Machine Drill leaves its pickaxe alone (it used to pull it out, turning the
+     * Drill back into a Base), and a hopper pointing into an empty Machine Base still feeds it.
+     */
+    @GameTest(template = EMPTY)
+    public static void hoppersFeedMachinesButNeverTakeTheirItem(GameTestHelper helper) {
+        BlockPos drill = new BlockPos(1, 2, 1);
+        helper.setBlock(1, 1, 1, Blocks.HOPPER);
+        helper.setBlock(drill, ModBlocks.MACHINE_BLOCK.get());
+        ((MachineFrameBlockEntity) helper.getBlockEntity(drill)).setItem(0, new ItemStack(Items.IRON_PICKAXE));
+        BlockPos base = new BlockPos(4, 1, 1);
+        helper.setBlock(base, ModBlocks.MACHINE_BLOCK.get());
+        helper.setBlock(4, 2, 1, Blocks.HOPPER);   // a hopper above points down into the Base
+        if (helper.getBlockEntity(new BlockPos(4, 2, 1)) instanceof net.minecraft.world.level.block.entity.HopperBlockEntity hopper) {
+            hopper.setItem(0, new ItemStack(Items.REPEATER));
+        }
+        helper.runAfterDelay(30, () -> {
+            if (!helper.getBlockState(drill).is(ModBlocks.MACHINE_DRILL.get())) { helper.fail("the hopper took the Drill's pickaxe: " + helper.getBlockState(drill), drill); return; }
+            if (!helper.getBlockState(base).is(ModBlocks.MACHINE_REPEATER.get())) { helper.fail("a hopper no longer feeds an empty Machine Base: " + helper.getBlockState(base), base); return; }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * Taking the Oddstone out of a powered source Transmitter (as the GUI does) switches its
+     * channel's receivers off; they used to stay on.
+     */
+    @GameTest(template = EMPTY)
+    public static void takingTheChannelOutOfASourceTransmitterTurnsReceiversOff(GameTestHelper helper) {
+        BlockPos source = new BlockPos(1, 1, 2), receiver = new BlockPos(4, 1, 2), lamp = new BlockPos(5, 1, 2);
+        helper.setBlock(source, ModBlocks.MACHINE_BLOCK.get());
+        ((MachineFrameBlockEntity) helper.getBlockEntity(source)).setItem(0, new ItemStack(ModBlocks.ODDSTONE.get()));
+        helper.setBlock(receiver, ModBlocks.MACHINE_BLOCK.get());
+        ((MachineFrameBlockEntity) helper.getBlockEntity(receiver)).setItem(0, new ItemStack(ModBlocks.ODDSTONE.get()));
+        helper.setBlock(lamp, Blocks.REDSTONE_LAMP);
+        helper.setBlock(0, 1, 2, Blocks.REDSTONE_BLOCK);
+        helper.runAfterDelay(10, () -> {
+            if (!helper.getBlockState(lamp).getValue(net.minecraft.world.level.block.RedstoneLampBlock.LIT)) { helper.fail("the receiver never came on", lamp); return; }
+            ((net.minecraft.world.Container) helper.getBlockEntity(source)).removeItem(0, 1);
+            helper.runAfterDelay(10, () -> {
+                if (helper.getBlockState(lamp).getValue(net.minecraft.world.level.block.RedstoneLampBlock.LIT)) helper.fail("the receiver stayed on after the source lost its channel", lamp);
+                else helper.succeed();
+            });
+        });
+    }
+
     // ==================== Recipes ====================
 
     /**

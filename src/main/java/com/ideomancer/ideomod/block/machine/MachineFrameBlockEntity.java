@@ -126,7 +126,10 @@ public class MachineFrameBlockEntity extends BlockEntity
      *
      * Reset to config default on every specialization swap.
      */
-    private int timerDuration = 20;
+    // New block entities start at the configured default (timer.default_index). Saving still
+    // leaves 20 out and loading still reads a missing value as 20, so saved Timers read back as
+    // they always did. (It used to be a fixed 20, so the setting had no effect on new Timers.)
+    private int timerDuration = IdeomodConfig.getTimerDefaultDuration();
 
     /**
      * Countdown ticks remaining for the Machine Timer. When the timer
@@ -494,6 +497,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         super.load(tag);
         this.items = NonNullList.withSize(1, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(tag, this.items);
+        rememberSpec();
         if (tag.contains(TAG_INPUT_FACE)) {
             this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
         } else {
@@ -655,6 +659,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     public void loadMovementData(CompoundTag tag) {
         this.items = NonNullList.withSize(1, ItemStack.EMPTY);
         ContainerHelper.loadAllItems(tag, this.items);
+        rememberSpec();
         if (tag.contains(TAG_INPUT_FACE)) {
             this.inputFace = Direction.from3DDataValue(tag.getInt(TAG_INPUT_FACE));
         } else {
@@ -808,10 +813,37 @@ public class MachineFrameBlockEntity extends BlockEntity
     @Override
     public ItemStack getItem(int slot) { return this.items.get(slot); }
 
+    /**
+     * The item last seen in the specialization slot. The menu's shift-click empties the slot's
+     * stack in place before calling setItem, so the slot itself can't say what was taken out;
+     * the block still needs to know (a Transmitter switches its channel's receivers off).
+     */
+    private ItemStack specMemory = ItemStack.EMPTY;
+
+    private void rememberSpec() {
+        this.specMemory = this.items.get(0).copy();
+    }
+
+    /** Tells the current block that the item behind it is going (before any swap replaces it). */
+    private void notifySpecChanging(ItemStack oldStack, ItemStack newStack) {
+        if (this.level != null && !this.level.isClientSide()
+                && !ItemStack.isSameItemSameTags(oldStack, newStack)) {
+            Block block = this.level.getBlockState(this.worldPosition).getBlock();
+            if (block instanceof AbstractMachineBlock machineBlock) {
+                machineBlock.onSpecItemChanging(this.level, this.worldPosition, oldStack);
+            }
+        }
+    }
+
     @Override
     public ItemStack removeItem(int slot, int amount) {
+        ItemStack old = slot == 0 ? this.specMemory.copy() : ItemStack.EMPTY;
         ItemStack result = ContainerHelper.removeItem(this.items, slot, amount);
         if (!result.isEmpty()) {
+            if (slot == 0) {
+                rememberSpec();
+                notifySpecChanging(old, this.items.get(0));
+            }
             this.setChanged();
             triggerSwapCheck();
         }
@@ -825,22 +857,17 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     @Override
     public void setItem(int slot, ItemStack stack) {
-        ItemStack oldStack = this.items.get(slot).copy();
+        ItemStack oldStack = slot == 0 ? this.specMemory.copy() : this.items.get(slot).copy();
         this.items.set(slot, stack);
         if (stack.getCount() > this.getMaxStackSize()) {
             stack.setCount(this.getMaxStackSize());
         }
+        if (slot == 0) rememberSpec();
 
         // PRE-SWAP: Let the current block clean up state tied to the old item
         // (e.g., transmitter turning off old-channel receivers). Must happen
         // BEFORE triggerSwapCheck, which may replace the block entirely.
-        if (this.level != null && !this.level.isClientSide()
-                && !ItemStack.isSameItemSameTags(oldStack, stack)) {
-            Block block = this.level.getBlockState(this.worldPosition).getBlock();
-            if (block instanceof AbstractMachineBlock machineBlock) {
-                machineBlock.onSpecItemChanging(this.level, this.worldPosition, oldStack);
-            }
-        }
+        notifySpecChanging(oldStack, stack);
 
         this.setChanged();
         triggerSwapCheck();
@@ -870,6 +897,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (stack.getCount() > this.getMaxStackSize()) {
             stack.setCount(this.getMaxStackSize());
         }
+        rememberSpec();
         this.setChanged();
     }
 
@@ -916,7 +944,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     @Override
-    public void clearContent() { this.items.clear(); }
+    public void clearContent() { this.items.clear(); rememberSpec(); }
 
     @Override
     public int getMaxStackSize() { return 1; }
@@ -935,7 +963,10 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     @Override
     public boolean canTakeItemThroughFace(int slot, ItemStack stack, net.minecraft.core.Direction direction) {
-        return true;
+        // A hopper may put the item that makes a machine into an empty Machine Base, but never
+        // takes a machine's item out (it used to: a hopper under a Drill took its pickaxe).
+        // Storage, Pipe and Engine expose their own other slots for that.
+        return slot != 0;
     }
 
     // ========================================================================
