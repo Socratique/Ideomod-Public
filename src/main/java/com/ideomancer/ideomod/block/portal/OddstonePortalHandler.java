@@ -97,6 +97,10 @@ public class OddstonePortalHandler {
             BlockPos neighbor = pos.relative(dir);
             BlockState neighborState = level.getBlockState(neighbor);
             if (neighborState.is(ModBlocks.ODDSTONE_PORTAL.get())) {
+                // A frame block sits in the portal's plane. Oddstone placed against the portal's
+                // face (along the axis it faces) is not part of the frame, and breaking it used
+                // to close the portal.
+                if (dir.getAxis() == neighborState.getValue(OddstonePortalBlock.AXIS)) continue;
                 unregisterAndClear(level, neighbor, neighborState);
                 break;
             }

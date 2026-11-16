@@ -1392,6 +1392,42 @@ public class IdeomodGameTests {
     }
 
     /**
+     * Copper corners count as copper whatever their oxidation: a corner that weathers keeps the portal
+     * open, and a ring with oxidized (and waxed) corners links to one with fresh copper corners.
+     */
+    @GameTest(template = EMPTY)
+    public static void oxidisedCopperCornersStillCountAsCopper(GameTestHelper helper) {
+        buildPortalRingAt(helper, 1, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.COPPER_BLOCK);
+        buildPortalRingAt(helper, 5, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.OXIDIZED_COPPER);
+        helper.setBlock(1, 1, 5, Blocks.WAXED_WEATHERED_COPPER);
+        if (!lightPortal(helper, 2, 1, 1)) { helper.fail("the copper ring did not light"); return; }
+        if (!lightPortal(helper, 2, 1, 5)) { helper.fail("the oxidized ring did not light"); return; }
+        helper.setBlock(5, 5, 1, Blocks.EXPOSED_COPPER);   // a corner of the first ring weathers
+        helper.runAfterDelay(4, () -> {
+            if (!helper.getBlockState(new BlockPos(3, 3, 1)).is(ModBlocks.ODDSTONE_PORTAL.get())) {
+                helper.fail("the portal closed when a copper corner oxidized", new BlockPos(3, 3, 1)); return;
+            }
+            var data = com.ideomancer.ideomod.block.portal.OddstonePortalSavedData.get(helper.getLevel());
+            var near = data.getPortal(helper.absolutePos(new BlockPos(1, 1, 1)));
+            if (near == null || !near.isLinked()) helper.fail("the fresh and oxidized copper rings did not link");
+            else helper.succeed();
+        });
+    }
+
+    /** Oddstone placed against a portal's face isn't part of its frame: removing it leaves the portal open. */
+    @GameTest(template = EMPTY)
+    public static void oddstoneAgainstThePortalFaceIsNotFrame(GameTestHelper helper) {
+        buildPortalRingAt(helper, 2, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.IRON_BLOCK);
+        if (!lightPortal(helper, 2, 1, 2)) { helper.fail("the ring did not light"); return; }
+        helper.setBlock(3, 3, 3, ModBlocks.COBBLED_ODDSTONE.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(3, 3, 3, Blocks.AIR));
+        helper.runAfterDelay(6, () -> {
+            if (helper.getBlockState(new BlockPos(3, 3, 2)).is(ModBlocks.ODDSTONE_PORTAL.get())) helper.succeed();
+            else helper.fail("removing Oddstone from the portal's face closed it", new BlockPos(3, 3, 2));
+        });
+    }
+
+    /**
      * Like a nether portal, a dropped item goes through to the linked portal (arriving as a fresh
      * copy with the same UUID); and it stays there after the cooldown instead of bouncing back,
      * because staying inside keeps the cooldown up.

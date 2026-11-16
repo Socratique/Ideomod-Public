@@ -234,7 +234,7 @@ public class OddstonePortalFrameDetector {
     }
 
     private static String getBlockId(Level level, BlockPos pos) {
-        Block block = level.getBlockState(pos).getBlock();
+        Block block = PortalUtils.addressBlock(level.getBlockState(pos).getBlock());
         return ForgeRegistries.BLOCKS.getKey(block).toString();
     }
 

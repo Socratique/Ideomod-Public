@@ -160,7 +160,7 @@ natural Oddstone ore never forms part of a frame. (Plain Oddstone frames, as bef
 ![Oddstone Portal](docs/media/portal.gif)
 
 - **Shape:** vertical only. The opening is 3 to 19 blocks wide and 3 to 19 tall, and must be empty.
-- **Corner blocks:** blocks of coal, iron, copper, gold, redstone, lapis, diamond, emerald, netherite, quartz or amethyst, or raw iron, raw copper or raw gold blocks.
+- **Corner blocks:** blocks of coal, iron, copper, gold, redstone, lapis, diamond, emerald, netherite, quartz or amethyst, or raw iron, raw copper or raw gold blocks. Copper counts as copper at any stage of oxidation, waxed or not, so a copper corner that weathers keeps the portal open.
 - **Lighting it:** throw an ender pearl at the frame. The pearl is used up and you are not teleported by it.
 - **Address:** the four corner blocks are the portal's address. It reads the same from both sides.
 - **Linking:** the first portal with a given address is unlinked. A second portal with the same address, in the same dimension, links to it. A third will not light.

@@ -61,6 +61,26 @@ public class PortalUtils {
     }
 
     /**
+     * Every full copper block, at every stage of oxidation, waxed or not. As a portal corner they
+     * all count as copper: the address reads them as minecraft:copper_block, so a corner that
+     * oxidises (or is waxed) keeps the portal's address and the portal stays open.
+     */
+    private static final java.util.Set<net.minecraft.world.level.block.Block> COPPER_BLOCKS = java.util.Set.of(
+            net.minecraft.world.level.block.Blocks.COPPER_BLOCK,
+            net.minecraft.world.level.block.Blocks.EXPOSED_COPPER,
+            net.minecraft.world.level.block.Blocks.WEATHERED_COPPER,
+            net.minecraft.world.level.block.Blocks.OXIDIZED_COPPER,
+            net.minecraft.world.level.block.Blocks.WAXED_COPPER_BLOCK,
+            net.minecraft.world.level.block.Blocks.WAXED_EXPOSED_COPPER,
+            net.minecraft.world.level.block.Blocks.WAXED_WEATHERED_COPPER,
+            net.minecraft.world.level.block.Blocks.WAXED_OXIDIZED_COPPER);
+
+    /** The block a corner counts as in a portal address: any full copper block reads as copper. */
+    public static net.minecraft.world.level.block.Block addressBlock(net.minecraft.world.level.block.Block block) {
+        return COPPER_BLOCKS.contains(block) ? net.minecraft.world.level.block.Blocks.COPPER_BLOCK : block;
+    }
+
+    /**
      * Convenience overload: checks corner block by position.
      * Looks up the block state from the level first.
      */
