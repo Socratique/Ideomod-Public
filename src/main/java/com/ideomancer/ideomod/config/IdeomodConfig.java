@@ -38,6 +38,8 @@ public class IdeomodConfig {
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static final Object LOCK = new Object();
     private static volatile boolean loaded = false;
+    /** Whether the last load read the file without a problem (for /ideomod reload's answer). */
+    private static volatile boolean lastLoadClean = true;
 
     // ========================================================================
     // ODDSTONE
@@ -49,7 +51,7 @@ public class IdeomodConfig {
     private static final int MAX_SYMPATHETIC_RADIUS = 16;
 
     /** Mobs that are repelled by Oddstone pathfinding. */
-    private static Set<String> affectedMobs = new HashSet<>();
+    private static volatile Set<String> affectedMobs = new HashSet<>();
 
     // ========================================================================
     // PISTONS & MOVEMENT
@@ -381,6 +383,7 @@ public class IdeomodConfig {
         Path configDir = FMLPaths.CONFIGDIR.get().resolve("ideomod");
         Path configFile = configDir.resolve("ideomod.json");
 
+        lastLoadClean = true;
         try {
             if (!Files.exists(configDir)) {
                 Files.createDirectories(configDir);
@@ -388,7 +391,21 @@ public class IdeomodConfig {
 
             if (Files.exists(configFile)) {
                 String json = Files.readString(configFile);
-                parseConfig(json);
+                JsonObject root = readRoot(json);
+                if (root == null) {
+                    lastLoadClean = false;
+                    // Not valid JSON: keep what is loaded now (the defaults on first load) rather
+                    // than crash the game on the next piston move or mob path.
+                    if (affectedMobs.isEmpty()) populateDefaultMobs();
+                    loaded = true;
+                    return;
+                }
+                try {
+                    parseConfig(root);
+                } catch (RuntimeException e) {
+                    lastLoadClean = false;
+                    Ideomod.LOGGER.error("Part of ideomod.json could not be read; values after the problem keep their previous setting", e);
+                }
                 Ideomod.LOGGER.info("Loaded Ideomod config (sympathetic radius={}, push limit={}, {} affected mobs, {} timer presets)",
                         sympatheticRadius, basePushLimit, affectedMobs.size(), timerDurations.length);
             } else {
@@ -408,20 +425,36 @@ public class IdeomodConfig {
      * Parses the JSON config into runtime values.
      * Missing keys gracefully fall back to defaults.
      */
-    private static void parseConfig(String json) {
-        JsonObject root = GSON.fromJson(json, JsonObject.class);
+    /** The file's top-level object, or null (with the reason logged) if it is not valid JSON. */
+    private static JsonObject readRoot(String json) {
+        try {
+            JsonObject root = GSON.fromJson(json, JsonObject.class);
+            if (root == null) {
+                Ideomod.LOGGER.error("ideomod.json is empty; keeping the current settings");
+            }
+            return root;
+        } catch (RuntimeException e) {
+            Ideomod.LOGGER.error("ideomod.json is not valid JSON ({}); keeping the current settings. Fix the file and run /ideomod reload.",
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    private static void parseConfig(JsonObject root) {
 
         // --- Oddstone ---
         JsonObject oddstone = getSection(root, "oddstone");
         if (oddstone != null) {
             sympatheticRadius = clamp(getInt(oddstone, "sympathetic_radius", sympatheticRadius), 1, MAX_SYMPATHETIC_RADIUS);
 
-            affectedMobs.clear();
-            if (oddstone.has("affected_mobs")) {
+            if (oddstone.has("affected_mobs") && oddstone.get("affected_mobs").isJsonArray()) {
+                // Built aside and swapped in whole, so a mob path never reads a half-filled list.
+                Set<String> parsed = new HashSet<>();
                 JsonArray mobs = oddstone.getAsJsonArray("affected_mobs");
                 for (int i = 0; i < mobs.size(); i++) {
-                    affectedMobs.add(mobs.get(i).getAsString());
+                    if (mobs.get(i).isJsonPrimitive()) parsed.add(mobs.get(i).getAsString());
                 }
+                affectedMobs = parsed;
             } else {
                 populateDefaultMobs();
             }
@@ -653,7 +686,8 @@ public class IdeomodConfig {
     /** Client: take the server's values for this connection (the file is not touched). */
     public static void applyServerConfig(String json) {
         synchronized (LOCK) {
-            parseConfig(json);
+            JsonObject root = readRoot(json);
+            if (root != null) parseConfig(root);   // a malformed packet keeps the current values
             loaded = true;
             usingServerConfig = true;
         }
@@ -679,11 +713,12 @@ public class IdeomodConfig {
     /**
      * Force a reload of the config. Useful for /reload commands.
      */
-    public static void reloadConfig() {
+    /** Reloads from disk; false if the file had a problem (the log says what). */
+    public static boolean reloadConfig() {
         synchronized (LOCK) {
             loaded = false;
-            affectedMobs.clear();
             loadConfig();
+            return lastLoadClean;
         }
     }
 
@@ -773,16 +808,40 @@ public class IdeomodConfig {
         return root.has(key) && root.get(key).isJsonObject() ? root.getAsJsonObject(key) : null;
     }
 
+    // A value of the wrong type (text where a number goes, say) counts as missing: it keeps the
+    // default and says so in the log, instead of stopping the whole load.
+
     private static int getInt(JsonObject obj, String key, int defaultVal) {
-        return obj.has(key) ? obj.get(key).getAsInt() : defaultVal;
+        if (!obj.has(key)) return defaultVal;
+        try {
+            return obj.get(key).getAsInt();
+        } catch (RuntimeException e) {
+            lastLoadClean = false;
+            Ideomod.LOGGER.warn("ideomod.json: '{}' should be a whole number; using {}", key, defaultVal);
+            return defaultVal;
+        }
     }
 
     private static float getFloat(JsonObject obj, String key, float defaultVal) {
-        return obj.has(key) ? obj.get(key).getAsFloat() : defaultVal;
+        if (!obj.has(key)) return defaultVal;
+        try {
+            return obj.get(key).getAsFloat();
+        } catch (RuntimeException e) {
+            lastLoadClean = false;
+            Ideomod.LOGGER.warn("ideomod.json: '{}' should be a number; using {}", key, defaultVal);
+            return defaultVal;
+        }
     }
 
     private static double getDouble(JsonObject obj, String key, double defaultVal) {
-        return obj.has(key) ? obj.get(key).getAsDouble() : defaultVal;
+        if (!obj.has(key)) return defaultVal;
+        try {
+            return obj.get(key).getAsDouble();
+        } catch (RuntimeException e) {
+            lastLoadClean = false;
+            Ideomod.LOGGER.warn("ideomod.json: '{}' should be a number; using {}", key, defaultVal);
+            return defaultVal;
+        }
     }
 
     private static int clamp(int value, int min, int max) {

@@ -48,8 +48,15 @@ public class ModCommands {
                 .requires(source -> source.hasPermission(2))
                 .then(Commands.literal("reload")
                     .executes(context -> {
-                        IdeomodConfig.reloadConfig();
+                        boolean clean = IdeomodConfig.reloadConfig();
+                        // Players always get what the server now uses (a file with a mistake can still
+                        // have changed the settings that could be read).
                         com.ideomancer.ideomod.network.ConfigSyncPacket.sendToAll(context.getSource().getServer());
+                        if (!clean) {
+                            context.getSource().sendFailure(Component.literal(
+                                    "ideomod.json has a mistake; kept the settings that could be read. See the server log."));
+                            return 0;
+                        }
                         context.getSource().sendSuccess(
                                 () -> Component.literal("Ideomod config reloaded."), true);
                         Ideomod.LOGGER.info("Config reloaded by command");
