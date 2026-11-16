@@ -902,6 +902,51 @@ public class IdeomodGameTests {
         }
     }
 
+    /**
+     * A filled Hollowstone broken by a survival player (vanilla's own break path):
+     * a pickaxe drops shards and leaves the inner block standing; a Silk Touch pickaxe drops the
+     * filled Hollowstone and leaves nothing; a Silk Touch shovel (can't harvest it) drops nothing
+     * but still leaves the inner block standing.
+     */
+    @GameTest(template = EMPTY)
+    public static void minedFilledHollowstoneDropsAndLeavesItsInnerBlock(GameTestHelper helper) {
+        ItemStack silkPick = new ItemStack(Items.DIAMOND_PICKAXE);
+        silkPick.enchant(net.minecraft.world.item.enchantment.Enchantments.SILK_TOUCH, 1);
+        ItemStack silkShovel = new ItemStack(Items.DIAMOND_SHOVEL);
+        silkShovel.enchant(net.minecraft.world.item.enchantment.Enchantments.SILK_TOUCH, 1);
+        ItemStack[] tools = {new ItemStack(Items.DIAMOND_PICKAXE), silkPick, silkShovel};
+        BlockPos[] at = {new BlockPos(1, 1, 1), new BlockPos(3, 1, 1), new BlockPos(5, 1, 1)};
+        net.minecraft.server.level.ServerLevel level = helper.getLevel();
+        net.minecraftforge.common.util.FakePlayer fp = net.minecraftforge.common.util.FakePlayerFactory.getMinecraft(level);
+        fp.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        String[] result = new String[3];
+        for (int i = 0; i < 3; i++) {
+            helper.setBlock(at[i], ModBlocks.HOLLOW_STONE.get().defaultBlockState().setValue(HollowstoneBlock.FILLED, true));
+            if (helper.getBlockEntity(at[i]) instanceof com.ideomancer.ideomod.block.HollowstoneBlockEntity h) {
+                h.setInnerBlock(new ResourceLocation("minecraft:obsidian"));
+            }
+            BlockPos abs = helper.absolutePos(at[i]);
+            fp.setItemInHand(InteractionHand.MAIN_HAND, tools[i].copy());
+            fp.gameMode.destroyBlock(abs);
+            List<net.minecraft.world.entity.item.ItemEntity> items = level.getEntitiesOfClass(
+                    net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(abs).inflate(1.5));
+            int shards = 0, hollowstone = 0;
+            for (var e : items) {
+                if (e.getItem().is(ModItems.HOLLOW_STONE_SHARD.get())) shards += e.getItem().getCount();
+                if (e.getItem().is(ModItems.HOLLOW_STONE.get())) hollowstone += e.getItem().getCount();
+                e.discard();
+            }
+            result[i] = level.getBlockState(abs).getBlock() + " shards=" + shards + " hollowstone=" + hollowstone;
+            boolean ok = switch (i) {
+                case 0 -> level.getBlockState(abs).is(Blocks.OBSIDIAN) && shards >= 5 && shards <= 9 && hollowstone == 0;
+                case 1 -> level.getBlockState(abs).isAir() && shards == 0 && hollowstone == 1;
+                default -> level.getBlockState(abs).is(Blocks.OBSIDIAN) && shards == 0 && hollowstone == 0;
+            };
+            if (!ok) { helper.fail(new String[]{"pickaxe", "Silk Touch pickaxe", "Silk Touch shovel"}[i] + ": " + result[i], at[i]); return; }
+        }
+        helper.succeed();
+    }
+
     // ==================== Recipes ====================
 
     /**

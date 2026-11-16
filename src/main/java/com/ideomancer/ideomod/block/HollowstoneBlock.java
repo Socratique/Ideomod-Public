@@ -120,55 +120,47 @@ public class HollowstoneBlock extends Block implements EntityBlock {
     // ========================================================================
     // MINING BEHAVIOR — FILLED BLOCK LEAVES INNER BLOCK IN-WORLD
     // ========================================================================
+    //
+    // Mined by a player, a filled Hollowstone leaves its inner block standing, except when it
+    // drops itself (Silk Touch with a tool that harvests it), which keeps the inner block in
+    // the item. The inner block goes back only after the drops: vanilla gives drops only if
+    // the position is clear after the break, so placing it during the removal (as before
+    // 2026-11-15) cost the player the shards. A break that drops nothing (wrong tool, creative)
+    // puts the inner block back at once.
+    //
+    // Other removals (explosions, commands) still take the inner block with them (README:
+    // Known rough edges).
 
-    /**
-     * When a filled Hollowstone is broken, place the inner block at the same position.
-     * Shard drops are handled by the loot table.
-     */
     @Override
-    public void playerWillDestroy(Level level, BlockPos pos, BlockState state, Player player) {
-        if (!level.isClientSide() && state.getValue(FILLED)) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof HollowstoneBlockEntity hollowBE && hollowBE.hasInnerBlock()) {
-                // If using Silk Touch, don't place inner block (block drops with NBT)
-                ItemStack tool = player.getMainHandItem();
-                if (!tool.isEmpty() && tool.getEnchantmentLevel(
-                        net.minecraft.world.item.enchantment.Enchantments.SILK_TOUCH) > 0) {
-                    // Silk Touch: block drops as-is, inner block data preserved in NBT
-                    // Don't place inner block in world
-                } else {
-                    // Normal mining: place inner block in world
-                    Block innerBlock = hollowBE.getInnerBlock();
-                    if (innerBlock != null) {
-                        // Schedule inner block placement for after the Hollowstone is removed
-                        BlockState innerState = innerBlock.defaultBlockState();
-                        // Use level.setBlock with UPDATE_ALL after super removes the block
-                        // We store the state to place it in onRemove instead
-                        hollowBE.markForInnerBlockPlacement();
-                    }
-                }
-            }
+    public boolean onDestroyedByPlayer(BlockState state, Level level, BlockPos pos, Player player,
+                                       boolean willHarvest, net.minecraft.world.level.material.FluidState fluid) {
+        BlockState inner = willHarvest || level.isClientSide() ? null : innerState(level.getBlockEntity(pos), state);
+        boolean removed = super.onDestroyedByPlayer(state, level, pos, player, willHarvest, fluid);
+        if (removed && inner != null) {
+            level.setBlock(pos, inner, Block.UPDATE_ALL);
         }
-        super.playerWillDestroy(level, pos, state, player);
+        return removed;
     }
 
     @Override
-    public void onRemove(BlockState state, Level level, BlockPos pos,
-                          BlockState newState, boolean movedByPiston) {
-        if (!level.isClientSide() && !state.is(newState.getBlock())) {
-            BlockEntity be = level.getBlockEntity(pos);
-            if (be instanceof HollowstoneBlockEntity hollowBE && hollowBE.shouldPlaceInnerBlock()) {
-                Block innerBlock = hollowBE.getInnerBlock();
-                if (innerBlock != null) {
-                    // Store reference before super.onRemove removes the BE
-                    BlockState innerState = innerBlock.defaultBlockState();
-                    super.onRemove(state, level, pos, newState, movedByPiston);
-                    // Place inner block after Hollowstone is removed
-                    level.setBlock(pos, innerState, Block.UPDATE_ALL);
-                    return;
-                }
-            }
+    public void playerDestroy(Level level, Player player, BlockPos pos, BlockState state,
+                              @Nullable BlockEntity blockEntity, ItemStack tool) {
+        super.playerDestroy(level, player, pos, state, blockEntity, tool);   // the drops
+        boolean silkTouch = tool.getEnchantmentLevel(
+                net.minecraft.world.item.enchantment.Enchantments.SILK_TOUCH) > 0;
+        if (!level.isClientSide() && !silkTouch && level.getBlockState(pos).isAir()) {
+            BlockState inner = innerState(blockEntity, state);
+            if (inner != null) level.setBlock(pos, inner, Block.UPDATE_ALL);
         }
-        super.onRemove(state, level, pos, newState, movedByPiston);
+    }
+
+    /** The inner block a filled Hollowstone would leave standing, or null. */
+    @Nullable
+    private static BlockState innerState(@Nullable BlockEntity be, BlockState state) {
+        if (!state.getValue(FILLED) || !(be instanceof HollowstoneBlockEntity hollowBE) || !hollowBE.hasInnerBlock()) {
+            return null;
+        }
+        Block innerBlock = hollowBE.getInnerBlock();
+        return innerBlock == null ? null : innerBlock.defaultBlockState();
     }
 }
