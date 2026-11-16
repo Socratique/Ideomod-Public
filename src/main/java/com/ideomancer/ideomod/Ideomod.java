@@ -76,6 +76,9 @@ public class Ideomod {
         // Clear Redstone Rod phantom signals on server shutdown
         MinecraftForge.EVENT_BUS.addListener((ServerStoppingEvent e) ->
                 RedstoneRodSignalManager.clearAll());
+        // Forget machine data in transit once the world is saved (moving blocks keep their own copy)
+        MinecraftForge.EVENT_BUS.addListener((net.minecraftforge.event.server.ServerStoppedEvent e) ->
+                com.ideomancer.ideomod.block.movement.MovingBlockEntityData.clearAll());
 
         LOGGER.info("Ideomod initializing!");
     }

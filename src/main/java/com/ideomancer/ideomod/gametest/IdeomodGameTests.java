@@ -1107,6 +1107,41 @@ public class IdeomodGameTests {
         });
     }
 
+    /**
+     * Saved and loaded mid-move (a world closed and reopened while it slides): it still lands with its
+     * contents. The test does what a reload does to the moving block: saves it, forgets the in-memory
+     * copy, and loads a fresh moving block from the save.
+     */
+    @GameTest(template = EMPTY)
+    public static void storageReloadedMidMoveKeepsItsContents(GameTestHelper helper) {
+        BlockPos from = new BlockPos(2, 2, 3), to = new BlockPos(2, 3, 3);
+        placeStorage(helper, from, 7);
+        helper.setBlock(2, 1, 3, Blocks.PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.UP));
+        helper.runAfterDelay(2, () -> helper.setBlock(2, 0, 3, Blocks.REDSTONE_BLOCK));
+        boolean[] reloaded = {false};
+        helper.onEachTick(() -> {
+            if (reloaded[0]) return;
+            net.minecraft.server.level.ServerLevel level = helper.getLevel();
+            BlockPos abs = helper.absolutePos(to);
+            if (!(level.getBlockEntity(abs) instanceof net.minecraft.world.level.block.piston.PistonMovingBlockEntity moving)) return;
+            reloaded[0] = true;
+            net.minecraft.nbt.CompoundTag saved = moving.saveWithFullMetadata();
+            com.ideomancer.ideomod.block.movement.MovingBlockEntityData.retrieve(level.dimension().location().toString(), abs);
+            net.minecraft.world.level.block.state.BlockState state = level.getBlockState(abs);
+            level.removeBlockEntity(abs);
+            net.minecraft.world.level.block.entity.BlockEntity loaded = net.minecraft.world.level.block.entity.BlockEntity.loadStatic(abs, state, saved);
+            if (loaded == null) { helper.fail("the moving block could not be loaded from its save", to); return; }
+            level.setBlockEntity(loaded);
+        });
+        helper.runAfterDelay(14, () -> {
+            if (!reloaded[0]) { helper.fail("never caught the Storage mid-move", to); return; }
+            if (!helper.getBlockState(to).is(ModBlocks.MACHINE_STORAGE.get())) { helper.fail("the Storage did not land as a Storage", to); return; }
+            com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity moved = (com.ideomancer.ideomod.block.machine.MachineStorageBlockEntity) helper.getBlockEntity(to);
+            if (cobbleIn(moved) == 7 && moved.getItem(0).is(Items.BARREL)) helper.succeed();
+            else helper.fail("reloaded mid-move, it landed with " + cobbleIn(moved) + " cobblestone and " + moved.getItem(0) + " in its slot");
+        });
+    }
+
     /** Broken, it spills what it holds. */
     @GameTest(template = EMPTY)
     public static void brokenStorageSpillsItsContents(GameTestHelper helper) {

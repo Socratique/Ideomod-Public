@@ -63,6 +63,20 @@ public class MovingBlockEntityData {
         return pendingData.containsKey(makeKey(dimensionKey, pos));
     }
 
+    /** The data waiting for this destination, without consuming it (for saving the moving block). */
+    public static CompoundTag peek(String dimensionKey, BlockPos pos) {
+        return pendingData.get(makeKey(dimensionKey, pos));
+    }
+
+    /**
+     * Forgets everything in transit. Called once the server has stopped, after the world is saved
+     * (the moving blocks carry their own copy in the save), so one world's in-flight data can
+     * never land in another world opened in the same game session.
+     */
+    public static void clearAll() {
+        pendingData.clear();
+    }
+
     /**
      * Build a unique key from dimension + position.
      * Uses '|' between dimension and coords, ';' between x/y/z.
