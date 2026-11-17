@@ -13,7 +13,7 @@ import glob
 import os
 import zipfile
 
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageChops, ImageDraw, ImageFont
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
@@ -302,7 +302,19 @@ class Renderer:
         c_ = a_ * bx + b_ * by + sw * (1 - gu) / 2.0 + pad
         f_ = d_ * bx + e_ * by + sh * (1 - gv) / 2.0 + pad
         patch = big.transform((pw, ph), Image.AFFINE, (a_, b_, c_, d_, e_, f_), resample=Image.NEAREST)
-        # cut away everything that fell on the replicated border beyond the overdraw
+        # Cut away everything that fell on the replicated border beyond the overdraw. Without this
+        # each face was drawn about one texel too big all round (copies of its edge texels), and the
+        # patch's bounding box then clipped that oversize face flat at the corners.
+        cx, cy = (U[0] + V[0]) / 2.0, (U[1] + V[1]) / 2.0
+        outline = []
+        for qx, qy in ((0.0, 0.0), U, (U[0] + V[0], U[1] + V[1]), V):
+            dx, dy = qx - cx, qy - cy
+            ln = (dx * dx + dy * dy) ** 0.5 or 1.0
+            grow = e * 1.5  # along the diagonal: about e out from each edge
+            outline.append((qx + dx / ln * grow - bx, qy + dy / ln * grow - by))
+        mask = Image.new("L", (pw, ph), 0)
+        ImageDraw.Draw(mask).polygon(outline, fill=255)
+        patch.putalpha(ImageChops.multiply(patch.getchannel("A"), mask))
         hit = (patch, bx, by)
         self.patches[key] = hit
         return hit
