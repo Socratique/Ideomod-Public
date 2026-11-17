@@ -1526,6 +1526,38 @@ public class IdeomodGameTests {
         });
     }
 
+    /**
+     * The ender pearl that lights a portal is used up, even when that portal links at once and the
+     * pearl is still inside its opening: it must not go through and turn up at the partner (where it
+     * would land and teleport its thrower). Ring A is lit first; a pearl dropped just inside ring B's
+     * opening onto its bottom frame lights B, and that pearl (same UUID: a portal copy keeps it) must
+     * not exist anywhere afterwards.
+     */
+    @GameTest(template = EMPTY, batch = "portals")
+    public static void pearlThatLightsAPortalDoesNotGoThrough(GameTestHelper helper) {
+        buildPortalRingAt(helper, 1, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.AMETHYST_BLOCK);
+        buildPortalRingAt(helper, 5, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.AMETHYST_BLOCK);
+        if (!lightPortal(helper, 2, 1, 1)) { helper.fail("ring A did not light"); return; }
+        net.minecraft.world.entity.projectile.ThrownEnderpearl pearl =
+                new net.minecraft.world.entity.projectile.ThrownEnderpearl(net.minecraft.world.entity.EntityType.ENDER_PEARL, helper.getLevel());
+        net.minecraft.world.phys.Vec3 at = helper.absoluteVec(new net.minecraft.world.phys.Vec3(3.5, 2.3, 5.5));
+        pearl.moveTo(at.x, at.y, at.z, 0, 0);
+        pearl.setDeltaMovement(0, -0.5, 0);
+        helper.getLevel().addFreshEntity(pearl);
+        java.util.UUID id = pearl.getUUID();
+        int[] ticks = {0};
+        helper.onEachTick(() -> {
+            if (++ticks[0] < 2) return;
+            net.minecraft.world.entity.Entity e = helper.getLevel().getEntity(id);
+            if (e != null && !e.isRemoved()) {
+                helper.fail("the pearl that lit ring B went on (at " + e.blockPosition() + ") instead of being used up");
+            } else if (ticks[0] >= 10) {
+                if (!helper.getBlockState(new BlockPos(3, 3, 5)).is(ModBlocks.ODDSTONE_PORTAL.get())) helper.fail("the pearl did not light ring B");
+                else helper.succeed();
+            }
+        });
+    }
+
     /** An empty boat goes through too, arriving as a fresh copy (so clients don't slide it the whole way). */
     @GameTest(template = EMPTY, batch = "portals")
     public static void boatGoesThroughALinkedPortal(GameTestHelper helper) {

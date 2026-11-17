@@ -190,6 +190,11 @@ public class OddstonePortalBlock extends Block {
     public void entityInside(BlockState state, Level level, BlockPos pos, Entity entity) {
         if (level.isClientSide()) return;
         if (!(level instanceof ServerLevel serverLevel)) return;
+        // Something already taken out of the world doesn't go through. The ender pearl that lights a
+        // portal is consumed (EnderPearlPortalHandler), but it is still inside the opening that tick:
+        // sending it through put down a live copy at the partner, which landed there and teleported
+        // its thrower after it.
+        if (entity.isRemoved()) return;
         if (entity.isPassenger() || entity.isVehicle() || !entity.canChangeDimensions()) return;
         if (entity.isOnPortalCooldown()) {
             entity.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());

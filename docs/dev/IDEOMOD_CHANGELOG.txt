@@ -1,5 +1,15 @@
 # Ideomod Changelog
 
+## [2026-11-17] A pearl used up lighting a portal no longer goes through it
+
+Found by the Ideomancer in his world; reproduced in the Machine Mod's test server. Ported from the Machine Mod fork.
+
+Fixed:
+- Lighting a portal with an ender pearl could teleport you a few blocks away: when the new portal linked at
+  once, the used-up pearl was still inside the opening and the portal sent a fresh copy of it through to the
+  partner, where it landed and teleported you to it. Portals now ignore anything already removed.
+New GameTest: pearlThatLightsAPortalDoesNotGoThrough.
+
 ## [2026-11-17] Portals move survival players; Nether throws land under the roof
 
 Found in a live-world test of the Machine Mod (normal terrain, a survival client). Ported from the Machine Mod fork.
