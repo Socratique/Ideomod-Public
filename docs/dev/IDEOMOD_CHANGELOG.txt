@@ -1,5 +1,22 @@
 # Ideomod Changelog
 
+## [2026-11-17] Portals move survival players; Nether throws land under the roof
+
+Found in a live-world test of the Machine Mod (normal terrain, a survival client). Ported from the Machine Mod fork.
+
+Fixed:
+- Portals did not move players in survival or adventure. Walking into an unlinked portal cost the 5 hearts
+  (again every few seconds while standing in it) without moving the player; a linked one let them walk out
+  of the back. The teleport ran inside the server's handling of the player's movement, which put them back.
+  Players now go through just after it, as with vanilla portals. Creative players, mobs and items were fine.
+
+Changed:
+- In the Nether an unlinked throw lands at a random place to stand under the bedrock roof (a solid floor
+  with two blocks of air), at a random height; on the roof only if no try finds one.
+
+Two new GameTests: unlinked throws are random (24 different spots within the configured distances, spread
+over the compass), and Nether throws land under the roof.
+
 ## [2026-11-16] Fixes from the release audit, and speed-ups
 
 Found by a code audit (Claude, ChatGPT and a Fable 5.2 reviewer) before the Machine Mod's first release, each

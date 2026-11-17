@@ -1572,6 +1572,67 @@ public class IdeomodGameTests {
         else helper.succeed();
     }
 
+    /**
+     * Unlinked throws are random: 24 throws from one spot land at 24 different places, every one
+     * scatter_distance_min to _max blocks away, spread over at least three of the four compass
+     * quarters and over a wide band of distances.
+     */
+    // Own batch: these generate far-off chunks, and kept apart they leave the other tests' layout as it was.
+    @GameTest(template = EMPTY, timeoutTicks = 400, batch = "portal_throws")
+    public static void unlinkedPortalThrowsAreRandom(GameTestHelper helper) {
+        net.minecraft.server.level.ServerLevel level = helper.getLevel();
+        BlockPos from = helper.absolutePos(new BlockPos(2, 2, 2));
+        int min = com.ideomancer.ideomod.config.IdeomodConfig.getScatterDistanceMin();
+        int max = com.ideomancer.ideomod.config.IdeomodConfig.getScatterDistanceMax();
+        java.util.Set<BlockPos> spots = new java.util.HashSet<>();
+        java.util.Set<Integer> quarters = new java.util.HashSet<>();
+        double near = Double.MAX_VALUE, far = 0;
+        for (int i = 0; i < 24; i++) {
+            BlockPos t = com.ideomancer.ideomod.block.portal.OddstonePortalBlock.findScatterTarget(level, from);
+            if (t == null) { helper.fail("throw " + i + " found no landing spot"); return; }
+            double dx = t.getX() - from.getX(), dz = t.getZ() - from.getZ(), d = Math.sqrt(dx * dx + dz * dz);
+            if (d < min - 2 || d > max + 2) { helper.fail("throw " + i + " landed " + (int) d + " blocks away: " + t); return; }
+            near = Math.min(near, d); far = Math.max(far, d);
+            spots.add(t);
+            quarters.add((dx >= 0 ? 1 : 0) + (dz >= 0 ? 2 : 0));
+        }
+        if (spots.size() < 24) helper.fail("only " + spots.size() + " different landing spots in 24 throws");
+        else if (quarters.size() < 3) helper.fail("throws went into only " + quarters.size() + " compass quarters");
+        else if (far - near < (max - min) / 3.0) helper.fail("distances only spread from " + (int) near + " to " + (int) far);
+        else helper.succeed();
+    }
+
+    /**
+     * In the Nether an unlinked throw lands at a random place to stand under the roof (solid floor,
+     * two blocks of air), not on the bedrock roof every time, and at varying heights.
+     */
+    // Own batch: these generate far-off chunks, and kept apart they leave the other tests' layout as it was.
+    @GameTest(template = EMPTY, timeoutTicks = 400, batch = "portal_throws")
+    public static void netherThrowsLandUnderTheRoof(GameTestHelper helper) {
+        net.minecraft.server.level.ServerLevel nether = helper.getLevel().getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+        if (nether == null) { helper.fail("no Nether on this server"); return; }
+        BlockPos from = new BlockPos(0, 64, 0);
+        int roofY = nether.getMinBuildHeight() + nether.dimensionType().logicalHeight();
+        int under = 0;
+        java.util.Set<Integer> heights = new java.util.HashSet<>();
+        for (int i = 0; i < 12; i++) {
+            BlockPos t = com.ideomancer.ideomod.block.portal.OddstonePortalBlock.findScatterTarget(nether, from);
+            if (t == null) { helper.fail("Nether throw " + i + " found no landing spot"); return; }
+            if (t.getY() >= roofY) continue; // the roof: allowed only as a fallback
+            BlockPos below = t.below();
+            if (!nether.getBlockState(t).isAir() || !nether.getBlockState(t.above()).isAir()
+                    || !nether.getBlockState(below).isFaceSturdy(nether, below, Direction.UP)) {
+                helper.fail("Nether throw " + i + " landed where nobody can stand: " + t);
+                return;
+            }
+            under++;
+            heights.add(t.getY());
+        }
+        if (under < 10) helper.fail("only " + under + " of 12 Nether throws landed under the roof");
+        else if (heights.size() < 3) helper.fail("Nether throws all landed at " + heights.size() + " height(s): " + heights);
+        else helper.succeed();
+    }
+
     /** A ring of plain Oddstone no longer forms a portal. */
     @GameTest(template = EMPTY)
     public static void plainOddstoneRingDoesNotLight(GameTestHelper helper) {

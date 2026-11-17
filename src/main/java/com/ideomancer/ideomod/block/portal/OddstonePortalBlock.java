@@ -10,6 +10,7 @@ import net.minecraft.core.particles.DustParticleOptions;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.server.level.TicketType;
+import net.minecraft.server.TickTask;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
@@ -197,6 +198,27 @@ public class OddstonePortalBlock extends Block {
 
         entity.setPortalCooldown(IdeomodConfig.getPortalTeleportCooldown());
 
+        if (entity instanceof ServerPlayer player) {
+            // A player walks in while the server is handling their own movement packet, and that
+            // handler puts a survival player back where the client said they were, undoing a
+            // teleport made inside it (only creative skipped that check). Vanilla moves players
+            // through its portals in their tick instead; this queues the move to run straight
+            // after the packet, still on the server thread.
+            // (entityInside is handed a mutable position the game keeps reusing: keep a copy.)
+            BlockPos at = pos.immutable();
+            serverLevel.getServer().tell(new TickTask(serverLevel.getServer().getTickCount(), () -> {
+                if (player.isRemoved() || player.level() != serverLevel) return;
+                BlockState now = serverLevel.getBlockState(at);
+                if (!now.is(this)) return;
+                sendThrough(serverLevel, at, now, player);
+            }));
+            return;
+        }
+        sendThrough(serverLevel, pos, state, entity);
+    }
+
+    /** Sends an entity standing in this portal block to the partner portal, or scatters it if unlinked. */
+    private void sendThrough(ServerLevel serverLevel, BlockPos pos, BlockState state, Entity entity) {
         OddstonePortalSavedData data = OddstonePortalSavedData.get(serverLevel);
         OddstonePortalSavedData.PortalEntry entry = findPortalEntry(serverLevel, pos, state, data);
 
@@ -561,18 +583,23 @@ public class OddstonePortalBlock extends Block {
     private static final int SCATTER_TRIES = 8;
 
     /**
-     * Where a scatter lands: a random spot scatter_distance_min to _max blocks away (kept inside the
-     * world border), standing on top of whatever is highest there. The spot's chunk is loaded (or
-     * generated) first, as a nether portal does for its far side: an unloaded column has no height,
-     * which used to put arrivals at the bottom of the world. A column with nothing in it (the End's
-     * void) is skipped for another spot; null if every try was void. In the Nether the highest block
-     * is the bedrock roof, so arrivals there land on the roof.
+     * Where a scatter lands: a random spot scatter_distance_min to _max blocks away, in a random
+     * direction (kept inside the world border), standing on top of whatever is highest there. The
+     * spot's chunk is loaded (or generated) first, as a nether portal does for its far side: an
+     * unloaded column has no height, which used to put arrivals at the bottom of the world. A column
+     * with nothing in it (the End's void) is skipped for another spot; null if every try was void.
+     *
+     * Under a roof (the Nether) the highest block is the bedrock ceiling, so there the spot is a
+     * random place to stand inside the column instead: a solid floor with two blocks of air above
+     * it, below the ceiling. Only if no try finds one does the arrival land on the roof.
      */
     @Nullable
     public static BlockPos findScatterTarget(ServerLevel level, BlockPos from) {
         int minDist = IdeomodConfig.getScatterDistanceMin();
         int maxDist = IdeomodConfig.getScatterDistanceMax();
         net.minecraft.world.level.border.WorldBorder border = level.getWorldBorder();
+        boolean ceiling = level.dimensionType().hasCeiling();
+        BlockPos roof = null;
         for (int attempt = 0; attempt < SCATTER_TRIES; attempt++) {
             double angle = level.getRandom().nextDouble() * Math.PI * 2;
             double distance = minDist + level.getRandom().nextDouble() * (maxDist - minDist);
@@ -581,9 +608,30 @@ public class OddstonePortalBlock extends Block {
             level.getChunk(column.getX() >> 4, column.getZ() >> 4);
             // The first free Y above the highest motion-blocking block: standing on it.
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING, column.getX(), column.getZ());
-            if (y > level.getMinBuildHeight()) return new BlockPos(column.getX(), y, column.getZ());
+            if (y <= level.getMinBuildHeight()) continue;
+            if (!ceiling) return new BlockPos(column.getX(), y, column.getZ());
+            BlockPos inside = randomPlaceToStand(level, column.getX(), column.getZ());
+            if (inside != null) return inside;
+            if (roof == null) roof = new BlockPos(column.getX(), y, column.getZ());
         }
-        return null;
+        return roof;
+    }
+
+    /** A random spot in the column, below the ceiling, with a solid floor and two blocks of air; null if none. */
+    @Nullable
+    private static BlockPos randomPlaceToStand(ServerLevel level, int x, int z) {
+        int bottom = level.getMinBuildHeight() + 1;
+        int top = level.getMinBuildHeight() + level.dimensionType().logicalHeight() - 2;
+        java.util.List<Integer> spots = new java.util.ArrayList<>();
+        BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos();
+        for (int y = bottom; y < top; y++) {
+            at.set(x, y, z);
+            if (!level.getBlockState(at).isAir() || !level.getBlockState(at.above()).isAir()) continue;
+            BlockPos below = at.below();
+            if (level.getBlockState(below).isFaceSturdy(level, below, Direction.UP)) spots.add(y);
+        }
+        if (spots.isEmpty()) return null;
+        return new BlockPos(x, spots.get(level.getRandom().nextInt(spots.size())), z);
     }
 
     // ========================================================================

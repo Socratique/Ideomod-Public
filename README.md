@@ -165,7 +165,7 @@ natural Oddstone ore never forms part of a frame. (Plain Oddstone frames, as bef
 - **Address:** the four corner blocks are the portal's address. It reads the same from both sides.
 - **Linking:** the first portal with a given address is unlinked. A second portal with the same address, in the same dimension, links to it. A third will not light.
 - **Linked portals:** walking in puts you at the matching spot in the other portal, facing out of it. This works between portals of different sizes.
-- **Unlinked portals:** walking in throws you 200 to 1000 blocks in a random direction, onto the surface, and costs 5 hearts. Things that aren't alive are thrown the same way but take no damage.
+- **Unlinked portals:** walking in throws you 200 to 1000 blocks in a random direction, onto the surface, and costs 5 hearts. In the Nether you land at a random spot under the roof instead. Things that aren't alive are thrown the same way but take no damage.
 - **What goes through:** as with a nether portal, players, mobs, dropped items, arrows and other projectiles, and empty minecarts and boats. Riders, the vehicles carrying them, and bosses do not. Anything moving keeps moving, turned to come out of the far portal.
 - **Cooldown:** 4 seconds. As with a nether portal, staying in the portal keeps the cooldown going, so something that stays in the far portal does not bounce back; it has to leave first.
 - **Closing:** break or move any frame block or corner block. The partner becomes unlinked.
