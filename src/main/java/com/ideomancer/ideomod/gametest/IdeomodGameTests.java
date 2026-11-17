@@ -1382,6 +1382,9 @@ public class IdeomodGameTests {
     // ========================================================================
 
     /** An upright 5x5 ring (3x3 opening) in the x-y plane at z = 3: frame block on the edges, corner at the corners. */
+    // Tests that build a portal run in their own batch ("portals"). Tests sit side by side in a grid whose
+    // order changes between runs, and a neighbour moving Cobbled Oddstone drags any Cobbled Oddstone in line
+    // with it up to 12 blocks away (sympathetic movement), which pulled portal frames apart at random.
     private static void buildPortalRing(GameTestHelper helper, Block frame, Block corner) {
         for (int x = 1; x <= 5; x++) {
             for (int y = 1; y <= 5; y++) {
@@ -1399,7 +1402,7 @@ public class IdeomodGameTests {
     }
 
     /** A Cobbled Oddstone ring with mineral corners lights, and breaking one frame block closes it. */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void cobbledOddstoneRingLightsAndClosesWhenBroken(GameTestHelper helper) {
         buildPortalRing(helper, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.IRON_BLOCK);
         if (!lightPortal(helper, 2, 1, 3)) {
@@ -1452,7 +1455,7 @@ public class IdeomodGameTests {
      * Copper corners count as copper whatever their oxidation: a corner that weathers keeps the portal
      * open, and a ring with oxidized (and waxed) corners links to one with fresh copper corners.
      */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void oxidisedCopperCornersStillCountAsCopper(GameTestHelper helper) {
         buildPortalRingAt(helper, 1, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.COPPER_BLOCK);
         buildPortalRingAt(helper, 5, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.OXIDIZED_COPPER);
@@ -1472,7 +1475,7 @@ public class IdeomodGameTests {
     }
 
     /** Oddstone placed against a portal's face isn't part of its frame: removing it leaves the portal open. */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void oddstoneAgainstThePortalFaceIsNotFrame(GameTestHelper helper) {
         // Coal corners: no other test uses them. Tests run side by side, and a portal with the same
         // corners as another test's would link to it and be affected when that one closes.
@@ -1491,7 +1494,7 @@ public class IdeomodGameTests {
      * copy with the same UUID); and it stays there after the cooldown instead of bouncing back,
      * because staying inside keeps the cooldown up.
      */
-    @GameTest(template = EMPTY, timeoutTicks = 200)
+    @GameTest(template = EMPTY, timeoutTicks = 200, batch = "portals")
     public static void itemGoesThroughALinkedPortalAndStays(GameTestHelper helper) {
         if (!buildLinkedPair(helper, Blocks.EMERALD_BLOCK)) { helper.fail("the linked pair did not light"); return; }
         net.minecraft.world.entity.item.ItemEntity item = helper.spawnItem(Items.DIAMOND, 3.5F, 2.2F, 1.5F);
@@ -1511,7 +1514,7 @@ public class IdeomodGameTests {
     }
 
     /** Like a nether portal, a mob goes through to the linked portal. */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void mobGoesThroughALinkedPortal(GameTestHelper helper) {
         if (!buildLinkedPair(helper, Blocks.DIAMOND_BLOCK)) { helper.fail("the linked pair did not light"); return; }
         net.minecraft.world.entity.Mob pig = helper.spawnWithNoFreeWill(net.minecraft.world.entity.EntityType.PIG, new net.minecraft.world.phys.Vec3(3.5, 2, 1.5));
@@ -1524,7 +1527,7 @@ public class IdeomodGameTests {
     }
 
     /** An empty boat goes through too, arriving as a fresh copy (so clients don't slide it the whole way). */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void boatGoesThroughALinkedPortal(GameTestHelper helper) {
         if (!buildLinkedPair(helper, Blocks.GOLD_BLOCK)) { helper.fail("the linked pair did not light"); return; }
         net.minecraft.world.entity.Entity boat = helper.spawn(net.minecraft.world.entity.EntityType.BOAT, new net.minecraft.world.phys.Vec3(3.5, 2, 1.5));
@@ -1543,7 +1546,7 @@ public class IdeomodGameTests {
      * the item is moved on, as a fresh copy in the far chunk, not killed. (The far chunk generates slowly in
      * the test server, so this checks how the item left rather than finding where it landed.)
      */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void unlinkedPortalScattersAnItemWithoutDestroyingIt(GameTestHelper helper) {
         buildPortalRing(helper, ModBlocks.COBBLED_ODDSTONE.get(), Blocks.LAPIS_BLOCK);
         if (!lightPortal(helper, 2, 1, 3)) { helper.fail("the portal did not light"); return; }
@@ -1634,7 +1637,7 @@ public class IdeomodGameTests {
     }
 
     /** A ring of plain Oddstone no longer forms a portal. */
-    @GameTest(template = EMPTY)
+    @GameTest(template = EMPTY, batch = "portals")
     public static void plainOddstoneRingDoesNotLight(GameTestHelper helper) {
         buildPortalRing(helper, ModBlocks.ODDSTONE.get(), Blocks.GOLD_BLOCK);
         if (lightPortal(helper, 2, 1, 3)
