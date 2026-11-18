@@ -1167,6 +1167,313 @@ helper.runAfterDelay(60, () -> {
         });
     }
 
+    // ==================== Circuits, still and moving (2026-11-18) ====================
+    // Each circuit is a row of machine blocks at y=2 on a strip of iron frames at y=1 (frames stick to
+    // machine blocks but carry no redstone), along x from x=1, at z=2. The first block is a Toggle
+    // latched on by a pulse from its west at the start, so the circuit carries its own power source.
+    // In the moving version a sticky piston at (0,1,2), facing east, driven 3 ticks on / 3 off, pushes
+    // and pulls the whole strip one block for MOVE_TICKS ticks, then rests.
+    // Machine blocks may pause while they are moving pistons; between moves they must keep working:
+    // no spurious flips, nothing lost, and the same rhythm once still again.
+
+    // MOVE_TICKS is a whole number of piston cycles (6 and 20 ticks), so moving stops fully retracted:
+    // a sticky piston that loses power mid-push leaves its block behind (vanilla).
+    private static final int SETTLE = 40, OBSERVE = 200, MOVE_TICKS = 240, AFTER = 100;
+
+    private record Part(int x, Item item, java.util.function.Consumer<net.minecraft.world.level.block.entity.BlockEntity> setup) {}
+
+    private static Part part(int x, Item item) { return new Part(x, item, be -> {}); }
+
+    private static Part engine(int x, int interval) {
+        return new Part(x, Items.FURNACE, be -> {
+            var e = (com.ideomancer.ideomod.block.machine.MachineEngineBlockEntity) be;
+            e.setItem(com.ideomancer.ideomod.block.machine.MachineEngineBlockEntity.FUEL_SLOT, new ItemStack(Items.COAL, 64));
+            e.setPulseInterval(interval);
+        });
+    }
+
+    /** "powered" (or Conductor "power" > 0) of whatever machine block is there; null if it is not a settled block. */
+    private static Integer outputOf(BlockState s) {
+        for (net.minecraft.world.level.block.state.properties.Property<?> p : s.getProperties()) {
+            if (p.getName().equals("power")) return (Integer) s.getValue(p);
+            if (p.getName().equals("powered")) return ((Boolean) s.getValue(p)) ? 1 : 0;
+        }
+        return null;
+    }
+
+    /** Where the strip is now: 0 at rest, 1 pushed east; -1 while any part is moving (or missing). */
+    private static int stripOffset(GameTestHelper h, Part[] parts) {
+        for (int off = 0; off <= 1; off++) {
+            boolean all = true;
+            for (Part p : parts) {
+                BlockState s = h.getBlockState(new BlockPos(p.x() + off, 2, 2));
+                if (!(s.getBlock() instanceof com.ideomancer.ideomod.block.machine.AbstractMachineBlock) || outputOf(s) == null) { all = false; break; }
+            }
+            if (all) return off;
+        }
+        return -1;
+    }
+
+    /**
+     * Builds the circuit, latches the first Toggle on, optionally drives the piston, and calls the check
+     * with per-tick output readings: readings.get(tick)[i] = output of part i, or null while moving.
+     */
+    private static void runCircuit(GameTestHelper h, Part[] parts, int frameTo, boolean moving,
+                                   java.util.function.BiFunction<java.util.List<Integer[]>, int[], String> check) {
+        runCircuit(h, parts, frameTo, moving ? 3 : 0, check);
+    }
+
+    /** halfPeriod: piston driver on for this many ticks, then off as long; 0 = still. */
+    private static void runCircuit(GameTestHelper h, Part[] parts, int frameTo, int halfPeriod,
+                                   java.util.function.BiFunction<java.util.List<Integer[]>, int[], String> check) {
+        boolean moving = halfPeriod > 0;
+        for (int x = 1; x <= frameTo; x++) h.setBlock(x, 1, 2, ModBlocks.IRON_FRAME.get());
+        for (Part p : parts) {
+            h.setBlock(p.x(), 2, 2, ModBlocks.MACHINE_BLOCK.get());
+            ((MachineFrameBlockEntity) h.getBlockEntity(new BlockPos(p.x(), 2, 2))).setItem(0, new ItemStack(p.item()));
+        }
+        h.runAfterDelay(2, () -> { for (Part p : parts) p.setup().accept(h.getBlockEntity(new BlockPos(p.x(), 2, 2))); });
+        h.runAfterDelay(5, () -> h.setBlock(0, 2, 2, Blocks.REDSTONE_BLOCK));   // latch the first Toggle on
+        h.runAfterDelay(7, () -> h.setBlock(0, 2, 2, Blocks.AIR));
+        // the piston only after the latch: the latch block sits right above where it goes
+        if (moving) h.runAfterDelay(10, () -> h.setBlock(0, 1, 2, Blocks.STICKY_PISTON.defaultBlockState().setValue(PistonBaseBlock.FACING, Direction.EAST)));
+        int moveFrom = SETTLE + OBSERVE, moveTo = moveFrom + MOVE_TICKS, end = moveTo + AFTER;
+        java.util.List<Integer[]> readings = new java.util.ArrayList<>();
+        int[] tick = {0};
+        h.onEachTick(() -> {
+            int t = ++tick[0];
+            if (moving && t >= moveFrom && t < moveTo) {
+                boolean on = ((t - moveFrom) / halfPeriod) % 2 == 0;
+                h.setBlock(0, 0, 2, on ? Blocks.REDSTONE_BLOCK : Blocks.STONE);
+            } else if (moving && t == moveTo) {
+                h.setBlock(0, 0, 2, Blocks.STONE);
+            }
+            if (t < SETTLE) return;
+            int off = stripOffset(h, parts);
+            Integer[] row = new Integer[parts.length];
+            if (off >= 0) for (int i = 0; i < parts.length; i++) row[i] = outputOf(h.getBlockState(new BlockPos(parts[i].x() + off, 2, 2)));
+            readings.add(row);
+            if (t == end) {
+                String problem = check.apply(readings, new int[]{OBSERVE, moving ? MOVE_TICKS : 0, AFTER});
+                if (stripOffset(h, parts) != 0) problem = "the circuit did not come back to rest at its start" + (problem == null ? "" : "; " + problem);
+                if (problem == null) h.succeed(); else h.fail(problem);
+            }
+        });
+    }
+
+    /** Rising edges of part i within readings[from, to) (ticks with no reading are skipped). */
+    private static int risesOf(java.util.List<Integer[]> r, int i, int from, int to) {
+        int n = 0; Integer last = null;
+        for (int k = from; k < to && k < r.size(); k++) {
+            Integer v = r.get(k)[i]; if (v == null) continue;
+            if (last != null && last == 0 && v > 0) n++;
+            last = v;
+        }
+        return n;
+    }
+
+    /** Changes (either way) of part i within readings[from, to). */
+    private static int flipsOf(java.util.List<Integer[]> r, int i, int from, int to) {
+        int n = 0; Integer last = null;
+        for (int k = from; k < to && k < r.size(); k++) {
+            Integer v = r.get(k)[i]; if (v == null) continue;
+            if (last != null && !last.equals(v)) n++;
+            last = v;
+        }
+        return n;
+    }
+
+    /** Gaps in ticks between rising edges of part i within readings[from, to). */
+    private static java.util.List<Integer> pulseGaps(java.util.List<Integer[]> r, int i, int from, int to) {
+        java.util.List<Integer> gaps = new java.util.ArrayList<>(); Integer last = null; int lastRise = -1;
+        for (int k = from; k < to && k < r.size(); k++) {
+            Integer v = r.get(k)[i]; if (v == null) { last = null; continue; }
+            if (last != null && last == 0 && v > 0) { if (lastRise >= 0) gaps.add(k - lastRise); lastRise = k; }
+            last = v;
+        }
+        return gaps;
+    }
+
+    /** Never off where it was read (the latched source Toggle must stay on). */
+    private static String staysOn(java.util.List<Integer[]> r, int i, String name) {
+        for (int k = 0; k < r.size(); k++) if (r.get(k)[i] != null && r.get(k)[i] == 0) return name + " went off at reading " + k;
+        return null;
+    }
+
+    /**
+     * The shared check for "a clock drives a Toggle": in each phase, the far Toggle flips once per clock
+     * pulse; while still, the clock keeps its interval exactly; while moving it may be slowed but must keep
+     * going; after moving it is back to its exact interval; the latched source never goes off.
+     */
+    private static String clockFlipsToggle(java.util.List<Integer[]> r, int[] phases, int clock, int toggle, int interval) {
+        return clockFlipsToggle(r, phases, clock, toggle, interval, 2);
+    }
+
+    /**
+     * minMoveFlips: how many flips the moving phase must show. 0 for the fast piston: there the circuit
+     * gets no tick of its own between moves (the piston moves it again before block entities tick),
+     * so an Engine has no time to count; what must hold is that nothing goes wrong.
+     */
+    private static String clockFlipsToggle(java.util.List<Integer[]> r, int[] phases, int clock, int toggle, int interval, int minMoveFlips) {
+        String s = staysOn(r, 0, "the latched source Toggle");
+        if (s != null) return s;
+        int a = phases[0], b = a + phases[1], c = b + phases[2];
+        int stillPulses = risesOf(r, clock, 0, a), stillFlips = flipsOf(r, toggle, 0, a);
+        com.ideomancer.ideomod.Ideomod.LOGGER.info("[CIRCUIT] still: {} pulses, {} flips, gaps {}", stillPulses, stillFlips, pulseGaps(r, clock, 0, a));
+        if (stillPulses < a / interval - 1) return "while still the clock gave " + stillPulses + " pulses in " + a + " ticks";
+        if (stillFlips != stillPulses && stillFlips != stillPulses - 1 && stillFlips != stillPulses + 1)
+            return "while still the Toggle flipped " + stillFlips + " times for " + stillPulses + " pulses";
+        for (int g : pulseGaps(r, clock, 0, a)) if (g != interval) return "while still the clock's gaps were " + pulseGaps(r, clock, 0, a);
+        if (phases[1] > 0) {
+            int movePulses = risesOf(r, clock, a, b), moveFlips = flipsOf(r, toggle, a, b);
+            com.ideomancer.ideomod.Ideomod.LOGGER.info("[CIRCUIT] moving: {} pulses seen, {} flips (still rate would be {})", movePulses, moveFlips, phases[1] / interval);
+            if (moveFlips < minMoveFlips) return "while moving the Toggle flipped only " + moveFlips + " times in " + phases[1] + " ticks";
+            if (moveFlips > phases[1] / interval + 2) return "while moving the Toggle flipped " + moveFlips + " times, more than the clock can drive";
+            if (moveFlips > movePulses + 2) return "while moving the Toggle flipped " + moveFlips + " times for " + movePulses + " pulses seen";
+        }
+        int afterPulses = risesOf(r, clock, b + 20, c), afterFlips = flipsOf(r, toggle, b + 20, c);
+        java.util.List<Integer> gaps = pulseGaps(r, clock, b + 20, c);
+        com.ideomancer.ideomod.Ideomod.LOGGER.info("[CIRCUIT] after: {} pulses, {} flips, gaps {}", afterPulses, afterFlips, gaps);
+        if (afterPulses < (c - b - 20) / interval - 1) return "after moving the clock gave only " + afterPulses + " pulses";
+        for (int g : gaps) if (g != interval) return "after moving the clock's gaps were " + gaps + " (still: " + interval + ")";
+        if (Math.abs(afterFlips - afterPulses) > 1) return "after moving the Toggle flipped " + afterFlips + " times for " + afterPulses + " pulses";
+        return null;
+    }
+
+    private static Part[] clockToggleCircuit() {
+        return new Part[]{part(1, Items.LEVER), engine(2, 10), part(3, Items.LEVER)};
+    }
+
+    /** Toggle (latched) -> Engine every 10 ticks -> Toggle: one flip per pulse, steady interval. */
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitClockFlipsAToggle(GameTestHelper helper) {
+        runCircuit(helper, clockToggleCircuit(), 3, false, (r, ph) -> clockFlipsToggle(r, ph, 1, 2, 10));
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitClockFlipsAToggleWhileMoving(GameTestHelper helper) {
+        runCircuit(helper, clockToggleCircuit(), 3, true, (r, ph) -> clockFlipsToggle(r, ph, 1, 2, 10, 0));
+    }
+
+    private static Part[] timerChainCircuit() {
+        return new Part[]{part(1, Items.LEVER), engine(2, 20),
+                new Part(3, Items.CLOCK, be -> ((MachineFrameBlockEntity) be).setTimerDuration(5)),
+                new Part(4, Items.REPEATER, be -> ((MachineFrameBlockEntity) be).setRepeaterDelay(2)),
+                part(5, Items.LEVER)};
+    }
+
+    /** Toggle (latched) -> Engine every 20 -> Timer 5 ticks -> Repeater delay 2 -> Toggle: one flip per pulse. */
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitTimerChain(GameTestHelper helper) {
+        runCircuit(helper, timerChainCircuit(), 5, false, (r, ph) -> {
+            String s = clockFlipsToggle(r, ph, 1, 4, 20);
+            if (s != null) return s;
+            return Math.abs(risesOf(r, 2, 0, ph[0]) - risesOf(r, 1, 0, ph[0])) > 1 ? "the Timer did not fire once per Engine pulse" : null;
+        });
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitTimerChainWhileMoving(GameTestHelper helper) {
+        runCircuit(helper, timerChainCircuit(), 5, true, (r, ph) -> clockFlipsToggle(r, ph, 1, 4, 20, 0));
+    }
+
+    private static Part[] transformerCircuit() {
+        return new Part[]{part(1, Items.LEVER),
+                new Part(2, Items.COMPARATOR, be -> ((MachineFrameBlockEntity) be).setTransformerLevel(7)),
+                part(3, Items.REDSTONE), part(4, Items.REDSTONE)};
+    }
+
+    /** The Conductors after a Transformer at 7 hold the same strengths at every still reading. */
+    private static String transformerHolds(java.util.List<Integer[]> r, int[] ph) {
+        String s = staysOn(r, 0, "the latched source Toggle");
+        if (s != null) return s;
+        Integer c1 = null, c2 = null;
+        for (int k = 10; k < ph[0]; k++) { if (r.get(k)[2] != null) { c1 = r.get(k)[2]; c2 = r.get(k)[3]; } }
+        com.ideomancer.ideomod.Ideomod.LOGGER.info("[CIRCUIT] transformer: Conductors at {} and {}", c1, c2);
+        if (c1 == null || c1 == 0) return "the first Conductor got no signal from the Transformer";
+        if (c2 == null || c2 != c1 - 1) return "the second Conductor read " + c2 + " after " + c1;
+        Integer lastMoveTick = null;
+        for (int k = 0; k < r.size(); k++) {
+            Integer[] row = r.get(k);
+            if (row[2] == null) { lastMoveTick = k; continue; }
+            if (lastMoveTick != null && k - lastMoveTick <= 3) continue;   // let it settle just after landing
+            if (!row[2].equals(c1) || !row[3].equals(c2)) return "at reading " + k + " the Conductors read " + row[2] + "/" + row[3] + " instead of " + c1 + "/" + c2;
+        }
+        return null;
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitTransformerHoldsItsLevel(GameTestHelper helper) {
+        runCircuit(helper, transformerCircuit(), 4, false, IdeomodGameTests::transformerHolds);
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitTransformerHoldsItsLevelWhileMoving(GameTestHelper helper) {
+        runCircuit(helper, transformerCircuit(), 4, true, IdeomodGameTests::transformerHolds);
+    }
+
+    private static Part[] wirelessCircuit() {
+        Item channel = ModBlocks.COBBLED_ODDSTONE.get().asItem();
+        return new Part[]{part(1, Items.LEVER), engine(2, 10), part(3, channel), part(5, channel), part(6, Items.LEVER)};
+    }
+
+    /** Toggle (latched) -> Engine every 10 -> Transmitter ... gap ... Transmitter -> Toggle: one flip per pulse. */
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitWirelessFlipsAToggle(GameTestHelper helper) {
+        runCircuit(helper, wirelessCircuit(), 6, false, (r, ph) -> clockFlipsToggle(r, ph, 1, 4, 10));
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitWirelessFlipsAToggleWhileMoving(GameTestHelper helper) {
+        runCircuit(helper, wirelessCircuit(), 6, true, (r, ph) -> clockFlipsToggle(r, ph, 1, 4, 10, 0));
+    }
+
+    /** The same circuits on a slower piston (10 ticks out, 10 back), with time to work between moves. */
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitClockFlipsAToggleMovingSlowly(GameTestHelper helper) {
+        runCircuit(helper, clockToggleCircuit(), 3, 10, (r, ph) -> clockFlipsToggle(r, ph, 1, 2, 10));
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitTimerChainMovingSlowly(GameTestHelper helper) {
+        runCircuit(helper, timerChainCircuit(), 5, 10, (r, ph) -> clockFlipsToggle(r, ph, 1, 4, 20));
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 700, batch = "circuits")
+    public static void circuitWirelessFlipsAToggleMovingSlowly(GameTestHelper helper) {
+        runCircuit(helper, wirelessCircuit(), 6, 10, (r, ph) -> clockFlipsToggle(r, ph, 1, 4, 10));
+    }
+
+    /**
+     * A pulse of one tick (shorter than the 2-tick reaction time) still counts: a Toggle flips, a Timer
+     * fires, a Repeater outputs (for its delay, as a vanilla repeater stretches a short pulse).
+     */
+    private static void oneTickPulse(GameTestHelper h, Item item, String what) {
+        h.setBlock(1, 2, 2, ModBlocks.MACHINE_BLOCK.get());
+        ((MachineFrameBlockEntity) h.getBlockEntity(new BlockPos(1, 2, 2))).setItem(0, new ItemStack(item));
+        h.runAfterDelay(5, () -> h.setBlock(0, 2, 2, Blocks.REDSTONE_BLOCK));
+        h.runAfterDelay(6, () -> h.setBlock(0, 2, 2, Blocks.AIR));
+        boolean[] seen = {false};
+        int[] tick = {0};
+        h.onEachTick(() -> {
+            Integer out = outputOf(h.getBlockState(new BlockPos(1, 2, 2)));
+            if (out != null && out > 0) seen[0] = true;
+            if (++tick[0] == 30) {
+                if (seen[0]) h.succeed();
+                else h.fail("a one-tick pulse did not " + what, new BlockPos(1, 2, 2));
+            }
+        });
+    }
+
+    @GameTest(template = EMPTY, timeoutTicks = 60, batch = "circuits")
+    public static void oneTickPulseFlipsAToggle(GameTestHelper helper) { oneTickPulse(helper, Items.LEVER, "flip the Toggle"); }
+
+    @GameTest(template = EMPTY, timeoutTicks = 60, batch = "circuits")
+    public static void oneTickPulseStartsATimer(GameTestHelper helper) { oneTickPulse(helper, Items.CLOCK, "start the Timer"); }
+
+    @GameTest(template = EMPTY, timeoutTicks = 60, batch = "circuits")
+    public static void oneTickPulseGoesThroughARepeater(GameTestHelper helper) { oneTickPulse(helper, Items.REPEATER, "come out of the Repeater"); }
+
     // ==================== Recipes ====================
 
     /**

@@ -69,6 +69,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_TRANSFORMER_LEVEL = "TransformerLevel";
     private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
     private static final String TAG_TRACK_INPUTS = "TrackInputs";
+    private static final String TAG_PENDING_EDGE = "PendingEdge";
     private static final String TAG_TIMER_DURATION = "TimerDuration";
     private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
     private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
@@ -328,6 +329,41 @@ public class MachineFrameBlockEntity extends BlockEntity
     }
 
     /** Track only: the faces that had a redstone signal last time (bit per Direction), or -1 if unknown. */
+    /**
+     * Toggle only: the face a rising edge arrived on, waiting for the Toggle's scheduled tick to flip.
+     * Kept apart from inputFace because a short pulse can drop (clearing inputFace) before that tick:
+     * the edge still counts. Not saved: it lives for the two ticks before the flip.
+     */
+    @Nullable
+    private Direction pendingEdge = null;
+
+    /** Game time this block landed from a piston move already outputting (not saved). */
+    private long cameBackOnAt = Long.MIN_VALUE;
+
+    /** Whether this block landed from a piston move in the last 2 ticks, outputting as it was before. */
+    public boolean cameBackOn() {
+        return this.level != null && this.cameBackOnAt != Long.MIN_VALUE && this.level.getGameTime() - this.cameBackOnAt <= 2;
+    }
+
+    /**
+     * Whether a signal on {@code face} of the block at {@code pos} is a ghost of a move rather than a
+     * rising edge: the neighbour there was already on before a piston moved it and has just landed on
+     * again. Its neighbours already answered that signal before the move. A neighbour that was off and
+     * turns on after landing (a Transmitter receiver relaying, say) is a real edge.
+     */
+    public static boolean isGhostEdge(Level level, BlockPos pos, @Nullable Direction face) {
+        return face != null && level.getBlockEntity(pos.relative(face)) instanceof MachineFrameBlockEntity n && n.cameBackOn();
+    }
+
+    @Nullable
+    public Direction getPendingEdge() {
+        return this.pendingEdge;
+    }
+
+    public void setPendingEdge(@Nullable Direction face) {
+        this.pendingEdge = face;
+    }
+
     public int getTrackInputs() {
         return this.trackInputs;
     }
@@ -662,6 +698,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.transmitterSignalStrength > 0) {
             tag.putInt(TAG_TRANSMITTER_SIGNAL, this.transmitterSignalStrength);
         }
+        if (this.pendingEdge != null) {
+            tag.putInt(TAG_PENDING_EDGE, this.pendingEdge.get3DDataValue());  // a flip waiting across the move
+        }
         // Save the POWERED blockstate so it survives piston movement.
         // Critical for the Toggle (a latch), but saved generically for all
         // machine blocks so none of them flicker OFF during movement.
@@ -699,6 +738,7 @@ public class MachineFrameBlockEntity extends BlockEntity
         } else {
             this.transformerLevel = 1;
         }
+        this.pendingEdge = tag.contains(TAG_PENDING_EDGE) ? Direction.from3DDataValue(tag.getInt(TAG_PENDING_EDGE)) : null;
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
         if (tag.contains(TAG_TIMER_DURATION)) {
             this.timerDuration = Math.max(1, tag.getInt(TAG_TIMER_DURATION));
@@ -727,6 +767,7 @@ public class MachineFrameBlockEntity extends BlockEntity
 
     @Override
     public void onMovementRestored(Level level, BlockPos pos) {
+        if (this.movementPowered) this.cameBackOnAt = level.getGameTime();
         // Scheduled ticks are lost during piston movement. If the block at
         // this position is a redstone machine that uses tick-based processing
         // (Repeater, Transformer, Toggle, Timer, Pulser), schedule a tick so

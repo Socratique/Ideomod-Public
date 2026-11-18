@@ -1,5 +1,20 @@
 # Ideomod Changelog
 
+## [2026-11-18] Circuits keep working while moved; short pulses count
+
+Found by new circuit GameTests (batch "circuits": four machine-block circuits on a strip of iron frames,
+still and on fast and slow sticky pistons). Ported from the Machine Mod fork.
+
+Fixed:
+- A Toggle, Timer or Repeater ignored a pulse shorter than its 2-tick reaction time (a Transmitter
+  receiver's pulses never flipped a Toggle). Every rising edge now counts; the Repeater passes a short
+  pulse on for its delay, as a vanilla repeater does. A neighbour that was on before a piston move and lands
+  on again is not a new edge.
+- An Engine moved by a piston restarted its count each time it landed, so on a machine moved every few
+  ticks it never fired. It now settles for a tick after landing and carries on counting.
+- A pulse waiting when a piston moved a Toggle, Timer or Repeater is now acted on once it lands.
+The Pulser keeps its old rule for now (a moved Pulser ring fired out of turn with short pulses counting).
+
 ## [2026-11-18] The Machine Track carries a travelling pulse
 
 The Ideomancer's original idea for the Track: it goes by the direction a signal comes from, not its strength.

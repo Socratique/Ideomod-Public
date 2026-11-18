@@ -172,6 +172,10 @@ public class MachineEngineBlock extends AbstractMachineBlock {
         BlockEntity be = level.getBlockEntity(pos);
         if (!(be instanceof MachineEngineBlockEntity engineBE)) return;
 
+        // Just set down by a piston: the rest of the moved group is still landing, so a missing
+        // input now is not a lost signal. The settling tick looks again (see tick()).
+        if (engineBE.isPistonSettling()) return;
+
         boolean currentlyPowered = state.getValue(POWERED);
 
         if (currentlyPowered) {
@@ -282,6 +286,17 @@ public class MachineEngineBlock extends AbstractMachineBlock {
 
     @Override
     public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        // Settling tick after a piston move: the whole group has landed, so look at the input again.
+        // Only a signal that is really gone stops the Engine and resets its count; otherwise it carries
+        // on from the count it had (saved with the move). Until 2026-11-18 the Engine dropped its input
+        // whenever a neighbour landed before the block feeding it, and restarted its count every move:
+        // on a machine that moves every few ticks it never fired.
+        if (level.getBlockEntity(pos) instanceof MachineEngineBlockEntity engineBE && engineBE.isPistonSettling()) {
+            engineBE.setPistonSettling(false);
+            neighborChanged(state, level, pos, this, pos, false);
+            state = level.getBlockState(pos);
+            if (!state.is(this)) return;
+        }
         // Scheduled tick: turn off POWERED after 2-game-tick (1 redstone tick) pulse
         if (state.getValue(POWERED)) {
             updatingPos.set(pos);
@@ -307,6 +322,11 @@ public class MachineEngineBlock extends AbstractMachineBlock {
         // FIX 2026-03-31: Added !movedByPiston guard. During piston movement,
         // block entity data is restored via IPistonMovable.loadMovementData.
         // Running the absorption scan would overwrite that restored state.
+        if (!oldState.is(state.getBlock()) && !level.isClientSide() && movedByPiston) {
+            // Set down by a piston: hold the restored input for a tick while the group lands.
+            if (level.getBlockEntity(pos) instanceof MachineEngineBlockEntity engineBE) engineBE.setPistonSettling(true);
+            level.scheduleTick(pos, this, 1, TickPriority.HIGH);
+        }
         if (!oldState.is(state.getBlock()) && !level.isClientSide() && !movedByPiston) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof MachineEngineBlockEntity engineBE) {

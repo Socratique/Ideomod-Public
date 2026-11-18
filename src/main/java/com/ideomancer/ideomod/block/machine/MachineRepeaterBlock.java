@@ -174,6 +174,9 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
             machineBE.setInputFace(bestFace);
 
             if (bestSignal > 0) {
+                // An edge from a real signal change counts even if its pulse is short; a neighbour that was
+                // already on before a piston move and lands on again is not a new edge (see isGhostEdge).
+                if (!movedByPiston && !MachineFrameBlockEntity.isGhostEdge(level, pos, bestFace)) machineBE.setPendingEdge(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                     level.scheduleTick(pos, this, state.getValue(DELAY) * 2, TickPriority.HIGH);
                 }
@@ -217,9 +220,16 @@ public class MachineRepeaterBlock extends AbstractMachineBlock {
             bestFace = scan[1] >= 0 ? Direction.values()[scan[1]] : null;
         }
 
+        // A rising edge since the last tick turns it on even if that pulse is already over, as a
+        // vanilla repeater does: it then turns off again after its delay (below). Until 2026-11-18 a
+        // pulse shorter than the delay was dropped.
+        Direction edge = wasPowered ? null : machineBE.getPendingEdge();
+        machineBE.setPendingEdge(null);
+        if (!wasPowered && bestSignal <= 0 && edge != null) bestFace = edge;
+
         machineBE.setInputFace(bestFace);
 
-        boolean shouldPower = bestSignal > 0;
+        boolean shouldPower = bestSignal > 0 || edge != null;
 
         LOGGER.debug("[REPEATER] tick({}) was={} should={} signal={} face={} delay={}",
                 pos, wasPowered, shouldPower, bestSignal, bestFace, beDelay);

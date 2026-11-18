@@ -204,6 +204,9 @@ public class MachineTimerBlock extends AbstractMachineBlock {
 
                 // Genuine rising edge — schedule turn on.
                 machineBE.setInputFace(bestFace);
+                // An edge from a real signal change counts even if its pulse is short; a neighbour that was
+                // already on before a piston move and lands on again is not a new edge (see isGhostEdge).
+                if (!movedByPiston && !MachineFrameBlockEntity.isGhostEdge(level, pos, bestFace)) machineBE.setPendingEdge(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                     level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                 }
@@ -235,6 +238,14 @@ public class MachineTimerBlock extends AbstractMachineBlock {
         if (!wasPowered) {
             // UNPOWERED → check if we should turn ON and start timer.
             Direction currentInput = machineBE.getInputFace();
+            // A rising edge seen since the last tick counts even if its pulse is already over
+            // (until 2026-11-18 a pulse shorter than the 2-tick delay was ignored).
+            Direction edge = machineBE.getPendingEdge();
+            machineBE.setPendingEdge(null);
+            if (currentInput == null && edge != null) {
+                currentInput = edge;
+                machineBE.setInputFace(edge);
+            }
 
             // FIX 2026-03-31e: After piston movement, a timer that expired
             // "clean" has inputFace=null. Scan all faces to recover the input
@@ -252,11 +263,11 @@ public class MachineTimerBlock extends AbstractMachineBlock {
             if (currentInput != null) {
                 int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, currentInput, shouldSignal);
 
-                if (inputSignal > 0) {
+                if (inputSignal > 0 || edge != null) {
                     // Start the timer
                     int duration = machineBE.getTimerDuration();
                     machineBE.setTimerTicksRemaining(duration);
-                    machineBE.setInputWasLow(false);
+                    machineBE.setInputWasLow(inputSignal <= 0);  // pulse already gone: armed for the next
 
                     LOGGER.debug("[TIMER] ON at {} input={} duration={}", pos, currentInput, duration);
 

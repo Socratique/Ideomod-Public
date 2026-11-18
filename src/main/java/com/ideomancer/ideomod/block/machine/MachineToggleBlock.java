@@ -222,7 +222,10 @@ public class MachineToggleBlock extends AbstractMachineBlock {
                 } else {
                     // Signal still present.
                     if (machineBE.isInputWasLow()) {
-                        // Armed and signal returned → schedule toggle-off.
+                        // Armed and signal returned → schedule toggle-off. Noted as a pending edge too,
+                        // so a flip-off that is waiting when a piston moves the Toggle still happens
+                        // once it lands (the landing restore skips the tick of a powered Toggle).
+                        if (!movedByPiston && !MachineFrameBlockEntity.isGhostEdge(level, pos, inputFace)) machineBE.setPendingEdge(inputFace);
                         if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                             level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                         }
@@ -248,6 +251,9 @@ public class MachineToggleBlock extends AbstractMachineBlock {
 
                 // Genuine rising edge — schedule turn on.
                 machineBE.setInputFace(bestFace);
+                // An edge from a real signal change counts even if its pulse is short; a neighbour that was
+                // already on before a piston move and lands on again is not a new edge (see isGhostEdge).
+                if (!movedByPiston && !MachineFrameBlockEntity.isGhostEdge(level, pos, bestFace)) machineBE.setPendingEdge(bestFace);
                 if (!level.getBlockTicks().willTickThisTick(pos, this)) {
                     level.scheduleTick(pos, this, 2, TickPriority.HIGH);
                 }
@@ -294,6 +300,8 @@ public class MachineToggleBlock extends AbstractMachineBlock {
             }
             LOGGER.debug("[TOGGLE] piston settled at {}, POWERED={}, inputWasLow={}",
                     pos, isPowered, machineBE.isInputWasLow());
+            // A rising edge that arrived just before the move still flips it, now the group has landed.
+            if (machineBE.getPendingEdge() != null) level.scheduleTick(pos, this, 1, TickPriority.HIGH);
             return;
         }
 
@@ -302,6 +310,15 @@ public class MachineToggleBlock extends AbstractMachineBlock {
         if (!wasPowered) {
             // UNPOWERED → check if we should turn ON.
             Direction currentInput = machineBE.getInputFace();
+            // A rising edge seen since the last tick. It counts even if its pulse is already over:
+            // until 2026-11-18 a pulse shorter than this 2-tick delay was ignored (a Transmitter
+            // receiver's pulses, for one, never flipped a Toggle).
+            Direction edge = machineBE.getPendingEdge();
+            machineBE.setPendingEdge(null);
+            if (currentInput == null && edge != null) {
+                currentInput = edge;
+                machineBE.setInputFace(edge);
+            }
 
             // FIX 2026-03-31e: After piston movement, a toggle with cleared
             // inputFace has null. Scan all faces to recover the input direction.
@@ -319,8 +336,9 @@ public class MachineToggleBlock extends AbstractMachineBlock {
             if (currentInput != null) {
                 int inputSignal = MachineRedstoneHelper.getIncomingSignalFromFace(level, pos, currentInput, shouldSignal);
 
-                if (inputSignal > 0) {
-                    machineBE.setInputWasLow(false);
+                if (inputSignal > 0 || edge != null) {
+                    // A pulse already gone: armed, so the next one flips it back off.
+                    machineBE.setInputWasLow(inputSignal <= 0);
                     InputFace inputFaceEnum = InputFace.fromDirection(currentInput);
 
                     LOGGER.debug("[TOGGLE] ON at {} input={} signal={}", pos, currentInput, inputSignal);
@@ -344,6 +362,7 @@ public class MachineToggleBlock extends AbstractMachineBlock {
 
         } else {
             // POWERED → toggle OFF
+            machineBE.setPendingEdge(null);
             Direction currentInput = machineBE.getInputFace();
             int remainingSignal = 0;
             if (currentInput != null) {
