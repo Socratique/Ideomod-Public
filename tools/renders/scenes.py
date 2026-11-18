@@ -192,25 +192,39 @@ def frames(tx):
 
 
 def track(tx):
-    s = Scene(tx, "Machine Track and Trolley", look=(3.5, 0.5, 1), floor=((-1, 9), (-1, 3)))
+    s = Scene(tx, "Machine Track and Trolley", look=(4.5, 0.5, 1), floor=((-1, 11), (-1, 3)))
     lever = s.add(0, 0, 1, "lever")
-    tracks = s.fill(range(1, 8), [0], [1], "track")
-    trolley = s.add(1, 1, 1, "trolley")
-    cargo = s.add(1, 2, 1, "machine_frame")
-    s.labels.append((tracks[4], "Track line", CYAN))
+    tracks = s.fill(range(1, 10), [0], [1], "track")
+    trolley = s.add(2, 1, 1, "trolley")
+    cargo = s.add(2, 2, 1, "machine_frame")
+    s.labels.append((tracks[5], "Track line", CYAN))
     s.labels.append((cargo, "Trolley + cargo", CYAN))
     s.say("A line of Tracks, with a Trolley sitting on top carrying a Machine Base.", 2400)
     del s.labels[:]
-    s.say("A Track pushes the Trolleys touching it, away from where its signal came from.", 2400)
-    for i in range(3):
+    s.say("A rising signal starts a pulse that runs down the line, one Track a tick.", 2400)
+
+    def show(head):
+        """Light the pulse: the Track it is on bright, the two behind it dimmer (power 15, 10, 5)."""
+        for i, t in enumerate(tracks):
+            t.set(power={0: 15, 1: 10, 2: 5}.get(head - i, 0))
+
+    for p in range(3):
         lever.set(on=True)
-        s.caption = "Pulse %d: the signal runs down the line and the Trolley moves one block." % (i + 1)
-        s.snap(350)
-        s.move([trolley, cargo], E)
-        s.snap(500)
+        s.caption = "Pulse %d: as it passes under the Trolley, the Trolley moves one block." % (p + 1)
+        head = 0
+        while head < len(tracks) + 3:
+            show(head)
+            if head == int(round(trolley.pos[0])) - 1:
+                h = head
+                s.move([trolley, cargo], E, steps=2, ms=90, also=lambda t, h=h: show(h + (1 if t < 1 else 2)))
+                head += 3
+                continue
+            s.snap(90)
+            head += 1
+        show(-10)
         lever.set(on=False)
-        s.snap(350)
-    s.say("One block per pulse. The Trolley carries whatever is stuck to it.", 2400)
+        s.snap(500)
+    s.say("One block per pulse, in either direction, along a line of any length.", 2400)
     return s
 
 

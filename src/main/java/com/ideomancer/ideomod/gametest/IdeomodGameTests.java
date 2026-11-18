@@ -1050,6 +1050,123 @@ public class IdeomodGameTests {
         });
     }
 
+    // ==================== Track and Trolley (pulses, 2026-11-18) ====================
+    // In their own batch: the 40-Track column reaches far above its own test.
+
+    private static void trackLine(GameTestHelper helper, int x0, int x1, int y, int z) {
+        for (int x = x0; x <= x1; x++) helper.setBlock(x, y, z, ModBlocks.MACHINE_TRACK.get());
+    }
+
+    private static int trackPower(GameTestHelper helper, int x, int y, int z) {
+        BlockState s = helper.getBlockState(new BlockPos(x, y, z));
+        return s.is(ModBlocks.MACHINE_TRACK.get()) ? s.getValue(com.ideomancer.ideomod.block.machine.MachineTrackBlock.POWER) : -1;
+    }
+
+    /**
+     * There is no limit to a line: a pulse started at the bottom of a column of 40 Tracks reaches the
+     * top and pushes the Trolley beside it up one block (a signal that faded by 1 per Track stopped
+     * after 15).
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 200, batch = "tracks")
+    public static void trackPulseHasNoLengthLimit(GameTestHelper helper) {
+        for (int y = 2; y <= 41; y++) helper.setBlock(2, y, 2, ModBlocks.MACHINE_TRACK.get());
+        helper.setBlock(3, 41, 2, ModBlocks.MACHINE_TROLLEY.get());
+        helper.setBlock(3, 42, 2, Blocks.AIR);  // above the test area the test world is solid rock
+        helper.runAfterDelay(2, () -> helper.setBlock(2, 1, 2, Blocks.REDSTONE_BLOCK));
+helper.runAfterDelay(60, () -> {
+            if (helper.getBlockState(new BlockPos(3, 42, 2)).is(ModBlocks.MACHINE_TROLLEY.get())
+                    && !helper.getBlockState(new BlockPos(3, 41, 2)).is(ModBlocks.MACHINE_TROLLEY.get())) helper.succeed();
+            else helper.fail("the pulse did not push the Trolley beside the 40th Track up", new BlockPos(3, 41, 2));
+        });
+    }
+
+    /**
+     * A Track pushes away from the side the pulse came from, one block per pulse: powered from the
+     * west end the Trolley goes one block east; then from the east end, one block back west.
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 120, batch = "tracks")
+    public static void trackPushesAwayFromWhereThePulseCame(GameTestHelper helper) {
+        trackLine(helper, 1, 6, 1, 2);
+        helper.setBlock(3, 2, 2, ModBlocks.MACHINE_TROLLEY.get());
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 2, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(20, () -> {
+            if (!helper.getBlockState(new BlockPos(4, 2, 2)).is(ModBlocks.MACHINE_TROLLEY.get())) {
+                helper.fail("a pulse from the west end did not move the Trolley exactly one block east", new BlockPos(4, 2, 2));
+                return;
+            }
+            helper.setBlock(0, 1, 2, Blocks.AIR);
+            helper.setBlock(7, 1, 2, Blocks.REDSTONE_BLOCK);
+        });
+        helper.runAfterDelay(40, () -> {
+            if (helper.getBlockState(new BlockPos(3, 2, 2)).is(ModBlocks.MACHINE_TROLLEY.get())) helper.succeed();
+            else helper.fail("a pulse from the east end did not move the Trolley one block back west", new BlockPos(3, 2, 2));
+        });
+    }
+
+    /** A Track never stays on: a signal held on gives one pulse, and the line goes dark behind it. */
+    @GameTest(template = EMPTY, timeoutTicks = 100, batch = "tracks")
+    public static void trackHeldSignalIsOnePulse(GameTestHelper helper) {
+        trackLine(helper, 1, 6, 1, 2);
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 2, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(4, () -> {
+            if (trackPower(helper, 1, 1, 2) <= 0 && trackPower(helper, 2, 1, 2) <= 0) helper.fail("no pulse went down the line");
+        });
+        helper.runAfterDelay(30, () -> {
+            for (int x = 1; x <= 6; x++) {
+                if (trackPower(helper, x, 1, 2) != 0) { helper.fail("Track " + x + " stayed lit while the signal was held", new BlockPos(x, 1, 2)); return; }
+            }
+            helper.succeed();
+        });
+    }
+
+    /**
+     * A pulse can't run round a closed ring of Tracks forever: each Track passes a pulse on once,
+     * so the ring is dark again soon after.
+     */
+    @GameTest(template = EMPTY, timeoutTicks = 120, batch = "tracks")
+    public static void trackPulseDiesInALoop(GameTestHelper helper) {
+        for (int x = 1; x <= 5; x++) {
+            for (int z = 1; z <= 5; z++) {
+                if (x == 1 || x == 5 || z == 1 || z == 5) helper.setBlock(x, 1, z, ModBlocks.MACHINE_TRACK.get());
+            }
+        }
+        helper.runAfterDelay(2, () -> helper.setBlock(0, 1, 1, Blocks.REDSTONE_BLOCK));
+        helper.runAfterDelay(6, () -> {
+            boolean lit = false;
+            for (int x = 1; x <= 5; x++) lit |= trackPower(helper, x, 1, 1) > 0 || trackPower(helper, x, 1, 5) > 0;
+            if (!lit) helper.fail("no pulse went round the ring");
+        });
+        int[] ticks = {0};
+        helper.onEachTick(() -> {
+            if (++ticks[0] < 40) return;
+            for (int x = 1; x <= 5; x++) {
+                for (int z = 1; z <= 5; z++) {
+                    if ((x == 1 || x == 5 || z == 1 || z == 5) && trackPower(helper, x, 1, z) != 0) {
+                        helper.fail("the pulse was still going round the ring at Track " + x + "," + z, new BlockPos(x, 1, z));
+                        return;
+                    }
+                }
+            }
+            if (ticks[0] >= 60) helper.succeed();
+        });
+    }
+
+    /** Each rising edge is its own pulse: three pulses move a Trolley three blocks. */
+    @GameTest(template = EMPTY, timeoutTicks = 160, batch = "tracks")
+    public static void trackEveryPulseMovesTheTrolleyOnce(GameTestHelper helper) {
+        trackLine(helper, 1, 7, 1, 2);
+        helper.setBlock(2, 2, 2, ModBlocks.MACHINE_TROLLEY.get());
+        for (int i = 0; i < 3; i++) {
+            int t = 2 + i * 20;
+            helper.runAfterDelay(t, () -> helper.setBlock(0, 1, 2, Blocks.REDSTONE_BLOCK));
+            helper.runAfterDelay(t + 6, () -> helper.setBlock(0, 1, 2, Blocks.AIR));
+        }
+        helper.runAfterDelay(80, () -> {
+            if (helper.getBlockState(new BlockPos(5, 2, 2)).is(ModBlocks.MACHINE_TROLLEY.get())) helper.succeed();
+            else helper.fail("three pulses did not move the Trolley exactly three blocks (from x=2 to x=5)", new BlockPos(5, 2, 2));
+        });
+    }
+
     // ==================== Recipes ====================
 
     /**

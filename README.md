@@ -295,13 +295,15 @@ This applies to vanilla pistons, Machine Pistons, Tracks, Repulsers and Attracto
 
 #### Track and Trolley
 
-A Track pushes Trolleys. When a Track's signal turns on, every Trolley touching it moves one block, away from the side the signal came from. Lay Tracks in a line, set a Trolley on top, and power the line from one end: each pulse moves the Trolley one block along it.
+A Track pushes Trolleys. A redstone signal turning on next to a Track starts a pulse that runs along the line of Tracks, one Track a tick. Every Trolley touching a Track the pulse passes moves one block, away from the side the pulse came from. Lay Tracks in a line, set a Trolley on top, and power the line from one end: each pulse moves the Trolley one block along it.
 
 ![Machine Track and Trolley](docs/media/track.gif)
 
 - One pulse moves a Trolley one block.
 - The Trolley moves as a pushed group, so it carries what is stuck to it: other Trolleys, Machine Bases, and anything those hold.
-- Tracks pass their signal along to neighbouring Tracks, losing 1 strength per Track. They do not power anything else. A grey indicator in each Track shows its signal, so a pulse can be seen fading along the line.
+- A line can be any length: the pulse doesn't weaken. It goes on to every Track touching the one it is on, except the one it came from, so it follows branches too. It passes each Track once, so it can't run round a loop forever.
+- A Track never stays on: a signal held on gives one pulse. Each rising signal is a new pulse.
+- Tracks don't power anything else. A grey indicator in each Track flashes as the pulse passes, so you can watch it run down the line.
 - The Trolley itself does nothing. It is the thing that gets moved.
 
 #### Grabbers

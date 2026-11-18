@@ -1,30 +1,44 @@
 package com.ideomancer.ideomod.block.machine;
 
 import com.ideomancer.ideomod.block.frame.FrameActivation;
+import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.RandomSource;
 import net.minecraft.world.level.BlockGetter;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import net.minecraft.world.level.block.state.properties.IntegerProperty;
-import com.ideomancer.ideomod.block.movement.BlockMoveHelper;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.WeakHashMap;
 
 /**
- * Machine Track -- pushes adjacent Machine Trolleys on redstone signal.
+ * Machine Track -- carries a pulse along a line of Tracks and pushes Trolleys as it passes.
  *
- * Overrides lifecycle hooks from AbstractMachineBlock to add isolated
- * redstone power tracking and Trolley push scheduling.
+ * A Track never stays on. When a redstone signal reaching it rises (a face that had no signal now
+ * has one), it starts a pulse. A pulse travels one Track per tick to every neighbouring Track except
+ * the one it came from, with no limit on length. Each Track it reaches pushes every Trolley touching
+ * it one block, away from the side the pulse came from, and flashes its grey indicator (POWER 15,
+ * fading by 5 a tick), so a pulse shows as a bright spot with a short tail running down the line.
  *
- * Signal input: Tracks accept signal from two sources:
- *   1. Other Tracks/Conductors -- via direct blockstate POWER read (decay by 1)
- *   2. Any vanilla redstone source -- via level.getSignal() query
+ * Every pulse has an id, and a Track ignores a pulse it has already passed on: a loop of Tracks, or
+ * two branches that meet again, cannot send a pulse round forever. At one Track per tick the pulse
+ * outruns the Trolley it pushed (which is still moving when the pulse reaches the next Track), so a
+ * Trolley moves one block per pulse.
  *
- * Signal output: NONE. isSignalSource=false, getSignal=0, getDirectSignal=0.
- * Track POWER is purely internal bookkeeping, invisible to vanilla redstone.
- * This isolation eliminates feedback loops, so no input whitelist is needed.
+ * Signal output: NONE. isSignalSource=false, getSignal=0, getDirectSignal=0. POWER is only the
+ * indicator, invisible to vanilla redstone.
+ *
+ * Until 2026-11-18 a Track held a signal that dropped by 1 per Track, like redstone dust, which
+ * limited a line to 15 Tracks; the Ideomancer's original idea was a Track that goes by the direction
+ * the signal comes from, not its strength.
  *
  * Updated by Claude, directed and guided by The Ideomancer.
  */
@@ -32,7 +46,14 @@ public class MachineTrackBlock extends AbstractMachineBlock {
 
     public static final IntegerProperty POWER = BlockStateProperties.POWER;
     private static final int EVENT_PUSH = 0;
-    private static final ThreadLocal<Boolean> isUpdating = ThreadLocal.withInitial(() -> false);
+    /** How much the indicator dims each tick after a pulse passes (15, 10, 5, off). */
+    private static final int FADE_STEP = 5;
+
+    /** Per world: the last pulse id each Track passed on, and the pulse each Track will pass on next tick. */
+    private static final Map<Level, Map<Long, Long>> SEEN = new WeakHashMap<>();
+    private static final Map<Level, Map<Long, Pending>> PENDING = new WeakHashMap<>();
+
+    private record Pending(long id, Direction from) {}
 
     public MachineTrackBlock(Properties properties) {
         super(properties);
@@ -57,117 +78,120 @@ public class MachineTrackBlock extends AbstractMachineBlock {
     public int getDirectSignal(BlockState state, BlockGetter level, BlockPos pos, Direction direction) { return 0; }
 
     // ========================================================================
-    // LIFECYCLE (overrides base for Track-specific redstone + push logic)
+    // LIFECYCLE
     // ========================================================================
 
     @Override
     public void neighborChanged(BlockState state, Level level, BlockPos pos,
                                  Block neighborBlock, BlockPos neighborPos, boolean movedByPiston) {
         if (level.isClientSide) return;
-        if (isUpdating.get()) return;
-        int oldPower = state.getValue(POWER);
-        int newPower = calculatePower(level, pos);
-        if (newPower != oldPower) {
-            isUpdating.set(true);
-            try {
-                level.setBlock(pos, state.setValue(POWER, newPower), 2);
-                level.updateNeighborsAt(pos, this);
-            } finally {
-                isUpdating.set(false);
+        int now = redstoneInputs(level, pos);
+        BlockEntity be = level.getBlockEntity(pos);
+        if (be instanceof MachineFrameBlockEntity machine) {
+            int before = machine.getTrackInputs();
+            machine.setTrackInputs(now);
+            int rising = before < 0 ? 0 : now & ~before;   // -1: first look after an upgrade, record only
+            if (rising != 0) {
+                Direction from = Direction.from3DDataValue(Integer.numberOfTrailingZeros(rising));
+                receivePulse(level, pos, from, level.getGameTime() * 31 + pos.asLong());
             }
-            if (oldPower == 0 && newPower > 0) scheduleAllPushes(level, pos, newPower);
         }
         FrameActivation.markDirty(level, pos);
     }
 
     @Override
     public void onPlace(BlockState state, Level level, BlockPos pos, BlockState oldState, boolean movedByPiston) {
-        // FIX 2026-03-29: Added !movedByPiston guard. During piston movement,
-        // blocks are temporarily removed and re-placed — firing neighbor updates
-        // and FrameActivation here would cause unnecessary recalculations mid-move.
-        if (!level.isClientSide() && !oldState.is(this) && !movedByPiston) {
-            updatePowerState(level, pos, state);
+        if (level.isClientSide() || oldState.is(this)) return;
+        // A Track set down next to a signal that is already on does not pulse: only a rising edge does.
+        if (level.getBlockEntity(pos) instanceof MachineFrameBlockEntity machine) {
+            machine.setTrackInputs(redstoneInputs(level, pos));
+        }
+        // During piston movement blocks are removed and put back; skip the neighbour updates then.
+        if (!movedByPiston) {
             BlockMoveHelper.updateAllNeighbors(level, pos, this);
             FrameActivation.markDirty(level, pos);
         }
+        if (state.getValue(POWER) > 0) level.scheduleTick(pos, this, 1);
     }
 
     @Override
     public void onRemove(BlockState state, Level level, BlockPos pos, BlockState newState, boolean movedByPiston) {
-        // FIX 2026-03-29: Added !movedByPiston guard to match other machine blocks.
-        if (!state.is(newState.getBlock()) && !level.isClientSide() && !movedByPiston) {
-            BlockMoveHelper.updateAllNeighbors(level, pos, this);
-            FrameActivation.markDirty(level, pos);
+        if (!state.is(newState.getBlock()) && !level.isClientSide()) {
+            forget(level, pos);
+            if (!movedByPiston) {
+                BlockMoveHelper.updateAllNeighbors(level, pos, this);
+                FrameActivation.markDirty(level, pos);
+            }
         }
         super.onRemove(state, level, pos, newState, movedByPiston);
     }
 
     // ========================================================================
-    // REDSTONE INTERNALS
+    // PULSES
     // ========================================================================
 
-    private void updatePowerState(Level level, BlockPos pos, BlockState state) {
-        int newPower = calculatePower(level, pos);
-        if (newPower != state.getValue(POWER)) {
-            level.setBlock(pos, state.setValue(POWER, newPower), 2);
-            level.updateNeighborsAt(pos, this);
+    /** The faces (one bit per Direction) where a non-Track neighbour gives this Track a redstone signal. */
+    private static int redstoneInputs(Level level, BlockPos pos) {
+        int mask = 0;
+        for (Direction dir : Direction.values()) {
+            BlockPos nPos = pos.relative(dir);
+            if (level.getBlockState(nPos).getBlock() instanceof MachineTrackBlock) continue;
+            if (level.getSignal(nPos, dir) > 0) mask |= 1 << dir.get3DDataValue();
         }
+        return mask;
     }
 
     /**
-     * Calculates the strongest signal reaching this Track from any neighbor.
-     *
-     * Two input paths:
-     *   1. Conduit blocks (other Tracks, Conductors) -- read POWER blockstate directly, decay by 1
-     *   2. Everything else -- query vanilla level.getSignal() for redstone input
-     *
-     * Since Tracks emit no vanilla signal (isSignalSource=false), there is no
-     * feedback risk from accepting signal from any vanilla source.
+     * A pulse reaches this Track from the side {@code from}: push the Trolleys touching it away from
+     * that side, light the indicator, and pass the pulse on next tick. A pulse it has already passed
+     * on is ignored.
      */
-    private int calculatePower(Level level, BlockPos pos) {
-        int bestPower = 0;
-        for (Direction dir : Direction.values()) {
-            BlockPos nPos = pos.relative(dir);
-            BlockState nState = level.getBlockState(nPos);
-            Block nBlock = nState.getBlock();
-            if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
-                // Conduit path: direct blockstate read with decay
-                int p = nState.getValue(POWER) - 1;
-                if (p > bestPower) bestPower = p;
-            } else {
-                // Vanilla path: any redstone source feeds in directly
-                int s = level.getSignal(nPos, dir);
-                if (s > bestPower) bestPower = s;
+    private void receivePulse(Level level, BlockPos pos, Direction from, long id) {
+        Map<Long, Long> seen = SEEN.computeIfAbsent(level, l -> new HashMap<>());
+        Long last = seen.put(pos.asLong(), id);
+        if (last != null && last == id) return;
+        Direction pushDir = from.getOpposite();
+        for (Direction tFace : Direction.values()) {
+            if (level.getBlockState(pos.relative(tFace)).getBlock() instanceof MachineTrolleyBlock) {
+                level.blockEvent(pos, this, EVENT_PUSH, packDirs(pushDir, tFace));
             }
         }
-        return Math.min(15, Math.max(0, bestPower));
+        BlockState state = level.getBlockState(pos);
+        if (state.getValue(POWER) != 15) level.setBlock(pos, state.setValue(POWER, 15), 2);
+        PENDING.computeIfAbsent(level, l -> new HashMap<>()).put(pos.asLong(), new Pending(id, from));
+        level.scheduleTick(pos, this, 1);
     }
 
-    // ========================================================================
-    // PUSH SCHEDULING
-    // ========================================================================
-
-    private void scheduleAllPushes(Level level, BlockPos pos, int myPower) {
-        for (Direction signalDir : Direction.values()) {
-            BlockPos nPos = pos.relative(signalDir);
-            BlockState nState = level.getBlockState(nPos);
-            Block nBlock = nState.getBlock();
-            boolean isSource = false;
-            if (MachineFrameBlock.isRedstoneConduit(nBlock)) {
-                isSource = nState.getValue(POWER) > myPower;
-            } else {
-                // Any vanilla source with signal counts as a directional source
-                isSource = level.getSignal(nPos, signalDir) > 0;
-            }
-            if (!isSource) continue;
-            Direction pushDir = signalDir.getOpposite();
-            for (Direction tFace : Direction.values()) {
-                BlockPos tPos = pos.relative(tFace);
-                if (level.getBlockState(tPos).getBlock() instanceof MachineTrolleyBlock) {
-                    level.blockEvent(pos, this, EVENT_PUSH, packDirs(pushDir, tFace));
+    /** Next tick: pass a waiting pulse on to the neighbouring Tracks, and dim the indicator a step. */
+    @Override
+    public void tick(BlockState state, ServerLevel level, BlockPos pos, RandomSource random) {
+        Map<Long, Pending> pending = PENDING.get(level);
+        Pending p = pending == null ? null : pending.remove(pos.asLong());
+        if (p != null) {
+            for (Direction dir : Direction.values()) {
+                if (dir == p.from()) continue;
+                BlockPos nPos = pos.relative(dir);
+                if (level.getBlockState(nPos).getBlock() instanceof MachineTrackBlock track) {
+                    track.receivePulse(level, nPos, dir.getOpposite(), p.id());
                 }
             }
         }
+        BlockState now = level.getBlockState(pos);
+        if (!now.is(this)) return;
+        int power = now.getValue(POWER);
+        if (pending != null && pending.containsKey(pos.asLong())) return;  // a new pulse just lit it again
+        if (power > 0) {
+            int dimmer = Math.max(0, power - FADE_STEP);
+            level.setBlock(pos, now.setValue(POWER, dimmer), 2);
+            if (dimmer > 0) level.scheduleTick(pos, this, 1);
+        }
+    }
+
+    private static void forget(Level level, BlockPos pos) {
+        Map<Long, Long> seen = SEEN.get(level);
+        if (seen != null) seen.remove(pos.asLong());
+        Map<Long, Pending> pending = PENDING.get(level);
+        if (pending != null) pending.remove(pos.asLong());
     }
 
     @Override

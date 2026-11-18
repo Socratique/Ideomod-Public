@@ -68,6 +68,7 @@ public class MachineFrameBlockEntity extends BlockEntity
     private static final String TAG_REPEATER_DELAY = "RepeaterDelay";
     private static final String TAG_TRANSFORMER_LEVEL = "TransformerLevel";
     private static final String TAG_INPUT_WAS_LOW = "InputWasLow";
+    private static final String TAG_TRACK_INPUTS = "TrackInputs";
     private static final String TAG_TIMER_DURATION = "TimerDuration";
     private static final String TAG_TIMER_TICKS_REMAINING = "TimerTicksRemaining";
     private static final String TAG_PULSER_TICKS_REMAINING = "PulserTicksRemaining";
@@ -118,6 +119,13 @@ public class MachineFrameBlockEntity extends BlockEntity
      * Reset to false on every specialization swap (via triggerSwapCheck).
      */
     private boolean inputWasLow = false;
+
+    /**
+     * Track only: which faces had a redstone signal last time the Track looked (one bit per
+     * Direction), so it can pulse on a rising edge. -1 = not known yet (a Track saved before this
+     * existed): its first look only records the faces, so an upgraded world gets no stray pulse.
+     */
+    private int trackInputs = 0;
 
     /**
      * Configured output duration for the Machine Timer, in game ticks.
@@ -319,6 +327,18 @@ public class MachineFrameBlockEntity extends BlockEntity
         }
     }
 
+    /** Track only: the faces that had a redstone signal last time (bit per Direction), or -1 if unknown. */
+    public int getTrackInputs() {
+        return this.trackInputs;
+    }
+
+    public void setTrackInputs(int mask) {
+        if (this.trackInputs != mask) {
+            this.trackInputs = mask;
+            this.setChanged();
+        }
+    }
+
     // ========================================================================
     // TIMER DURATION AND COUNTDOWN (for Machine Timer)
     // ========================================================================
@@ -490,6 +510,9 @@ public class MachineFrameBlockEntity extends BlockEntity
         if (this.transmitterSignalStrength > 0) {
             tag.putInt(TAG_TRANSMITTER_SIGNAL, this.transmitterSignalStrength);
         }
+        if (this.getBlockState().getBlock() instanceof MachineTrackBlock) {
+            tag.putInt(TAG_TRACK_INPUTS, this.trackInputs);
+        }
     }
 
     @Override
@@ -514,6 +537,7 @@ public class MachineFrameBlockEntity extends BlockEntity
             this.transformerLevel = 1;
         }
         this.inputWasLow = tag.getBoolean(TAG_INPUT_WAS_LOW);
+        this.trackInputs = tag.contains(TAG_TRACK_INPUTS) ? tag.getInt(TAG_TRACK_INPUTS) : -1;
         if (tag.contains(TAG_TIMER_DURATION)) {
             this.timerDuration = Math.max(1, tag.getInt(TAG_TIMER_DURATION));
         } else {

@@ -1,5 +1,20 @@
 # Ideomod Changelog
 
+## [2026-11-18] The Machine Track carries a travelling pulse
+
+The Ideomancer's original idea for the Track: it goes by the direction a signal comes from, not its strength.
+Ported from the Machine Mod fork.
+
+Changed:
+- A redstone signal turning on next to a Track starts a pulse that runs along the line, one Track a tick,
+  to every neighbouring Track except the one it came from. Every Trolley it passes moves one block, away
+  from where the pulse came from. A line can be any length (the old signal dropped 1 per Track, so a line
+  stopped after 15). Each pulse passes a Track once, so loops and rejoining branches end it; a signal held
+  on gives one pulse. The grey indicator flashes as the pulse passes (15, 10, 5), so it can be seen running
+  down the line. Tracks saved before this record their inputs on their first look instead of pulsing.
+New GameTests (batch "tracks"): a 40-Track column, both directions one block per pulse, held signal is one
+pulse, a ring goes dark, three pulses move a Trolley three blocks. README Track section and track.gif redrawn.
+
 ## [2026-11-17] A pearl used up lighting a portal no longer goes through it
 
 Found by the Ideomancer in his world; reproduced in the Machine Mod's test server. Ported from the Machine Mod fork.
